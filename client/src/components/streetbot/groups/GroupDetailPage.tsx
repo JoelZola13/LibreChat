@@ -157,7 +157,7 @@ export default function GroupDetailPage() {
       const resp = await fetch(`${SB_API_BASE}/groups/${id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, user_id: userId }),
+        body: JSON.stringify({ content, user_id: userId, agents: group?.agents ?? [] }),
       });
       if (resp.ok) {
         await fetchMessages();
