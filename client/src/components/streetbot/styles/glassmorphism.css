@@ -1,0 +1,1360 @@
+/**
+ * ============================================================================
+ * GLASSMORPHISM DESIGN SYSTEM
+ * ============================================================================
+ *
+ * A premium glassmorphism system inspired by Apple Vision Pro and modern AI
+ * dashboards. Designed for dark-mode first with focus on depth, layering,
+ * realism, and restraint.
+ *
+ * Key Principles:
+ * 1. DEPTH: Multiple layers create spatial hierarchy
+ * 2. LIGHT: Subtle highlights simulate real glass catching light
+ * 3. RESTRAINT: Less is more - blur is expensive and can feel cheap if overused
+ * 4. CONTRAST: Text must remain readable at all times
+ *
+ * Usage:
+ * - Apply .glass-* classes to cards, modals, dropdowns, and panels
+ * - Use .glass-bg-* on the page/section background for the effect to work
+ * - Combine with .glass-border-* for edge highlights
+ * - Add .glass-glow-* for ambient lighting effects
+ *
+ * ============================================================================
+ */
+
+/* ============================================================================
+   DESIGN TOKENS (CSS Custom Properties)
+   ============================================================================
+
+   These tokens form the foundation of the design system. Override them in your
+   :root or theme class to customize the entire system at once.
+*/
+
+:root {
+  /* --------------------------------------------------------------------------
+     COLOR PALETTE
+     --------------------------------------------------------------------------
+     Integrated with Street Voices brand tokens from globals.css.
+     These reference --sb-color-* variables for consistency.
+  */
+
+  /* Primary brand colors - Street Voices Yellow/Gold */
+  --glass-accent-h: 51;          /* Yellow/gold hue matching #FFD600 */
+  --glass-accent-s: 100%;
+  --glass-accent-l: 50%;
+  --glass-accent: var(--sb-color-accent, #FFD600);
+
+  /* Secondary accent - purple for AI/tech feel */
+  --glass-secondary-h: 252;
+  --glass-secondary-s: 60%;
+  --glass-secondary-l: 55%;
+  --glass-secondary: hsl(var(--glass-secondary-h), var(--glass-secondary-s), var(--glass-secondary-l));
+
+  /* Background colors - derived from Street Voices brand */
+  --glass-void: var(--sb-color-background, #1f2027);
+  --glass-void-elevated: var(--sb-color-surface-muted, #2a2c36);
+
+  /* Surface colors - the glass itself (using brand-aware opacity) */
+  --glass-surface-1: rgba(255, 255, 255, 0.03);   /* Subtle, deep background */
+  --glass-surface-2: rgba(255, 255, 255, 0.05);   /* Standard cards */
+  --glass-surface-3: rgba(255, 255, 255, 0.08);   /* Elevated elements */
+  --glass-surface-4: rgba(255, 255, 255, 0.12);   /* Modal/dropdown level */
+
+  /* Text colors - integrated with Street Voices brand */
+  --glass-text-primary: var(--sb-color-text-primary, #ddddE2);
+  --glass-text-secondary: var(--sb-color-text-secondary, #afafaf);
+  --glass-text-tertiary: rgba(255, 255, 255, 0.50);   /* Captions, hints */
+  --glass-text-muted: rgba(255, 255, 255, 0.35);      /* Disabled, decorative */
+
+  /* --------------------------------------------------------------------------
+     BLUR VALUES
+     --------------------------------------------------------------------------
+     Blur is expensive! Use sparingly and never on frequently updating content.
+     Higher values = more expensive = use on fewer/smaller elements.
+  */
+  --glass-blur-none: 0;
+  --glass-blur-xs: 4px;      /* Subtle, for small elements */
+  --glass-blur-sm: 8px;      /* Light frosting */
+  --glass-blur-md: 16px;     /* Standard glass effect */
+  --glass-blur-lg: 24px;     /* Heavy frosting */
+  --glass-blur-xl: 40px;     /* Maximum blur, use rarely */
+
+  /* --------------------------------------------------------------------------
+     BORDER & EDGE TREATMENTS
+     --------------------------------------------------------------------------
+     Borders simulate light catching the edge of glass. The gradient creates
+     the illusion of a light source from above.
+  */
+  --glass-border-subtle: rgba(255, 255, 255, 0.06);
+  --glass-border-light: rgba(255, 255, 255, 0.10);
+  --glass-border-medium: rgba(255, 255, 255, 0.15);
+  --glass-border-strong: rgba(255, 255, 255, 0.20);
+
+  /* Border width tokens */
+  --glass-border-width: 1px;
+  --glass-border-width-thick: 1.5px;
+
+  /* --------------------------------------------------------------------------
+     SHADOWS & DEPTH
+     --------------------------------------------------------------------------
+     Layered shadows create realistic depth. Each shadow serves a purpose:
+     - First: tight shadow for grounding
+     - Second: medium spread for depth
+     - Third: large, soft for ambient occlusion
+  */
+  --glass-shadow-sm:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.2);
+
+  --glass-shadow-md:
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 4px 8px rgba(0, 0, 0, 0.25),
+    0 8px 16px rgba(0, 0, 0, 0.2);
+
+  --glass-shadow-lg:
+    0 4px 6px rgba(0, 0, 0, 0.35),
+    0 8px 15px rgba(0, 0, 0, 0.3),
+    0 16px 32px rgba(0, 0, 0, 0.25),
+    0 32px 64px rgba(0, 0, 0, 0.2);
+
+  --glass-shadow-xl:
+    0 8px 12px rgba(0, 0, 0, 0.4),
+    0 16px 24px rgba(0, 0, 0, 0.35),
+    0 32px 48px rgba(0, 0, 0, 0.3),
+    0 48px 80px rgba(0, 0, 0, 0.25);
+
+  /* Colored glow shadows for accents - uses Street Voices brand yellow */
+  --glass-glow-accent:
+    0 0 20px rgba(255, 214, 0, 0.15),
+    0 0 40px rgba(255, 214, 0, 0.1);
+
+  --glass-glow-secondary:
+    0 0 20px hsla(var(--glass-secondary-h), var(--glass-secondary-s), var(--glass-secondary-l), 0.15),
+    0 0 40px hsla(var(--glass-secondary-h), var(--glass-secondary-s), var(--glass-secondary-l), 0.1);
+
+  /* --------------------------------------------------------------------------
+     RADIUS TOKENS
+     --------------------------------------------------------------------------
+     Consistent rounding creates visual harmony. Larger elements get larger
+     radius, but we cap it to avoid the "bubble" look.
+  */
+  --glass-radius-xs: 6px;
+  --glass-radius-sm: 8px;
+  --glass-radius-md: 12px;
+  --glass-radius-lg: 16px;
+  --glass-radius-xl: 20px;
+  --glass-radius-2xl: 24px;
+  --glass-radius-full: 9999px;
+
+  /* --------------------------------------------------------------------------
+     TIMING & EASING
+     --------------------------------------------------------------------------
+     Smooth, natural transitions. We use custom easing for a premium feel.
+  */
+  --glass-transition-fast: 150ms;
+  --glass-transition-normal: 250ms;
+  --glass-transition-slow: 400ms;
+
+  /* Custom easing curves */
+  --glass-ease-out: cubic-bezier(0.16, 1, 0.3, 1);      /* Snappy exit */
+  --glass-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);  /* Smooth both ways */
+  --glass-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* Slight overshoot */
+
+  /* --------------------------------------------------------------------------
+     SPACING
+     --------------------------------------------------------------------------
+     Consistent internal padding for glass containers.
+  */
+  --glass-padding-xs: 8px;
+  --glass-padding-sm: 12px;
+  --glass-padding-md: 16px;
+  --glass-padding-lg: 24px;
+  --glass-padding-xl: 32px;
+
+  /* --------------------------------------------------------------------------
+     NOISE TEXTURE
+     --------------------------------------------------------------------------
+     Subtle noise adds realism and reduces banding in gradients.
+     This is a tiny base64 SVG for performance.
+  */
+  --glass-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+
+/* ============================================================================
+   BACKGROUND SYSTEM
+   ============================================================================
+
+   The glass effect only works when there's something interesting behind it.
+   These backgrounds provide depth and visual interest for the glass to reveal.
+*/
+
+/* Base dark background with subtle gradient */
+.glass-bg-base {
+  background: var(--glass-void);
+  background-image:
+    radial-gradient(
+      ellipse 100% 100% at 50% 0%,
+      rgba(120, 119, 198, 0.08) 0%,
+      transparent 50%
+    );
+}
+
+/* Mesh gradient background - creates depth illusion */
+.glass-bg-mesh {
+  background: var(--glass-void);
+  background-image:
+    /* Top-left accent glow */
+    radial-gradient(
+      ellipse 80% 50% at 10% 20%,
+      hsla(var(--glass-secondary-h), 70%, 50%, 0.12) 0%,
+      transparent 50%
+    ),
+    /* Top-right warm glow */
+    radial-gradient(
+      ellipse 60% 40% at 85% 15%,
+      hsla(var(--glass-accent-h), 80%, 50%, 0.08) 0%,
+      transparent 45%
+    ),
+    /* Bottom ambient */
+    radial-gradient(
+      ellipse 100% 60% at 50% 100%,
+      rgba(120, 119, 198, 0.06) 0%,
+      transparent 60%
+    );
+}
+
+/* Animated gradient background for hero sections */
+.glass-bg-animated {
+  background: var(--glass-void);
+  background-image:
+    radial-gradient(
+      ellipse 80% 50% at var(--mouse-x, 50%) var(--mouse-y, 50%),
+      hsla(var(--glass-secondary-h), 60%, 50%, 0.1) 0%,
+      transparent 50%
+    );
+  transition: background-image 0.3s ease;
+}
+
+/* Dot grid pattern - subtle depth indicator */
+.glass-bg-dots {
+  background-image:
+    radial-gradient(
+      circle at 1px 1px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 0
+    );
+  background-size: 32px 32px;
+}
+
+/* Noise overlay - adds texture and reduces banding */
+.glass-bg-noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--glass-noise);
+  opacity: 0.02;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+
+/* ============================================================================
+   BASE GLASS CLASS
+   ============================================================================
+
+   The foundation class that all variants extend. Includes:
+   - Semi-transparent background
+   - Backdrop blur
+   - Border with gradient highlight
+   - Proper stacking context
+
+   IMPORTANT: backdrop-filter is expensive. Apply only to static or
+   infrequently updating elements.
+*/
+
+.glass {
+  /* Isolation creates stacking context for proper layering */
+  isolation: isolate;
+  position: relative;
+
+  /* Core glass appearance */
+  background: var(--glass-surface-2);
+  backdrop-filter: blur(var(--glass-blur-md));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md));
+
+  /* Border with top highlight */
+  border: var(--glass-border-width) solid var(--glass-border-light);
+  border-top-color: var(--glass-border-medium);
+
+  /* Standard rounding */
+  border-radius: var(--glass-radius-lg);
+
+  /* Layered shadow for depth */
+  box-shadow: var(--glass-shadow-md);
+
+  /* Smooth transitions for interactions */
+  transition:
+    background-color var(--glass-transition-normal) var(--glass-ease-out),
+    border-color var(--glass-transition-normal) var(--glass-ease-out),
+    box-shadow var(--glass-transition-normal) var(--glass-ease-out),
+    transform var(--glass-transition-normal) var(--glass-ease-out);
+}
+
+/* Inner highlight - simulates light hitting top edge */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--glass-border-width);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 40%,
+    transparent 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Noise texture overlay for realism */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: var(--glass-noise);
+  opacity: 0.015;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+
+/* ============================================================================
+   GLASS VARIANTS
+   ============================================================================
+
+   Each variant serves a specific purpose in the visual hierarchy.
+*/
+
+/* --------------------------------------------------------------------------
+   GLASS SOFT
+   --------------------------------------------------------------------------
+   Subtle, minimal blur. Use for:
+   - Background cards that don't need heavy blur
+   - Performance-critical areas
+   - Large surfaces
+*/
+.glass-soft {
+  background: var(--glass-surface-1);
+  backdrop-filter: blur(var(--glass-blur-xs));
+  -webkit-backdrop-filter: blur(var(--glass-blur-xs));
+  border-color: var(--glass-border-subtle);
+  border-top-color: var(--glass-border-light);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+.glass-soft::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    transparent 30%
+  );
+}
+
+/* --------------------------------------------------------------------------
+   GLASS STRONG
+   --------------------------------------------------------------------------
+   Higher contrast, more visible. Use for:
+   - Primary action cards
+   - Important information
+   - Call-to-action panels
+*/
+.glass-strong {
+  background: var(--glass-surface-3);
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+  border-color: var(--glass-border-medium);
+  border-top-color: var(--glass-border-strong);
+  box-shadow: var(--glass-shadow-lg);
+}
+
+.glass-strong::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    transparent 50%
+  );
+}
+
+/* --------------------------------------------------------------------------
+   GLASS FROSTED
+   --------------------------------------------------------------------------
+   Heavy blur, very opaque. Use for:
+   - Modals and dialogs
+   - Dropdown menus
+   - Tooltips
+   - Overlays that need to obscure content
+*/
+.glass-frosted {
+  background: var(--glass-surface-4);
+  backdrop-filter: blur(var(--glass-blur-xl)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur-xl)) saturate(150%);
+  border-color: var(--glass-border-medium);
+  border-top-color: var(--glass-border-strong);
+  box-shadow: var(--glass-shadow-xl);
+}
+
+.glass-frosted::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    rgba(255, 255, 255, 0.05) 20%,
+    transparent 60%
+  );
+}
+
+/* --------------------------------------------------------------------------
+   GLASS CLEAR
+   --------------------------------------------------------------------------
+   Minimal frosting, mostly transparent. Use for:
+   - Navigation bars
+   - Toolbars
+   - Elements that need to show content behind clearly
+*/
+.glass-clear {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(var(--glass-blur-sm)) saturate(120%);
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm)) saturate(120%);
+  border-color: var(--glass-border-subtle);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+.glass-clear::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    transparent 20%
+  );
+}
+
+
+/* ============================================================================
+   INTERACTIVE STATES
+   ============================================================================
+
+   Hover and active states that enhance realism without over-animating.
+   Key principle: subtle changes that feel responsive but not distracting.
+*/
+
+/* Hover state - slight elevation and brightness increase */
+.glass:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--glass-border-medium);
+  box-shadow: var(--glass-shadow-lg);
+}
+
+.glass-soft:hover {
+  background: var(--glass-surface-2);
+  border-color: var(--glass-border-light);
+}
+
+.glass-strong:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: var(--glass-border-strong);
+  box-shadow: var(--glass-shadow-xl);
+}
+
+.glass-frosted:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: var(--glass-border-strong);
+}
+
+/* Focus state - visible ring for accessibility */
+.glass:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--glass-shadow-md),
+    0 0 0 2px var(--glass-void),
+    0 0 0 4px var(--sb-color-accent, #FFD600);
+}
+
+/* Active/pressed state - slight depression effect */
+.glass:active {
+  transform: scale(0.99);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: var(--glass-shadow-sm);
+  transition-duration: var(--glass-transition-fast);
+}
+
+/* Interactive variant - explicitly for clickable glass elements */
+.glass-interactive {
+  cursor: pointer;
+  user-select: none;
+}
+
+.glass-interactive:hover {
+  transform: translateY(-1px);
+}
+
+.glass-interactive:active {
+  transform: translateY(0) scale(0.99);
+}
+
+
+/* ============================================================================
+   GLOW EFFECTS
+   ============================================================================
+
+   Ambient lighting effects that make glass elements feel alive.
+   Use sparingly - one or two glowing elements per viewport maximum.
+*/
+
+/* Accent glow - for primary actions */
+.glass-glow {
+  box-shadow:
+    var(--glass-shadow-md),
+    var(--glass-glow-accent);
+}
+
+.glass-glow:hover {
+  box-shadow:
+    var(--glass-shadow-lg),
+    0 0 30px rgba(255, 214, 0, 0.25),
+    0 0 60px rgba(255, 214, 0, 0.15);
+}
+
+/* Secondary glow - for AI/tech elements */
+.glass-glow-secondary {
+  box-shadow:
+    var(--glass-shadow-md),
+    var(--glass-glow-secondary);
+}
+
+/* Pulse animation for drawing attention - Street Voices brand yellow */
+@keyframes glass-pulse {
+  0%, 100% {
+    box-shadow:
+      var(--glass-shadow-md),
+      0 0 20px rgba(255, 214, 0, 0.15);
+  }
+  50% {
+    box-shadow:
+      var(--glass-shadow-md),
+      0 0 30px rgba(255, 214, 0, 0.25);
+  }
+}
+
+.glass-pulse {
+  animation: glass-pulse 3s ease-in-out infinite;
+}
+
+
+/* ============================================================================
+   BORDER UTILITIES
+   ============================================================================
+
+   Edge treatments for additional visual interest.
+*/
+
+/* Gradient border - top light, fades down */
+.glass-border-gradient {
+  border-image: linear-gradient(
+    180deg,
+    var(--glass-border-strong) 0%,
+    var(--glass-border-light) 50%,
+    var(--glass-border-subtle) 100%
+  ) 1;
+}
+
+/* Accent border - Street Voices brand yellow top edge */
+.glass-border-accent {
+  border-top: 2px solid var(--sb-color-accent, #FFD600);
+}
+
+/* Rainbow border - for special elements */
+.glass-border-rainbow {
+  position: relative;
+}
+
+.glass-border-rainbow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    hsla(var(--glass-accent-h), 100%, 60%, 0.5) 0%,
+    hsla(var(--glass-secondary-h), 80%, 60%, 0.5) 50%,
+    hsla(var(--glass-accent-h), 100%, 60%, 0.5) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+
+/* ============================================================================
+   TEXT UTILITIES
+   ============================================================================
+
+   Text styling that ensures readability on glass surfaces.
+   CRITICAL: Never blur text. Always maintain high contrast.
+*/
+
+/* Text colors */
+.glass-text {
+  color: var(--glass-text-primary);
+}
+
+.glass-text-secondary {
+  color: var(--glass-text-secondary);
+}
+
+.glass-text-muted {
+  color: var(--glass-text-tertiary);
+}
+
+/* Text with subtle shadow for extra legibility */
+.glass-text-shadow {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Gradient text for headings */
+.glass-text-gradient {
+  background: linear-gradient(
+    135deg,
+    var(--glass-text-primary) 0%,
+    var(--glass-text-secondary) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Accent gradient text - Street Voices brand yellow */
+.glass-text-accent {
+  background: linear-gradient(
+    135deg,
+    #FFD600 0%,
+    #ff8800 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+
+/* ============================================================================
+   SIZE VARIANTS
+   ============================================================================
+
+   Pre-defined sizes for common use cases.
+*/
+
+.glass-sm {
+  padding: var(--glass-padding-sm);
+  border-radius: var(--glass-radius-sm);
+}
+
+.glass-md {
+  padding: var(--glass-padding-md);
+  border-radius: var(--glass-radius-md);
+}
+
+.glass-lg {
+  padding: var(--glass-padding-lg);
+  border-radius: var(--glass-radius-lg);
+}
+
+.glass-xl {
+  padding: var(--glass-padding-xl);
+  border-radius: var(--glass-radius-xl);
+}
+
+
+/* ============================================================================
+   COMPONENT PATTERNS
+   ============================================================================
+
+   Pre-built patterns for common UI components.
+*/
+
+/* --------------------------------------------------------------------------
+   GLASS CARD
+   --------------------------------------------------------------------------
+*/
+.glass-card {
+  composes: glass;
+  padding: var(--glass-padding-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--glass-padding-md);
+}
+
+.glass-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--glass-padding-sm);
+  border-bottom: 1px solid var(--glass-border-subtle);
+}
+
+.glass-card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--glass-text-primary);
+  margin: 0;
+}
+
+.glass-card-content {
+  flex: 1;
+}
+
+.glass-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--glass-padding-sm);
+  padding-top: var(--glass-padding-sm);
+  border-top: 1px solid var(--glass-border-subtle);
+}
+
+/* --------------------------------------------------------------------------
+   GLASS BUTTON
+   --------------------------------------------------------------------------
+*/
+.glass-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--glass-text-primary);
+  background: var(--glass-surface-2);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+  border: var(--glass-border-width) solid var(--glass-border-light);
+  border-radius: var(--glass-radius-md);
+  cursor: pointer;
+  transition: all var(--glass-transition-normal) var(--glass-ease-out);
+}
+
+.glass-button:hover {
+  background: var(--glass-surface-3);
+  border-color: var(--glass-border-medium);
+  transform: translateY(-1px);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+.glass-button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.glass-button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--glass-void),
+    0 0 0 4px var(--sb-color-accent, #FFD600);
+}
+
+/* Primary button variant - Street Voices brand yellow */
+.glass-button-primary {
+  background: var(--sb-color-accent, #FFD600);
+  color: #000;
+  border-color: transparent;
+}
+
+.glass-button-primary:hover {
+  background: #ffe033;  /* Slightly lighter yellow on hover */
+  box-shadow: 0 0 20px rgba(255, 214, 0, 0.4);
+}
+
+/* Ghost button variant */
+.glass-button-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.glass-button-ghost:hover {
+  background: var(--glass-surface-2);
+}
+
+/* --------------------------------------------------------------------------
+   GLASS INPUT
+   --------------------------------------------------------------------------
+*/
+.glass-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--glass-text-primary);
+  background: var(--glass-surface-1);
+  backdrop-filter: blur(var(--glass-blur-xs));
+  -webkit-backdrop-filter: blur(var(--glass-blur-xs));
+  border: var(--glass-border-width) solid var(--glass-border-subtle);
+  border-radius: var(--glass-radius-md);
+  outline: none;
+  transition: all var(--glass-transition-normal) var(--glass-ease-out);
+}
+
+.glass-input::placeholder {
+  color: var(--glass-text-muted);
+}
+
+.glass-input:hover {
+  border-color: var(--glass-border-light);
+}
+
+.glass-input:focus {
+  background: var(--glass-surface-2);
+  border-color: var(--sb-color-accent, #FFD600);
+  box-shadow: 0 0 0 3px rgba(255, 214, 0, 0.15);
+}
+
+/* --------------------------------------------------------------------------
+   GLASS BADGE
+   --------------------------------------------------------------------------
+*/
+.glass-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--glass-text-primary);
+  background: var(--glass-surface-2);
+  border: var(--glass-border-width) solid var(--glass-border-subtle);
+  border-radius: var(--glass-radius-full);
+}
+
+.glass-badge-accent {
+  background: rgba(255, 214, 0, 0.15);
+  border-color: rgba(255, 214, 0, 0.3);
+  color: var(--sb-color-accent, #FFD600);
+}
+
+.glass-badge-secondary {
+  background: hsla(var(--glass-secondary-h), var(--glass-secondary-s), var(--glass-secondary-l), 0.15);
+  border-color: hsla(var(--glass-secondary-h), var(--glass-secondary-s), var(--glass-secondary-l), 0.3);
+  color: hsl(var(--glass-secondary-h), var(--glass-secondary-s), 70%);
+}
+
+/* --------------------------------------------------------------------------
+   GLASS DIVIDER
+   --------------------------------------------------------------------------
+*/
+.glass-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--glass-border-light) 20%,
+    var(--glass-border-light) 80%,
+    transparent 100%
+  );
+  border: none;
+  margin: var(--glass-padding-md) 0;
+}
+
+.glass-divider-vertical {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--glass-border-light) 20%,
+    var(--glass-border-light) 80%,
+    transparent 100%
+  );
+}
+
+
+/* ============================================================================
+   ACCESSIBILITY
+   ============================================================================
+
+   Ensuring glass effects don't compromise usability.
+*/
+
+/* Reduced motion - disable animations and transitions */
+@media (prefers-reduced-motion: reduce) {
+  .glass,
+  .glass-soft,
+  .glass-strong,
+  .glass-frosted,
+  .glass-button,
+  .glass-input {
+    transition: none;
+  }
+
+  .glass-pulse {
+    animation: none;
+  }
+
+  .glass-interactive:hover,
+  .glass-interactive:active,
+  .glass:active {
+    transform: none;
+  }
+}
+
+/* ============================================================================
+   LIGHT MODE SUPPORT
+   ============================================================================
+   Light mode overrides for the glassmorphism system.
+   Glass effects on light backgrounds require inverted opacities.
+*/
+
+:root[data-theme="light"] {
+  /* Background colors for light mode */
+  --glass-void: var(--sb-color-background, #f7f8fc);
+  --glass-void-elevated: var(--sb-color-surface-muted, #f3f4f8);
+
+  /* Surface colors - darker glass on light backgrounds */
+  --glass-surface-1: rgba(255, 255, 255, 0.6);
+  --glass-surface-2: rgba(255, 255, 255, 0.7);
+  --glass-surface-3: rgba(255, 255, 255, 0.8);
+  --glass-surface-4: rgba(255, 255, 255, 0.85);
+
+  /* Text colors for light mode */
+  --glass-text-primary: var(--sb-color-text-primary, #1a1c24);
+  --glass-text-secondary: var(--sb-color-text-secondary, #4b4d59);
+  --glass-text-tertiary: rgba(0, 0, 0, 0.55);
+  --glass-text-muted: rgba(0, 0, 0, 0.4);
+
+  /* Borders - darker for light mode */
+  --glass-border-subtle: rgba(0, 0, 0, 0.06);
+  --glass-border-light: rgba(0, 0, 0, 0.1);
+  --glass-border-medium: rgba(0, 0, 0, 0.15);
+  --glass-border-strong: rgba(0, 0, 0, 0.2);
+
+  /* Shadows - softer for light mode */
+  --glass-shadow-sm:
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.05);
+
+  --glass-shadow-md:
+    0 2px 4px rgba(0, 0, 0, 0.08),
+    0 4px 8px rgba(0, 0, 0, 0.06),
+    0 8px 16px rgba(0, 0, 0, 0.04);
+
+  --glass-shadow-lg:
+    0 4px 6px rgba(0, 0, 0, 0.1),
+    0 8px 15px rgba(0, 0, 0, 0.08),
+    0 16px 32px rgba(0, 0, 0, 0.06);
+
+  --glass-shadow-xl:
+    0 8px 12px rgba(0, 0, 0, 0.1),
+    0 16px 24px rgba(0, 0, 0, 0.08),
+    0 32px 48px rgba(0, 0, 0, 0.06);
+
+  /* Glows - warmer for light mode */
+  --glass-glow-accent:
+    0 0 20px rgba(255, 180, 0, 0.2),
+    0 0 40px rgba(255, 180, 0, 0.1);
+}
+
+/* Light mode glass background */
+:root[data-theme="light"] .glass-bg-base {
+  background: var(--glass-void);
+  background-image:
+    radial-gradient(
+      ellipse 100% 100% at 50% 0%,
+      rgba(139, 92, 246, 0.08) 0%,
+      transparent 50%
+    );
+}
+
+:root[data-theme="light"] .glass-bg-mesh {
+  background: var(--glass-void);
+  background-image:
+    radial-gradient(
+      ellipse 80% 50% at 10% 20%,
+      rgba(139, 92, 246, 0.1) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 85% 15%,
+      rgba(255, 180, 0, 0.08) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse 100% 60% at 50% 100%,
+      rgba(6, 182, 212, 0.06) 0%,
+      transparent 60%
+    );
+}
+
+/* Light mode hover states */
+:root[data-theme="light"] .glass:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: var(--glass-border-medium);
+}
+
+:root[data-theme="light"] .glass-soft:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme="light"] .glass-strong:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Light mode no-blur fallback */
+:root[data-theme="light"] .glass-no-blur {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* Light mode button overrides - ensure black text on accent buttons */
+:root[data-theme="light"] .glass-button-primary {
+  color: #000 !important;
+}
+
+:root[data-theme="light"] .glass-button-primary svg {
+  color: #000 !important;
+}
+
+/* High contrast mode - increase visibility */
+@media (prefers-contrast: high) {
+  :root {
+    --glass-text-primary: rgba(255, 255, 255, 1);
+    --glass-text-secondary: rgba(255, 255, 255, 0.9);
+    --glass-border-light: rgba(255, 255, 255, 0.3);
+    --glass-border-medium: rgba(255, 255, 255, 0.5);
+    --glass-surface-2: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Focus visible - ensure focus states are always visible */
+.glass:focus-visible,
+.glass-button:focus-visible,
+.glass-input:focus-visible {
+  outline: 2px solid var(--sb-color-accent, #FFD600);
+  outline-offset: 2px;
+}
+
+
+/* ============================================================================
+   PERFORMANCE UTILITIES
+   ============================================================================
+
+   Classes to optimize rendering performance.
+*/
+
+/* Disable blur for performance-critical scenarios */
+.glass-no-blur {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(20, 20, 30, 0.85);
+}
+
+/* Hardware acceleration hint */
+.glass-accelerated {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+/* Contain layout for better performance */
+.glass-contained {
+  contain: layout style paint;
+}
+
+
+/* ============================================================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================================================
+
+   Reduce effects on mobile for better performance.
+*/
+
+@media (max-width: 768px) {
+  :root {
+    /* Reduce blur on mobile for performance */
+    --glass-blur-md: 12px;
+    --glass-blur-lg: 16px;
+    --glass-blur-xl: 24px;
+
+    /* Slightly more opaque for legibility */
+    --glass-surface-2: rgba(255, 255, 255, 0.06);
+    --glass-surface-3: rgba(255, 255, 255, 0.09);
+  }
+
+  /* Reduce shadow complexity on mobile */
+  .glass {
+    box-shadow: var(--glass-shadow-sm);
+  }
+
+  .glass-strong {
+    box-shadow: var(--glass-shadow-md);
+  }
+}
+
+/* Disable blur entirely on low-power devices if needed */
+@media (prefers-reduced-data: reduce) {
+  .glass,
+  .glass-soft,
+  .glass-strong,
+  .glass-frosted,
+  .glass-clear {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(20, 20, 30, 0.9);
+  }
+}
+
+
+/* ============================================================================
+   MESSAGING UTILITIES
+   ============================================================================
+
+   Animations and utilities for the messaging interface.
+*/
+
+/* Typing indicator bounce animation */
+@keyframes bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Search result highlight animation */
+.search-highlight {
+  animation: highlight-flash 2s ease-out;
+}
+
+@keyframes highlight-flash {
+  0% {
+    background-color: rgba(255, 214, 0, 0.4);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Connection status pulse */
+@keyframes connection-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.connection-indicator {
+  animation: connection-pulse 1.5s ease-in-out infinite;
+}
+
+/* Thread panel slide-in animation */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.thread-panel-enter {
+  animation: slide-in-right 0.25s ease-out;
+}
+
+/* Link preview card styles */
+.link-preview {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--glass-surface-2);
+  border: 1px solid var(--glass-border-light);
+  border-radius: var(--glass-radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  max-width: 400px;
+}
+
+.link-preview:hover {
+  background: var(--glass-surface-3);
+  border-color: var(--glass-border-medium);
+  transform: translateY(-1px);
+}
+
+.link-preview-image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--glass-radius-sm);
+  flex-shrink: 0;
+}
+
+.link-preview-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.link-preview-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--glass-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-preview-description {
+  font-size: 0.8rem;
+  color: var(--glass-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.link-preview-site {
+  font-size: 0.7rem;
+  color: var(--glass-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.link-preview-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   TRACK CHANGES STYLES
+   TipTap marks for insertions and deletions
+   --------------------------------------------------------------------------
+*/
+
+/* Insertion decoration - green underline */
+.track-changes-insertion {
+  background-color: rgba(34, 197, 94, 0.15);
+  border-bottom: 2px solid #22c55e;
+  padding: 0 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.track-changes-insertion:hover {
+  background-color: rgba(34, 197, 94, 0.25);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+
+/* Deletion decoration - red strikethrough */
+.track-changes-deletion {
+  background-color: rgba(239, 68, 68, 0.15);
+  text-decoration: line-through;
+  text-decoration-color: #ef4444;
+  text-decoration-thickness: 2px;
+  color: #999;
+  padding: 0 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.track-changes-deletion:hover {
+  background-color: rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+}
+
+/* Selected/focused change */
+.track-changes-selected {
+  box-shadow: 0 0 0 2px var(--glass-accent) !important;
+  outline: none;
+}
+
+/* Author color variants for left border */
+.track-changes-author-1 { border-left: 3px solid #6366f1 !important; }
+.track-changes-author-2 { border-left: 3px solid #8b5cf6 !important; }
+.track-changes-author-3 { border-left: 3px solid #ec4899 !important; }
+.track-changes-author-4 { border-left: 3px solid #f97316 !important; }
+.track-changes-author-5 { border-left: 3px solid #06b6d4 !important; }
+
+/* My suggestion highlight */
+.track-changes-mine {
+  box-shadow: inset 0 0 0 1px var(--glass-accent);
+}
+
+/* Others' suggestion - dashed border style */
+.track-changes-others {
+  border-style: dashed !important;
+}
+
+/* Hide marks when show suggestions is off */
+.track-changes-hidden .track-changes-insertion,
+.track-changes-hidden .track-changes-deletion {
+  background-color: transparent !important;
+  border-bottom: none !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+
+/* Suggesting mode indicator - subtle border glow on editor */
+.suggesting-mode-active {
+  box-shadow: inset 0 0 0 2px rgba(255, 214, 0, 0.3);
+  border-color: rgba(255, 214, 0, 0.5) !important;
+}
+
+/* Track changes panel animations */
+@keyframes track-change-flash-accept {
+  0% { background-color: rgba(34, 197, 94, 0.3); }
+  100% { background-color: transparent; }
+}
+
+@keyframes track-change-flash-reject {
+  0% { background-color: rgba(239, 68, 68, 0.3); }
+  100% { background-color: transparent; }
+}
+
+.track-change-accepted {
+  animation: track-change-flash-accept 0.5s ease-out;
+}
+
+.track-change-rejected {
+  animation: track-change-flash-reject 0.5s ease-out;
+}
+
+/* Suggesting mode toggle animation */
+@keyframes suggesting-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 214, 0, 0.2); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 214, 0, 0.1); }
+}
+
+.suggesting-mode-toggle--active {
+  animation: suggesting-pulse 2s ease-in-out infinite;
+}

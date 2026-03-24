@@ -14,11 +14,11 @@
     const style = document.createElement('style');
     style.id = 'sv-tpl-styles';
     style.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;800&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rubik:wght@400;500;800&display=swap');
 
       @font-face {
         font-family: 'Cocogoose Compressed';
-        src: local('Cocogoose Compressed'), local('CocogooseCompressed-Regular');
+        src: url('/fonts/CocogooseCompressed-Regular.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
       }
@@ -163,7 +163,8 @@
       }
       #${PANEL_ID} .sv-front .cta-pill {
         position: absolute; left: 100px; top: 1181px;
-        width: 514px; height: 50px; background: #ffd600; border-radius: 36px;
+        width: 514px; height: 50px; background: #ffd600 !important; border-radius: 36px;
+        border: none !important; box-shadow: none !important;
       }
       #${PANEL_ID} .sv-front .cta-text {
         position: absolute; left: 120px; top: 1175px; width: 648px;
@@ -177,24 +178,25 @@
         letter-spacing: -0.69px; text-transform: uppercase; color: #fff;
       }
       /* Article page */
-      #${PANEL_ID} .sv-article { background: #fff; }
+      #${PANEL_ID} .sv-article { background: #ffffff !important; }
       #${PANEL_ID} .sv-article .article-body {
         position: absolute; left: 123px; top: 240px; width: 834px;
         font-family: 'Rubik', sans-serif; font-weight: 400;
         font-size: 27px; line-height: 44px; letter-spacing: 0.54px;
-        color: #000; text-align: center;
+        color: #000000 !important; text-align: center;
+        background: transparent !important;
       }
       #${PANEL_ID} .sv-article .article-body p { margin: 0; }
       #${PANEL_ID} .sv-article .article-body .spacer { height: 44px; }
       #${PANEL_ID} .sv-article .cta-pill {
         position: absolute; left: 280px; top: 1187px;
-        width: 514px; height: 50px; background: #ffd600; border-radius: 36px;
+        width: 514px; height: 50px; background: #ffd600 !important; border-radius: 36px;
+        border: none !important; box-shadow: none !important;
       }
       #${PANEL_ID} .sv-article .cta-text {
-        position: absolute; left: 50%; transform: translateX(-50%);
-        top: 1181px; width: 480px; font-family: 'Rubik', sans-serif;
-        font-weight: 500; font-size: 26px; line-height: 62px;
-        letter-spacing: 0.52px; color: #000; text-align: center;
+        position: absolute; left: 300px; top: 1181px; width: 480px;
+        font-family: 'Rubik', sans-serif; font-weight: 500;
+        font-size: 26px; line-height: 62px; letter-spacing: 0.52px; color: #000;
       }
       /* Editor panel */
       #${PANEL_ID} .sv-editor {
@@ -396,13 +398,13 @@
     document.getElementById('svInputHL').oninput = updateHL;
     document.getElementById('svInputCta').oninput = updateCta;
     document.getElementById('svInputBody').oninput = updateBody;
-    document.getElementById('svInputImage').onchange = function(e) {
+    document.getElementById('svInputImage').onchange = function (e) {
       var f = e.target.files[0]; if (!f) return;
       var r = new FileReader();
-      r.onload = function(ev) { document.getElementById('svBgImage').src = ev.target.result; };
+      r.onload = function (ev) { document.getElementById('svBgImage').src = ev.target.result; };
       r.readAsDataURL(f);
     };
-    document.getElementById('svInputImageUrl').oninput = function() {
+    document.getElementById('svInputImageUrl').oninput = function () {
       var url = this.value.trim();
       if (url) document.getElementById('svBgImage').src = url;
     };
@@ -413,13 +415,15 @@
     document.addEventListener('keydown', panel._keyHandler);
 
     // Init drag-to-move after a tick so elements are in DOM and sized
-    requestAnimationFrame(function() {
+    requestAnimationFrame(function () {
       var hl = document.getElementById('svHeadline');
       var maxBottom = hl.offsetTop + hl.offsetHeight;
       initDraggable(hl, 'svCoordsHL', { maxBottomY: maxBottom });
       initDraggable(document.getElementById('svArticleBody'), 'svCoordsBody');
     });
   }
+  // Expose globally so Automations panel can trigger it
+  window.__svTemplateShowPanel = showPanel;
 
   function closePanel() {
     if (exportInProgress) return;
@@ -441,11 +445,11 @@
   }
 
   function escAttr(s) {
-    return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function bodyToHtml(raw) {
-    return raw.split('\n\n').map(function(block) {
+    return raw.split('\n\n').map(function (block) {
       if (!block.trim()) return '<div class="spacer"></div>';
       return '<p>' + esc(block).replace(/\n/g, '<br>') + '</p>';
     }).join('<div class="spacer"></div>');
@@ -474,7 +478,7 @@
     el.appendChild(coordsSpan);
     // Build body HTML
     var frag = document.createDocumentFragment();
-    raw.split('\n\n').forEach(function(block, i) {
+    raw.split('\n\n').forEach(function (block, i) {
       if (i > 0) {
         var sp = document.createElement('div');
         sp.className = 'spacer';
@@ -499,7 +503,7 @@
 
   function initDraggable(el, coordsId, opts) {
     opts = opts || {};
-    el.addEventListener('mousedown', function(e) {
+    el.addEventListener('mousedown', function (e) {
       if (e.target.classList.contains('drag-coords')) return;
       e.preventDefault();
       var isDragging = true;
@@ -540,15 +544,15 @@
   }
 
   function loadScriptOnce(src) {
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
       var existing = document.querySelector('script[data-sv-lib="' + src + '"]');
       if (existing) {
         if (existing.dataset.loaded === '1') {
           resolve();
           return;
         }
-        existing.addEventListener('load', function() { resolve(); }, { once: true });
-        existing.addEventListener('error', function() { reject(new Error('Failed to load ' + src)); }, { once: true });
+        existing.addEventListener('load', function () { resolve(); }, { once: true });
+        existing.addEventListener('error', function () { reject(new Error('Failed to load ' + src)); }, { once: true });
         return;
       }
 
@@ -556,61 +560,52 @@
       script.src = src;
       script.async = true;
       script.dataset.svLib = src;
-      script.onload = function() {
+      script.onload = function () {
         script.dataset.loaded = '1';
         resolve();
       };
-      script.onerror = function() {
+      script.onerror = function () {
         reject(new Error('Failed to load ' + src));
       };
       document.head.appendChild(script);
     });
   }
 
-  function dataUrlToBlob(dataUrl) {
-    if (!dataUrl || dataUrl.indexOf('data:') !== 0) return null;
-    var commaIndex = dataUrl.indexOf(',');
-    if (commaIndex === -1) return null;
-    var header = dataUrl.slice(0, commaIndex);
-    var payload = dataUrl.slice(commaIndex + 1);
-
-    var mimeMatch = header.match(/^data:([^;]+)/);
-    var mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-    var isBase64 = /;base64/i.test(header);
-
-    try {
-      var byteString;
-      if (isBase64) byteString = atob(payload);
-      else byteString = decodeURIComponent(payload);
-
-      var bytes = new Uint8Array(byteString.length);
-      for (var i = 0; i < byteString.length; i++) {
-        bytes[i] = byteString.charCodeAt(i);
-      }
-      return new Blob([bytes], { type: mime });
-    } catch (_) {
-      return null;
-    }
-  }
-
   function triggerBrowserDownload(dataUrl, fileName) {
-    var blob = dataUrlToBlob(dataUrl);
-    if (!blob) return false;
-
-    var blobUrl = URL.createObjectURL(blob);
+    // Use the data URL directly in the href — data URLs bypass PWA service workers
+    // entirely (they are not network requests), so the download attribute filename
+    // is always respected. Blob URLs risk being renamed to their UUID path segment.
     var tempLink = document.createElement('a');
-    tempLink.href = blobUrl;
+    tempLink.href = dataUrl;
     tempLink.download = fileName;
-    tempLink.rel = 'noopener';
     document.body.appendChild(tempLink);
     tempLink.click();
-    tempLink.remove();
+    document.body.removeChild(tempLink);
+  }
 
-    setTimeout(function() {
-      URL.revokeObjectURL(blobUrl);
-    }, 10000);
+  function dataUrlToBlobUrl(dataUrl) {
+    var commaIdx = dataUrl.indexOf(',');
+    if (commaIdx === -1) return null;
+    var byteString = atob(dataUrl.slice(commaIdx + 1));
+    var bytes = new Uint8Array(byteString.length);
+    for (var i = 0; i < byteString.length; i++) {
+      bytes[i] = byteString.charCodeAt(i);
+    }
+    var blob = new Blob([bytes], { type: 'image/png' });
+    return URL.createObjectURL(blob);
+  }
 
-    return true;
+  function cleanupDownloadBlobUrls() {
+    var dlFront = document.getElementById('svDlFront');
+    var dlArticle = document.getElementById('svDlArticle');
+    [dlFront, dlArticle].forEach(function (link) {
+      if (!link) return;
+      var prev = link.dataset.blobUrl || '';
+      if (prev.indexOf('blob:') === 0) {
+        try { URL.revokeObjectURL(prev); } catch (_) {}
+      }
+      delete link.dataset.blobUrl;
+    });
   }
 
   function wireDownloadLinkHandlers() {
@@ -618,30 +613,20 @@
     var articleLink = document.getElementById('svDlArticle');
     if (frontLink && !frontLink.dataset.boundClick) {
       frontLink.dataset.boundClick = '1';
-      frontLink.addEventListener('click', function(e) {
-        var dataUrl = frontLink.dataset.pngDataUrl || frontLink.getAttribute('href') || '';
+      frontLink.addEventListener('click', function (e) {
+        var dataUrl = frontLink.dataset.pngDataUrl || '';
         if (dataUrl.indexOf('data:image/png') !== 0) return;
-        if (triggerBrowserDownload(dataUrl, 'sv-cover.png')) {
-          e.preventDefault();
-          return;
-        }
-        // Keep browser-native anchor behavior for fallback. Do not call click()
-        // here or we can recurse into this same handler and no-op.
-        frontLink.setAttribute('href', dataUrl);
-        frontLink.setAttribute('download', 'sv-cover.png');
+        e.preventDefault();
+        triggerBrowserDownload(dataUrl, 'sv-cover.png');
       });
     }
     if (articleLink && !articleLink.dataset.boundClick) {
       articleLink.dataset.boundClick = '1';
-      articleLink.addEventListener('click', function(e) {
-        var dataUrl = articleLink.dataset.pngDataUrl || articleLink.getAttribute('href') || '';
+      articleLink.addEventListener('click', function (e) {
+        var dataUrl = articleLink.dataset.pngDataUrl || '';
         if (dataUrl.indexOf('data:image/png') !== 0) return;
-        if (triggerBrowserDownload(dataUrl, 'sv-article.png')) {
-          e.preventDefault();
-          return;
-        }
-        articleLink.setAttribute('href', dataUrl);
-        articleLink.setAttribute('download', 'sv-article.png');
+        e.preventDefault();
+        triggerBrowserDownload(dataUrl, 'sv-article.png');
       });
     }
   }
@@ -656,22 +641,22 @@
     var img = new Image();
     img.crossOrigin = 'anonymous';
     try {
-      await new Promise(function(res, rej) {
+      await new Promise(function (res, rej) {
         img.onload = res;
-        img.onerror = function() { rej(new Error('CORS image load failed')); };
+        img.onerror = function () { rej(new Error('CORS image load failed')); };
         img.src = bgImg.src;
       });
-    } catch(e) {
+    } catch (e) {
       // CORS blocked — try without crossOrigin (canvas will be tainted but blur fallback is cosmetic)
       console.warn('Blur fallback: CORS load failed, trying without crossOrigin...');
       img = new Image();
       try {
-        await new Promise(function(res, rej) {
+        await new Promise(function (res, rej) {
           img.onload = res;
-          img.onerror = function() { rej(new Error('Image load failed entirely')); };
+          img.onerror = function () { rej(new Error('Image load failed entirely')); };
           img.src = bgImg.src;
         });
-      } catch(e2) {
+      } catch (e2) {
         console.warn('Blur fallback: image load failed entirely, skipping blur');
         return null;
       }
@@ -690,27 +675,25 @@
     ctx.drawImage(img, oX, oY - 817 + blurPad, dW, dH);
     ctx.filter = 'none';
 
-    // Dark gradient on top (shifted by blurPad)
+    // Dark gradient — match CSS preview exactly:
+    // linear-gradient(rgba(0,0,0,0) 0%, rgba(0,0,0,0.15) 20%, rgba(0,0,0,0.5) 50%, rgb(0,0,0) 100%)
     var g = ctx.createLinearGradient(0, blurPad, 0, 533 + blurPad);
     g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(0.15, 'rgba(0,0,0,0.10)');
-    g.addColorStop(0.3, 'rgba(0,0,0,0.25)');
+    g.addColorStop(0.2, 'rgba(0,0,0,0.15)');
     g.addColorStop(0.5, 'rgba(0,0,0,0.50)');
-    g.addColorStop(0.75, 'rgba(0,0,0,0.80)');
     g.addColorStop(1, 'rgba(0,0,0,1)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, 1080, 533 + blurPad * 2);
 
-    // Mask: very gradual transparent top -> opaque (smoother than CSS mask)
+    // Mask: feather the top edge so blur fades in naturally (matches backdrop-filter behavior)
     var mc = document.createElement('canvas'); mc.width = 1080; mc.height = 533;
     var mx = mc.getContext('2d');
     mx.drawImage(c, 0, -blurPad); // shift back so we crop the padded canvas to 533px
     mx.globalCompositeOperation = 'destination-in';
     var mg = mx.createLinearGradient(0, 0, 0, 533);
     mg.addColorStop(0, 'rgba(0,0,0,0)');
-    mg.addColorStop(0.08, 'rgba(0,0,0,0.05)');
-    mg.addColorStop(0.18, 'rgba(0,0,0,0.25)');
-    mg.addColorStop(0.35, 'rgba(0,0,0,0.85)');
-    mg.addColorStop(0.5, 'rgba(0,0,0,1)');
+    mg.addColorStop(0.15, 'rgba(0,0,0,0.1)'); // Smooth fade start
+    mg.addColorStop(0.35, 'rgba(0,0,0,0.7)'); // Ramps up
+    mg.addColorStop(0.50, 'rgba(0,0,0,1)'); // Fully opaque a bit later
     mg.addColorStop(1, 'rgba(0,0,0,1)');
     mx.fillStyle = mg; mx.fillRect(0, 0, 1080, 533);
 
@@ -733,22 +716,76 @@
     wrapper.style.overflow = 'visible';
     wrapper.style.boxShadow = 'none';
     var blurInfo = await createBlurFallback(slide);
-    slide.querySelectorAll('.drag-coords').forEach(function(el) { el.style.display = 'none'; });
-    slide.querySelectorAll('.draggable').forEach(function(el) { el.style.outline = 'none'; });
+    slide.querySelectorAll('.drag-coords').forEach(function (el) { el.style.display = 'none'; });
+    slide.querySelectorAll('.draggable').forEach(function (el) { el.style.outline = 'none'; });
 
     // Fix: html2canvas doesn't enforce overflow:hidden on the root capture element.
     // Instead of trying to fix individual elements, we crop the canvas after capture
     // to exact slide dimensions, removing any overflow content.
-    slide.style.overflow = 'hidden';
+    slide.style.setProperty('overflow', 'hidden', 'important');
+
+    // Stability: Force explicit background/color to prevent inheritance leaking into export
+    if (slide.classList.contains('sv-article')) {
+      slide.style.setProperty('background-color', '#ffffff', 'important');
+      var body = slide.querySelector('.article-body');
+      if (body) body.style.setProperty('color', '#000000', 'important');
+    }
+
+    // Position corrections specifically for html2canvas to match the pre-render perfectly
+    // html2canvas has a ~4px PNG offset (~2px CSS) relative to computed position.
+    // CSS default top=210px → center at 274px CSS = 548px PNG.
+    // With offset, html2canvas renders center at 552px. Correct by pulling up 2px CSS → 208px.
+    var articleBadgeText = slide.querySelector('.article-badge-text');
+    if (articleBadgeText) {
+      articleBadgeText.style.setProperty('top', '208px', 'important');
+      articleBadgeText.style.setProperty('left', '113px', 'important'); // Badge text horizontal position
+    }
+
+    // Shift article body 10px right in the export to better match the pre-render centre
+    if (slide.classList.contains('sv-article')) {
+      var articleBody = slide.querySelector('.article-body');
+      if (articleBody) articleBody.style.setProperty('left', '133px', 'important');
+    }
+
+    // Move headline text 15px up in export to match pre-render
+    if (slide.classList.contains('sv-front')) {
+      var headline = slide.querySelector('.headline');
+      if (headline) {
+        headline.style.setProperty('top', '862px', 'important');
+      }
+    }
+
+    var ctaText = slide.querySelector('.cta-text');
+    if (ctaText) {
+      // html2canvas struggles with the 62px line-height on a 50px pill, pushing text down.
+      ctaText.style.setProperty('line-height', '50px', 'important');
+      if (slide.classList.contains('sv-front')) {
+        ctaText.style.setProperty('top', '1176px', 'important');
+      } else {
+        ctaText.style.setProperty('top', '1174px', 'important');
+      }
+    }
+
+    slide.querySelectorAll('.cta-pill').forEach(el => {
+      el.style.setProperty('border', 'none', 'important');
+      el.style.setProperty('box-shadow', 'none', 'important');
+    });
+
+    // Shrink CTA pill from the top by 10px to match pre-render sizing
+    var ctaPill = slide.querySelector('.cta-pill');
+    if (ctaPill) {
+      ctaPill.style.setProperty('top', '1191px', 'important');
+      ctaPill.style.setProperty('height', '40px', 'important');
+    }
 
     try {
       var canvas = await html2canvas(slide, {
         width: 1080, height: 1350,
         scale: 2,
-        useCORS: true, allowTaint: true,
+        useCORS: true,
         backgroundColor: null, logging: false
       });
-      // Crop canvas to exact slide dimensions to remove any overflow
+      // Crop canvas to exact 2x dimensions to remove any overflow
       var targetW = 1080 * 2;
       var targetH = 1350 * 2;
       if (canvas.width !== targetW || canvas.height !== targetH) {
@@ -756,7 +793,6 @@
         cropped.width = targetW;
         cropped.height = targetH;
         var ctx = cropped.getContext('2d');
-        // Overflow extends above/left, so actual slide content is at the bottom-right
         var sx = Math.max(0, canvas.width - targetW);
         var sy = Math.max(0, canvas.height - targetH);
         ctx.drawImage(canvas, sx, sy, targetW, targetH, 0, 0, targetW, targetH);
@@ -770,8 +806,40 @@
       wrapper.style.height = '';
       wrapper.style.overflow = '';
       wrapper.style.boxShadow = '';
-      slide.querySelectorAll('.drag-coords').forEach(function(el) { el.style.display = ''; });
-      slide.querySelectorAll('.draggable').forEach(function(el) { el.style.outline = ''; });
+      slide.querySelectorAll('.drag-coords').forEach(function (el) { el.style.display = ''; });
+      slide.querySelectorAll('.draggable').forEach(function (el) { el.style.outline = ''; });
+
+      // Cleanup export-time styling corrections
+      if (slide.classList.contains('sv-article')) {
+        slide.style.removeProperty('background-color');
+        var body = slide.querySelector('.article-body');
+        if (body) {
+          body.style.removeProperty('color');
+          body.style.removeProperty('left');
+        }
+      }
+      var headline = slide.querySelector('.headline');
+      if (headline) { headline.style.removeProperty('top'); }
+      var articleBadgeText = slide.querySelector('.article-badge-text');
+      if (articleBadgeText) {
+        articleBadgeText.style.removeProperty('top');
+        articleBadgeText.style.removeProperty('left');
+      }
+      var ctaText = slide.querySelector('.cta-text');
+      if (ctaText) {
+        ctaText.style.removeProperty('line-height');
+        ctaText.style.removeProperty('top');
+      }
+      slide.querySelectorAll('.cta-pill').forEach(el => {
+        el.style.removeProperty('border');
+        el.style.removeProperty('box-shadow');
+      });
+      var ctaPill = slide.querySelector('.cta-pill');
+      if (ctaPill) {
+        ctaPill.style.removeProperty('top');
+        ctaPill.style.removeProperty('height');
+      }
+
       if (blurInfo) { blurInfo.fb.remove(); blurInfo.ov.style.display = ''; }
     }
   }
@@ -780,28 +848,50 @@
     if (exportInProgress) return;
     exportInProgress = true;
     var btn = document.getElementById('svBtnExport');
-    btn.textContent = 'Rendering\u2026';
-    btn.disabled = true;
     try {
-      // Wait for fonts before rendering
+      // Load html2canvas if needed
+      if (typeof html2canvas === 'undefined') {
+        btn.textContent = 'Loading Engine\u2026';
+        await loadScriptOnce('/html2canvas.min.js');
+      }
+      // Wait for fonts
       if (document.fonts && document.fonts.ready) {
         await document.fonts.ready;
       }
-      // Load html2canvas if needed (local copy avoids CDN/service-worker issues)
-      if (typeof html2canvas === 'undefined') {
-        await loadScriptOnce('/html2canvas.min.js');
-      }
+
+      btn.textContent = 'Rendering Cover\u2026';
       var frontUrl = await renderSlide(document.getElementById('svFrontPage'));
+
+      btn.textContent = 'Rendering Article\u2026';
       var articleUrl = await renderSlide(document.getElementById('svArticlePage'));
+
+      // Do not auto-download. Native link clicks preserve expected browser download behavior.
+      btn.textContent = 'Preparing Downloads\u2026';
+
+      // Store as real blob URLs for native browser downloads with stable file names
+      cleanupDownloadBlobUrls();
       var dlFront = document.getElementById('svDlFront');
       var dlArticle = document.getElementById('svDlArticle');
-      dlFront.href = frontUrl;
-      dlFront.dataset.pngDataUrl = frontUrl;
-      dlArticle.href = articleUrl;
-      dlArticle.dataset.pngDataUrl = articleUrl;
+      var frontBlobUrl = dataUrlToBlobUrl(frontUrl);
+      var articleBlobUrl = dataUrlToBlobUrl(articleUrl);
+      if (frontBlobUrl) {
+        dlFront.href = frontBlobUrl;
+        dlFront.download = 'sv-cover.png';
+        dlFront.dataset.blobUrl = frontBlobUrl;
+        dlFront.dataset.pngDataUrl = frontUrl;
+      }
+      if (articleBlobUrl) {
+        dlArticle.href = articleBlobUrl;
+        dlArticle.download = 'sv-article.png';
+        dlArticle.dataset.blobUrl = articleBlobUrl;
+        dlArticle.dataset.pngDataUrl = articleUrl;
+      }
+
       wireDownloadLinkHandlers();
       document.getElementById('svDownloadRow').style.display = 'flex';
-    } catch(e) {
+      btn.textContent = 'Export Ready \u2713';
+      setTimeout(function () { if (!exportInProgress) btn.textContent = 'Export as PNG'; }, 3000);
+    } catch (e) {
       console.error('Export error:', e);
       var msg = e instanceof Error ? e.message : (e && e.type ? 'Event: ' + e.type : String(e));
       alert('Export failed: ' + msg);
@@ -822,11 +912,11 @@
     btn.setAttribute('aria-label', 'Instagram Template');
     btn.innerHTML =
       '<div style="display:flex;flex:1;align-items:center;overflow:hidden;padding-right:1.5rem">' +
-        '<div style="margin-right:0.5rem;width:1.25rem;height:1.25rem;flex-shrink:0">' + TEMPLATE_SVG + '</div>' +
-        '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">IG Template</span>' +
+      '<div style="margin-right:0.5rem;width:1.25rem;height:1.25rem;flex-shrink:0">' + TEMPLATE_SVG + '</div>' +
+      '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">IG Template</span>' +
       '</div>';
-    btn.addEventListener('click', function(e) { e.stopPropagation(); showPanel(); }, true);
-    btn.addEventListener('keydown', function(e) {
+    btn.addEventListener('click', function (e) { e.stopPropagation(); showPanel(); }, true);
+    btn.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); showPanel(); }
     }, true);
     return btn;
@@ -834,40 +924,57 @@
 
   function isCorrectParent(el) {
     var p = el && el.parentElement;
-    return p && p.classList.contains('flex-1') && p.classList.contains('overflow-hidden');
+    if (!p) return false;
+    if (p.id === 'sv-sidebar-nav-wrap') return true;
+    if (p.id === 'sv-sidebar-static') return true;
+    return p.classList.contains('flex-1') && p.classList.contains('overflow-hidden');
   }
 
   function doInject() {
-    document.querySelectorAll('#' + BUTTON_ID).forEach(function(el) {
-      if (!isCorrectParent(el)) el.remove();
-    });
-    if (document.getElementById(BUTTON_ID)) return;
+    try {
+      document.querySelectorAll('#' + BUTTON_ID).forEach(function (el) {
+        if (!isCorrectParent(el)) el.remove();
+      });
+      if (document.getElementById(BUTTON_ID)) return;
 
-    var nav = document.getElementById('chat-history-nav');
-    if (!nav) return;
+      var nav = document.getElementById('chat-history-nav');
+      if (!nav) return;
 
-    var outerWrapper = nav.firstElementChild;
-    if (!outerWrapper || !outerWrapper.classList.contains('flex-1') || !outerWrapper.classList.contains('overflow-hidden')) return;
+      var outerWrapper = nav.firstElementChild;
+      if (!outerWrapper || !outerWrapper.classList.contains('flex-1') || !outerWrapper.classList.contains('overflow-hidden')) return;
 
-    var scrollContainer = null;
-    for (var i = 0; i < outerWrapper.children.length; i++) {
-      var child = outerWrapper.children[i];
-      if (child.classList.contains('flex-grow') && child.classList.contains('min-h-0')) {
-        scrollContainer = child;
-        break;
+      // Insert into the static section (created by unified-nav.js) if available
+      var staticSection = document.getElementById('sv-sidebar-static');
+      if (staticSection) {
+        injectStyles();
+        var btn = createButton();
+        staticSection.appendChild(btn);
+        return;
       }
-    }
-    if (!scrollContainer) return;
 
-    injectStyles();
-    var btn = createButton();
-    outerWrapper.insertBefore(btn, scrollContainer);
+      // Fallback: find div.min-h-0.flex-grow among direct children
+      var scrollContainer = null;
+      for (var i = 0; i < outerWrapper.children.length; i++) {
+        var child = outerWrapper.children[i];
+        if (child.classList.contains('flex-grow') && child.classList.contains('min-h-0')) {
+          scrollContainer = child;
+          break;
+        }
+      }
+      if (!scrollContainer) return;
+
+      injectStyles();
+      var btn = createButton();
+      outerWrapper.insertBefore(btn, scrollContainer);
+    } catch (e) {
+      // Swallow DOM errors — React may be mid-reconciliation
+    }
   }
 
   // Poll-based injection
   setInterval(doInject, 600);
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(doInject, 500); });
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(doInject, 500); });
   } else {
     setTimeout(doInject, 500);
   }

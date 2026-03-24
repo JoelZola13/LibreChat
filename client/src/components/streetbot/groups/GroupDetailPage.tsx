@@ -6,6 +6,7 @@ import { useGlassStyles } from "../shared/useGlassStyles";
 import { GlassBackground } from "../shared/GlassBackground";
 import { useAuthContext } from "~/hooks/AuthContext";
 import { getOrCreateUserId } from "@/lib/userId";
+import { AGENT_ICONS } from "./agentIcons";
 
 type Group = {
   id: number;
@@ -403,21 +404,31 @@ export default function GroupDetailPage() {
                         style={{
                           width: "36px",
                           height: "36px",
-                          borderRadius: "50%",
+                          borderRadius: msg.author.isAgent && AGENT_ICONS[msg.author.username] ? "10px" : "50%",
                           flexShrink: 0,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          background: msg.author.avatarUrl
-                            ? `url(${msg.author.avatarUrl}) center/cover no-repeat`
-                            : getAvatarColor(msg.author.displayName),
+                          background: msg.author.isAgent && AGENT_ICONS[msg.author.username]
+                            ? getAvatarColor(msg.author.displayName)
+                            : (msg.author.avatarUrl
+                              ? `url(${msg.author.avatarUrl}) center/cover no-repeat`
+                              : getAvatarColor(msg.author.displayName)),
                           fontSize: "0.85rem",
                           fontWeight: 700,
                           color: "#fff",
                           position: "relative",
                         }}
                       >
-                        {!msg.author.avatarUrl && msg.author.displayName.charAt(0).toUpperCase()}
+                        {msg.author.isAgent && AGENT_ICONS[msg.author.username] ? (
+                          <img
+                            src={AGENT_ICONS[msg.author.username]}
+                            alt={msg.author.displayName}
+                            style={{ width: "20px", height: "20px", filter: "brightness(0) invert(1)" }}
+                          />
+                        ) : (
+                          !msg.author.avatarUrl && msg.author.displayName.charAt(0).toUpperCase()
+                        )}
                         {msg.author.isAgent && (
                           <div
                             style={{
@@ -616,7 +627,7 @@ export default function GroupDetailPage() {
                     style={{
                       width: "32px",
                       height: "32px",
-                      borderRadius: "50%",
+                      borderRadius: AGENT_ICONS[agentName] ? "8px" : "50%",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -628,7 +639,15 @@ export default function GroupDetailPage() {
                       flexShrink: 0,
                     }}
                   >
-                    {agentName.charAt(0).toUpperCase()}
+                    {AGENT_ICONS[agentName] ? (
+                      <img
+                        src={AGENT_ICONS[agentName]}
+                        alt={agentName}
+                        style={{ width: "18px", height: "18px", filter: "brightness(0) invert(1)" }}
+                      />
+                    ) : (
+                      agentName.charAt(0).toUpperCase()
+                    )}
                     {/* Online indicator */}
                     <div
                       style={{

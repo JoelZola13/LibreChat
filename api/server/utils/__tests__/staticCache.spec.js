@@ -12,6 +12,8 @@ describe('staticCache', () => {
   let indexFile;
   let manifestFile;
   let swFile;
+  let svTemplateFile;
+  let automationsFile;
 
   beforeAll(() => {
     // Create a test directory and files
@@ -25,16 +27,22 @@ describe('staticCache', () => {
     indexFile = path.join(testDir, 'index.html');
     manifestFile = path.join(testDir, 'manifest.json');
     swFile = path.join(testDir, 'sw.js');
+    svTemplateFile = path.join(testDir, 'sv-template.js');
+    automationsFile = path.join(testDir, 'automations.js');
 
     const jsContent = 'console.log("test");';
     const htmlContent = '<html><body>Test</body></html>';
     const jsonContent = '{"name": "test"}';
     const swContent = 'self.addEventListener("install", () => {});';
+    const svTemplateContent = 'console.log("sv-template");';
+    const automationsContent = 'console.log("automations");';
 
     fs.writeFileSync(testFile, jsContent);
     fs.writeFileSync(indexFile, htmlContent);
     fs.writeFileSync(manifestFile, jsonContent);
     fs.writeFileSync(swFile, swContent);
+    fs.writeFileSync(svTemplateFile, svTemplateContent);
+    fs.writeFileSync(automationsFile, automationsContent);
 
     // Create gzipped versions of some files
     fs.writeFileSync(testFile + '.gz', zlib.gzipSync(jsContent));
@@ -101,6 +109,22 @@ describe('staticCache', () => {
       app.use(staticCache(testDir));
 
       const response = await request(app).get('/sw.js').expect(200);
+
+      expect(response.headers['cache-control']).toBe('no-store, no-cache, must-revalidate');
+    });
+
+    it('should set no-cache headers for sv-template.js', async () => {
+      app.use(staticCache(testDir));
+
+      const response = await request(app).get('/sv-template.js').expect(200);
+
+      expect(response.headers['cache-control']).toBe('no-store, no-cache, must-revalidate');
+    });
+
+    it('should set no-cache headers for automations.js', async () => {
+      app.use(staticCache(testDir));
+
+      const response = await request(app).get('/automations.js').expect(200);
 
       expect(response.headers['cache-control']).toBe('no-store, no-cache, must-revalidate');
     });

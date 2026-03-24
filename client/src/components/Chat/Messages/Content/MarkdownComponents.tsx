@@ -197,5 +197,47 @@ export const img: React.ElementType = memo(({ src, alt, title, className, style 
     return `${baseURL}${src}`;
   }, [src, baseURL]);
 
+  // Render video files as <video> elements with controls and audio
+  const isVideo = useMemo(() => {
+    if (!fixedSrc) return false;
+    const url = fixedSrc.split('?')[0].toLowerCase();
+    return url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov');
+  }, [fixedSrc]);
+
+  // Render audio files as <audio> elements with controls
+  const isAudio = useMemo(() => {
+    if (!fixedSrc) return false;
+    const url = fixedSrc.split('?')[0].toLowerCase();
+    return url.endsWith('.wav') || url.endsWith('.mp3') || url.endsWith('.ogg');
+  }, [fixedSrc]);
+
+  if (isVideo) {
+    return (
+      <video
+        src={fixedSrc}
+        controls
+        style={{ maxWidth: '100%', borderRadius: '8px', ...style }}
+        className={className}
+        title={title}
+      >
+        {alt}
+      </video>
+    );
+  }
+
+  if (isAudio) {
+    return (
+      <audio
+        src={fixedSrc}
+        controls
+        style={{ width: '100%', ...style }}
+        className={className}
+        title={title}
+      >
+        {alt}
+      </audio>
+    );
+  }
+
   return <img src={fixedSrc} alt={alt} title={title} className={className} style={style} />;
 });

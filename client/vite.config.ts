@@ -2,16 +2,57 @@ import react from '@vitejs/plugin-react';
 // @ts-ignore
 import path from 'path';
 import type { Plugin } from 'vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { compression } from 'vite-plugin-compression2';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// https://vitejs.dev/config/
-const backendPort = process.env.BACKEND_PORT && Number(process.env.BACKEND_PORT) || 3080;
-const backendURL = process.env.HOST ? `http://${process.env.HOST}:${backendPort}` : `http://localhost:${backendPort}`;
+function isLocalLikeTarget(target?: string) {
+  if (!target) {
+    return false;
+  }
+  return /^(https?:\/\/)?(localhost|127\.0\.0\.1|host\.docker\.internal)(:\d+)?/i.test(target);
+}
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ mode }) => {
+  // Read env at config-evaluation time so shell overrides are honored when
+  // running a specific variant locally.
+  const fileEnv = loadEnv(mode, path.resolve(__dirname, '..'), '');
+  const env = { ...fileEnv, ...process.env };
+
+  const backendPort = (env.BACKEND_PORT && Number(env.BACKEND_PORT)) || 3080;
+  const backendURL =
+    env.BACKEND_URL ||
+    (env.BACKEND_HOST
+      ? `http://${env.BACKEND_HOST}:${backendPort}`
+      : env.HOST
+        ? `http://${env.HOST}:${backendPort}`
+        : `http://localhost:${backendPort}`);
+  const appVariant = env.VITE_APP_VARIANT || 'streetbot';
+
+  const defaultSbapiTarget = 'https://librechat-api-production.up.railway.app';
+  const defaultCmsTarget = 'https://directus-production-8852.up.railway.app';
+  const defaultDirectoryApiTarget = 'https://streetvoices-directory.pages.dev';
+
+  const rawSbapiTarget = env.SBAPI_TARGET || defaultSbapiTarget;
+  const rawCmsTarget = env.CMS_TARGET || defaultCmsTarget;
+  const rawDirectoryApiTarget = env.DIRECTORY_API_TARGET || defaultDirectoryApiTarget;
+
+  const sbapiTarget =
+    appVariant === 'directory' && isLocalLikeTarget(rawSbapiTarget)
+      ? defaultSbapiTarget
+      : rawSbapiTarget;
+  const cmsTarget =
+    appVariant === 'directory' && isLocalLikeTarget(rawCmsTarget)
+      ? defaultCmsTarget
+      : rawCmsTarget;
+  const directoryApiTarget =
+    appVariant === 'directory' && isLocalLikeTarget(rawDirectoryApiTarget)
+      ? defaultDirectoryApiTarget
+      : rawDirectoryApiTarget;
+  const apiTarget = appVariant === 'directory' ? sbapiTarget : backendURL;
+
+  return ({
   base: '',
   server: {
     allowedHosts: process.env.VITE_ALLOWED_HOSTS && process.env.VITE_ALLOWED_HOSTS.split(',') || [],
@@ -19,12 +60,34 @@ export default defineConfig(({ command }) => ({
     port: process.env.PORT && Number(process.env.PORT) || 3090,
     strictPort: false,
     proxy: {
-      '/api': {
+      '/sbapi': {
+        target: sbapiTarget,
+        changeOrigin: true,
+        ws: true,
+        rewrite: (proxyPath: string) =>
+          appVariant === 'directory' ? proxyPath.replace(/^\/sbapi/, '') : proxyPath,
+      },
+      '/cms': {
+        target: cmsTarget,
+        changeOrigin: true,
+        ws: true,
+        rewrite: (path: string) => path.replace(/^\/cms/, ''),
+      },
+      '/api/directory': {
+        target: directoryApiTarget,
+        changeOrigin: true,
+        secure: true,
+      },
+      '/admin': {
         target: backendURL,
         changeOrigin: true,
       },
+      '/api': {
+        target: apiTarget,
+        changeOrigin: true,
+      },
       '/oauth': {
-        target: backendURL,
+        target: apiTarget,
         changeOrigin: true,
       },
     },
@@ -45,40 +108,56 @@ export default defineConfig(({ command }) => ({
       includeManifestIcons: false,
       workbox: {
         globPatterns: [
-          '**/*.{js,css,html}',
+          'assets/*.css',
           'assets/favicon*.png',
           'assets/icon-*.png',
           'assets/apple-touch-icon*.png',
           'assets/maskable-icon.png',
           'manifest.webmanifest',
         ],
-        globIgnores: ['images/**/*', '**/*.map', 'index.html'],
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        navigateFallbackDenylist: [/^\/oauth/, /^\/api/],
+        globIgnores: ['images/**/*', '**/*.map'],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [
+          /^\/oauth/,
+          /^\/api/,
+          /^\/sbapi/,
+          /^\/(cms|admin|auth|users|server|utils|collections|fields|relations|roles|permissions|policies|presets|translations|activity|revisions|files|folders|items|dashboards|panels|operations|flows|shares|extensions|graphql)(\/|$)/,
+        ],
+        runtimeCaching: [
+          {
+            urlPattern: /^\/assets\/.*\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'js-cache-v2',
+              expiration: { maxEntries: 80, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /^\/assets\/.*\.css$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'css-cache-v1',
+              expiration: { maxEntries: 30, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /\.(?:woff2?|ttf|otf|eot)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'font-cache-v1',
+              expiration: { maxEntries: 20, maxAgeSeconds: 365 * 24 * 60 * 60 },
+            },
+          },
+        ],
       },
       includeAssets: [],
       manifest: {
-        name: 'LibreChat',
-        short_name: 'LibreChat',
+        name: 'Street Voices',
+        short_name: 'Street Voices',
         display: 'standalone',
-        background_color: '#000000',
-        theme_color: '#009688',
+        background_color: '#1f2027',
+        theme_color: '#ffd600',
         icons: [
-          {
-            src: 'assets/favicon-32x32.png',
-            sizes: '32x32',
-            type: 'image/png',
-          },
-          {
-            src: 'assets/favicon-16x16.png',
-            sizes: '16x16',
-            type: 'image/png',
-          },
-          {
-            src: 'assets/apple-touch-icon-180x180.png',
-            sizes: '180x180',
-            type: 'image/png',
-          },
           {
             src: 'assets/icon-192x192.png',
             sizes: '192x192',
@@ -88,7 +167,7 @@ export default defineConfig(({ command }) => ({
             src: 'assets/maskable-icon.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'maskable',
+            purpose: 'any maskable',
           },
         ],
       },
@@ -98,153 +177,18 @@ export default defineConfig(({ command }) => ({
       threshold: 10240,
     }),
   ],
-  publicDir: command === 'serve' ? './public' : false,
+  publicDir: './public',
   build: {
+    target: 'es2020',
     sourcemap: process.env.NODE_ENV === 'development',
     outDir: './dist',
     minify: 'terser',
     rollupOptions: {
       preserveEntrySignatures: 'strict',
       output: {
-        manualChunks(id: string) {
-          const normalizedId = id.replace(/\\/g, '/');
-          if (normalizedId.includes('node_modules')) {
-            // High-impact chunking for large libraries
-
-            // IMPORTANT: mermaid and ALL its dependencies must be in the same chunk
-            // to avoid initialization order issues. This includes chevrotain, langium,
-            // dagre-d3-es, and their nested lodash-es dependencies.
-            if (
-              normalizedId.includes('mermaid') ||
-              normalizedId.includes('dagre-d3-es') ||
-              normalizedId.includes('chevrotain') ||
-              normalizedId.includes('langium') ||
-              normalizedId.includes('lodash-es')
-            ) {
-              return 'mermaid';
-            }
-
-            if (normalizedId.includes('@codesandbox/sandpack')) {
-              return 'sandpack';
-            }
-            if (normalizedId.includes('react-virtualized')) {
-              return 'virtualization';
-            }
-            if (normalizedId.includes('i18next') || normalizedId.includes('react-i18next')) {
-              return 'i18n';
-            }
-            // Only regular lodash (not lodash-es which goes to mermaid chunk)
-            if (normalizedId.includes('/lodash/')) {
-              return 'utilities';
-            }
-            if (normalizedId.includes('date-fns')) {
-              return 'date-utils';
-            }
-            if (normalizedId.includes('@dicebear')) {
-              return 'avatars';
-            }
-            if (normalizedId.includes('react-dnd') || normalizedId.includes('react-flip-toolkit')) {
-              return 'react-interactions';
-            }
-            if (normalizedId.includes('react-hook-form')) {
-              return 'forms';
-            }
-            if (normalizedId.includes('react-router-dom')) {
-              return 'routing';
-            }
-            if (
-              normalizedId.includes('qrcode.react') ||
-              normalizedId.includes('@marsidev/react-turnstile')
-            ) {
-              return 'security-ui';
-            }
-
-            if (normalizedId.includes('@codemirror/view')) {
-              return 'codemirror-view';
-            }
-            if (normalizedId.includes('@codemirror/state')) {
-              return 'codemirror-state';
-            }
-            if (normalizedId.includes('@codemirror/language')) {
-              return 'codemirror-language';
-            }
-            if (normalizedId.includes('@codemirror')) {
-              return 'codemirror-core';
-            }
-
-            if (
-              normalizedId.includes('react-markdown') ||
-              normalizedId.includes('remark-') ||
-              normalizedId.includes('rehype-')
-            ) {
-              return 'markdown-processing';
-            }
-            if (normalizedId.includes('monaco-editor') || normalizedId.includes('@monaco-editor')) {
-              return 'code-editor';
-            }
-            if (normalizedId.includes('react-window') || normalizedId.includes('react-virtual')) {
-              return 'virtualization';
-            }
-            if (
-              normalizedId.includes('zod') ||
-              normalizedId.includes('yup') ||
-              normalizedId.includes('joi')
-            ) {
-              return 'validation';
-            }
-            if (
-              normalizedId.includes('axios') ||
-              normalizedId.includes('ky') ||
-              normalizedId.includes('fetch')
-            ) {
-              return 'http-client';
-            }
-            if (
-              normalizedId.includes('react-spring') ||
-              normalizedId.includes('react-transition-group')
-            ) {
-              return 'animations';
-            }
-            if (normalizedId.includes('react-select') || normalizedId.includes('downshift')) {
-              return 'advanced-inputs';
-            }
-            if (normalizedId.includes('heic-to')) {
-              return 'heic-converter';
-            }
-
-            // Existing chunks
-            if (normalizedId.includes('@radix-ui')) {
-              return 'radix-ui';
-            }
-            if (normalizedId.includes('framer-motion')) {
-              return 'framer-motion';
-            }
-            if (normalizedId.includes('node_modules/highlight.js')) {
-              return 'markdown_highlight';
-            }
-            if (normalizedId.includes('katex') || normalizedId.includes('node_modules/katex')) {
-              return 'math-katex';
-            }
-            if (normalizedId.includes('node_modules/hast-util-raw')) {
-              return 'markdown_large';
-            }
-            if (normalizedId.includes('@tanstack')) {
-              return 'tanstack-vendor';
-            }
-            if (normalizedId.includes('@headlessui')) {
-              return 'headlessui';
-            }
-
-            // Everything else falls into a generic vendor chunk.
-            return 'vendor';
-          }
-          // Create a separate chunk for all locale files under src/locales.
-          if (normalizedId.includes('/src/locales/')) {
-            return 'locales';
-          }
-          // Let Rollup decide automatically for any other files.
-          return null;
-        },
+        // manualChunks removed — Rollup's automatic chunking correctly handles
+        // circular dependencies. Manual chunking caused TDZ errors (mermaid,
+        // codemirror) and useSyncExternalStore errors (tanstack, headlessui).
         entryFileNames: 'assets/[name].[hash].js',
         chunkFileNames: 'assets/[name].[hash].js',
         assetFileNames: (assetInfo) => {
@@ -270,11 +214,15 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: {
       '~': path.join(__dirname, 'src/'),
+      '@': path.join(__dirname, 'src/components/streetbot'),
       $fonts: path.resolve(__dirname, 'public/fonts'),
       'micromark-extension-math': 'micromark-extension-llm-math',
+      'next/navigation': path.join(__dirname, 'src/components/streetbot/shared/next-navigation-shim.ts'),
+      'next/link': path.join(__dirname, 'src/components/streetbot/shared/next-link-shim.tsx'),
     },
   },
-}));
+  });
+});
 
 interface SourcemapExclude {
   excludeNodeModules?: boolean;
