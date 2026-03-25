@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <rect width="24" height="24" fill="none"/>
+  <g fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Roof -->
+    <path d="M4 11L12 4L20 11" />
+    <!-- Walls -->
+    <path d="M6.5 11V19.5H17.5V11" />
+    <!-- Door -->
+    <rect x="10" y="13" width="4" height="5.5" rx="0.9" stroke-width="2" />
+  </g>
+</svg>

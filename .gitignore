@@ -40,6 +40,8 @@ public/main.js
 public/main.js.map
 public/main.js.LICENSE.txt
 client/public/images/
+!client/public/images/sidebar-icons/
+!client/public/images/streetbot/
 client/public/main.js
 client/public/main.js.map
 client/public/main.js.LICENSE.txt
