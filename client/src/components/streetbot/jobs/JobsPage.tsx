@@ -1011,7 +1011,7 @@ function JobCard({
                   textDecoration: "none",
                 }}
               >
-                Learn More
+                View Details
               </Link>
               <button
                 type="button"
@@ -1061,7 +1061,7 @@ function JobCard({
                   textDecoration: "none",
                 }}
               >
-                Learn More
+                View Details
               </Link>
               <Link
                 to={`/jobs/${job.id}?apply=1`}
