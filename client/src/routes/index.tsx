@@ -39,7 +39,9 @@ const NewsEditorPage = lazy(() => import('~/components/streetbot/news/editor/Edi
 const DirectoryPage = lazy(() => import('~/components/streetbot/directory/DirectoryPage'));
 const ServiceDetailPage = lazy(() => import('~/components/streetbot/directory/ServiceDetailPage'));
 const JobsPage = lazy(() => import('~/components/streetbot/jobs/JobsPage'));
+const JobDetailPage = lazy(() => import('~/components/streetbot/jobs/JobDetailPage'));
 const MyApplicationsPage = lazy(() => import('~/components/streetbot/jobs/MyApplicationsPage'));
+const MyResumePage = lazy(() => import('~/components/streetbot/jobs/MyResumePage'));
 const EmployerDashboardPage = lazy(() => import('~/components/streetbot/jobs/EmployerDashboardPage'));
 const CalendarPage = lazy(() => import('~/components/streetbot/calendar/CalendarPage'));
 const MessagesPage = lazy(() => import('~/components/streetbot/messages/MessagesPage'));
@@ -260,7 +262,9 @@ export const router = createBrowserRouter(
             { path: 'directory/*', element: guardedSbPage('directory', DirectoryPage) },
             { path: 'jobs', element: guardedSbPage('jobs', JobsPage) },
             { path: 'jobs/my-applications', element: guardedSbPage('jobs', MyApplicationsPage) },
+            { path: 'jobs/resume', element: guardedSbPage('jobs', MyResumePage) },
             { path: 'jobs/employer', element: guardedSbPage('jobs', EmployerDashboardPage) },
+            { path: 'jobs/:jobId', element: guardedSbPage('jobs', JobDetailPage) },
             { path: 'jobs/*', element: guardedSbPage('jobs', JobsPage) },
             // Notifications — always accessible (not a nav item)
             { path: 'notifications', element: sbPage(NotificationsPage) },

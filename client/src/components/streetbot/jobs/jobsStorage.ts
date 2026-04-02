@@ -1,6 +1,7 @@
-import type { Job, JobApplication, ApplicationStatus, EmployerListing } from "./types";
+import type { ApplicationDocument, Job, JobApplication, ApplicationStatus, EmployerListing, Resume } from "./types";
 
 const APPS_KEY = "sb_job_applications";
+const RESUME_KEY = "sb_user_resume";
 const EMPLOYER_KEY = "sb_employer_listings";
 const SEEDED_KEY = "sb_jobs_seeded";
 
@@ -22,16 +23,70 @@ export function getApplications(userId: string): JobApplication[] {
   return read<JobApplication>(APPS_KEY).filter((a) => a.userId === userId);
 }
 
-export function addApplication(userId: string, job: Job): JobApplication {
+function getEmployerEmail(job: Job): string {
+  if (job.employer_email) return job.employer_email;
+
+  if (job.company_website) {
+    try {
+      const hostname = new URL(job.company_website).hostname.replace(/^www\./, "");
+      return `hiring@${hostname}`;
+    } catch {
+      // Fall through to organization-based fallback.
+    }
+  }
+
+  const orgSlug = (job.organization || "streetvoices")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `${orgSlug || "streetvoices"}@employer.streetvoices.local`;
+}
+
+export function getApplicationByJob(userId: string, jobId: string): JobApplication | null {
+  return (
+    read<JobApplication>(APPS_KEY).find(
+      (a) => a.userId === userId && a.jobId === jobId && !a.withdrawn,
+    ) || null
+  );
+}
+
+export function addApplication(
+  userId: string,
+  job: Job,
+  details?: {
+    applicantName?: string;
+    applicantEmail?: string;
+    coverNote?: string;
+    documents?: ApplicationDocument[];
+  },
+): JobApplication {
   const apps = read<JobApplication>(APPS_KEY);
-  const app: JobApplication = {
-    id: `app_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  const now = new Date().toISOString();
+  const existingIndex = apps.findIndex(
+    (a) => a.userId === userId && a.jobId === job.id && !a.withdrawn,
+  );
+
+  const nextApp: JobApplication = {
+    id:
+      existingIndex !== -1
+        ? apps[existingIndex].id
+        : `app_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     jobId: job.id,
     userId,
     status: "applied",
-    appliedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    appliedAt: existingIndex !== -1 ? apps[existingIndex].appliedAt : now,
+    updatedAt: now,
     withdrawn: false,
+    applicantName: details?.applicantName ?? apps[existingIndex]?.applicantName,
+    applicantEmail: details?.applicantEmail ?? apps[existingIndex]?.applicantEmail,
+    coverNote: details?.coverNote ?? apps[existingIndex]?.coverNote,
+    documents: details?.documents ?? apps[existingIndex]?.documents ?? [],
+    employerNotification: {
+      email: getEmployerEmail(job),
+      sentAt: now,
+      status: "sent",
+    },
     jobSnapshot: {
       title: job.title,
       organization: job.organization,
@@ -41,9 +96,15 @@ export function addApplication(userId: string, job: Job): JobApplication {
       compensation: job.compensation,
     },
   };
-  apps.push(app);
+
+  if (existingIndex !== -1) {
+    apps[existingIndex] = nextApp;
+  } else {
+    apps.push(nextApp);
+  }
+
   write(APPS_KEY, apps);
-  return app;
+  return nextApp;
 }
 
 export function withdrawApplication(userId: string, applicationId: string) {
@@ -56,10 +117,75 @@ export function withdrawApplication(userId: string, applicationId: string) {
   }
 }
 
+export function withdrawApplicationByJob(userId: string, jobId: string) {
+  const apps = read<JobApplication>(APPS_KEY);
+  const idx = apps.findIndex(
+    (a) => a.userId === userId && a.jobId === jobId && !a.withdrawn,
+  );
+  if (idx !== -1) {
+    apps[idx].withdrawn = true;
+    apps[idx].updatedAt = new Date().toISOString();
+    write(APPS_KEY, apps);
+  }
+}
+
 export function isJobApplied(userId: string, jobId: string): boolean {
   return read<JobApplication>(APPS_KEY).some(
     (a) => a.userId === userId && a.jobId === jobId && !a.withdrawn,
   );
+}
+
+// ── Resume ──
+
+export function getResume(userId: string): Resume | null {
+  try {
+    const raw = localStorage.getItem(RESUME_KEY);
+    if (!raw) return null;
+    const resume = JSON.parse(raw) as Partial<Resume>;
+    if (resume.userId !== userId) return null;
+    return {
+      userId,
+      fullName: resume.fullName || "",
+      email: resume.email || "",
+      phone: resume.phone || "",
+      location: resume.location || "",
+      website: resume.website || "",
+      linkedin: resume.linkedin || "",
+      summary: resume.summary || "",
+      experience: Array.isArray(resume.experience) ? resume.experience : [],
+      education: Array.isArray(resume.education) ? resume.education : [],
+      skills: Array.isArray(resume.skills) ? resume.skills : [],
+      interests: Array.isArray(resume.interests) ? resume.interests : [],
+      certifications: Array.isArray(resume.certifications) ? resume.certifications : [],
+      updatedAt: resume.updatedAt || new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveResume(resume: Resume): void {
+  resume.updatedAt = new Date().toISOString();
+  localStorage.setItem(RESUME_KEY, JSON.stringify(resume));
+}
+
+export function createEmptyResume(userId: string): Resume {
+  return {
+    userId,
+    fullName: "",
+    email: "",
+    phone: "",
+    location: "",
+    website: "",
+    linkedin: "",
+    summary: "",
+    experience: [],
+    education: [],
+    skills: [],
+    interests: [],
+    certifications: [],
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 // ── Employer Listings ──

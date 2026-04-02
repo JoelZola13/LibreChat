@@ -9,8 +9,8 @@ import { readSessionCache } from '../shared/perfCache';
 import { useGlassStyles } from '../shared/useGlassStyles';
 import { useResponsive } from '../hooks/useResponsive';
 import { useUserRole } from '../lib/auth/useUserRole';
-import { CrossLink } from '../shared/CrossLink';
-import { isJobApplied, addApplication } from './jobsStorage';
+import { isJobApplied, withdrawApplicationByJob } from './jobsStorage';
+import { enrichJobsSchedule } from './jobSchedule';
 import type { Job } from './types';
 import {
   Search,
@@ -33,7 +33,6 @@ import {
   Loader2,
   SearchX,
   Shield,
-  CalendarPlus,
 } from "lucide-react";
 
 // Inline userId helper (replaces @/lib/userId)
@@ -136,6 +135,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 342,
     application_count: 28,
     deadline: "2025-02-15",
+    posting_date: "2025-01-15",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -155,6 +155,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 289,
     application_count: 45,
     deadline: "2025-02-28",
+    posting_date: "2025-01-20",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -174,6 +175,7 @@ const SAMPLE_JOBS: Job[] = [
     hires_with_gaps: true,
     view_count: 156,
     application_count: 19,
+    posting_date: "2025-01-10",
   },
   {
     id: "sample-4",
@@ -191,6 +193,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 412,
     application_count: 33,
     deadline: "2025-01-31",
+    posting_date: "2025-01-05",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -209,6 +212,7 @@ const SAMPLE_JOBS: Job[] = [
     hires_with_record: true,
     view_count: 198,
     application_count: 12,
+    posting_date: "2025-01-18",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -227,6 +231,7 @@ const SAMPLE_JOBS: Job[] = [
     hires_without_address: true,
     view_count: 267,
     application_count: 52,
+    posting_date: "2025-01-12",
   },
   {
     id: "sample-7",
@@ -243,6 +248,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 143,
     application_count: 8,
     deadline: "2025-02-15",
+    posting_date: "2025-01-22",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -259,6 +265,7 @@ const SAMPLE_JOBS: Job[] = [
     tags: "events,planning,coordination",
     view_count: 187,
     application_count: 14,
+    posting_date: "2025-01-08",
   },
   {
     id: "sample-9",
@@ -276,6 +283,7 @@ const SAMPLE_JOBS: Job[] = [
     no_experience_required: true,
     view_count: 234,
     application_count: 31,
+    posting_date: "2025-01-25",
     employer_verified: true,
     employer_verification_type: "nonprofit",
   },
@@ -295,6 +303,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 312,
     application_count: 22,
     deadline: "2025-02-10",
+    posting_date: "2025-01-03",
     employer_verified: true,
     employer_verification_type: "nonprofit",
   },
@@ -315,6 +324,7 @@ const SAMPLE_JOBS: Job[] = [
     hires_with_gaps: true,
     view_count: 421,
     application_count: 67,
+    posting_date: "2025-01-14",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -334,6 +344,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 189,
     application_count: 26,
     deadline: "2025-02-05",
+    posting_date: "2025-01-07",
     employer_verified: true,
     employer_verification_type: "nonprofit",
   },
@@ -355,6 +366,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 445,
     application_count: 38,
     deadline: "2025-02-20",
+    posting_date: "2024-12-28",
     employer_verified: true,
     employer_verification_type: "nonprofit",
     black_led_organization: true,
@@ -373,6 +385,7 @@ const SAMPLE_JOBS: Job[] = [
     training_provided: true,
     view_count: 276,
     application_count: 19,
+    posting_date: "2025-01-16",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -392,6 +405,7 @@ const SAMPLE_JOBS: Job[] = [
     hires_with_record: true,
     view_count: 334,
     application_count: 41,
+    posting_date: "2024-12-20",
   },
   {
     id: "sample-16",
@@ -410,6 +424,7 @@ const SAMPLE_JOBS: Job[] = [
     same_day_pay: true,
     view_count: 521,
     application_count: 89,
+    posting_date: "2025-01-11",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -430,6 +445,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 892,
     application_count: 156,
     deadline: "2025-02-28",
+    posting_date: "2025-01-19",
     employer_verified: true,
     employer_verification_type: "government",
   },
@@ -448,6 +464,7 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 167,
     application_count: 12,
     deadline: "2025-02-12",
+    posting_date: "2024-12-30",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -467,6 +484,7 @@ const SAMPLE_JOBS: Job[] = [
     no_experience_required: true,
     view_count: 623,
     application_count: 78,
+    posting_date: "2025-01-23",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -486,6 +504,7 @@ const SAMPLE_JOBS: Job[] = [
     hires_with_gaps: true,
     view_count: 445,
     application_count: 53,
+    posting_date: "2025-01-06",
     employer_verified: true,
     employer_verification_type: "business",
   },
@@ -566,6 +585,8 @@ const SAMPLE_JOBS: Job[] = [
     employer_verification_type: "business",
   },
 ];
+
+const ENRICHED_SAMPLE_JOBS: Job[] = enrichJobsSchedule(SAMPLE_JOBS);
 
 // Verification Badge component
 function VerificationBadge({
@@ -689,8 +710,8 @@ function JobCard({
   isSaved,
   onToggleFavorite,
   onShare,
-  onApply,
   isApplied,
+  onUnapply,
   colors,
   isDark,
 }: {
@@ -698,8 +719,8 @@ function JobCard({
   isSaved: boolean;
   onToggleFavorite: (id: string) => void;
   onShare: (job: Job) => void;
-  onApply: (job: Job) => void;
   isApplied: boolean;
+  onUnapply: (job: Job) => void;
   colors: JobColors;
   isDark: boolean;
 }) {
@@ -946,90 +967,126 @@ function JobCard({
               <span style={{ fontSize: "13px", color: colors.text }}>{job.compensation}</span>
             </div>
           )}
-          {job.deadline && (
+          {job.work_mode && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Briefcase style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
+              <span style={{ fontSize: "13px", color: colors.text }}>{job.work_mode}</span>
+            </div>
+          )}
+          {job.hours_per_week && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <Clock style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
-              <span style={{ fontSize: "13px", color: colors.text }}>Due: {job.deadline}</span>
+              <span style={{ fontSize: "13px", color: colors.text }}>{job.hours_per_week}</span>
+            </div>
+          )}
+          {job.posting_date && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Clock style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
+              <span style={{ fontSize: "13px", color: colors.text }}>Posted: {job.posting_date}</span>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <footer style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px solid ${colors.border}`, paddingTop: "14px" }}>
-          <Link
-            to={`/jobs/${job.id}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              borderRadius: "12px",
-              background: colors.accent,
-              padding: "10px 20px",
-              fontSize: "14px",
-              fontWeight: 600,
-              color: "#000",
-              textDecoration: "none",
-              transition: "all 0.2s",
-              boxShadow: "0 4px 14px rgba(255, 214, 0, 0.3)",
-            }}
-          >
-            View Details
-            <span aria-hidden="true">&rarr;</span>
-          </Link>
-          <button
-            onClick={(e) => { e.preventDefault(); if (!isApplied) onApply(job); }}
-            disabled={isApplied}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              borderRadius: "12px",
-              padding: "10px 18px",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor: isApplied ? "default" : "pointer",
-              border: isApplied ? "none" : `1px solid ${colors.accent}`,
-              background: isApplied ? (isDark ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.1)") : "transparent",
-              color: isApplied ? "#10B981" : colors.accent,
-              transition: "all 0.2s",
-            }}
-          >
-            {isApplied ? "Applied ✓" : "Quick Apply"}
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            {job.deadline && (
-              <CrossLink
-                icon={CalendarPlus}
-                label="Remind"
-                to={`/calendar?action=new&title=Apply: ${encodeURIComponent(job.title)}&date=${job.deadline}`}
-                variant="chip"
-                color="#3b82f6"
-              />
-            )}
-            <CrossLink
-              icon={Sparkles}
-              label="Ask Street Voices"
-              to={`/c/new?prompt=${encodeURIComponent('Tell me about the ' + job.title + ' role' + (job.organization ? ' at ' + job.organization : ''))}`}
-              variant="chip"
-              color="#FFD600"
-            />
-          </div>
-          <div style={{ display: "flex", gap: "12px", fontSize: "12px", color: colors.textMuted }}>
-            {typeof job.view_count === "number" && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                <Eye style={{ width: "14px", height: "14px" }} aria-hidden="true" />
-                <span>{job.view_count}</span>
-                <span style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", borderWidth: 0 }}>views</span>
-              </span>
-            )}
-            {typeof job.application_count === "number" && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                <FileText style={{ width: "14px", height: "14px" }} aria-hidden="true" />
-                <span>{job.application_count}</span>
-                <span style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", borderWidth: 0 }}>applications</span>
-              </span>
-            )}
-          </div>
+        <footer style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "center", borderTop: `1px solid ${colors.border}`, paddingTop: "14px" }}>
+          {isApplied ? (
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
+              <Link
+                to={`/jobs/${job.id}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  minWidth: "148px",
+                  borderRadius: "12px",
+                  padding: "10px 18px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: `1px solid ${colors.border}`,
+                  background: colors.surface,
+                  color: colors.text,
+                  transition: "all 0.2s",
+                  textDecoration: "none",
+                }}
+              >
+                Learn More
+              </Link>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onUnapply(job);
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  minWidth: "148px",
+                  borderRadius: "12px",
+                  padding: "10px 18px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: `1px solid rgba(239, 68, 68, 0.35)`,
+                  background: isDark ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.08)",
+                  color: "#ef4444",
+                  transition: "all 0.2s",
+                }}
+              >
+                Unapply
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
+              <Link
+                to={`/jobs/${job.id}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  minWidth: "148px",
+                  borderRadius: "12px",
+                  padding: "10px 18px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: `1px solid ${colors.border}`,
+                  background: colors.surface,
+                  color: colors.text,
+                  transition: "all 0.2s",
+                  textDecoration: "none",
+                }}
+              >
+                Learn More
+              </Link>
+              <Link
+                to={`/jobs/${job.id}?apply=1`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  minWidth: "148px",
+                  borderRadius: "12px",
+                  padding: "10px 18px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: `1px solid ${colors.accent}`,
+                  background: "transparent",
+                  color: colors.accent,
+                  transition: "all 0.2s",
+                  textDecoration: "none",
+                }}
+              >
+                Apply Now
+              </Link>
+            </div>
+          )}
         </footer>
       </div>
     </article>
@@ -1184,12 +1241,12 @@ export default function JobsPage() {
   const { isMobile } = useResponsive();
 
   const [isLoading, setIsLoading] = useState(() => {
-    const cached = readSessionCache<Job[]>('streetbot:jobs:listings:v1', 5 * 60 * 1000);
+    const cached = readSessionCache<Job[]>('streetbot:jobs:listings:v2', 5 * 60 * 1000);
     return !cached || cached.length === 0;
   });
   const [jobs, setJobs] = useState<Job[]>(() => {
-    const cached = readSessionCache<Job[]>('streetbot:jobs:listings:v1', 5 * 60 * 1000);
-    return cached && cached.length > 0 ? cached : [];
+    const cached = readSessionCache<Job[]>('streetbot:jobs:listings:v2', 5 * 60 * 1000);
+    return cached && cached.length > 0 ? enrichJobsSchedule(cached) : [];
   });
   const [jobQuery, setJobQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -1199,7 +1256,7 @@ export default function JobsPage() {
   const [sortMode, setSortMode] = useState("newest");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"all" | "saved" | "my">("all");
+  const [viewMode, setViewMode] = useState<"all" | "saved">("all");
   const [showFilters, setShowFilters] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const { isAdmin } = useUserRole();
@@ -1228,9 +1285,6 @@ export default function JobsPage() {
 
     if (viewMode === "saved") {
       result = result.filter((job) => savedIds.includes(job.id));
-    } else if (viewMode === "my") {
-      const userId = getOrCreateUserId();
-      result = result.filter((job) => job.owner_id === userId);
     }
 
     if (jobQuery.trim()) {
@@ -1322,10 +1376,10 @@ export default function JobsPage() {
       const resp = await fetch(JOBS_API_URL);
       if (!resp.ok) throw new Error("Failed to load jobs");
       const data = await resp.json();
-      const jobsData = Array.isArray(data) ? data : [];
-      setJobs(jobsData.length > 0 ? jobsData : SAMPLE_JOBS);
+      const jobsData = Array.isArray(data) ? enrichJobsSchedule(data) : [];
+      setJobs(jobsData.length > 0 ? jobsData : ENRICHED_SAMPLE_JOBS);
     } catch {
-      setJobs(SAMPLE_JOBS);
+      setJobs(ENRICHED_SAMPLE_JOBS);
     } finally {
       setIsLoading(false);
     }
@@ -1405,11 +1459,11 @@ export default function JobsPage() {
     setAppliedIds(ids);
   }, [jobs]);
 
-  const handleApply = useCallback((job: Job) => {
+  const handleUnapply = useCallback((job: Job) => {
     const userId = getOrCreateUserId();
-    addApplication(userId, job);
-    setAppliedIds((prev) => [...prev, job.id]);
-    setToast("Application submitted!");
+    withdrawApplicationByJob(userId, job.id);
+    setAppliedIds((prev) => prev.filter((id) => id !== job.id));
+    setToast("Application withdrawn.");
   }, []);
 
   useEffect(() => {
@@ -1423,11 +1477,8 @@ export default function JobsPage() {
 
   useEffect(() => {
     const savedParam = searchParams?.get("saved");
-    const myParam = searchParams?.get("my");
     if (savedParam === "1") {
       setViewMode("saved");
-    } else if (myParam === "1") {
-      setViewMode("my");
     }
   }, [searchParams]);
 
@@ -1820,29 +1871,6 @@ export default function JobsPage() {
               >
                 Saved
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode("my");
-                  navigate("/jobs?my=1");
-                }}
-                role="tab"
-                aria-selected={viewMode === "my"}
-                style={{
-                  borderRadius: "14px",
-                  padding: "10px 20px",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background: viewMode === "my" ? colors.accent : colors.surface,
-                  color: viewMode === "my" ? "#000" : colors.textSecondary,
-                  border: viewMode === "my" ? "none" : `1px solid ${colors.border}`,
-                  boxShadow: viewMode === "my" ? "0 4px 14px rgba(255, 214, 0, 0.3)" : "none",
-                }}
-              >
-                My Listings
-              </button>
               <Link
                 to="/jobs/my-applications"
                 style={{
@@ -1864,7 +1892,7 @@ export default function JobsPage() {
                 My Applications
               </Link>
               <Link
-                to="/jobs/employer"
+                to="/jobs/resume"
                 style={{
                   borderRadius: "14px",
                   padding: "10px 20px",
@@ -1880,8 +1908,8 @@ export default function JobsPage() {
                   gap: "6px",
                 }}
               >
-                <Building2 style={{ width: "16px", height: "16px" }} />
-                Employer Dashboard
+                <FileText style={{ width: "16px", height: "16px" }} />
+                My Resume
               </Link>
               {isAdmin && (
                 <Link
@@ -1907,23 +1935,20 @@ export default function JobsPage() {
               )}
             </div>
             <Link
-              to="/jobs/post"
+              to="/jobs/employer"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "8px",
-                borderRadius: "14px",
-                background: colors.accent,
-                padding: "10px 20px",
-                fontSize: "14px",
-                fontWeight: 600,
-                color: "#000",
+                gap: "6px",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: colors.textMuted,
                 textDecoration: "none",
                 transition: "all 0.2s",
-                boxShadow: "0 4px 14px rgba(255, 214, 0, 0.3)",
               }}
             >
-              + Post a Job
+              <Building2 style={{ width: "14px", height: "14px" }} />
+              Employer View &rarr;
             </Link>
           </nav>
 
@@ -1978,8 +2003,8 @@ export default function JobsPage() {
                     isSaved={savedIds.includes(job.id)}
                     onToggleFavorite={toggleFavorite}
                     onShare={shareJob}
-                    onApply={handleApply}
                     isApplied={appliedIds.includes(job.id)}
+                    onUnapply={handleUnapply}
                     colors={colors}
                     isDark={isDark}
                   />

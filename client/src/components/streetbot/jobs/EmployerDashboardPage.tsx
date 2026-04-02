@@ -79,13 +79,15 @@ export default function EmployerDashboardPage() {
             display: "inline-flex",
             alignItems: "center",
             gap: "6px",
-            fontSize: "0.875rem",
-            color: colors.textSecondary,
+            fontSize: "13px",
+            fontWeight: 500,
+            color: colors.textMuted,
             textDecoration: "none",
-            marginBottom: "24px",
+            marginBottom: "20px",
+            transition: "all 0.2s",
           }}
         >
-          <ArrowLeft size={16} /> Back to Jobs
+          <ArrowLeft size={14} /> Job Seeker View
         </Link>
 
         {/* Header */}

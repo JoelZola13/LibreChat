@@ -2,7 +2,10 @@ export type Job = {
   id: string;
   title: string;
   organization?: string;
+  employer_email?: string;
   logo_url?: string;
+  work_mode?: string;
+  hours_per_week?: string;
   opportunity_type?: string;
   category?: string;
   experience_level?: string;
@@ -44,6 +47,15 @@ export type Job = {
 
 export type ApplicationStatus = "applied" | "under_review" | "interview" | "offered" | "rejected";
 
+export type ApplicationDocument = {
+  id: string;
+  kind: "resume" | "cover_letter" | "portfolio" | "other";
+  name: string;
+  size: number;
+  mimeType: string;
+  uploadedAt: string;
+};
+
 export type JobApplication = {
   id: string;
   jobId: string;
@@ -52,6 +64,15 @@ export type JobApplication = {
   appliedAt: string;
   updatedAt: string;
   withdrawn: boolean;
+  applicantName?: string;
+  applicantEmail?: string;
+  coverNote?: string;
+  documents?: ApplicationDocument[];
+  employerNotification?: {
+    email: string;
+    sentAt: string;
+    status: "sent";
+  };
   jobSnapshot: {
     title: string;
     organization?: string;
@@ -60,6 +81,51 @@ export type JobApplication = {
     location?: string;
     compensation?: string;
   };
+};
+
+export type ResumeExperience = {
+  id: string;
+  title: string;
+  company: string;
+  location?: string;
+  startDate: string;
+  endDate?: string;
+  current: boolean;
+  description: string;
+};
+
+export type ResumeEducation = {
+  id: string;
+  institution: string;
+  degree: string;
+  field?: string;
+  startDate: string;
+  endDate?: string;
+  current: boolean;
+};
+
+export type ResumeCertification = {
+  id: string;
+  name: string;
+  issuer: string;
+  date?: string;
+};
+
+export type Resume = {
+  userId: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  website?: string;
+  linkedin?: string;
+  summary: string;
+  experience: ResumeExperience[];
+  education: ResumeEducation[];
+  skills: string[];
+  interests: string[];
+  certifications: ResumeCertification[];
+  updatedAt: string;
 };
 
 export type EmployerListing = {
