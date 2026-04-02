@@ -23,6 +23,7 @@ import { useGlassStyles } from "../shared/useGlassStyles";
 import { GlassBackground } from "../shared/GlassBackground";
 import { useAuthContext } from "~/hooks/AuthContext";
 import { getOrCreateUserId } from "@/lib/userId";
+import SubmitArtModal from "./SubmitArtModal";
 
 // ── Types (inlined from gallery types) ──────────────────────────────────────
 
@@ -649,6 +650,14 @@ export default function GalleryPage() {
 
   // Artworks state
   const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+
+  // Auto-open submit modal when navigating to /gallery/upload
+  useEffect(() => {
+    if (location.pathname === "/gallery/upload") {
+      setShowSubmitModal(true);
+    }
+  }, [location.pathname]);
   const [artworksLoading, setArtworksLoading] = useState(true);
   const [artworksError, setArtworksError] = useState<string | null>(null);
 
@@ -941,7 +950,7 @@ export default function GalleryPage() {
             }}
           >
             <button
-              onClick={() => navigate("/gallery/upload")}
+              onClick={() => setShowSubmitModal(true)}
               style={{
                 background: "#FFD700",
                 color: "#000",
@@ -1326,7 +1335,7 @@ export default function GalleryPage() {
               </h3>
               <button
                 type="button"
-                onClick={() => navigate("/gallery/upload")}
+                onClick={() => setShowSubmitModal(true)}
                 style={{
                   background: "rgba(255, 214, 0, 0.1)",
                   backdropFilter: "blur(10px)",
@@ -1591,7 +1600,7 @@ export default function GalleryPage() {
               <p style={{ fontSize: "1.2rem", marginBottom: 16 }}>No artworks found</p>
               <p>Be the first to submit your art to the gallery!</p>
               <button
-                onClick={() => navigate("/gallery/upload")}
+                onClick={() => setShowSubmitModal(true)}
                 style={{
                   marginTop: 16,
                   padding: "10px 20px",
@@ -1939,6 +1948,15 @@ export default function GalleryPage() {
           favoriteIds={favoriteIds}
         />
       )}
+
+      <SubmitArtModal
+        open={showSubmitModal}
+        onClose={() => setShowSubmitModal(false)}
+        onSuccess={() => {
+          loadArtworks();
+          loadUploads();
+        }}
+      />
     </div>
   );
 }
