@@ -223,6 +223,8 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
   const [loading, setLoading] = useState(!initialProfile);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(profile?.cover_url || null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<TabId>("about");
 
   const tabScrollRef = useRef<HTMLDivElement>(null);
@@ -501,11 +503,54 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                 width: "100%",
                 height: isMobile ? "160px" : "220px",
                 position: "relative",
-                background: profile.cover_url
-                  ? `url(${profile.cover_url}) center/cover`
+                background: bannerUrl
+                  ? `url(${bannerUrl}) center/cover`
                   : `linear-gradient(135deg, ${colors.accent} 0%, #7c3aed 50%, #2563eb 100%)`,
               }}
             >
+              {/* Banner Upload */}
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const url = URL.createObjectURL(file);
+                    setBannerUrl(url);
+                  }
+                }}
+              />
+              <button
+                onClick={() => bannerInputRef.current?.click()}
+                title="Upload banner image"
+                style={{
+                  position: "absolute",
+                  bottom: "12px",
+                  right: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 14px",
+                  borderRadius: "10px",
+                  background: "rgba(0,0,0,0.5)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  cursor: "pointer",
+                  backdropFilter: "blur(8px)",
+                  color: "#fff",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  transition: "all 0.2s",
+                  zIndex: 5,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.7)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.5)"; }}
+              >
+                <Camera size={16} />
+                {bannerUrl ? "Change Banner" : "Add Banner"}
+              </button>
+
               {profile.is_featured && (
                 <div
                   style={{
@@ -1117,53 +1162,58 @@ function ListRow({
 function TabNews({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
   const savedArticles = [
     {
-      title: "The Rise of Street Art in the Digital Age",
-      source: "Street Voices Magazine",
+      title: "The 25 Most Influential Works of American Protest Art Since World War II",
+      source: "The New York Times",
       date: "Apr 5, 2026",
+      readTime: "15 min read",
+      category: "Culture",
+      excerpt: "From the AIDS crisis to Black Lives Matter, how artists have used their work to challenge power and demand change.",
+      imageUrl: "https://picsum.photos/seed/nyt-protest/300/200",
+      url: "https://www.nytimes.com/2020/10/15/t-magazine/most-influential-protest-art.html",
+      saved: true,
+    },
+    {
+      title: "How Banksy Became the World's Most Famous Street Artist",
+      source: "BBC Culture",
+      date: "Apr 3, 2026",
       readTime: "8 min read",
       category: "Culture",
-      excerpt: "How digital tools and social platforms are transforming the way street artists create, share, and monetize their work.",
-      imageUrl: "https://picsum.photos/seed/streetart1/300/200",
+      excerpt: "The anonymous artist has become a global phenomenon, but the mystery of his identity only adds to his appeal.",
+      imageUrl: "https://picsum.photos/seed/bbc-banksy/300/200",
+      url: "https://www.bbc.com/culture/article/20210803-how-banksy-became-the-worlds-most-famous-artist",
       saved: true,
     },
     {
-      title: "Grant Opportunities for Emerging Artists — Spring 2026",
-      source: "Arts Council Weekly",
-      date: "Apr 3, 2026",
-      readTime: "5 min read",
-      category: "Opportunities",
-      excerpt: "A roundup of the latest grants, residencies, and funding programs open to visual artists and muralists.",
-      imageUrl: "https://picsum.photos/seed/grants2/300/200",
-      saved: true,
-    },
-    {
-      title: "How to Price Your Creative Services",
-      source: "The Creative Independent",
+      title: "A Practical Guide to Pricing Your Artwork",
+      source: "Artwork Archive",
       date: "Mar 28, 2026",
-      readTime: "12 min read",
+      readTime: "10 min read",
       category: "Business",
-      excerpt: "A practical guide to setting rates, negotiating contracts, and valuing your time as a freelance creative.",
-      imageUrl: "https://picsum.photos/seed/pricing3/300/200",
+      excerpt: "Learn the formulas, strategies, and market research behind pricing your creative work with confidence.",
+      imageUrl: "https://picsum.photos/seed/pricing-art/300/200",
+      url: "https://www.artworkarchive.com/blog/how-to-price-your-artwork",
       saved: true,
     },
     {
-      title: "Toronto's Most Instagrammable Murals in 2026",
-      source: "BlogTO",
+      title: "Street Art Cities: The App Mapping Urban Art Around the World",
+      source: "Lonely Planet",
       date: "Mar 22, 2026",
       readTime: "6 min read",
-      category: "Culture",
-      excerpt: "From Kensington Market to the Distillery District, these are the walls turning heads this year.",
-      imageUrl: "https://picsum.photos/seed/murals4/300/200",
+      category: "Opportunities",
+      excerpt: "A community-driven platform is documenting murals and street art in over 1,000 cities worldwide.",
+      imageUrl: "https://picsum.photos/seed/lp-streetart/300/200",
+      url: "https://www.lonelyplanet.com/articles/street-art-cities-app",
       saved: true,
     },
     {
-      title: "Building a Portfolio That Gets You Hired",
-      source: "Creative Boom",
+      title: "How to Build an Art Portfolio That Stands Out",
+      source: "Creative Bloq",
       date: "Mar 15, 2026",
-      readTime: "10 min read",
+      readTime: "12 min read",
       category: "Career",
-      excerpt: "Art directors share what they look for when reviewing creative portfolios and how to stand out.",
-      imageUrl: "https://picsum.photos/seed/portfolio5/300/200",
+      excerpt: "Industry professionals share their top tips for creating a portfolio that showcases your skills and lands you work.",
+      imageUrl: "https://picsum.photos/seed/portfolio-cb/300/200",
+      url: "https://www.creativebloq.com/career/how-to-create-a-portfolio-that-will-get-you-hired-71621369",
       saved: true,
     },
   ];
@@ -1171,8 +1221,11 @@ function TabNews({ profile, colors, isDark }: { profile: StreetProfile; colors: 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {savedArticles.map((article, i) => (
-        <div
+        <a
           key={i}
+          href={article.url}
+          target="_blank"
+          rel="noopener noreferrer"
           style={{
             display: "flex",
             gap: "16px",
@@ -1182,6 +1235,8 @@ function TabNews({ profile, colors, isDark }: { profile: StreetProfile; colors: 
             border: `1px solid ${colors.border}`,
             cursor: "pointer",
             transition: "all 0.2s",
+            textDecoration: "none",
+            color: "inherit",
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
@@ -1232,7 +1287,7 @@ function TabNews({ profile, colors, isDark }: { profile: StreetProfile; colors: 
               <Bookmark size={14} style={{ marginLeft: "auto", color: colors.accent, fill: colors.accent }} />
             </div>
           </div>
-        </div>
+        </a>
       ))}
     </div>
   );
@@ -3039,7 +3094,87 @@ function TabActivity({ profile, colors, isDark }: { profile: StreetProfile; colo
 
 function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
+  const [selectedSavedImage, setSelectedSavedImage] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [savedFavorites, setSavedFavorites] = useState<Set<string>>(new Set(["saved-1", "saved-2", "saved-3", "saved-4", "saved-5"]));
+
+  const toggleSavedFavorite = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSavedFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Art saved/bookmarked from other artists in Street Gallery
+  const savedArtworks = [
+    {
+      id: "saved-1",
+      title: "Midnight Lotus — Chinatown Series",
+      artist_name: "Maya Chen",
+      image_url: "https://picsum.photos/seed/saved-lotus/600/400",
+      medium: "Spray Paint & Ink",
+      style: "Neo-Asian Fusion",
+      description: "A striking fusion of traditional Chinese calligraphy and contemporary street art aesthetics. The lotus flower, a symbol of purity and resilience, emerges from layers of spray paint and sumi ink, blending East and West in a vivid nocturnal palette.",
+      year: "2025",
+      location: "Chinatown, Toronto",
+      view_count: 3450,
+      favorite_count: 234,
+    },
+    {
+      id: "saved-2",
+      title: "Fractures of Light",
+      artist_name: "Diego Alvarez",
+      image_url: "https://picsum.photos/seed/saved-fractures/600/400",
+      medium: "Broken Glass & Resin",
+      style: "Installation",
+      description: "An installation piece that captures sunlight through fractured glass suspended in clear resin panels. As the sun moves, the piece casts shifting rainbow patterns across the surrounding walls, creating a constantly evolving artwork that changes with the time of day.",
+      year: "2024",
+      location: "Distillery District, Toronto",
+      view_count: 1820,
+      favorite_count: 156,
+    },
+    {
+      id: "saved-3",
+      title: "Echoes of Harlem",
+      artist_name: "Keisha Williams",
+      image_url: "https://picsum.photos/seed/saved-harlem/600/400",
+      medium: "Acrylic on Brick",
+      style: "Social Realism",
+      description: "A powerful mural depicting the legacy of Black culture in urban spaces — from jazz musicians to civil rights leaders to modern-day community organizers. Painted directly on exposed brick, the raw texture of the wall becomes part of the narrative.",
+      year: "2025",
+      location: "Little Jamaica, Toronto",
+      view_count: 5670,
+      favorite_count: 421,
+    },
+    {
+      id: "saved-4",
+      title: "Steel Bloom",
+      artist_name: "Tomoko Saito",
+      image_url: "https://picsum.photos/seed/saved-bloom/600/400",
+      medium: "Welded Metal & Paint",
+      style: "Sculpture",
+      description: "A 7-foot welded steel sculpture of a flower in bloom, with petals cut from reclaimed industrial metal and hand-painted in gradients of gold and copper. The piece explores the tension between nature and industry, softness and strength.",
+      year: "2025",
+      location: "Trinity Bellwoods Park, Toronto",
+      view_count: 2890,
+      favorite_count: 198,
+    },
+    {
+      id: "saved-5",
+      title: "Pixels & Pavement",
+      artist_name: "Ravi Patel",
+      image_url: "https://picsum.photos/seed/saved-pixels/600/400",
+      medium: "Digital Projection",
+      style: "New Media",
+      description: "A cutting-edge new media installation that projects interactive pixel art onto sidewalks. Pedestrians trigger motion sensors that ripple the digital artwork, turning the pavement into a responsive canvas that reacts to the city's foot traffic.",
+      year: "2025",
+      location: "Yonge-Dundas Square, Toronto",
+      view_count: 4120,
+      favorite_count: 312,
+    },
+  ];
 
   // Artworks created by this specific profile owner
   const ownerName = profile.display_name || "This Creative";
@@ -3051,6 +3186,11 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       image_url: "https://picsum.photos/seed/own-voices/600/400",
       medium: "Spray Paint",
       style: "Street Art",
+      description: "A large-scale mural exploring the stories of subway musicians and buskers who form the invisible soundtrack of the city. Each face is rendered in hyper-saturated color, their instruments dissolving into the surrounding architecture — a tribute to artists who perform without stages.",
+      year: "2025",
+      dimensions: "12ft × 8ft",
+      location: "Dundas West Underpass, Toronto",
+      tools: ["Montana Gold Spray Paint", "Molotow Markers", "Stencil Cut"],
       price: 2800,
       is_for_sale: true,
       is_sold: false,
@@ -3065,6 +3205,11 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       image_url: "https://picsum.photos/seed/own-concrete/600/400",
       medium: "Acrylic & Wheat Paste",
       style: "Muralism",
+      description: "Commissioned by the Ossington BIA, this piece transforms a blank concrete wall into a living narrative of the neighborhood's evolution — from its immigrant roots to its current creative renaissance. Layers of wheat-pasted archival photographs blend with hand-painted contemporary portraits.",
+      year: "2025",
+      dimensions: "20ft × 10ft",
+      location: "Ossington Ave, Toronto",
+      tools: ["Golden Heavy Body Acrylics", "Wheat Paste", "Archival Inkjet Prints"],
       price: 4500,
       is_for_sale: true,
       is_sold: false,
@@ -3079,6 +3224,11 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       image_url: "https://picsum.photos/seed/own-chromatic/600/400",
       medium: "Mixed Media",
       style: "Abstract",
+      description: "An explosive abstract piece that challenges the sterile minimalism dominating gallery spaces. Built up through dozens of layers — dripped acrylics, torn newsprint, spray enamel, and coffee stains — it represents the beautiful chaos of the creative process itself.",
+      year: "2024",
+      dimensions: "48\" × 36\" (canvas)",
+      location: "Studio Work",
+      tools: ["Liquitex Acrylics", "Spray Enamel", "Found Materials", "Coffee"],
       price: 1200,
       is_for_sale: false,
       is_sold: true,
@@ -3093,6 +3243,11 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       image_url: "https://picsum.photos/seed/own-pulse/600/400",
       medium: "Digital Print",
       style: "Contemporary",
+      description: "Part of a limited edition series capturing the energy of Queen West at different times of day. This piece layers long-exposure street photography with hand-drawn illustrations, printed on archival cotton rag paper. Edition of 25.",
+      year: "2025",
+      dimensions: "24\" × 18\"",
+      location: "Queen West, Toronto",
+      tools: ["Canon R5", "Procreate", "Epson Ultrachrome Inks"],
       price: 650,
       is_for_sale: true,
       is_sold: false,
@@ -3107,6 +3262,11 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       image_url: "https://picsum.photos/seed/own-roots/600/400",
       medium: "Spray Paint & Acrylic",
       style: "Figurative",
+      description: "A deeply personal piece exploring the artist's journey between cultures. Tree roots morph into subway maps, while branches become flight paths — connecting the places that shaped the artist's identity. The central figure stands at the crossroads, grounded but reaching upward.",
+      year: "2024",
+      dimensions: "15ft × 9ft",
+      location: "Kensington Market, Toronto",
+      tools: ["Montana Black", "Nova Color Acrylics", "Paint Rollers"],
       price: 3200,
       is_for_sale: true,
       is_sold: false,
@@ -3121,6 +3281,11 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       image_url: "https://picsum.photos/seed/own-neon/600/400",
       medium: "UV Paint & Projection",
       style: "Installation",
+      description: "An immersive night installation that transforms an alleyway into a glowing portal. UV-reactive paint on the walls activates under blacklight, while a projection maps animated spirits onto the architecture. Visitors walk through the piece, becoming part of the artwork themselves.",
+      year: "2025",
+      dimensions: "Site-Specific (30ft corridor)",
+      location: "Kensington Market, Toronto",
+      tools: ["UV Reactive Paint", "Resolume Arena", "Epson Projector", "Arduino"],
       price: 0,
       is_for_sale: false,
       is_sold: false,
@@ -3267,73 +3432,496 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
         })}
       </div>
 
-      {/* Lightbox */}
-      {selectedImage !== null && artworks[selectedImage] && (
-        <div
-          onClick={() => setSelectedImage(null)}
-          style={{
-            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-            background: "rgba(0,0,0,0.92)", display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 9999, padding: "40px",
-          }}
-        >
-          <button
-            onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
+      {/* ── Saved Art Section ── */}
+      <div style={{ marginTop: "48px" }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px",
+          borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+          paddingTop: "32px",
+        }}>
+          <Bookmark size={20} color="#eab308" />
+          <h3 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: colors.text }}>
+            Saved Art
+          </h3>
+          <span style={{
+            fontSize: "12px", padding: "3px 10px", borderRadius: "12px",
+            background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+            color: colors.textSecondary,
+          }}>
+            {savedArtworks.length} pieces
+          </span>
+        </div>
+        <p style={{ fontSize: "14px", color: colors.textSecondary, marginBottom: "20px", marginTop: 0 }}>
+          Art from other creatives in the Street Gallery that you've saved for inspiration.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "18px" }}>
+          {savedArtworks.map((art, i) => {
+            const isFav = savedFavorites.has(art.id);
+            return (
+              <div
+                key={art.id}
+                onClick={() => setSelectedSavedImage(i)}
+                style={{
+                  borderRadius: "14px",
+                  overflow: "hidden",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  cursor: "pointer",
+                  transition: "all 0.3s",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.25)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+              >
+                {/* Image */}
+                <div style={{ position: "relative", width: "100%", paddingTop: "66%", overflow: "hidden" }}>
+                  <img
+                    src={art.image_url}
+                    alt={art.title}
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => {
+                      const t = e.target as HTMLImageElement;
+                      t.style.display = "none";
+                      const p = t.parentElement;
+                      if (p) { p.style.display = "flex"; p.style.alignItems = "center"; p.style.justifyContent = "center"; p.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"; p.innerHTML += '<div style="font-size:48px">🖼️</div>'; }
+                    }}
+                  />
+                  {/* Saved badge */}
+                  <div style={{
+                    position: "absolute", top: "10px", left: "10px",
+                    background: "rgba(234,179,8,0.9)", color: "#000", fontSize: "10px", fontWeight: 700,
+                    padding: "3px 8px", borderRadius: "5px", letterSpacing: "0.5px",
+                    display: "flex", alignItems: "center", gap: "4px",
+                  }}>
+                    <Bookmark size={10} fill="#000" /> SAVED
+                  </div>
+                  {/* Unsave button */}
+                  <button
+                    onClick={(e) => toggleSavedFavorite(art.id, e)}
+                    style={{
+                      position: "absolute", top: "10px", right: "10px",
+                      width: "32px", height: "32px", borderRadius: "50%",
+                      background: isFav ? "rgba(239,68,68,0.9)" : "rgba(0,0,0,0.4)",
+                      border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <Heart size={14} fill={isFav ? "#fff" : "none"} color="#fff" />
+                  </button>
+                </div>
+
+                {/* Card info */}
+                <div style={{ padding: "12px 14px" }}>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: colors.text, marginBottom: "4px" }}>
+                    {art.title}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#eab308", marginBottom: "6px", fontWeight: 600 }}>
+                    by {art.artist_name}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "10px" }}>
+                    {art.medium && (
+                      <span style={{
+                        fontSize: "10px", padding: "2px 8px", borderRadius: "5px",
+                        background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                        color: colors.textSecondary,
+                      }}>
+                        {art.medium}
+                      </span>
+                    )}
+                    {art.style && (
+                      <span style={{
+                        fontSize: "10px", padding: "2px 8px", borderRadius: "5px",
+                        background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                        color: colors.textSecondary,
+                      }}>
+                        {art.style}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "11px", color: colors.textSecondary }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                      <Eye size={12} /> {art.view_count || 0}
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                      <Heart size={12} /> {art.favorite_count || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Saved Art Project Detail Modal ── */}
+      {selectedSavedImage !== null && savedArtworks[selectedSavedImage] && (() => {
+        const sArt = savedArtworks[selectedSavedImage];
+        const isSavedFav = savedFavorites.has(sArt.id);
+        return (
+          <div
+            onClick={() => setSelectedSavedImage(null)}
             style={{
-              position: "absolute", top: "20px", right: "20px",
-              background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
-              width: "40px", height: "40px", borderRadius: "50%", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "flex-start", justifyContent: "center",
+              zIndex: 9999, overflowY: "auto", padding: "40px 20px",
             }}
           >
-            <X size={20} />
-          </button>
-          {selectedImage > 0 && (
             <button
-              onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage - 1); }}
+              onClick={(e) => { e.stopPropagation(); setSelectedSavedImage(null); }}
               style={{
-                position: "absolute", left: "20px",
+                position: "fixed", top: "20px", right: "20px",
                 background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
-                width: "48px", height: "48px", borderRadius: "50%", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
+                width: "44px", height: "44px", borderRadius: "50%", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001,
               }}
             >
-              <ChevronLeft size={24} />
+              <X size={22} />
             </button>
-          )}
-          {selectedImage < artworks.length - 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage + 1); }}
-              style={{
-                position: "absolute", right: "20px",
-                background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
-                width: "48px", height: "48px", borderRadius: "50%", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              <ChevronRight size={24} />
-            </button>
-          )}
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: "90vw", maxHeight: "80vh", textAlign: "center" }}>
-            <img
-              src={artworks[selectedImage].image_url}
-              alt={artworks[selectedImage].title}
-              style={{ maxWidth: "100%", maxHeight: "70vh", borderRadius: "12px", objectFit: "contain" }}
-            />
-            <div style={{ color: "#fff", marginTop: "16px", fontSize: "20px", fontWeight: 700 }}>
-              {artworks[selectedImage].title}
-            </div>
-            <div style={{ color: "rgba(255,255,255,0.7)", marginTop: "6px", fontSize: "14px" }}>
-              by {artworks[selectedImage].artist_name} · {artworks[selectedImage].medium} · {artworks[selectedImage].style}
-            </div>
-            {artworks[selectedImage].is_for_sale && artworks[selectedImage].price && (
-              <div style={{ color: "#eab308", marginTop: "8px", fontSize: "18px", fontWeight: 700 }}>
-                ${artworks[selectedImage].price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-              </div>
+            {selectedSavedImage > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedSavedImage(selectedSavedImage - 1); }}
+                style={{
+                  position: "fixed", left: "20px", top: "50%", transform: "translateY(-50%)",
+                  background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
+                  width: "48px", height: "48px", borderRadius: "50%", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001,
+                }}
+              >
+                <ChevronLeft size={24} />
+              </button>
             )}
+            {selectedSavedImage < savedArtworks.length - 1 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedSavedImage(selectedSavedImage + 1); }}
+                style={{
+                  position: "fixed", right: "20px", top: "50%", transform: "translateY(-50%)",
+                  background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
+                  width: "48px", height: "48px", borderRadius: "50%", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001,
+                }}
+              >
+                <ChevronRight size={24} />
+              </button>
+            )}
+
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "900px", width: "100%", borderRadius: "16px", overflow: "hidden",
+                background: "rgba(20,20,20,0.98)", border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              {/* Hero Image */}
+              <div style={{ width: "100%", position: "relative" }}>
+                <img
+                  src={sArt.image_url}
+                  alt={sArt.title}
+                  style={{ width: "100%", maxHeight: "60vh", objectFit: "cover", display: "block" }}
+                />
+                <div style={{
+                  position: "absolute", top: "16px", left: "16px",
+                  background: "rgba(234,179,8,0.9)", color: "#000", fontSize: "11px", fontWeight: 700,
+                  padding: "4px 10px", borderRadius: "6px",
+                  display: "flex", alignItems: "center", gap: "4px",
+                }}>
+                  <Bookmark size={11} fill="#000" /> SAVED
+                </div>
+              </div>
+
+              {/* Project Info */}
+              <div style={{ padding: "32px 36px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                  <h2 style={{ margin: 0, fontSize: "28px", fontWeight: 800, color: "#fff" }}>
+                    {sArt.title}
+                  </h2>
+                  <button
+                    onClick={() => toggleSavedFavorite(sArt.id, { stopPropagation: () => {} } as React.MouseEvent)}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer", padding: "8px",
+                      display: "flex", alignItems: "center", gap: "6px",
+                    }}
+                  >
+                    <Heart size={22} fill={isSavedFav ? "#ef4444" : "none"} color={isSavedFav ? "#ef4444" : "#fff"} />
+                    <span style={{ color: isSavedFav ? "#ef4444" : "rgba(255,255,255,0.6)", fontSize: "14px" }}>
+                      {sArt.favorite_count}
+                    </span>
+                  </button>
+                </div>
+
+                <div style={{ fontSize: "15px", color: "#eab308", fontWeight: 600, marginBottom: "16px" }}>
+                  by {sArt.artist_name}
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", fontSize: "13px", color: "rgba(255,255,255,0.5)", marginBottom: "24px" }}>
+                  {sArt.year && <span>📅 {sArt.year}</span>}
+                  {sArt.location && <span>📍 {sArt.location}</span>}
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Eye size={13} /> {sArt.view_count}</span>
+                </div>
+
+                {/* Description */}
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "20px", marginBottom: "24px" }}>
+                  <h4 style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: "12px" }}>
+                    About This Piece
+                  </h4>
+                  <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "15px", lineHeight: 1.7, margin: 0 }}>
+                    {sArt.description}
+                  </p>
+                </div>
+
+                {/* Tags */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "24px" }}>
+                  {sArt.medium && (
+                    <span style={{
+                      fontSize: "12px", padding: "5px 14px", borderRadius: "8px",
+                      background: "rgba(234,179,8,0.15)", color: "#eab308", fontWeight: 600,
+                    }}>
+                      {sArt.medium}
+                    </span>
+                  )}
+                  {sArt.style && (
+                    <span style={{
+                      fontSize: "12px", padding: "5px 14px", borderRadius: "8px",
+                      background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)",
+                    }}>
+                      {sArt.style}
+                    </span>
+                  )}
+                </div>
+
+                {/* Artist Card */}
+                <div style={{
+                  borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "20px",
+                  display: "flex", alignItems: "center", gap: "14px",
+                }}>
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "50%",
+                    background: "linear-gradient(135deg, #eab308, #f59e0b)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "20px", fontWeight: 700, color: "#000",
+                  }}>
+                    {sArt.artist_name.charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: "15px" }}>{sArt.artist_name}</div>
+                    <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "12px" }}>
+                      Street Gallery Artist
+                    </div>
+                  </div>
+                  <button style={{
+                    marginLeft: "auto", padding: "8px 20px", borderRadius: "8px",
+                    background: "rgba(234,179,8,0.15)", border: "1px solid rgba(234,179,8,0.3)",
+                    color: "#eab308", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  }}>
+                    View Profile
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      {/* ── Full Project Detail Modal (Behance-style) ── */}
+      {selectedImage !== null && artworks[selectedImage] && (() => {
+        const art = artworks[selectedImage];
+        const isFav = favorites.has(art.id);
+        return (
+          <div
+            onClick={() => setSelectedImage(null)}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "flex-start", justifyContent: "center",
+              zIndex: 9999, overflowY: "auto", padding: "40px 20px",
+            }}
+          >
+            {/* Close button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
+              style={{
+                position: "fixed", top: "20px", right: "20px",
+                background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
+                width: "44px", height: "44px", borderRadius: "50%", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001,
+              }}
+            >
+              <X size={22} />
+            </button>
+            {/* Nav arrows */}
+            {selectedImage > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage - 1); }}
+                style={{
+                  position: "fixed", left: "20px", top: "50%", transform: "translateY(-50%)",
+                  background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
+                  width: "48px", height: "48px", borderRadius: "50%", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001,
+                }}
+              >
+                <ChevronLeft size={24} />
+              </button>
+            )}
+            {selectedImage < artworks.length - 1 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage + 1); }}
+                style={{
+                  position: "fixed", right: "20px", top: "50%", transform: "translateY(-50%)",
+                  background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
+                  width: "48px", height: "48px", borderRadius: "50%", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001,
+                }}
+              >
+                <ChevronRight size={24} />
+              </button>
+            )}
+
+            {/* Project Detail Content */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "900px", width: "100%", borderRadius: "16px", overflow: "hidden",
+                background: "rgba(20,20,20,0.98)", border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              {/* Hero Image */}
+              <div style={{ width: "100%", position: "relative" }}>
+                <img
+                  src={art.image_url}
+                  alt={art.title}
+                  style={{ width: "100%", maxHeight: "60vh", objectFit: "cover", display: "block" }}
+                />
+                {/* Badges on image */}
+                {art.is_for_sale && !art.is_sold && (
+                  <div style={{
+                    position: "absolute", top: "16px", left: "16px",
+                    background: "#22c55e", color: "#fff", fontSize: "12px", fontWeight: 700,
+                    padding: "5px 12px", borderRadius: "8px",
+                  }}>
+                    FOR SALE — ${art.price?.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </div>
+                )}
+                {art.is_sold && (
+                  <div style={{
+                    position: "absolute", top: "16px", left: "16px",
+                    background: "#ef4444", color: "#fff", fontSize: "12px", fontWeight: 700,
+                    padding: "5px 12px", borderRadius: "8px",
+                  }}>
+                    SOLD
+                  </div>
+                )}
+              </div>
+
+              {/* Project Info */}
+              <div style={{ padding: "32px 36px" }}>
+                {/* Title row */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                  <h2 style={{ margin: 0, fontSize: "28px", fontWeight: 800, color: "#fff" }}>
+                    {art.title}
+                  </h2>
+                  <button
+                    onClick={() => toggleFavorite(art.id, { stopPropagation: () => {} } as React.MouseEvent)}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer", padding: "8px",
+                      display: "flex", alignItems: "center", gap: "6px",
+                    }}
+                  >
+                    <Heart size={22} fill={isFav ? "#ef4444" : "none"} color={isFav ? "#ef4444" : "#fff"} />
+                    <span style={{ color: isFav ? "#ef4444" : "rgba(255,255,255,0.6)", fontSize: "14px" }}>
+                      {art.favorite_count + (isFav ? 1 : 0)}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Artist + meta */}
+                <div style={{ fontSize: "15px", color: "#eab308", fontWeight: 600, marginBottom: "16px" }}>
+                  by {art.artist_name}
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", fontSize: "13px", color: "rgba(255,255,255,0.5)", marginBottom: "24px" }}>
+                  {art.year && <span>📅 {art.year}</span>}
+                  {art.dimensions && <span>📐 {art.dimensions}</span>}
+                  {art.location && <span>📍 {art.location}</span>}
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Eye size={13} /> {art.view_count}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><MessageCircle size={13} /> {art.comment_count}</span>
+                </div>
+
+                {/* Description */}
+                <div style={{
+                  borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "20px", marginBottom: "24px",
+                }}>
+                  <h4 style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: "12px" }}>
+                    About This Piece
+                  </h4>
+                  <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "15px", lineHeight: 1.7, margin: 0 }}>
+                    {art.description}
+                  </p>
+                </div>
+
+                {/* Medium & Style tags */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "24px" }}>
+                  {art.medium && (
+                    <span style={{
+                      fontSize: "12px", padding: "5px 14px", borderRadius: "8px",
+                      background: "rgba(234,179,8,0.15)", color: "#eab308", fontWeight: 600,
+                    }}>
+                      {art.medium}
+                    </span>
+                  )}
+                  {art.style && (
+                    <span style={{
+                      fontSize: "12px", padding: "5px 14px", borderRadius: "8px",
+                      background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)",
+                    }}>
+                      {art.style}
+                    </span>
+                  )}
+                </div>
+
+                {/* Tools & Materials */}
+                {art.tools && art.tools.length > 0 && (
+                  <div style={{ marginBottom: "24px" }}>
+                    <h4 style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: "10px" }}>
+                      Tools & Materials
+                    </h4>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      {art.tools.map((tool: string) => (
+                        <span key={tool} style={{
+                          fontSize: "11px", padding: "4px 12px", borderRadius: "6px",
+                          background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                        }}>
+                          {tool}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Artist Card */}
+                <div style={{
+                  borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "20px",
+                  display: "flex", alignItems: "center", gap: "14px",
+                }}>
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "50%",
+                    background: "linear-gradient(135deg, #eab308, #f59e0b)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "20px", fontWeight: 700, color: "#000",
+                  }}>
+                    {art.artist_name.charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: "15px" }}>{art.artist_name}</div>
+                    <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "12px" }}>
+                      {profile.primary_roles?.[0] || "Creative"} · {profile.city || "Toronto"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
