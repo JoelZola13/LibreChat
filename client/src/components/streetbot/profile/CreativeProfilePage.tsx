@@ -3927,164 +3927,1250 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
 }
 
 function TabJobs({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  const [savedJobs, setSavedJobs] = useState<Set<string>>(new Set());
+  const [jobFilter, setJobFilter] = useState<string>("ALL");
+  const [selectedJob, setSelectedJob] = useState<any | null>(null);
+  const [applyingJob, setApplyingJob] = useState<any | null>(null);
+  const [applyForm, setApplyForm] = useState({ name: "", email: "", phone: "", message: "", portfolio: "" });
+  const [applySubmitted, setApplySubmitted] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const resumeInputRef = useRef<HTMLInputElement>(null);
+  const [reminders, setReminders] = useState<Set<string>>(new Set());
+  const [reminderToast, setReminderToast] = useState<{ jobTitle: string; deadline: string } | null>(null);
+  const [sharingJob, setSharingJob] = useState<any | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const toggleReminder = (jobId: string, jobTitle: string, deadline: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setReminders((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobId)) {
+        next.delete(jobId);
+        setReminderToast(null);
+      } else {
+        next.add(jobId);
+        setReminderToast({ jobTitle, deadline });
+        setTimeout(() => setReminderToast(null), 4000);
+      }
+      return next;
+    });
+  };
+
+  const toggleSaveJob = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSavedJobs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const jobs = [
     {
-      title: "Mural Artist for Restaurant Rebrand",
-      client: "The Urban Kitchen",
-      status: "Active",
-      budget: "$3,500",
+      id: "job-1",
+      title: "Youth Media Producer",
+      company: "Black Voices Media Collective",
+      type: "PART-TIME",
+      banner_color: "#1a1a2e",
+      banner_text_color: "#fff",
+      accent_color: "#eab308",
+      image_url: "https://picsum.photos/seed/job-media/600/300",
+      description: "Create engaging multimedia content that amplifies Black youth voices and experiences. Work with a team of creatives to produce podcasts, videos, and social media content.",
+      full_description: "Black Voices Media Collective is looking for a passionate Youth Media Producer to join our creative team. You will help produce podcasts, short-form videos, social media reels, and written content that centers Black youth perspectives in Toronto.\n\nThis is a paid, part-time role ideal for emerging creatives aged 16-29 who want hands-on experience in media production. Full training is provided — no formal experience required. You'll work alongside experienced producers, editors, and community organizers in a supportive, youth-led environment.\n\nThe role includes access to professional-grade equipment, mentorship from industry professionals, and opportunities to have your work published across our platforms reaching 50,000+ monthly viewers.",
+      qualifications: ["Basic video/audio editing skills", "Interest in storytelling & media", "Age 16-29", "No formal experience required"],
+      responsibilities: ["Produce 2-3 short-form videos per week for social media", "Assist with podcast recording, editing, and publishing", "Attend weekly team meetings and creative brainstorms", "Participate in community events for content capture", "Collaborate with writers, designers, and other producers"],
+      how_to_apply: "Submit your resume and a short portfolio (links to any videos, social posts, or creative work you've made — even personal projects count!) to careers@blackvoicesmedia.ca. Include a brief paragraph about why this role interests you. Applications are reviewed on a rolling basis.",
+      contact_email: "careers@blackvoicesmedia.ca",
+      posted_date: "Mar 15, 2026",
+      tags: [
+        { label: "Black-Led", color: "#ef4444", icon: "org" },
+        { label: "No Experience", color: "#8b5cf6", icon: "sparkle" },
+        { label: "Training", color: "#22c55e", icon: "training" },
+        { label: "Creative", color: "#f97316", icon: "creative" },
+        { label: "Media", color: "#3b82f6", icon: "media" },
+      ],
+      location: "Toronto, ON",
+      salary: "$20-$25/hour",
       deadline: "Apr 30, 2026",
-      description: "Looking for a talented muralist to create a vibrant wall piece for our restaurant renovation.",
     },
     {
+      id: "job-2",
+      title: "Youth Outreach Worker",
+      company: "Street Voices Community Services",
+      type: "FULL-TIME",
+      banner_color: "#f59e0b",
+      banner_text_color: "#000",
+      accent_color: "#f59e0b",
+      image_url: "https://picsum.photos/seed/job-outreach/600/300",
+      description: "Connect with youth experiencing homelessness and provide support, resources, and pathways to stability through creative engagement programs.",
+      full_description: "Street Voices Community Services is hiring a full-time Youth Outreach Worker to connect with young people (ages 16-29) experiencing homelessness, housing insecurity, or other barriers in the Greater Toronto Area.\n\nYou will meet youth where they are — on the streets, in shelters, at drop-ins — and build trusting relationships that help them access housing, healthcare, employment, and creative programs. This role is rooted in harm reduction, trauma-informed care, and a strengths-based approach.\n\nLived experience with housing insecurity, the justice system, or mental health challenges is valued and considered an asset. Comprehensive training and ongoing supervision are provided.",
+      qualifications: ["Lived experience with housing insecurity preferred", "Strong communication skills", "First Aid certification an asset", "Training provided"],
+      responsibilities: ["Conduct street-level outreach across downtown Toronto", "Build rapport and trust with youth in crisis", "Connect youth to shelter, housing, and health resources", "Maintain case notes and documentation", "Participate in team debriefs and clinical supervision"],
+      how_to_apply: "Send your resume and cover letter to hr@streetvoices.org with the subject line 'Youth Outreach Worker Application'. We encourage applications from people with lived experience. Accommodations are available upon request throughout the hiring process.",
+      contact_email: "hr@streetvoices.org",
+      posted_date: "Mar 22, 2026",
+      tags: [
+        { label: "No Experience", color: "#8b5cf6", icon: "sparkle" },
+        { label: "Training", color: "#22c55e", icon: "training" },
+      ],
+      location: "Toronto, ON",
+      salary: "$45,000-$55,000/year",
+      deadline: "May 19, 2026",
+    },
+    {
+      id: "job-3",
+      title: "Peer Support Specialist",
+      company: "Youth Wellness Hub",
+      type: "PART-TIME",
+      banner_color: "#14b8a6",
+      banner_text_color: "#fff",
+      accent_color: "#14b8a6",
+      image_url: "https://picsum.photos/seed/job-peer/600/300",
+      description: "Use your lived experience to support other young people navigating mental health challenges. Facilitate peer support groups and one-on-one sessions.",
+      full_description: "Youth Wellness Hub is seeking a compassionate Peer Support Specialist to work with young people ages 18-29 who are navigating mental health and substance use challenges in Hamilton, ON.\n\nAs a peer specialist, you will draw on your own lived experience to build trust, reduce stigma, and help youth develop coping strategies. You'll facilitate weekly peer support groups, provide one-on-one check-ins, and connect youth to clinical services when needed.\n\nThis is a meaningful role for someone who has walked a similar path and wants to use their journey to help others. Full peer support certification training is provided through the Ontario Peer Development Initiative.",
+      qualifications: ["Lived experience with mental health challenges", "Empathy and active listening", "Age 18-29", "Peer support training provided"],
+      responsibilities: ["Facilitate 2-3 peer support groups per week", "Provide one-on-one peer check-ins", "Support youth in setting wellness goals", "Maintain confidential session notes", "Attend weekly clinical supervision"],
+      how_to_apply: "Apply online at youthwellnesshub.ca/careers or email your resume to jobs@youthwellnesshub.ca. In your application, briefly share why peer support matters to you (1-2 paragraphs). We value lived experience and do not require a degree.",
+      contact_email: "jobs@youthwellnesshub.ca",
+      posted_date: "Mar 10, 2026",
+      tags: [
+        { label: "No Experience", color: "#8b5cf6", icon: "sparkle" },
+        { label: "Training", color: "#22c55e", icon: "training" },
+      ],
+      location: "Hamilton, ON",
+      salary: "$22-$26/hour",
+      deadline: "Apr 15, 2026",
+    },
+    {
+      id: "job-4",
+      title: "Mural Artist — Restaurant Rebrand",
+      company: "The Urban Kitchen",
+      type: "COMMISSION",
+      banner_color: "#7c3aed",
+      banner_text_color: "#fff",
+      accent_color: "#7c3aed",
+      image_url: "https://picsum.photos/seed/job-mural/600/300",
+      description: "Looking for a talented muralist to create a vibrant wall piece for our restaurant renovation. Must have experience with large-scale indoor murals.",
+      full_description: "The Urban Kitchen is undergoing a full rebrand and we're looking for a talented muralist to create a vibrant, eye-catching wall piece for our main dining area.\n\nThe mural should reflect our brand values: community, culture, and fresh ingredients. We're open to styles ranging from realistic to abstract, but want something bold that becomes a conversation piece and Instagram-worthy backdrop for our guests.\n\nThe wall is approximately 12ft x 8ft. The artist will have full creative freedom within the agreed concept. Budget includes materials allowance. Work must be completed within 2 weeks during off-hours (restaurant closes at 11pm, work can begin at midnight).",
+      qualifications: ["Portfolio of completed murals", "Experience with interior wall painting", "Own equipment & supplies", "Ability to work within a 2-week timeline"],
+      responsibilities: ["Submit concept sketches for approval", "Source and purchase materials (reimbursed)", "Complete the mural within the 2-week timeline", "Apply protective sealant for longevity", "Clean up workspace nightly"],
+      how_to_apply: "Send your portfolio and a brief concept pitch (mood board or rough sketches welcome) to hello@theurbankitchen.ca. Include your availability and any questions about the space. We'll schedule a site visit with shortlisted artists.",
+      contact_email: "hello@theurbankitchen.ca",
+      posted_date: "Apr 1, 2026",
+      tags: [
+        { label: "Creative", color: "#f97316", icon: "creative" },
+        { label: "Commission", color: "#eab308", icon: "briefcase" },
+      ],
+      location: "Toronto, ON",
+      salary: "$3,500 commission",
+      deadline: "Apr 30, 2026",
+    },
+    {
+      id: "job-5",
       title: "Live Art Performance — Music Festival",
-      client: "SoundWave Festival",
-      status: "Pending Review",
-      budget: "$2,000",
+      company: "SoundWave Festival",
+      type: "COMMISSION",
+      banner_color: "#ec4899",
+      banner_text_color: "#fff",
+      accent_color: "#ec4899",
+      image_url: "https://picsum.photos/seed/job-festival/600/300",
+      description: "Live painting during the 3-day music festival. Must be comfortable performing in front of large crowds and creating art in real-time.",
+      full_description: "SoundWave Festival is looking for a dynamic visual artist to perform live painting across our 3-day music festival at Ontario Place. You'll be creating art in real-time as bands perform, with your work displayed prominently on the festival grounds.\n\nThis is a high-visibility opportunity — SoundWave draws 15,000+ attendees and significant media coverage. Your finished pieces will be auctioned at the closing ceremony with proceeds split 70/30 (artist/festival).\n\nWe provide the stage area, large-format canvases, lighting, and a dedicated assistant. You bring your paints, brushes, and creative energy. Housing and meals are covered for the duration of the event.",
+      qualifications: ["Live painting experience", "Comfortable with public performance", "Own supplies (canvas & paints provided)", "Available for full 3-day event"],
+      responsibilities: ["Perform live painting during headliner sets (3-4 hours/day)", "Engage with festival attendees during painting sessions", "Complete 2-3 finished pieces over the 3 days", "Participate in the closing ceremony art auction", "Be available for media interviews and photo ops"],
+      how_to_apply: "Submit your portfolio and a 1-minute video of you painting (can be casual, phone-recorded) to artists@soundwavefest.com. Tell us what music inspires your art. Selected artists will be invited to a virtual interview.",
+      contact_email: "artists@soundwavefest.com",
+      posted_date: "Mar 28, 2026",
+      tags: [
+        { label: "Creative", color: "#f97316", icon: "creative" },
+        { label: "Live Event", color: "#ef4444", icon: "sparkle" },
+        { label: "Commission", color: "#eab308", icon: "briefcase" },
+      ],
+      location: "Toronto, ON",
+      salary: "$2,000 commission",
       deadline: "May 15, 2026",
-      description: "Live painting during the 3-day music festival. Must be comfortable performing in front of large crowds.",
     },
     {
+      id: "job-6",
       title: "Street Art Installation — City Commission",
-      client: "Toronto Arts Council",
-      status: "Completed",
-      budget: "$8,000",
-      deadline: "Mar 20, 2026",
-      description: "Public art installation for the downtown revitalization project. Successfully completed and featured in local media.",
-    },
-    {
-      title: "Brand Mural — Sneaker Store Launch",
-      client: "StreetKicks Co.",
-      status: "Active",
-      budget: "$4,200",
-      deadline: "Apr 22, 2026",
-      description: "Interior and exterior mural work for a new sneaker retail location.",
+      company: "Toronto Arts Council",
+      type: "COMMISSION",
+      banner_color: "#059669",
+      banner_text_color: "#fff",
+      accent_color: "#059669",
+      image_url: "https://picsum.photos/seed/job-cityart/600/300",
+      description: "Public art installation for the downtown revitalization project. Open call for emerging and established street artists to transform a public space.",
+      full_description: "The Toronto Arts Council, in partnership with the City of Toronto, is issuing an open call for street artists to create a permanent public art installation as part of the Downtown East Revitalization Project.\n\nThe selected artist will transform a 40ft concrete retaining wall along the new pedestrian corridor into a landmark piece that reflects the cultural diversity and creative energy of the neighborhood. The project has strong community support and will be unveiled during Nuit Blanche 2026.\n\nThis is a significant opportunity for emerging or established artists to create a permanent, high-profile public artwork. The $8,000 budget covers artist fees, materials, equipment rental, and installation costs. The City provides permitting, site preparation, scaffolding, and project management support.",
+      qualifications: ["Portfolio of public art or street art", "Proposal submission required", "Must carry liability insurance", "Experience with outdoor installations"],
+      responsibilities: ["Submit a detailed proposal with concept renders", "Present to the community advisory panel", "Complete the installation within the agreed timeline", "Coordinate with city engineers on structural requirements", "Attend the public unveiling ceremony"],
+      how_to_apply: "Download the full RFP from torontoartscouncil.org/public-art-2026. Submit your proposal package (artist statement, concept renders, budget breakdown, timeline, portfolio, and proof of insurance) to publicart@torontoarts.ca by the deadline. Info sessions are held every Tuesday at 2pm via Zoom — register on our website.",
+      contact_email: "publicart@torontoarts.ca",
+      posted_date: "Mar 5, 2026",
+      tags: [
+        { label: "Creative", color: "#f97316", icon: "creative" },
+        { label: "Public Art", color: "#3b82f6", icon: "media" },
+        { label: "Commission", color: "#eab308", icon: "briefcase" },
+      ],
+      location: "Toronto, ON",
+      salary: "$8,000 commission",
+      deadline: "May 20, 2026",
     },
   ];
 
-  const statusColor = (s: string) => {
-    if (s === "Active") return { color: "#22c55e", bg: "rgba(34,197,94,0.15)" };
-    if (s === "Completed") return { color: colors.accent, bg: "rgba(255,214,0,0.12)" };
-    return { color: "#f59e0b", bg: "rgba(245,158,11,0.15)" };
+  const typeColor = (t: string) => {
+    if (t === "FULL-TIME") return { bg: "#22c55e", color: "#fff" };
+    if (t === "COMMISSION") return { bg: "#f59e0b", color: "#000" };
+    if (t === "CONTRACT") return { bg: "#f59e0b", color: "#000" };
+    return { bg: "#eab308", color: "#000" };
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      <GlassCard colors={colors} isDark={isDark}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, color: colors.text, margin: 0 }}>
-            Jobs & Commissions
+    <div>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: "24px", flexWrap: "wrap", gap: "12px",
+      }}>
+        <div>
+          <h3 style={{ fontSize: "18px", fontWeight: 700, color: colors.text, margin: "0 0 4px 0" }}>
+            Jobs & Opportunities
           </h3>
-          <span style={{ fontSize: "13px", color: colors.textSecondary }}>
-            {jobs.filter((j) => j.status === "Active").length} active · {jobs.filter((j) => j.status === "Completed").length} completed
-          </span>
+          <p style={{ fontSize: "13px", color: colors.textSecondary, margin: 0 }}>
+            Opportunities relevant to {profile.display_name || "this creative"}
+          </p>
         </div>
-        <p style={{ fontSize: "13px", color: colors.textSecondary, margin: "4px 0 0 0" }}>
-          See who is building with {profile.display_name} and current commission work.
-        </p>
-      </GlassCard>
+        <div style={{ fontSize: "13px", color: colors.textSecondary }}>
+          {jobs.length} opportunities
+        </div>
+      </div>
 
-      {jobs.map((job, i) => {
-        const sc = statusColor(job.status);
-        return (
-          <GlassCard key={i} colors={colors} isDark={isDark}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
-              <div style={{ flex: 1, minWidth: "200px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px", flexWrap: "wrap" }}>
-                  <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>{job.title}</h4>
-                  <span
+      {/* Filter Buttons */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "24px",
+        padding: "12px 16px", borderRadius: "12px",
+        background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+      }}>
+        {["ALL", "PART-TIME", "FULL-TIME", "COMMISSION", "CONTRACT"].map((filter) => {
+          const isActive = jobFilter === filter;
+          return (
+            <button
+              key={filter}
+              onClick={() => setJobFilter(filter)}
+              style={{
+                padding: "8px 18px", borderRadius: "100px", fontSize: "12px", fontWeight: 700,
+                border: "none", cursor: "pointer", transition: "all 0.2s",
+                background: isActive ? "#eab308" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"),
+                color: isActive ? "#000" : colors.textSecondary,
+                letterSpacing: "0.3px",
+              }}
+            >
+              {filter === "ALL" ? "All Jobs" : filter.charAt(0) + filter.slice(1).toLowerCase().replace("-", "-")}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Job Cards Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "20px" }}>
+        {jobs.filter((job) => jobFilter === "ALL" || job.type === jobFilter).map((job) => {
+          const tc = typeColor(job.type);
+          const isSaved = savedJobs.has(job.id);
+          return (
+            <div
+              key={job.id}
+              style={{
+                borderRadius: "16px",
+                overflow: "hidden",
+                background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)",
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                transition: "all 0.3s",
+                display: "flex",
+                flexDirection: "column",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.3)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+            >
+              {/* Banner with company name */}
+              <div style={{ position: "relative", padding: "0" }}>
+                {/* Type badge */}
+                <div style={{
+                  position: "absolute", top: "12px", left: "12px", zIndex: 2,
+                  background: tc.bg, color: tc.color, fontSize: "10px", fontWeight: 800,
+                  padding: "4px 10px", borderRadius: "6px", letterSpacing: "0.5px",
+                }}>
+                  {job.type}
+                </div>
+                {/* Save & Share icons */}
+                <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 2, display: "flex", gap: "8px" }}>
+                  <button
+                    onClick={(e) => toggleSaveJob(job.id, e)}
                     style={{
-                      fontSize: "11px",
-                      padding: "3px 10px",
-                      borderRadius: "100px",
-                      background: sc.bg,
-                      color: sc.color,
-                      fontWeight: 600,
+                      width: "34px", height: "34px", borderRadius: "50%",
+                      background: "rgba(0,0,0,0.35)", border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
                     }}
                   >
-                    {job.status}
-                  </span>
-                </div>
-                <p style={{ margin: "0 0 8px 0", fontSize: "14px", color: colors.textSecondary, lineHeight: 1.5 }}>
-                  {job.description}
-                </p>
-                <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "13px", color: colors.textSecondary }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <Briefcase size={13} /> {job.client}
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <Calendar size={13} /> {job.deadline}
-                  </span>
-                </div>
-              </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontSize: "18px", fontWeight: 800, color: colors.accent }}>{job.budget}</div>
-                {job.status === "Active" && (
+                    <Heart size={15} fill={isSaved ? "#ef4444" : "none"} color={isSaved ? "#ef4444" : "#fff"} />
+                  </button>
                   <button
                     style={{
-                      marginTop: "8px",
-                      padding: "8px 20px",
-                      borderRadius: "10px",
-                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                      color: colors.text,
-                      fontWeight: 600,
-                      fontSize: "13px",
-                      border: `1px solid ${colors.border}`,
-                      cursor: "pointer",
+                      width: "34px", height: "34px", borderRadius: "50%",
+                      background: "rgba(0,0,0,0.35)", border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
                     }}
                   >
-                    View Details
+                    <Share2 size={15} color="#fff" />
                   </button>
-                )}
-                {job.status === "Completed" && (
-                  <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "4px", justifyContent: "flex-end" }}>
-                    <Star size={14} color={colors.accent} fill={colors.accent} />
-                    <Star size={14} color={colors.accent} fill={colors.accent} />
-                    <Star size={14} color={colors.accent} fill={colors.accent} />
-                    <Star size={14} color={colors.accent} fill={colors.accent} />
-                    <Star size={14} color={colors.accent} fill={colors.accent} />
+                </div>
+                {/* Company banner */}
+                <div style={{
+                  background: job.banner_color,
+                  padding: "40px 20px 24px",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  borderRadius: "12px", margin: "12px 12px 0",
+                }}>
+                  <div style={{
+                    fontSize: "22px", fontWeight: 900, color: job.banner_text_color,
+                    textTransform: "uppercase", textAlign: "center", letterSpacing: "1px", lineHeight: 1.2,
+                  }}>
+                    {job.company.split(" ").slice(0, -1).join(" ")}
+                  </div>
+                  <div style={{
+                    fontSize: "13px", fontWeight: 600, color: job.banner_text_color,
+                    opacity: 0.8, marginTop: "4px", textAlign: "center",
+                  }}>
+                    {job.company.split(" ").slice(-1)[0]}
+                  </div>
+                </div>
+              </div>
+
+              {/* Job Image */}
+              {job.image_url && (
+                <div style={{ margin: "12px 12px 0", borderRadius: "10px", overflow: "hidden" }}>
+                  <img
+                    src={job.image_url}
+                    alt={job.title}
+                    style={{ width: "100%", height: "140px", objectFit: "cover", display: "block" }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                </div>
+              )}
+
+              {/* Content */}
+              <div style={{ padding: "16px 18px", flex: 1, display: "flex", flexDirection: "column" }}>
+                {/* Title */}
+                <h4 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: 700, color: colors.text, textAlign: "center" }}>
+                  {job.title}
+                </h4>
+                <div style={{ fontSize: "13px", color: colors.textSecondary, textAlign: "center", marginBottom: "12px" }}>
+                  {job.company}
+                </div>
+
+                {/* Description */}
+                <p style={{
+                  fontSize: "13px", color: colors.textSecondary, lineHeight: 1.5,
+                  margin: "0 0 14px 0", textAlign: "center",
+                  display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as any, overflow: "hidden",
+                }}>
+                  {job.description}
+                </p>
+
+                {/* Tags */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "center", marginBottom: "16px" }}>
+                  {job.tags.map((tag) => (
+                    <span
+                      key={tag.label}
+                      style={{
+                        fontSize: "11px", padding: "4px 10px", borderRadius: "100px",
+                        background: tag.color, color: "#fff", fontWeight: 600,
+                        display: "flex", alignItems: "center", gap: "4px",
+                      }}
+                    >
+                      {tag.icon === "org" && <Briefcase size={10} />}
+                      {tag.icon === "sparkle" && <Sparkles size={10} />}
+                      {tag.icon === "training" && <CheckCircle2 size={10} />}
+                      {tag.icon === "creative" && <Layers size={10} />}
+                      {tag.icon === "media" && <Camera size={10} />}
+                      {tag.icon === "briefcase" && <Briefcase size={10} />}
+                      {tag.label}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Qualifications */}
+                {job.qualifications && job.qualifications.length > 0 && (
+                  <div style={{ marginBottom: "14px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+                      Qualifications
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      {job.qualifications.map((q: string, qi: number) => (
+                        <div key={qi} style={{ fontSize: "12px", color: colors.textSecondary, display: "flex", alignItems: "flex-start", gap: "6px" }}>
+                          <CheckCircle2 size={12} color="#22c55e" style={{ marginTop: "2px", flexShrink: 0 }} />
+                          <span>{q}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
+
+                {/* Divider */}
+                <div style={{ borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`, margin: "0 0 12px 0" }} />
+
+                {/* Details */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: colors.textSecondary, marginBottom: "16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <MapPin size={14} color={colors.textSecondary} />
+                    <span>{job.location}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 700 }}>$</span>
+                    <span>{job.salary}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Clock size={14} color={colors.textSecondary} />
+                    <span>Due: {job.deadline}</span>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div style={{ borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`, margin: "0 0 14px 0" }} />
+
+                {/* Action buttons */}
+                <div style={{ display: "flex", gap: "8px", marginTop: "auto", flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => setSelectedJob(job)}
+                    style={{
+                    flex: 1, minWidth: "80px", padding: "10px 14px", borderRadius: "10px",
+                    background: "#eab308", color: "#000", fontSize: "13px", fontWeight: 700,
+                    border: "none", cursor: "pointer", display: "flex", alignItems: "center",
+                    justifyContent: "center", gap: "6px",
+                  }}>
+                    View Details <ExternalLink size={12} />
+                  </button>
+                  <button
+                    onClick={() => { setApplyingJob(job); setApplySubmitted(false); setResumeFile(null); setApplyForm({ name: "", email: "", phone: "", message: "", portfolio: "" }); }}
+                    style={{
+                    padding: "10px 14px", borderRadius: "10px",
+                    background: "#eab308", color: "#000", fontSize: "13px", fontWeight: 700,
+                    border: "none", cursor: "pointer",
+                  }}>
+                    Quick Apply
+                  </button>
+                  <button
+                    onClick={(e) => toggleReminder(job.id, job.title, job.deadline, e)}
+                    style={{
+                    padding: "10px 12px", borderRadius: "10px",
+                    background: reminders.has(job.id) ? "rgba(234,179,8,0.15)" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+                    color: reminders.has(job.id) ? "#eab308" : colors.textSecondary, fontSize: "12px", fontWeight: 600,
+                    border: `1px solid ${reminders.has(job.id) ? "rgba(234,179,8,0.3)" : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)")}`,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: "4px",
+                  }}>
+                    <Clock size={12} /> Remind Me
+                  </button>
+                </div>
               </div>
             </div>
-          </GlassCard>
+          );
+        })}
+      </div>
+
+      {/* ── Reminder Toast Notification ── */}
+      {reminderToast && (
+        <div style={{
+          position: "fixed", bottom: "32px", right: "32px", zIndex: 10010,
+          background: "rgba(25,25,25,0.98)", border: "1px solid rgba(234,179,8,0.3)",
+          borderRadius: "14px", padding: "20px 24px", maxWidth: "380px",
+          boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+          animation: "slideInUp 0.3s ease-out",
+        }}>
+          <style>{`@keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`}</style>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "14px" }}>
+            <div style={{
+              width: "40px", height: "40px", borderRadius: "10px",
+              background: "rgba(234,179,8,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <Clock size={20} color="#eab308" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff", marginBottom: "4px" }}>
+                Reminder Set
+              </div>
+              <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", lineHeight: 1.5, marginBottom: "10px" }}>
+                You'll be reminded about <strong style={{ color: "#eab308" }}>{reminderToast.jobTitle}</strong> at weekly intervals before the deadline.
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CheckCircle2 size={12} color="#22c55e" /> 1 week before deadline
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CheckCircle2 size={12} color="#22c55e" /> 3 days before deadline
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CheckCircle2 size={12} color="#22c55e" /> Day of deadline ({reminderToast.deadline})
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setReminderToast(null)}
+              style={{
+                background: "none", border: "none", color: "rgba(255,255,255,0.3)",
+                cursor: "pointer", padding: "4px", flexShrink: 0,
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Job Detail Full-Page Modal ── */}
+      {selectedJob && (() => {
+        const job = selectedJob;
+        const tc = typeColor(job.type);
+        const isSaved = savedJobs.has(job.id);
+        return (
+          <div
+            onClick={() => setSelectedJob(null)}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "flex-start", justifyContent: "center",
+              zIndex: 9999, overflowY: "auto", padding: "40px 20px",
+            }}
+          >
+            {/* Close button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setSelectedJob(null); }}
+              style={{
+                position: "fixed", top: "20px", right: "20px",
+                background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
+                width: "44px", height: "44px", borderRadius: "50%", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001,
+              }}
+            >
+              <X size={22} />
+            </button>
+
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "800px", width: "100%", borderRadius: "16px", overflow: "hidden",
+                background: "rgba(20,20,20,0.98)", border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              {/* Hero Banner */}
+              <div style={{ position: "relative" }}>
+                <div style={{
+                  background: job.banner_color,
+                  padding: "48px 32px 32px",
+                  display: "flex", flexDirection: "column", alignItems: "center",
+                }}>
+                  {/* Type badge */}
+                  <div style={{
+                    position: "absolute", top: "16px", left: "16px",
+                    background: tc.bg, color: tc.color, fontSize: "11px", fontWeight: 800,
+                    padding: "5px 14px", borderRadius: "6px", letterSpacing: "0.5px",
+                  }}>
+                    {job.type}
+                  </div>
+                  {/* Save & Share */}
+                  <div style={{ position: "absolute", top: "16px", right: "16px", display: "flex", gap: "8px" }}>
+                    <button
+                      onClick={(e) => toggleSaveJob(job.id, e)}
+                      style={{
+                        width: "38px", height: "38px", borderRadius: "50%",
+                        background: "rgba(0,0,0,0.3)", border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <Heart size={16} fill={isSaved ? "#ef4444" : "none"} color={isSaved ? "#ef4444" : "#fff"} />
+                    </button>
+                    <button style={{
+                      width: "38px", height: "38px", borderRadius: "50%",
+                      background: "rgba(0,0,0,0.3)", border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Share2 size={16} color="#fff" />
+                    </button>
+                  </div>
+                  <div style={{
+                    fontSize: "28px", fontWeight: 900, color: job.banner_text_color,
+                    textTransform: "uppercase", textAlign: "center", letterSpacing: "1.5px", lineHeight: 1.2,
+                  }}>
+                    {job.company.split(" ").slice(0, -1).join(" ")}
+                  </div>
+                  <div style={{
+                    fontSize: "15px", fontWeight: 600, color: job.banner_text_color,
+                    opacity: 0.8, marginTop: "6px", textAlign: "center",
+                  }}>
+                    {job.company.split(" ").slice(-1)[0]}
+                  </div>
+                </div>
+                {/* Job image */}
+                {job.image_url && (
+                  <img
+                    src={job.image_url}
+                    alt={job.title}
+                    style={{ width: "100%", height: "220px", objectFit: "cover", display: "block" }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                )}
+              </div>
+
+              {/* Content */}
+              <div style={{ padding: "32px 36px" }}>
+                {/* Title */}
+                <h2 style={{ margin: "0 0 6px 0", fontSize: "26px", fontWeight: 800, color: "#fff" }}>
+                  {job.title}
+                </h2>
+                <div style={{ fontSize: "15px", color: job.accent_color || "#eab308", fontWeight: 600, marginBottom: "20px" }}>
+                  {job.company}
+                </div>
+
+                {/* Tags */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "24px" }}>
+                  {job.tags.map((tag: any) => (
+                    <span key={tag.label} style={{
+                      fontSize: "12px", padding: "5px 14px", borderRadius: "100px",
+                      background: tag.color, color: "#fff", fontWeight: 600,
+                      display: "flex", alignItems: "center", gap: "5px",
+                    }}>
+                      {tag.icon === "org" && <Briefcase size={11} />}
+                      {tag.icon === "sparkle" && <Sparkles size={11} />}
+                      {tag.icon === "training" && <CheckCircle2 size={11} />}
+                      {tag.icon === "creative" && <Layers size={11} />}
+                      {tag.icon === "media" && <Camera size={11} />}
+                      {tag.icon === "briefcase" && <Briefcase size={11} />}
+                      {tag.label}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Key Details Grid */}
+                <div style={{
+                  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "16px",
+                  padding: "20px", borderRadius: "12px",
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                  marginBottom: "28px",
+                }}>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Location</div>
+                    <div style={{ fontSize: "14px", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <MapPin size={14} color="rgba(255,255,255,0.5)" /> {job.location}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Compensation</div>
+                    <div style={{ fontSize: "14px", color: "#eab308", fontWeight: 700 }}>{job.salary}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Deadline</div>
+                    <div style={{ fontSize: "14px", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Clock size={14} color="rgba(255,255,255,0.5)" /> {job.deadline}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Posted</div>
+                    <div style={{ fontSize: "14px", color: "#fff" }}>{job.posted_date || "Recently"}</div>
+                  </div>
+                </div>
+
+                {/* About This Role */}
+                <div style={{ marginBottom: "28px" }}>
+                  <h4 style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: "12px" }}>
+                    About This Role
+                  </h4>
+                  <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "15px", lineHeight: 1.7, whiteSpace: "pre-line" }}>
+                    {job.full_description || job.description}
+                  </div>
+                </div>
+
+                {/* Responsibilities */}
+                {job.responsibilities && job.responsibilities.length > 0 && (
+                  <div style={{ marginBottom: "28px" }}>
+                    <h4 style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: "12px" }}>
+                      Responsibilities
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {job.responsibilities.map((r: string, ri: number) => (
+                        <div key={ri} style={{ fontSize: "14px", color: "rgba(255,255,255,0.8)", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                          <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: job.accent_color || "#eab308", marginTop: "7px", flexShrink: 0 }} />
+                          <span>{r}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Qualifications */}
+                {job.qualifications && job.qualifications.length > 0 && (
+                  <div style={{ marginBottom: "28px" }}>
+                    <h4 style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: "12px" }}>
+                      Qualifications
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {job.qualifications.map((q: string, qi: number) => (
+                        <div key={qi} style={{ fontSize: "14px", color: "rgba(255,255,255,0.8)", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                          <CheckCircle2 size={16} color="#22c55e" style={{ marginTop: "2px", flexShrink: 0 }} />
+                          <span>{q}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* How to Apply */}
+                <div style={{
+                  marginBottom: "28px", padding: "24px", borderRadius: "12px",
+                  background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)",
+                }}>
+                  <h4 style={{ color: "#eab308", fontSize: "13px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Mail size={16} /> How to Apply
+                  </h4>
+                  <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "14px", lineHeight: 1.7, margin: "0 0 16px 0" }}>
+                    {job.how_to_apply || "Contact the employer directly for application details."}
+                  </p>
+                  {job.contact_email && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
+                      <Mail size={14} color="#eab308" />
+                      <a href={`mailto:${job.contact_email}`} style={{ color: "#eab308", textDecoration: "none", fontWeight: 600 }}>
+                        {job.contact_email}
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                {/* Company Info Card */}
+                <div style={{
+                  borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "24px", marginBottom: "24px",
+                  display: "flex", alignItems: "center", gap: "16px",
+                }}>
+                  <div style={{
+                    width: "52px", height: "52px", borderRadius: "12px",
+                    background: job.banner_color,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "22px", fontWeight: 900, color: job.banner_text_color,
+                  }}>
+                    {job.company.charAt(0)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: "15px" }}>{job.company}</div>
+                    <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "12px" }}>{job.location}</div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => { setApplyingJob(job); setApplySubmitted(false); setResumeFile(null); setApplyForm({ name: "", email: "", phone: "", message: "", portfolio: "" }); }}
+                    style={{
+                    padding: "14px 28px", borderRadius: "12px",
+                    background: "#eab308", color: "#000", fontSize: "15px", fontWeight: 700,
+                    border: "none", cursor: "pointer",
+                  }}>
+                    Quick Apply
+                  </button>
+                  <button
+                    onClick={(e) => toggleSaveJob(job.id, e)}
+                    style={{
+                    padding: "14px 24px", borderRadius: "12px",
+                    background: isSaved ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)",
+                    color: isSaved ? "#ef4444" : "#fff", fontSize: "14px", fontWeight: 600,
+                    border: `1px solid ${isSaved ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.1)"}`,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: "8px",
+                  }}>
+                    <Heart size={16} fill={isSaved ? "#ef4444" : "none"} /> {isSaved ? "Saved" : "Save Job"}
+                  </button>
+                  <button
+                    onClick={() => { setSharingJob(job); setLinkCopied(false); }}
+                    style={{
+                    padding: "14px 24px", borderRadius: "12px",
+                    background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: "14px", fontWeight: 600,
+                    border: "1px solid rgba(255,255,255,0.1)", cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: "8px",
+                  }}>
+                    <Share2 size={16} /> Share
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         );
-      })}
+      })()}
+
+      {/* ── Quick Apply Modal ── */}
+      {applyingJob && (() => {
+        const job = applyingJob;
+        const inputStyle: React.CSSProperties = {
+          width: "100%", padding: "12px 16px", borderRadius: "10px", fontSize: "14px",
+          background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+          color: "#fff", outline: "none", boxSizing: "border-box",
+        };
+        const labelStyle: React.CSSProperties = {
+          fontSize: "12px", fontWeight: 700, color: "rgba(255,255,255,0.5)",
+          textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px", display: "block",
+        };
+        return (
+          <div
+            onClick={() => setApplyingJob(null)}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 10002, padding: "20px",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "520px", width: "100%", borderRadius: "16px", overflow: "hidden",
+                background: "rgba(25,25,25,0.98)", border: "1px solid rgba(255,255,255,0.1)",
+                maxHeight: "90vh", overflowY: "auto",
+              }}
+            >
+              {/* Header */}
+              <div style={{
+                padding: "24px 28px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)",
+                display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+              }}>
+                <div>
+                  <h3 style={{ margin: "0 0 4px 0", fontSize: "20px", fontWeight: 800, color: "#fff" }}>
+                    Quick Apply
+                  </h3>
+                  <div style={{ fontSize: "14px", color: "#eab308", fontWeight: 600 }}>
+                    {job.title} — {job.company}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setApplyingJob(null)}
+                  style={{
+                    background: "rgba(255,255,255,0.08)", border: "none", color: "#fff",
+                    width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {applySubmitted ? (
+                <div style={{ padding: "48px 28px", textAlign: "center" }}>
+                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>✓</div>
+                  <h3 style={{ color: "#22c55e", fontSize: "22px", fontWeight: 800, margin: "0 0 8px 0" }}>
+                    Application Submitted!
+                  </h3>
+                  <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "14px", margin: "0 0 8px 0" }}>
+                    Your application for <strong style={{ color: "#fff" }}>{job.title}</strong> at <strong style={{ color: "#eab308" }}>{job.company}</strong> has been sent.
+                  </p>
+                  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", margin: "0 0 24px 0" }}>
+                    You'll receive a confirmation email shortly. The employer will review your application and reach out if there's a fit.
+                  </p>
+                  <button
+                    onClick={() => setApplyingJob(null)}
+                    style={{
+                      padding: "12px 32px", borderRadius: "10px",
+                      background: "#eab308", color: "#000", fontSize: "14px", fontWeight: 700,
+                      border: "none", cursor: "pointer",
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <div style={{ padding: "24px 28px" }}>
+                  {/* Form Fields */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                    <div>
+                      <label style={labelStyle}>Full Name *</label>
+                      <input
+                        type="text"
+                        placeholder="Your full name"
+                        value={applyForm.name}
+                        onChange={(e) => setApplyForm({ ...applyForm, name: e.target.value })}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Email Address *</label>
+                      <input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={applyForm.email}
+                        onChange={(e) => setApplyForm({ ...applyForm, email: e.target.value })}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Phone Number</label>
+                      <input
+                        type="tel"
+                        placeholder="(416) 555-0123"
+                        value={applyForm.phone}
+                        onChange={(e) => setApplyForm({ ...applyForm, phone: e.target.value })}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Portfolio / Website Link</label>
+                      <input
+                        type="url"
+                        placeholder="https://your-portfolio.com"
+                        value={applyForm.portfolio}
+                        onChange={(e) => setApplyForm({ ...applyForm, portfolio: e.target.value })}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Cover Message *</label>
+                      <textarea
+                        placeholder="Tell them why you're interested and what makes you a great fit..."
+                        value={applyForm.message}
+                        onChange={(e) => setApplyForm({ ...applyForm, message: e.target.value })}
+                        rows={5}
+                        style={{ ...inputStyle, resize: "vertical" as any }}
+                      />
+                    </div>
+
+                    {/* Resume Upload */}
+                    <div>
+                      <label style={labelStyle}>Resume / CV</label>
+                      <input
+                        ref={resumeInputRef}
+                        type="file"
+                        accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file && file.size <= 5 * 1024 * 1024) {
+                            setResumeFile(file);
+                          }
+                        }}
+                      />
+                      {resumeFile ? (
+                        <div style={{
+                          padding: "16px 20px", borderRadius: "10px",
+                          border: "2px solid rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.06)",
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <FileText size={20} color="#22c55e" />
+                            <div>
+                              <div style={{ fontSize: "14px", color: "#fff", fontWeight: 600 }}>{resumeFile.name}</div>
+                              <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)" }}>
+                                {(resumeFile.size / 1024).toFixed(0)} KB
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => { setResumeFile(null); if (resumeInputRef.current) resumeInputRef.current.value = ""; }}
+                            style={{
+                              background: "rgba(239,68,68,0.15)", border: "none", color: "#ef4444",
+                              width: "30px", height: "30px", borderRadius: "50%", cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => resumeInputRef.current?.click()}
+                          onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = "rgba(234,179,8,0.5)"; e.currentTarget.style.background = "rgba(234,179,8,0.05)"; }}
+                          onDragLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+                            e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+                            const file = e.dataTransfer.files?.[0];
+                            if (file && file.size <= 5 * 1024 * 1024 && /\.(pdf|doc|docx)$/i.test(file.name)) {
+                              setResumeFile(file);
+                            }
+                          }}
+                          style={{
+                            padding: "20px", borderRadius: "10px", textAlign: "center",
+                            border: "2px dashed rgba(255,255,255,0.12)", cursor: "pointer",
+                            background: "rgba(255,255,255,0.02)", transition: "all 0.2s",
+                          }}
+                        >
+                          <Upload size={20} color="rgba(255,255,255,0.3)" style={{ marginBottom: "8px" }} />
+                          <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)" }}>
+                            Drag & drop your resume or <span style={{ color: "#eab308", fontWeight: 600 }}>browse files</span>
+                          </div>
+                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)", marginTop: "4px" }}>
+                            PDF, DOC, DOCX (max 5MB)
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Submit */}
+                  <div style={{ marginTop: "24px", display: "flex", gap: "12px" }}>
+                    <button
+                      onClick={() => {
+                        if (applyForm.name && applyForm.email && applyForm.message) {
+                          setApplySubmitted(true);
+                        }
+                      }}
+                      style={{
+                        flex: 1, padding: "14px 24px", borderRadius: "12px",
+                        background: (applyForm.name && applyForm.email && applyForm.message) ? "#eab308" : "rgba(234,179,8,0.3)",
+                        color: "#000", fontSize: "15px", fontWeight: 700,
+                        border: "none", cursor: (applyForm.name && applyForm.email && applyForm.message) ? "pointer" : "not-allowed",
+                        opacity: (applyForm.name && applyForm.email && applyForm.message) ? 1 : 0.6,
+                      }}
+                    >
+                      Submit Application
+                    </button>
+                    <button
+                      onClick={() => setApplyingJob(null)}
+                      style={{
+                        padding: "14px 20px", borderRadius: "12px",
+                        background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: "14px", fontWeight: 600,
+                        border: "1px solid rgba(255,255,255,0.1)", cursor: "pointer",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Share Job Modal ── */}
+      {sharingJob && (() => {
+        const job = sharingJob;
+        const shareUrl = `${window.location.origin}/jobs/${job.id}`;
+        const shareText = `Check out this opportunity: ${job.title} at ${job.company} — ${job.salary}`;
+        return (
+          <div
+            onClick={() => setSharingJob(null)}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 10012, padding: "20px",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "440px", width: "100%", borderRadius: "16px",
+                background: "rgba(25,25,25,0.98)", border: "1px solid rgba(255,255,255,0.1)",
+                overflow: "hidden",
+              }}
+            >
+              {/* Header */}
+              <div style={{
+                padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#fff" }}>
+                  Share This Job
+                </h3>
+                <button
+                  onClick={() => setSharingJob(null)}
+                  style={{
+                    background: "rgba(255,255,255,0.08)", border: "none", color: "#fff",
+                    width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div style={{ padding: "24px" }}>
+                {/* Job Preview */}
+                <div style={{
+                  padding: "14px 16px", borderRadius: "10px", marginBottom: "20px",
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)",
+                  display: "flex", alignItems: "center", gap: "12px",
+                }}>
+                  <div style={{
+                    width: "44px", height: "44px", borderRadius: "10px",
+                    background: job.banner_color, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "18px", fontWeight: 900, color: job.banner_text_color, flexShrink: 0,
+                  }}>
+                    {job.company.charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff" }}>{job.title}</div>
+                    <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>{job.company} · {job.salary}</div>
+                  </div>
+                </div>
+
+                {/* Copy Link */}
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
+                    Copy Link
+                  </div>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{
+                      flex: 1, padding: "10px 14px", borderRadius: "8px", fontSize: "13px",
+                      background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+                      color: "rgba(255,255,255,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {shareUrl}
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(shareUrl);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }}
+                      style={{
+                        padding: "10px 18px", borderRadius: "8px", fontSize: "13px", fontWeight: 700,
+                        background: linkCopied ? "#22c55e" : "#eab308",
+                        color: linkCopied ? "#fff" : "#000",
+                        border: "none", cursor: "pointer", whiteSpace: "nowrap",
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      {linkCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Share via */}
+                <div>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
+                    Share Via
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <a
+                      href={`mailto:?subject=${encodeURIComponent(`Job: ${job.title} at ${job.company}`)}&body=${encodeURIComponent(`${shareText}\n\nApply here: ${shareUrl}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: "12px", borderRadius: "10px", textDecoration: "none",
+                        background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                        color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      <Mail size={16} /> Email
+                    </a>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: "12px", borderRadius: "10px", textDecoration: "none",
+                        background: "rgba(37,211,102,0.12)", border: "1px solid rgba(37,211,102,0.2)",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                        color: "#25d366", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      <MessageCircle size={16} /> WhatsApp
+                    </a>
+                    <a
+                      href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: "12px", borderRadius: "10px", textDecoration: "none",
+                        background: "rgba(29,161,242,0.12)", border: "1px solid rgba(29,161,242,0.2)",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                        color: "#1da1f2", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      <ExternalLink size={16} /> X / Twitter
+                    </a>
+                    <a
+                      href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: "12px", borderRadius: "10px", textDecoration: "none",
+                        background: "rgba(10,102,194,0.12)", border: "1px solid rgba(10,102,194,0.2)",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                        color: "#0a66c2", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      <Briefcase size={16} /> LinkedIn
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
 function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  const [settings, setSettings] = useState<Record<string, boolean>>({
+    "Public Profile": profile.is_public !== false,
+    "Show in Directory": true,
+    "Show Activity": true,
+    "New Followers": true,
+    "Messages": true,
+    "Job Inquiries": true,
+    "Community Updates": false,
+    "Show Email": false,
+    "Allow Direct Messages": true,
+    "Show Online Status": false,
+  });
+  const [savedToast, setSavedToast] = useState(false);
+
+  const toggleSetting = (label: string) => {
+    setSettings((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 2000);
+      return next;
+    });
+  };
+
   const sections = [
     {
       title: "Profile Visibility",
       items: [
-        { label: "Public Profile", desc: "Allow anyone to view your profile", enabled: profile.is_public },
-        { label: "Show in Directory", desc: "Appear in the Street Profile directory", enabled: true },
-        { label: "Show Activity", desc: "Display recent activity on your profile", enabled: true },
+        { label: "Public Profile", desc: "Allow anyone to view your profile" },
+        { label: "Show in Directory", desc: "Appear in the Street Profile directory" },
+        { label: "Show Activity", desc: "Display recent activity on your profile" },
       ],
     },
     {
       title: "Notifications",
       items: [
-        { label: "New Followers", desc: "Get notified when someone follows you", enabled: true },
-        { label: "Messages", desc: "Receive notifications for new messages", enabled: true },
-        { label: "Job Inquiries", desc: "Get notified about new job offers", enabled: true },
-        { label: "Community Updates", desc: "Receive Street Voices community news", enabled: false },
+        { label: "New Followers", desc: "Get notified when someone follows you" },
+        { label: "Messages", desc: "Receive notifications for new messages" },
+        { label: "Job Inquiries", desc: "Get notified about new job offers" },
+        { label: "Community Updates", desc: "Receive Street Voices community news" },
       ],
     },
     {
       title: "Privacy",
       items: [
-        { label: "Show Email", desc: "Display contact email on profile", enabled: false },
-        { label: "Allow Direct Messages", desc: "Let anyone send you messages", enabled: true },
-        { label: "Show Online Status", desc: "Display when you are online", enabled: false },
+        { label: "Show Email", desc: "Display contact email on profile" },
+        { label: "Allow Direct Messages", desc: "Let anyone send you messages" },
+        { label: "Show Online Status", desc: "Display when you are online" },
       ],
     },
   ];
 
+  const isEnabled = (label: string) => settings[label] ?? false;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* Saved toast */}
+      {savedToast && (
+        <div style={{
+          position: "fixed", bottom: "32px", right: "32px", zIndex: 10010,
+          background: "rgba(34,197,94,0.9)", color: "#fff", padding: "12px 24px",
+          borderRadius: "10px", fontSize: "14px", fontWeight: 700,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.3)", display: "flex", alignItems: "center", gap: "8px",
+          animation: "slideInUp 0.3s ease-out",
+        }}>
+          <CheckCircle2 size={16} /> Settings saved
+        </div>
+      )}
       {sections.map((section, si) => (
         <GlassCard key={si} title={section.title} colors={colors} isDark={isDark}>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -4105,11 +5191,12 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
                 </div>
                 {/* Toggle */}
                 <div
+                  onClick={() => toggleSetting(item.label)}
                   style={{
                     width: "44px",
                     height: "24px",
                     borderRadius: "100px",
-                    background: item.enabled
+                    background: isEnabled(item.label)
                       ? colors.accent
                       : isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)",
                     position: "relative",
@@ -4122,7 +5209,7 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
                     style={{
                       position: "absolute",
                       top: "2px",
-                      left: item.enabled ? "22px" : "2px",
+                      left: isEnabled(item.label) ? "22px" : "2px",
                       width: "20px",
                       height: "20px",
                       borderRadius: "50%",
