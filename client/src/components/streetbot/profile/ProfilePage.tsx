@@ -76,6 +76,13 @@ const ROLE_OPTIONS = [
   "Filmmaker",
 ];
 
+const ROLE_CATEGORIES: Record<string, string[]> = {
+  Visual: ["Visual Artist", "Muralist", "Illustrator", "Photographer", "Videographer", "Filmmaker"],
+  Audio: ["DJ", "Music Producer", "Sound Designer"],
+  Design: ["UI/UX Designer", "Brand Designer", "Graphic Designer", "Motion Designer", "3D Artist"],
+  Tech: ["Creative Developer", "Writer", "Journalist", "Architect"],
+};
+
 const CITY_OPTIONS = [
   "Toronto",
   "Vancouver",
@@ -250,180 +257,148 @@ export default function ProfilePage() {
           zIndex: 1,
         }}
       >
-        <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
-          <div style={{ display: "flex", flexDirection: isMobile ? "column" as const : "row" as const, gap: isMobile ? "24px" : "40px", alignItems: "flex-start" }}>
-            {/* Left Side: Content */}
-            <div style={{ flex: 1 }}>
-              {/* Badge */}
-              <div
+        <div style={{ maxWidth: "1400px", margin: "0 auto", textAlign: "center" }}>
+          {/* Hero Text */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "6px 14px",
+              borderRadius: "999px",
+              background: "rgba(255, 214, 0, 0.1)",
+              border: "1px solid rgba(255, 214, 0, 0.3)",
+              marginBottom: "24px",
+            }}
+          >
+            <Sparkles size={14} color={colors.accent} />
+            <span style={{ fontSize: "13px", color: colors.accentText, fontWeight: 500 }}>
+              Street Profile Directory
+            </span>
+          </div>
+
+          <h1
+            style={{
+              fontSize: "clamp(2.5rem, 5vw, 3.5rem)",
+              fontWeight: 800,
+              color: colors.accent,
+              marginBottom: "16px",
+              lineHeight: 1.1,
+              letterSpacing: "3px",
+              textTransform: "uppercase",
+            }}
+          >
+            Discover Creatives
+          </h1>
+
+          <p
+            style={{
+              fontSize: "1.2rem",
+              color: colors.textSecondary,
+              marginBottom: "24px",
+              maxWidth: "600px",
+              margin: "0 auto 24px",
+              lineHeight: 1.6,
+            }}
+          >
+            Connect with artists, designers, musicians, and creators.
+            Find talent for your next project or discover inspiring work.
+          </p>
+
+          {/* CTA Button — Gallery-style */}
+          <a
+            href="/social/signup"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "12px 24px",
+              borderRadius: "999px",
+              background: "#FFD700",
+              color: "#000",
+              fontSize: "0.9rem",
+              fontWeight: "bold",
+              textDecoration: "none",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+              marginBottom: "24px",
+              border: "none",
+              cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(255, 214, 0, 0.4)",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(255, 214, 0, 0.5)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(255, 214, 0, 0.4)"; }}
+          >
+            Create Your Street Profile
+          </a>
+
+          {/* Search Bar — Full width, below CTA */}
+          <div style={{ maxWidth: "900px", margin: "0 auto", width: "100%", padding: "0 16px" }}>
+            <div style={{ display: "flex", gap: 0 }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "16px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <Search size={20} color={colors.textMuted} />
+                </div>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && loadProfiles()}
+                  placeholder="Search by name, role, or skill..."
+                  style={{
+                    width: "100%",
+                    height: "54px",
+                    paddingLeft: "48px",
+                    paddingRight: "16px",
+                    background: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.95)",
+                    color: colors.text,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: "14px 0 0 14px",
+                    fontSize: "16px",
+                    outline: "none",
+                    backdropFilter: "blur(20px)",
+                    WebkitBackdropFilter: "blur(20px)",
+                  }}
+                />
+              </div>
+              <button
+                onClick={loadProfiles}
                 style={{
-                  display: "inline-flex",
+                  height: "54px",
+                  padding: "0 28px",
+                  background: colors.accent,
+                  color: "#000",
+                  border: "none",
+                  borderRadius: "0 14px 14px 0",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  padding: "6px 14px",
-                  borderRadius: "999px",
-                  background: "rgba(255, 214, 0, 0.1)",
-                  border: "1px solid rgba(255, 214, 0, 0.3)",
-                  marginBottom: "24px",
+                  fontSize: "15px",
+                  boxShadow: "0 4px 14px rgba(255, 214, 0, 0.4)",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "scale(1.02)";
+                  e.currentTarget.style.boxShadow = "0 6px 20px rgba(255, 214, 0, 0.5)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow = "0 4px 14px rgba(255, 214, 0, 0.4)";
                 }}
               >
-                <Sparkles size={14} color={colors.accent} />
-                <span style={{ fontSize: "13px", color: colors.accentText, fontWeight: 500 }}>
-                  Street Profile Directory
-                </span>
-              </div>
-
-              {/* Title */}
-              <h1
-                style={{
-                  fontSize: "clamp(2.5rem, 5vw, 4rem)",
-                  fontWeight: 800,
-                  color: colors.text,
-                  marginBottom: "16px",
-                  lineHeight: 1.1,
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                Discover{" "}
-                <span
-                  style={{
-                    background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.text} 100%)`,
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  Creatives
-                </span>
-              </h1>
-
-              <p
-                style={{
-                  fontSize: "1.125rem",
-                  color: colors.textSecondary,
-                  marginBottom: "20px",
-                  maxWidth: "600px",
-                  lineHeight: 1.6,
-                }}
-              >
-                Connect with artists, designers, musicians, and creators.
-                Find talent for your next project or discover inspiring work.
-              </p>
-
-              {/* Stats Row */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: "32px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "2rem", fontWeight: 700, color: colors.text }}>
-                    {stats.total_profiles}+
-                  </div>
-                  <div style={{ fontSize: "14px", color: colors.textMuted }}>Creatives</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "2rem", fontWeight: 700, color: colors.success }}>
-                    {stats.available_count}
-                  </div>
-                  <div style={{ fontSize: "14px", color: colors.textMuted }}>Available</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Side: Search Bar */}
-            <div style={{ width: isMobile ? "100%" : "400px", flexShrink: isMobile ? 1 : 0 }}>
-              {isDirectory ? (
-                <>
-                  <style>{`.sv-search-input::placeholder { color: #000; opacity: 1; }`}</style>
-                  <div style={{ display: "flex", alignItems: "center", borderRadius: 30, background: "#d3d3d3", overflow: "hidden", height: 46 }}>
-                    <div style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", padding: "0 20px", background: "#fff" }}>
-                      <input
-                        type="text"
-                        className="sv-search-input"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && loadProfiles()}
-                        placeholder="Search by name, role, or skill..."
-                        style={{ width: "100%", height: "100%", border: "none", background: "transparent", color: "#000", fontSize: 14, outline: "none", fontFamily: "inherit" }}
-                      />
-                    </div>
-                    <button
-                      onClick={loadProfiles}
-                      style={{ height: 46, padding: "1px 50px", borderRadius: 25, border: "none", background: "#FFD600", color: "#000", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}
-                    >
-                      Search
-                    </button>
-                  </div>
-                </>
-              ) : (
-              <div style={{ display: "flex", gap: 0 }}>
-                <div style={{ position: "relative", flex: 1 }}>
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "16px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      pointerEvents: "none",
-                    }}
-                  >
-                    <Search size={20} color={colors.textMuted} />
-                  </div>
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && loadProfiles()}
-                    placeholder="Search by name, role, or skill..."
-                    style={{
-                      width: "100%",
-                      height: "54px",
-                      paddingLeft: "48px",
-                      paddingRight: "16px",
-                      background: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.95)",
-                      color: colors.text,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: "14px 0 0 14px",
-                      fontSize: "16px",
-                      outline: "none",
-                      backdropFilter: "blur(20px)",
-                      WebkitBackdropFilter: "blur(20px)",
-                    }}
-                  />
-                </div>
-                <button
-                  onClick={loadProfiles}
-                  style={{
-                    height: "54px",
-                    padding: "0 28px",
-                    background: colors.accent,
-                    color: "#000",
-                    border: "none",
-                    borderRadius: "0 14px 14px 0",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "15px",
-                    boxShadow: "0 4px 14px rgba(255, 214, 0, 0.4)",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "scale(1.02)";
-                    e.currentTarget.style.boxShadow = "0 6px 20px rgba(255, 214, 0, 0.5)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "scale(1)";
-                    e.currentTarget.style.boxShadow = "0 4px 14px rgba(255, 214, 0, 0.4)";
-                  }}
-                >
-                  Search
-                </button>
-              </div>
-              )}
+                Search
+              </button>
             </div>
           </div>
         </div>
@@ -668,31 +643,66 @@ export default function ProfilePage() {
                     />
                   </button>
                   {expandedSections.has("roles") && (
-                    <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                      {ROLE_OPTIONS.map((role) => (
-                        <label
-                          key={role}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "10px",
-                            cursor: "pointer",
-                            padding: "8px 10px",
-                            borderRadius: "8px",
-                            background: filters.roles.includes(role)
-                              ? `rgba(255, 214, 0, 0.1)`
-                              : "transparent",
-                            transition: "background 0.2s",
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={filters.roles.includes(role)}
-                            onChange={() => toggleRole(role)}
-                            style={{ accentColor: colors.accent, width: 16, height: 16 }}
-                          />
-                          <span style={{ fontSize: "14px", color: colors.text }}>{role}</span>
-                        </label>
+                    <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {Object.entries(ROLE_CATEGORIES).map(([category, roles]) => (
+                        <div key={category}>
+                          <button
+                            onClick={() => toggleSection(`role-${category}`)}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              width: "100%",
+                              padding: "6px 10px",
+                              background: "rgba(255, 255, 255, 0.05)",
+                              border: "none",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              textAlign: "left",
+                            }}
+                          >
+                            <span style={{ fontSize: "13px", fontWeight: 600, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              {category}
+                              {roles.filter((r) => filters.roles.includes(r)).length > 0 && (
+                                <span style={{ marginLeft: "6px", padding: "1px 6px", background: "rgba(255, 214, 0, 0.2)", borderRadius: "8px", fontSize: "11px", color: colors.accentText }}>
+                                  {roles.filter((r) => filters.roles.includes(r)).length}
+                                </span>
+                              )}
+                            </span>
+                            <ChevronDown
+                              size={14}
+                              color={colors.textMuted}
+                              style={{ transform: expandedSections.has(`role-${category}`) ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+                            />
+                          </button>
+                          {expandedSections.has(`role-${category}`) && (
+                            <div style={{ marginTop: "4px", display: "flex", flexDirection: "column", gap: "2px", paddingLeft: "4px" }}>
+                              {roles.map((role) => (
+                                <label
+                                  key={role}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "10px",
+                                    cursor: "pointer",
+                                    padding: "6px 10px",
+                                    borderRadius: "8px",
+                                    background: filters.roles.includes(role) ? "rgba(255, 214, 0, 0.1)" : "transparent",
+                                    transition: "background 0.2s",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={filters.roles.includes(role)}
+                                    onChange={() => toggleRole(role)}
+                                    style={{ accentColor: colors.accent, width: 16, height: 16 }}
+                                  />
+                                  <span style={{ fontSize: "14px", color: colors.text }}>{role}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
@@ -836,7 +846,29 @@ export default function ProfilePage() {
                 <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: colors.text, marginBottom: "8px" }}>
                   No profiles found
                 </h3>
-                <p style={{ color: colors.textSecondary }}>Try adjusting your filters or search terms</p>
+                <p style={{ color: colors.textSecondary, marginBottom: "16px" }}>Try adjusting your filters or search terms</p>
+                <a
+                  href="/social/signup"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "10px 20px",
+                    borderRadius: "999px",
+                    background: colors.accent,
+                    color: "#000",
+                    fontWeight: "bold",
+                    fontSize: "14px",
+                    textDecoration: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.05)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+                >
+                  Be the first — Create Your Street Profile
+                </a>
               </div>
             ) : isGridView ? (
               // Grid View

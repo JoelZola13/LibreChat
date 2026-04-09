@@ -510,7 +510,7 @@
       // Social button removed — Messages now links to /social/dm
 
       var SB_ITEMS = [
-        { id: 'sv-sb-profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: SB_BASE + '/profile' },
+        { id: 'sv-sb-profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: '/social/signup' },
         { id: 'sv-sb-forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: SB_BASE + '/forum' },
         { id: 'sv-sb-gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: SB_BASE + '/gallery' },
         { id: 'sv-sb-groups', label: 'Groups', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', path: SB_BASE + '/groups' },
@@ -687,7 +687,7 @@
     navWrap.style.cssText = 'width:100%;flex:1 1 auto;box-sizing:border-box;padding:0 0.25rem;overflow-y:auto;';
 
     var SB_ITEMS = [
-      { id: 'sv-sa-profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: '/profile' },
+      { id: 'sv-sa-profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: '/social/signup' },
       { id: 'sv-sa-forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: '/forum' },
       { id: 'sv-sa-gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: '/gallery' },
       { id: 'sv-sa-groups', label: 'Groups', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', path: '/groups' },

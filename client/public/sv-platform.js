@@ -23,12 +23,13 @@
   }
 
   var BASE = 'http://localhost:18790/shared/';
+  var VERSIONS = { 'unified-nav.js': 84, 'mission-control.js': 5, 'marketplace.js': 1 };
   var scripts = ['unified-nav.js', 'mission-control.js', 'marketplace.js'];
 
   scripts.forEach(function (name) {
     if (document.querySelector('script[src*="' + name + '"]')) return;
     var s = document.createElement('script');
-    s.src = BASE + name;
+    s.src = BASE + name + '?v=' + (VERSIONS[name] || 1);
     s.defer = true;
     document.head.appendChild(s);
   });

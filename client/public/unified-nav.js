@@ -510,7 +510,7 @@
       // Social button removed — Messages now links to /social/dm
 
       var SB_ITEMS = [
-        { id: 'sv-sb-profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: SB_BASE + '/profile' },
+        { id: 'sv-sb-profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: '/profile' },
         { id: 'sv-sb-forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: SB_BASE + '/forum' },
         { id: 'sv-sb-gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: SB_BASE + '/gallery' },
         { id: 'sv-sb-groups', label: 'Groups', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', path: SB_BASE + '/groups' },
@@ -941,4 +941,75 @@
   })();
 
   // /agents route now handled natively by React router — no redirect needed
+
+  // Street Profile CTA is now built into ProfilePage.tsx — no JS injection needed
+
+  // ── Inject "Street Profile" into user account dropdown ──
+  // Poll for account dropdown and inject Street Profile link
+  (function() {
+    var SP_ID = 'sv-street-profile-menuitem';
+    setInterval(function() {
+      try {
+        var popover = document.querySelector('.account-settings-popover');
+        if (!popover) return;
+        if (popover.querySelector('#' + SP_ID)) return;
+
+        var items = popover.querySelectorAll('.select-item');
+        var settingsItem = null;
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].textContent.trim().indexOf('Settings') !== -1) {
+            settingsItem = items[i];
+            break;
+          }
+        }
+        if (!settingsItem) return;
+
+        // Clone the Settings item and modify it
+        var spItem = settingsItem.cloneNode(true);
+        spItem.id = SP_ID;
+
+        // Clear cloned content and rebuild
+        spItem.innerHTML = '';
+
+        // Create icon using a temp div to parse SVG safely
+        var iconWrap = document.createElement('div');
+        iconWrap.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-md"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>';
+        spItem.appendChild(iconWrap.firstChild);
+
+        var label = document.createElement('span');
+        label.textContent = 'Street Profile';
+        spItem.appendChild(label);
+
+        // Make it a clickable link to user's own street profile
+        spItem.style.cursor = 'pointer';
+        spItem.onclick = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Get the user's email from the popover header
+          var emailEl = popover.querySelector('[role="note"]');
+          var email = emailEl ? emailEl.textContent.trim() : '';
+          if (email && email.indexOf('@') !== -1) {
+            fetch('/social/api/street-profile/lookup?email=' + encodeURIComponent(email))
+              .then(function(r) { return r.ok ? r.json() : null; })
+              .then(function(data) {
+                if (data && data.found && data.username) {
+                  window.location.href = '/social/street-profile/' + data.username;
+                } else {
+                  window.location.href = '/social/signup';
+                }
+              })
+              .catch(function() {
+                window.location.href = '/social/signup';
+              });
+          } else {
+            window.location.href = '/social/signup';
+          }
+        };
+
+        settingsItem.parentNode.insertBefore(spItem, settingsItem);
+      } catch(e) {
+        // silent
+      }
+    }, 300);
+  })();
 })();

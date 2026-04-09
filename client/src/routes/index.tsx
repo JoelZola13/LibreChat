@@ -60,6 +60,9 @@ const StoragePage = lazy(() => import('~/components/streetbot/storage/StoragePag
 const DatabasePage = lazy(() => import('~/components/streetbot/database/DatabasePage'));
 const GrantWriterPage = lazy(() => import('~/components/streetbot/grantwriter/GrantWriterPage'));
 const AgentMarketplacePage = lazy(() => import('~/components/streetbot/agents/AgentMarketplacePage'));
+const CreativeProfilePage = lazy(() => import('~/components/streetbot/profile/CreativeProfilePage'));
+const BookingPage = lazy(() => import('~/components/streetbot/profile/BookingPage'));
+const MyProfilePage = lazy(() => import('~/components/streetbot/profile/MyProfilePage'));
 const SettingsPage = lazy(() => import('~/components/streetbot/settings/SettingsPage'));
 const SBDashboardPage = lazy(() => import('~/components/streetbot/dashboard/DashboardPage'));
 const HowItWorksPage = lazy(() => import('~/components/streetbot/info/HowItWorksPage'));
@@ -232,6 +235,8 @@ export const router = createBrowserRouter(
             // Street Bot Pro pages — shared across both variants
             { path: 'profile', element: guardedSbPage('profile', ProfilePage) },
             { path: 'profile/*', element: guardedSbPage('profile', ProfilePage) },
+            { path: 'creatives/:username', element: guardedSbPage('profile', CreativeProfilePage) },
+            { path: 'creatives/:username/book', element: guardedSbPage('profile', BookingPage) },
             { path: 'groups', element: guardedSbPage('groups', GroupsPage) },
             { path: 'groups/:groupId', element: guardedSbPage('groups', GroupDetailPage) },
             { path: 'news/editor', element: guardedSbPage('news', NewsEditorPage) },
@@ -265,8 +270,8 @@ export const router = createBrowserRouter(
             // Notifications — always accessible (not a nav item)
             { path: 'notifications', element: sbPage(NotificationsPage) },
             { path: 'notifications/*', element: sbPage(NotificationsPage) },
-            { path: 'settings', element: guardedSbPage('settings', SettingsPage) },
-            { path: 'settings/*', element: guardedSbPage('settings', SettingsPage) },
+            { path: 'settings', element: guardedSbPage('settings', MyProfilePage) },
+            { path: 'settings/*', element: guardedSbPage('settings', MyProfilePage) },
             // StreetBot-only pages
             ...(isStreetBot
               ? [
