@@ -141,13 +141,13 @@ function getAvailabilityInfo(status: string): { label: string; color: string; bg
 // =============================================================================
 
 const TABS: TabDef[] = [
+  { id: "about", label: "About", icon: <Info size={16} /> },
   { id: "news", label: "News", icon: <TrendingUp size={16} /> },
   { id: "services", label: "Services", icon: <Wrench size={16} /> },
   { id: "messages", label: "Messages", icon: <MessageSquare size={16} /> },
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={16} /> },
   { id: "calendar", label: "Calendar", icon: <Calendar size={16} /> },
   { id: "documents", label: "Documents", icon: <FileText size={16} /> },
-  { id: "about", label: "About", icon: <Info size={16} /> },
   { id: "storage", label: "Storage", icon: <HardDrive size={16} /> },
   { id: "social-media", label: "Social Media", icon: <Share2 size={16} /> },
   { id: "activity", label: "Activity", icon: <Activity size={16} /> },
@@ -223,7 +223,7 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
   const [loading, setLoading] = useState(!initialProfile);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("news");
+  const [activeTab, setActiveTab] = useState<TabId>("about");
 
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -464,6 +464,20 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
               </button>
             </div>
           </div>
+
+          {/* Street Profile Title */}
+          <h1
+            style={{
+              fontSize: "28px",
+              fontWeight: 800,
+              color: colors.accent,
+              fontStyle: "italic",
+              margin: "0 0 20px 0",
+              letterSpacing: "-0.5px",
+            }}
+          >
+            Street Profile
+          </h1>
 
           {/* Cover / Hero Section */}
           <div
@@ -2164,6 +2178,112 @@ function TabAbout({
   isDark: boolean;
   isMobile: boolean;
 }) {
+  const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const [lovedProjects, setLovedProjects] = useState<Set<number>>(new Set());
+  const [projectComments, setProjectComments] = useState<Record<number, Array<{ name: string; avatar: string; text: string; time: string }>>>({
+    0: [
+      { name: "Maya Chen", avatar: "https://picsum.photos/seed/user-maya/100/100", text: "This mural is incredible. The layering technique gives it so much depth!", time: "2 days ago" },
+      { name: "Derin Falana", avatar: "https://picsum.photos/seed/user-derin/100/100", text: "Walked past this last week — photos don't do it justice. The scale is massive.", time: "5 days ago" },
+    ],
+    2: [
+      { name: "Suki Park", avatar: "https://picsum.photos/seed/user-suki/100/100", text: "The found object work in this series is next level. Love the transit tokens embedded in resin.", time: "1 week ago" },
+    ],
+    5: [
+      { name: "Carlos Rivera", avatar: "https://picsum.photos/seed/user-carlos/100/100", text: "Was at Nuit Blanche for this — the UV reveal was absolutely magical. Best piece of the night.", time: "3 weeks ago" },
+      { name: "Asha Williams", avatar: "https://picsum.photos/seed/user-asha/100/100", text: "How long did the UV paint take to apply? This must have been so meticulous.", time: "2 weeks ago" },
+      { name: "Ghost", avatar: "", text: "Thanks Asha! About 3 weeks of daytime work — painting something you can't see until nightfall is wild.", time: "2 weeks ago" },
+    ],
+  });
+  const [commentInput, setCommentInput] = useState("");
+
+  const toggleLove = (idx: number) => {
+    setLovedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
+  const addComment = (idx: number) => {
+    if (!commentInput.trim()) return;
+    setProjectComments((prev) => ({
+      ...prev,
+      [idx]: [...(prev[idx] || []), { name: "You", avatar: "", text: commentInput.trim(), time: "Just now" }],
+    }));
+    setCommentInput("");
+  };
+
+  const portfolioWorks = profile.portfolio_items && profile.portfolio_items.length > 0
+    ? profile.portfolio_items
+    : [
+        {
+          title: "Voices of the Underground",
+          image_url: "https://picsum.photos/seed/port-voices/1200/800",
+          thumbnail_url: "https://picsum.photos/seed/port-voices/600/400",
+          category: "Mural",
+          year: "2026",
+          tools: ["Spray Paint", "Acrylic", "Stencils"],
+          description: "A large-scale mural exploring the hidden narratives of Toronto's underground music scene. This 40-foot wall piece was commissioned by the Dundas West BIA and features layered portraits of local musicians, DJs, and producers who shaped the city's sound. The work uses a mix of freehand spray paint and precision stencil work to create depth and movement.",
+          views: 1247,
+          appreciations: 89,
+        },
+        {
+          title: "Concrete Canvas — Dundas & Ossington",
+          image_url: "https://picsum.photos/seed/port-concrete/1200/800",
+          thumbnail_url: "https://picsum.photos/seed/port-concrete/600/400",
+          category: "Installation",
+          year: "2025",
+          tools: ["Wheat Paste", "Photography", "Mixed Media"],
+          description: "An ephemeral installation that transformed a construction hoarding into a living timeline of the neighbourhood. Using large-format wheat paste prints combined with hand-painted elements, the piece documented 50 years of community stories gathered through interviews with local residents. The installation stood for 3 months before the site was developed.",
+          views: 892,
+          appreciations: 67,
+        },
+        {
+          title: "Chromatic Rebellion Series",
+          image_url: "https://picsum.photos/seed/port-chromatic/1200/800",
+          thumbnail_url: "https://picsum.photos/seed/port-chromatic/600/400",
+          category: "Mixed Media",
+          year: "2025",
+          tools: ["Acrylic", "Resin", "Found Objects"],
+          description: "A 12-piece gallery series examining the intersection of street culture and fine art. Each canvas incorporates found objects from Toronto streets — transit tokens, torn posters, broken glass — embedded in layers of acrylic and resin. The series was exhibited at the AGO's First Thursday and later acquired by a private collector.",
+          views: 2034,
+          appreciations: 156,
+        },
+        {
+          title: "City Pulse — Queen West",
+          image_url: "https://picsum.photos/seed/port-pulse/1200/800",
+          thumbnail_url: "https://picsum.photos/seed/port-pulse/600/400",
+          category: "Digital Print",
+          year: "2025",
+          tools: ["Digital Illustration", "Large Format Print", "UV Ink"],
+          description: "A series of limited-edition digital prints capturing the energy of Queen Street West at different times of day. Created using a combination of photography, digital painting, and generative algorithms, each print in the edition of 25 represents a unique moment in the street's daily rhythm.",
+          views: 534,
+          appreciations: 41,
+        },
+        {
+          title: "Roots & Routes",
+          image_url: "https://picsum.photos/seed/port-roots/1200/800",
+          thumbnail_url: "https://picsum.photos/seed/port-roots/600/400",
+          category: "Spray Paint",
+          year: "2024",
+          tools: ["Montana Gold", "Ironlak", "Hand-cut Stencils"],
+          description: "A community mural project in collaboration with newcomer youth in the Jane-Finch corridor. Over 6 weeks, participants shared migration stories that were woven into a 60-foot narrative mural. The piece traces routes from countries of origin to Toronto, connecting personal histories with the geography of the city.",
+          views: 1678,
+          appreciations: 112,
+        },
+        {
+          title: "Neon Ghosts — Kensington Nights",
+          image_url: "https://picsum.photos/seed/port-neon/1200/800",
+          thumbnail_url: "https://picsum.photos/seed/port-neon/600/400",
+          category: "UV Installation",
+          year: "2024",
+          tools: ["UV Reactive Paint", "Black Light", "Projection Mapping"],
+          description: "A site-specific night installation in Kensington Market that revealed hidden murals only visible under UV light. Painted during the day in clear UV-reactive medium, the works came alive after sunset when custom black light fixtures were activated. The project ran for Nuit Blanche 2024 and drew over 3,000 visitors.",
+          views: 3210,
+          appreciations: 245,
+        },
+      ];
+
   return (
     <div
       style={{
@@ -2213,52 +2333,338 @@ function TabAbout({
           </GlassCard>
         )}
 
-        {profile.portfolio_items && profile.portfolio_items.length > 0 && (
-          <GlassCard title="Portfolio" colors={colors} isDark={isDark}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                gap: "12px",
-              }}
-            >
-              {profile.portfolio_items.map((item: any, i: number) => (
-                <div
-                  key={i}
-                  style={{
-                    borderRadius: "12px",
-                    overflow: "hidden",
-                    border: `1px solid ${colors.border}`,
-                    aspectRatio: "16/9",
-                    background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
-                  }}
-                >
-                  {item.image_url ? (
-                    <img
-                      src={item.image_url}
-                      alt={item.title || "Portfolio item"}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: colors.textSecondary,
-                        fontSize: "14px",
-                      }}
-                    >
-                      {item.title || "Untitled"}
+        {/* Portfolio Section — Behance-style */}
+        <GlassCard title="Portfolio" colors={colors} isDark={isDark}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            {portfolioWorks.map((item: any, i: number) => (
+              <div
+                key={i}
+                onClick={() => setSelectedProject(i)}
+                style={{
+                  borderRadius: "14px",
+                  overflow: "hidden",
+                  border: `1px solid ${colors.border}`,
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  transition: "all 0.3s",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+              >
+                <div style={{ position: "relative", width: "100%", paddingTop: "66%", overflow: "hidden" }}>
+                  <img
+                    src={item.thumbnail_url || item.image_url}
+                    alt={item.title || "Portfolio item"}
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => {
+                      const t = e.target as HTMLImageElement;
+                      t.style.display = "none";
+                      const p = t.parentElement;
+                      if (p) { p.style.display = "flex"; p.style.alignItems = "center"; p.style.justifyContent = "center"; p.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"; p.innerHTML += '<div style="font-size:48px">🖼️</div>'; }
+                    }}
+                  />
+                </div>
+                <div style={{ padding: "12px 14px" }}>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: colors.text, marginBottom: "4px" }}>
+                    {item.title || "Untitled"}
+                  </div>
+                  {(item.category || item.year) && (
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>
+                      {item.category}{item.category && item.year ? " · " : ""}{item.year}
                     </div>
                   )}
                 </div>
-              ))}
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+
+        {/* Behance-style Project Detail Modal */}
+        {selectedProject !== null && portfolioWorks[selectedProject] && (() => {
+          const project = portfolioWorks[selectedProject];
+          return (
+            <div
+              onClick={() => setSelectedProject(null)}
+              style={{
+                position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                background: "rgba(0,0,0,0.85)", zIndex: 9999,
+                overflowY: "auto", backdropFilter: "blur(8px)",
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  maxWidth: "900px", margin: "40px auto", padding: "0 20px 60px",
+                }}
+              >
+                {/* Close + Nav */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 0", position: "sticky", top: 0, zIndex: 10 }}>
+                  <button
+                    onClick={() => setSelectedProject(null)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "8px",
+                      padding: "10px 20px", borderRadius: "10px",
+                      background: "rgba(255,255,255,0.1)", border: "none",
+                      color: "#fff", cursor: "pointer", fontSize: "14px", fontWeight: 500,
+                    }}
+                  >
+                    <ArrowLeft size={16} /> Back to Portfolio
+                  </button>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {selectedProject > 0 && (
+                      <button
+                        onClick={() => setSelectedProject(selectedProject - 1)}
+                        style={{
+                          width: "40px", height: "40px", borderRadius: "50%",
+                          background: "rgba(255,255,255,0.1)", border: "none",
+                          color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                        }}
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+                    )}
+                    {selectedProject < portfolioWorks.length - 1 && (
+                      <button
+                        onClick={() => setSelectedProject(selectedProject + 1)}
+                        style={{
+                          width: "40px", height: "40px", borderRadius: "50%",
+                          background: "rgba(255,255,255,0.1)", border: "none",
+                          color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                        }}
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Hero Image — Full Width */}
+                <div style={{ borderRadius: "16px", overflow: "hidden", marginBottom: "32px", boxShadow: "0 16px 48px rgba(0,0,0,0.4)" }}>
+                  <img
+                    src={project.image_url}
+                    alt={project.title}
+                    style={{ width: "100%", display: "block" }}
+                  />
+                </div>
+
+                {/* Project Info */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "24px" }}>
+                  <div>
+                    <h2 style={{ fontSize: "28px", fontWeight: 800, color: "#fff", margin: "0 0 8px 0" }}>
+                      {project.title}
+                    </h2>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "14px", color: "rgba(255,255,255,0.6)" }}>
+                      <span>{profile.display_name}</span>
+                      <span>·</span>
+                      <span>{project.category}</span>
+                      <span>·</span>
+                      <span>{project.year}</span>
+                    </div>
+                  </div>
+                  {/* Stats */}
+                  <div style={{ display: "flex", gap: "20px", fontSize: "14px", color: "rgba(255,255,255,0.6)" }}>
+                    {project.views !== undefined && (
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Eye size={16} /> {project.views.toLocaleString()}
+                      </span>
+                    )}
+                    {project.appreciations !== undefined && (
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Heart size={16} /> {project.appreciations.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div style={{ height: "1px", background: "rgba(255,255,255,0.1)", margin: "0 0 24px 0" }} />
+
+                {/* Description */}
+                {project.description && (
+                  <div style={{ marginBottom: "32px" }}>
+                    <p style={{
+                      fontSize: "16px", lineHeight: 1.8, color: "rgba(255,255,255,0.85)",
+                      margin: 0, maxWidth: "700px",
+                    }}>
+                      {project.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Tools Used */}
+                {project.tools && project.tools.length > 0 && (
+                  <div style={{ marginBottom: "32px" }}>
+                    <h3 style={{ fontSize: "14px", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 12px 0" }}>
+                      Tools & Materials
+                    </h3>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                      {project.tools.map((tool: string, i: number) => (
+                        <span key={i} style={{
+                          fontSize: "13px", padding: "6px 16px", borderRadius: "100px",
+                          background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.8)",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                        }}>
+                          {tool}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Love Button */}
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "32px" }}>
+                  <button
+                    onClick={() => toggleLove(selectedProject)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "12px 16px", borderRadius: "100px",
+                      background: lovedProjects.has(selectedProject) ? "#ef4444" : "rgba(255,255,255,0.08)",
+                      border: lovedProjects.has(selectedProject) ? "none" : "1px solid rgba(255,255,255,0.15)",
+                      color: "#fff", cursor: "pointer", fontSize: "15px", fontWeight: 600,
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <Heart size={20} fill={lovedProjects.has(selectedProject) ? "#fff" : "none"} />
+                  </button>
+                  <span style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)" }}>
+                    {(project.appreciations || 0) + (lovedProjects.has(selectedProject) ? 1 : 0)} appreciations
+                  </span>
+                </div>
+
+                {/* Artist Card */}
+                <div style={{
+                  padding: "20px", borderRadius: "14px",
+                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                  display: "flex", alignItems: "center", gap: "16px",
+                  marginBottom: "32px",
+                }}>
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "50%",
+                    background: "rgba(255,255,255,0.1)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    overflow: "hidden",
+                  }}>
+                    {profile.avatar_url ? (
+                      <img src={profile.avatar_url} alt={profile.display_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <User size={24} color="rgba(255,255,255,0.5)" />
+                    )}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>{profile.display_name}</div>
+                    <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)" }}>
+                      {profile.primary_roles?.join(", ") || "Creative"} · {profile.location_display || profile.city}
+                    </div>
+                  </div>
+                  <button style={{
+                    padding: "8px 20px", borderRadius: "8px",
+                    background: colors.accent, color: "#000", fontWeight: 700,
+                    fontSize: "13px", border: "none", cursor: "pointer",
+                  }}>
+                    Follow
+                  </button>
+                </div>
+
+                {/* Comments Section */}
+                <div style={{ marginBottom: "32px" }}>
+                  <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#fff", margin: "0 0 20px 0" }}>
+                    Comments ({(projectComments[selectedProject] || []).length})
+                  </h3>
+
+                  {/* Comment Input */}
+                  <div style={{
+                    display: "flex", gap: "12px", marginBottom: "24px",
+                    padding: "16px", borderRadius: "14px",
+                    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                  }}>
+                    <div style={{
+                      width: "36px", height: "36px", borderRadius: "50%",
+                      background: colors.accent, flexShrink: 0,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "14px", fontWeight: 700, color: "#000",
+                    }}>
+                      Y
+                    </div>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
+                      <textarea
+                        value={commentInput}
+                        onChange={(e) => setCommentInput(e.target.value)}
+                        placeholder="Share your thoughts on this project..."
+                        style={{
+                          width: "100%", minHeight: "60px", padding: "10px 14px",
+                          borderRadius: "10px", border: "1px solid rgba(255,255,255,0.1)",
+                          background: "rgba(255,255,255,0.04)", color: "#fff",
+                          fontSize: "14px", fontFamily: "inherit", resize: "vertical",
+                          outline: "none",
+                        }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
+                      />
+                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <button
+                          onClick={() => addComment(selectedProject)}
+                          disabled={!commentInput.trim()}
+                          style={{
+                            padding: "8px 20px", borderRadius: "8px",
+                            background: commentInput.trim() ? colors.accent : "rgba(255,255,255,0.06)",
+                            color: commentInput.trim() ? "#000" : "rgba(255,255,255,0.3)",
+                            fontWeight: 700, fontSize: "13px", border: "none",
+                            cursor: commentInput.trim() ? "pointer" : "default",
+                          }}
+                        >
+                          Post Comment
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Comment List */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {(projectComments[selectedProject] || []).map((comment, ci) => (
+                      <div key={ci} style={{
+                        display: "flex", gap: "12px",
+                        padding: "16px", borderRadius: "14px",
+                        background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+                      }}>
+                        <div style={{
+                          width: "36px", height: "36px", borderRadius: "50%",
+                          background: "rgba(255,255,255,0.1)", flexShrink: 0,
+                          overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {comment.avatar ? (
+                            <img src={comment.avatar} alt={comment.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            <User size={18} color="rgba(255,255,255,0.5)" />
+                          )}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#fff" }}>{comment.name}</span>
+                            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>{comment.time}</span>
+                          </div>
+                          <p style={{ fontSize: "14px", lineHeight: 1.6, color: "rgba(255,255,255,0.75)", margin: 0 }}>
+                            {comment.text}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {(!projectComments[selectedProject] || projectComments[selectedProject].length === 0) && (
+                      <div style={{ textAlign: "center", padding: "24px", color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>
+                        No comments yet. Be the first to share your thoughts!
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          </GlassCard>
-        )}
+          );
+        })()}
       </div>
 
       {/* Right Column */}
