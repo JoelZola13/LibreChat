@@ -47,6 +47,16 @@ import {
   Home,
   User,
   MessageCircle,
+  Bell,
+  RefreshCw,
+  CheckCheck,
+  Send,
+  BookOpen,
+  Pin,
+  GripVertical,
+  FolderOpen,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 // =============================================================================
@@ -100,6 +110,8 @@ type TabId =
   | "activity"
   | "street-gallery"
   | "jobs"
+  | "notifications"
+  | "academy"
   | "settings";
 
 type TabDef = {
@@ -143,15 +155,16 @@ function getAvailabilityInfo(status: string): { label: string; color: string; bg
 const TABS: TabDef[] = [
   { id: "about", label: "About", icon: <Info size={16} /> },
   { id: "news", label: "News", icon: <TrendingUp size={16} /> },
-  { id: "services", label: "Services", icon: <Wrench size={16} /> },
   { id: "messages", label: "Messages", icon: <MessageSquare size={16} /> },
+  { id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={16} /> },
   { id: "calendar", label: "Calendar", icon: <Calendar size={16} /> },
   { id: "documents", label: "Documents", icon: <FileText size={16} /> },
   { id: "storage", label: "Storage", icon: <HardDrive size={16} /> },
-  { id: "social-media", label: "Social Media", icon: <Share2 size={16} /> },
-  { id: "activity", label: "Activity", icon: <Activity size={16} /> },
   { id: "street-gallery", label: "Street Gallery", icon: <Image size={16} /> },
+  { id: "social-media", label: "Social Media", icon: <Share2 size={16} /> },
+  { id: "academy", label: "Academy", icon: <BookOpen size={16} /> },
+  { id: "activity", label: "Activity", icon: <Activity size={16} /> },
   { id: "jobs", label: "Jobs", icon: <Briefcase size={16} /> },
   { id: "settings", label: "", icon: <Settings size={16} /> },
 ];
@@ -917,9 +930,6 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
             {activeTab === "portfolio" && (
               <TabPortfolio profile={profile} colors={colors} isDark={isDark} />
             )}
-            {activeTab === "services" && (
-              <TabServices profile={profile} colors={colors} isDark={isDark} />
-            )}
             {activeTab === "messages" && (
               <TabMessages profile={profile} colors={colors} isDark={isDark} />
             )}
@@ -941,11 +951,17 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
             {activeTab === "social-media" && (
               <TabSocialMedia profile={profile} colors={colors} isDark={isDark} />
             )}
+            {activeTab === "academy" && (
+              <TabAcademy profile={profile} colors={colors} isDark={isDark} />
+            )}
             {activeTab === "activity" && (
               <TabActivity profile={profile} colors={colors} isDark={isDark} />
             )}
             {activeTab === "street-gallery" && (
               <TabStreetGallery profile={profile} colors={colors} isDark={isDark} />
+            )}
+            {activeTab === "notifications" && (
+              <TabNotifications profile={profile} colors={colors} isDark={isDark} />
             )}
             {activeTab === "jobs" && (
               <TabJobs profile={profile} colors={colors} isDark={isDark} />
@@ -2168,30 +2184,466 @@ function TabTasks({ profile, colors, isDark }: { profile: StreetProfile; colors:
 }
 
 function TabCalendar({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [viewMode, setViewMode] = useState<"month" | "week" | "day" | "agenda">("month");
+  const [selectedDate, setSelectedDate] = useState<number | null>(today.getDate());
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [calendarFilters, setCalendarFilters] = useState({ personal: true, community: true, work: true });
+
+  // Sample events with calendar categories
   const events = [
-    { title: "Live Mural Painting — Downtown Arts District", date: "Apr 8, 2026", time: "10:00 AM — 4:00 PM" },
-    { title: "Portfolio Review with Gallery Owner", date: "Apr 11, 2026", time: "2:00 PM" },
-    { title: "Street Art Festival — Panel Discussion", date: "Apr 15, 2026", time: "1:00 PM — 3:00 PM" },
-    { title: "Workshop: Spray Can Techniques", date: "Apr 20, 2026", time: "11:00 AM — 1:00 PM" },
+    { title: "Live Mural Painting — Downtown Arts District", date: 8, month: 3, year: 2026, time: "10:00 AM — 4:00 PM", calendar: "work", color: "#3b82f6" },
+    { title: "Portfolio Review with Gallery Owner", date: 11, month: 3, year: 2026, time: "2:00 PM", calendar: "work", color: "#3b82f6" },
+    { title: "Street Art Festival — Panel Discussion", date: 15, month: 3, year: 2026, time: "1:00 PM — 3:00 PM", calendar: "community", color: "#22c55e" },
+    { title: "Workshop: Spray Can Techniques", date: 20, month: 3, year: 2026, time: "11:00 AM — 1:00 PM", calendar: "work", color: "#3b82f6" },
+    { title: "Gallery Opening Night", date: 24, month: 3, year: 2026, time: "7:00 PM — 10:00 PM", calendar: "community", color: "#22c55e" },
+    { title: "Commission Deadline — Urban Kitchen", date: 30, month: 3, year: 2026, time: "All Day", calendar: "work", color: "#3b82f6" },
+    { title: "Dentist Appointment", date: 14, month: 3, year: 2026, time: "9:30 AM", calendar: "personal", color: "#eab308" },
+    { title: "Rent Due", date: 1, month: 3, year: 2026, time: "All Day", calendar: "personal", color: "#eab308" },
+    { title: "Community Mural Meetup", date: 29, month: 3, year: 2026, time: "6:00 PM", calendar: "community", color: "#22c55e" },
   ];
 
+  const getEventsForDate = (day: number) => {
+    return events.filter((e) => e.date === day && e.month === currentMonth && e.year === currentYear && calendarFilters[e.calendar as keyof typeof calendarFilters]);
+  };
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+  const prevMonth = () => {
+    if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); }
+    else setCurrentMonth(currentMonth - 1);
+  };
+  const nextMonth = () => {
+    if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); }
+    else setCurrentMonth(currentMonth + 1);
+  };
+  const goToToday = () => { setCurrentMonth(today.getMonth()); setCurrentYear(today.getFullYear()); setSelectedDate(today.getDate()); };
+
+  // Mini calendar for sidebar
+  const prevMonthDays = new Date(currentYear, currentMonth, 0).getDate();
+  const miniCalDays: Array<{ day: number; currentMonth: boolean }> = [];
+  for (let i = firstDayOfMonth - 1; i >= 0; i--) miniCalDays.push({ day: prevMonthDays - i, currentMonth: false });
+  for (let i = 1; i <= daysInMonth; i++) miniCalDays.push({ day: i, currentMonth: true });
+  const remaining = 42 - miniCalDays.length;
+  for (let i = 1; i <= remaining; i++) miniCalDays.push({ day: i, currentMonth: false });
+
+  const isToday = (day: number) => day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
+
   return (
-    <GlassCard title="Upcoming Events" colors={colors} isDark={isDark}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {events.map((evt, i) => (
-          <ListRow
-            key={i}
-            icon={<Calendar size={18} />}
-            title={evt.title}
-            subtitle={evt.time}
-            rightText={evt.date}
-            colors={colors}
-            isDark={isDark}
-            accent
-          />
-        ))}
+    <div style={{ display: "flex", gap: "0", minHeight: "700px", borderRadius: "16px", overflow: "hidden", border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
+      {/* Left Sidebar */}
+      <div style={{
+        width: "240px", flexShrink: 0, padding: "20px",
+        background: isDark ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.5)",
+        borderRight: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+        display: "flex", flexDirection: "column", gap: "20px",
+      }}>
+        {/* Create Button */}
+        <button
+          onClick={() => setShowCreateModal(true)}
+          style={{
+            padding: "12px 0", borderRadius: "12px", background: colors.accent, color: "#000",
+            fontWeight: 700, fontSize: "14px", border: "none", cursor: "pointer", width: "100%",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+          }}
+        >
+          + Create
+        </button>
+
+        {/* Mini Calendar */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <button onClick={prevMonth} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer", padding: "4px" }}><ChevronLeft size={16} /></button>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: colors.text }}>{monthNames[currentMonth]} {currentYear}</span>
+            <button onClick={nextMonth} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer", padding: "4px" }}><ChevronRight size={16} /></button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", textAlign: "center" }}>
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+              <div key={i} style={{ fontSize: "10px", fontWeight: 600, color: colors.textSecondary, padding: "4px 0" }}>{d}</div>
+            ))}
+            {miniCalDays.map((d, i) => (
+              <button
+                key={i}
+                onClick={() => d.currentMonth && setSelectedDate(d.day)}
+                style={{
+                  fontSize: "11px", padding: "4px 0", border: "none", cursor: d.currentMonth ? "pointer" : "default",
+                  borderRadius: "50%", width: "28px", height: "28px", margin: "0 auto",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: d.currentMonth && isToday(d.day) ? colors.accent : d.currentMonth && selectedDate === d.day ? "rgba(234,179,8,0.2)" : "transparent",
+                  color: d.currentMonth && isToday(d.day) ? "#000" : d.currentMonth ? colors.text : "rgba(128,128,128,0.3)",
+                  fontWeight: isToday(d.day) ? 700 : 400,
+                }}
+              >
+                {d.day}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* My Calendars */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: colors.textSecondary, letterSpacing: "0.5px", textTransform: "uppercase" }}>My Calendars</span>
+            <span style={{ fontSize: "16px", color: colors.textSecondary, cursor: "pointer" }}>+</span>
+          </div>
+          {[
+            { key: "personal", label: "Personal", color: "#eab308", isDefault: true },
+            { key: "community", label: "Community Events", color: "#22c55e", isDefault: false },
+            { key: "work", label: "Work", color: "#3b82f6", isDefault: false },
+          ].map((cal) => (
+            <div
+              key={cal.key}
+              onClick={() => setCalendarFilters((prev) => ({ ...prev, [cal.key]: !prev[cal.key as keyof typeof prev] }))}
+              style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 0", cursor: "pointer" }}
+            >
+              <div style={{
+                width: "18px", height: "18px", borderRadius: "4px", border: `2px solid ${cal.color}`,
+                background: calendarFilters[cal.key as keyof typeof calendarFilters] ? cal.color : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {calendarFilters[cal.key as keyof typeof calendarFilters] && <CheckSquare size={12} color="#fff" />}
+              </div>
+              <span style={{ fontSize: "13px", color: colors.text, fontWeight: 500 }}>{cal.label}</span>
+              {cal.isDefault && (
+                <span style={{ fontSize: "9px", padding: "2px 6px", borderRadius: "4px", background: "rgba(234,179,8,0.2)", color: "#eab308", fontWeight: 700 }}>Default</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* View All Tasks */}
+        <button style={{
+          padding: "10px 0", borderRadius: "10px", width: "100%",
+          background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+          color: colors.text, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+        }}>
+          <CheckSquare size={14} /> View All Tasks
+        </button>
+
+        {/* Connect Google Calendar */}
+        <button style={{
+          padding: "10px 0", borderRadius: "10px", width: "100%",
+          background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+          color: colors.accent, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+        }}>
+          ⚡ Connect Google Calendar
+        </button>
       </div>
-    </GlassCard>
+
+      {/* Main Calendar Area */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* Top Bar */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px",
+          borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+          background: isDark ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.3)",
+          flexWrap: "wrap", gap: "10px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Calendar size={18} color={colors.accent} />
+            <button onClick={goToToday} style={{
+              padding: "6px 16px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+              color: colors.text, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+            }}>Today</button>
+            <button onClick={prevMonth} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer" }}><ChevronLeft size={18} /></button>
+            <button onClick={nextMonth} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer" }}><ChevronRight size={18} /></button>
+            <span style={{ fontSize: "18px", fontWeight: 700, color: colors.text }}>{monthNames[currentMonth]} {currentYear}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {(["month", "week", "day", "agenda"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                style={{
+                  padding: "6px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                  background: viewMode === mode ? colors.accent : isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                  color: viewMode === mode ? "#000" : colors.textSecondary,
+                  border: viewMode === mode ? "none" : `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  textTransform: "capitalize",
+                  display: "flex", alignItems: "center", gap: "4px",
+                }}
+              >
+                {mode === "month" && <Calendar size={12} />}
+                {mode === "agenda" && "≡"}
+                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+            <div style={{ width: "1px", height: "24px", background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", margin: "0 4px" }} />
+            <button style={{
+              padding: "6px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+              background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+              color: colors.textSecondary, display: "flex", alignItems: "center", gap: "4px",
+            }}>
+              <CheckSquare size={12} /> Task
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              style={{
+                padding: "6px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                background: colors.accent, border: "none", color: "#000",
+                display: "flex", alignItems: "center", gap: "4px",
+              }}
+            >
+              + Event
+            </button>
+          </div>
+        </div>
+
+        {/* Calendar Grid — Month View */}
+        {viewMode === "month" && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            {/* Day Headers */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}>
+              {dayNames.map((d) => (
+                <div key={d} style={{
+                  padding: "8px", textAlign: "center", fontSize: "11px", fontWeight: 700,
+                  color: colors.textSecondary, letterSpacing: "0.5px",
+                }}>{d}</div>
+              ))}
+            </div>
+            {/* Day Cells */}
+            <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridTemplateRows: `repeat(${Math.ceil((firstDayOfMonth + daysInMonth) / 7)}, 1fr)` }}>
+              {/* Empty cells before first day */}
+              {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                <div key={`empty-${i}`} style={{
+                  borderRight: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                  borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                  padding: "6px",
+                  background: isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
+                }}>
+                  <span style={{ fontSize: "12px", color: "rgba(128,128,128,0.3)" }}>{new Date(currentYear, currentMonth, 0).getDate() - firstDayOfMonth + i + 1}</span>
+                </div>
+              ))}
+              {/* Actual days */}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1;
+                const dayEvents = getEventsForDate(day);
+                const isTodayCell = isToday(day);
+                const isSelected = selectedDate === day;
+                return (
+                  <div
+                    key={day}
+                    onClick={() => setSelectedDate(day)}
+                    style={{
+                      borderRight: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                      borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                      padding: "6px", cursor: "pointer", minHeight: "90px",
+                      background: isSelected ? (isDark ? "rgba(234,179,8,0.05)" : "rgba(234,179,8,0.05)") : "transparent",
+                      transition: "background 0.15s",
+                    }}
+                  >
+                    <div style={{
+                      width: "28px", height: "28px", borderRadius: "50%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: isTodayCell ? colors.accent : "transparent",
+                      color: isTodayCell ? "#000" : colors.text,
+                      fontSize: "13px", fontWeight: isTodayCell ? 700 : 400,
+                      marginBottom: "4px",
+                    }}>
+                      {day}
+                    </div>
+                    {dayEvents.slice(0, 2).map((evt, ei) => (
+                      <div key={ei} style={{
+                        fontSize: "10px", padding: "2px 6px", borderRadius: "4px", marginBottom: "2px",
+                        background: `${evt.color}22`, color: evt.color, fontWeight: 600,
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        borderLeft: `2px solid ${evt.color}`,
+                      }}>
+                        {evt.title}
+                      </div>
+                    ))}
+                    {dayEvents.length > 2 && (
+                      <div style={{ fontSize: "9px", color: colors.textSecondary, paddingLeft: "6px" }}>+{dayEvents.length - 2} more</div>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Empty cells after last day */}
+              {Array.from({ length: (7 - ((firstDayOfMonth + daysInMonth) % 7)) % 7 }).map((_, i) => (
+                <div key={`end-${i}`} style={{
+                  borderRight: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                  borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                  padding: "6px",
+                  background: isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
+                }}>
+                  <span style={{ fontSize: "12px", color: "rgba(128,128,128,0.3)" }}>{i + 1}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Agenda View */}
+        {viewMode === "agenda" && (
+          <div style={{ flex: 1, padding: "20px", overflowY: "auto" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {events
+                .filter((e) => e.month === currentMonth && calendarFilters[e.calendar as keyof typeof calendarFilters])
+                .sort((a, b) => a.date - b.date)
+                .map((evt, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: "14px", padding: "14px 16px",
+                  borderRadius: "12px", background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+                  borderLeft: `3px solid ${evt.color}`,
+                }}>
+                  <div style={{
+                    width: "44px", height: "44px", borderRadius: "10px",
+                    background: `${evt.color}22`, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Calendar size={18} color={evt.color} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: colors.text }}>{evt.title}</div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>{evt.time}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: colors.accent }}>{monthNames[evt.month].slice(0, 3)} {evt.date}, {evt.year}</div>
+                    <div style={{ fontSize: "10px", color: colors.textSecondary, textTransform: "capitalize" }}>{evt.calendar}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Week / Day placeholder */}
+        {(viewMode === "week" || viewMode === "day") && (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px" }}>
+            <div style={{ textAlign: "center" }}>
+              <Calendar size={48} color={colors.textSecondary} style={{ opacity: 0.3, marginBottom: "16px" }} />
+              <div style={{ fontSize: "16px", fontWeight: 600, color: colors.text, marginBottom: "6px" }}>{viewMode === "week" ? "Week" : "Day"} View</div>
+              <div style={{ fontSize: "13px", color: colors.textSecondary }}>Switch to Month or Agenda view for full event details</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Create Event Modal */}
+      {showCreateModal && (
+        <div
+          onClick={() => setShowCreateModal(false)}
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "420px", borderRadius: "16px", overflow: "hidden",
+              background: isDark ? "rgba(30,30,30,0.98)" : "#fff",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+              padding: "28px",
+            }}
+          >
+            <h3 style={{ margin: "0 0 20px 0", fontSize: "20px", fontWeight: 800, color: colors.text }}>Create Event</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Event Title</label>
+                <input
+                  type="text"
+                  placeholder="Enter event title..."
+                  style={{
+                    width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                    color: colors.text, outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Date</label>
+                  <input
+                    type="date"
+                    style={{
+                      width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                      color: colors.text, outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Time</label>
+                  <input
+                    type="time"
+                    style={{
+                      width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                      color: colors.text, outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Calendar</label>
+                <select style={{
+                  width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                  color: colors.text, outline: "none", boxSizing: "border-box",
+                }}>
+                  <option value="personal">Personal</option>
+                  <option value="community">Community Events</option>
+                  <option value="work">Work</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Description</label>
+                <textarea
+                  placeholder="Add details..."
+                  rows={3}
+                  style={{
+                    width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                    color: colors.text, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "10px", marginTop: "20px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{
+                  padding: "10px 24px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                  color: colors.text,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{
+                  padding: "10px 24px", borderRadius: "10px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                  background: colors.accent, border: "none", color: "#000",
+                }}
+              >
+                Save Event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2227,13 +2679,17 @@ function TabAbout({
   colors,
   isDark,
   isMobile,
+  onViewFullPortfolio,
 }: {
   profile: StreetProfile;
   colors: any;
   isDark: boolean;
   isMobile: boolean;
+  onViewFullPortfolio?: () => void;
 }) {
+  const navigate = useNavigate();
   const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const [showFullPortfolio, setShowFullPortfolio] = useState(false);
   const [lovedProjects, setLovedProjects] = useState<Set<number>>(new Set());
   const [projectComments, setProjectComments] = useState<Record<number, Array<{ name: string; avatar: string; text: string; time: string }>>>({
     0: [
@@ -2388,7 +2844,7 @@ function TabAbout({
           </GlassCard>
         )}
 
-        {/* Portfolio Section — Behance-style */}
+        {/* Portfolio Section — Hero Showcase or Full View */}
         <GlassCard title="Portfolio" colors={colors} isDark={isDark}>
           <div
             style={{
@@ -2397,7 +2853,7 @@ function TabAbout({
               gap: "16px",
             }}
           >
-            {portfolioWorks.map((item: any, i: number) => (
+            {(showFullPortfolio ? portfolioWorks : portfolioWorks.slice(0, 3)).map((item: any, i: number) => (
               <div
                 key={i}
                 onClick={() => setSelectedProject(i)}
@@ -2438,7 +2894,112 @@ function TabAbout({
               </div>
             ))}
           </div>
+
+          {/* View Full Portfolio button — opens full portfolio overlay */}
+          {portfolioWorks.length > 3 && !showFullPortfolio && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "18px" }}>
+              <button
+                onClick={() => setShowFullPortfolio(true)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  padding: "8px 20px",
+                  borderRadius: "20px", border: "none",
+                  background: "#eab308", color: "#fff",
+                  fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+              >
+                <Image size={14} /> View Full Portfolio
+              </button>
+            </div>
+          )}
         </GlassCard>
+
+        {/* Full Portfolio Overlay */}
+        {showFullPortfolio && (
+          <div
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.92)", zIndex: 9998,
+              overflowY: "auto", backdropFilter: "blur(8px)",
+            }}
+          >
+            <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "40px 24px 60px" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "28px" }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "24px", fontWeight: 800, color: "#fff" }}>
+                    Full Portfolio
+                  </h2>
+                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", marginTop: "4px" }}>
+                    {portfolioWorks.length} pieces by {profile.display_name || profile.username}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowFullPortfolio(false)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "8px 16px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.15)",
+                    background: "rgba(255,255,255,0.06)", color: "#fff",
+                    fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  <X size={16} /> Close
+                </button>
+              </div>
+              {/* Grid */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "20px",
+              }}>
+                {portfolioWorks.map((item: any, i: number) => (
+                  <div
+                    key={i}
+                    onClick={() => { setSelectedProject(i); setShowFullPortfolio(false); }}
+                    style={{
+                      borderRadius: "14px", overflow: "hidden", cursor: "pointer",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "rgba(255,255,255,0.04)",
+                      transition: "all 0.3s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.4)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+                  >
+                    <div style={{ position: "relative", width: "100%", paddingTop: "66%", overflow: "hidden" }}>
+                      <img
+                        src={item.thumbnail_url || item.image_url}
+                        alt={item.title || "Portfolio item"}
+                        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <div style={{ padding: "14px 16px" }}>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color: "#fff", marginBottom: "4px" }}>
+                        {item.title || "Untitled"}
+                      </div>
+                      {(item.category || item.year) && (
+                        <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>
+                          {item.category}{item.category && item.year ? " · " : ""}{item.year}
+                        </div>
+                      )}
+                      {item.description && (
+                        <div style={{
+                          fontSize: "12px", color: "rgba(255,255,255,0.4)", marginTop: "6px", lineHeight: 1.4,
+                          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const,
+                          overflow: "hidden",
+                        }}>
+                          {item.description}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Behance-style Project Detail Modal */}
         {selectedProject !== null && portfolioWorks[selectedProject] && (() => {
@@ -2866,6 +3427,68 @@ function TabAbout({
             </div>
           </div>
         </GlassCard>
+
+        {/* Services */}
+        <GlassCard title="Services" colors={colors} isDark={isDark}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {[
+              { id: "mural-commission", name: "Mural Commission", price: "From $2,500", available: true },
+              { id: "live-painting", name: "Live Painting", price: "From $1,000", available: true },
+              { id: "art-direction", name: "Art Direction", price: "Custom quote", available: true },
+              { id: "workshop-teaching", name: "Workshop / Teaching", price: "From $500", available: false },
+            ].map((svc, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: colors.text }}>{svc.name}</span>
+                    <span
+                      style={{
+                        fontSize: "9px",
+                        padding: "1px 6px",
+                        borderRadius: "100px",
+                        background: svc.available ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                        color: svc.available ? "#22c55e" : "#ef4444",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {svc.available ? "Available" : "Unavailable"}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: colors.accent }}>{svc.price}</span>
+                </div>
+                {svc.available && (
+                  <button
+                    onClick={() => navigate(`/creatives/${profile.username}/book?service=${svc.id}`)}
+                    style={{
+                      padding: "5px 14px",
+                      borderRadius: "8px",
+                      background: colors.accent,
+                      color: "#000",
+                      fontWeight: 700,
+                      fontSize: "11px",
+                      border: "none",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Book Now
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </GlassCard>
       </div>
     </div>
   );
@@ -3097,6 +3720,14 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
   const [selectedSavedImage, setSelectedSavedImage] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [savedFavorites, setSavedFavorites] = useState<Set<string>>(new Set(["saved-1", "saved-2", "saved-3", "saved-4", "saved-5"]));
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set(["own-1"]));
+  const [collectionFilter, setCollectionFilter] = useState<string>("all");
+  const [artworkOrder, setArtworkOrder] = useState<string[]>(["own-1","own-2","own-3","own-4","own-5","own-6"]);
+  const [reorderMode, setReorderMode] = useState(false);
+  const [inquiryArt, setInquiryArt] = useState<any | null>(null);
+  const [inquiryForm, setInquiryForm] = useState({ name: "", email: "", message: "", offerAmount: "" });
+  const [inquirySent, setInquirySent] = useState(false);
+  const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
 
   const toggleSavedFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -3184,8 +3815,15 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Voices of the Underground",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-voices/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-voices/600/400", label: "Main View" },
+        { url: "https://picsum.photos/seed/own-voices-close/600/400", label: "Close-Up Detail" },
+        { url: "https://picsum.photos/seed/own-voices-context/600/400", label: "In-Situ — Dundas West Underpass" },
+        { url: "https://picsum.photos/seed/own-voices-angle/600/400", label: "Side Angle" },
+      ],
       medium: "Spray Paint",
       style: "Street Art",
+      collection: "Urban Voices",
       description: "A large-scale mural exploring the stories of subway musicians and buskers who form the invisible soundtrack of the city. Each face is rendered in hyper-saturated color, their instruments dissolving into the surrounding architecture — a tribute to artists who perform without stages.",
       year: "2025",
       dimensions: "12ft × 8ft",
@@ -3203,8 +3841,14 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Concrete Canvas — Dundas & Ossington",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-concrete/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-concrete/600/400", label: "Main View" },
+        { url: "https://picsum.photos/seed/own-concrete-wide/600/400", label: "Full Wall — Street Context" },
+        { url: "https://picsum.photos/seed/own-concrete-detail/600/400", label: "Wheat Paste Layering Detail" },
+      ],
       medium: "Acrylic & Wheat Paste",
       style: "Muralism",
+      collection: "Urban Voices",
       description: "Commissioned by the Ossington BIA, this piece transforms a blank concrete wall into a living narrative of the neighborhood's evolution — from its immigrant roots to its current creative renaissance. Layers of wheat-pasted archival photographs blend with hand-painted contemporary portraits.",
       year: "2025",
       dimensions: "20ft × 10ft",
@@ -3222,8 +3866,15 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Chromatic Rebellion",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-chromatic/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-chromatic/600/400", label: "Main View" },
+        { url: "https://picsum.photos/seed/own-chromatic-texture/600/400", label: "Texture Close-Up" },
+        { url: "https://picsum.photos/seed/own-chromatic-studio/600/400", label: "Studio Installation" },
+        { url: "https://picsum.photos/seed/own-chromatic-process/600/400", label: "Process Shot" },
+      ],
       medium: "Mixed Media",
       style: "Abstract",
+      collection: "Studio Experiments",
       description: "An explosive abstract piece that challenges the sterile minimalism dominating gallery spaces. Built up through dozens of layers — dripped acrylics, torn newsprint, spray enamel, and coffee stains — it represents the beautiful chaos of the creative process itself.",
       year: "2024",
       dimensions: "48\" × 36\" (canvas)",
@@ -3241,8 +3892,14 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "City Pulse — Queen West Series",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-pulse/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-pulse/600/400", label: "Main Print" },
+        { url: "https://picsum.photos/seed/own-pulse-framed/600/400", label: "Framed — Gallery Display" },
+        { url: "https://picsum.photos/seed/own-pulse-detail/600/400", label: "Print Detail — Ink Layers" },
+      ],
       medium: "Digital Print",
       style: "Contemporary",
+      collection: "City Pulse Series",
       description: "Part of a limited edition series capturing the energy of Queen West at different times of day. This piece layers long-exposure street photography with hand-drawn illustrations, printed on archival cotton rag paper. Edition of 25.",
       year: "2025",
       dimensions: "24\" × 18\"",
@@ -3260,8 +3917,15 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Roots & Routes",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-roots/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-roots/600/400", label: "Main View" },
+        { url: "https://picsum.photos/seed/own-roots-close/600/400", label: "Face Detail — Central Figure" },
+        { url: "https://picsum.photos/seed/own-roots-environment/600/400", label: "In-Situ — Kensington Market" },
+        { url: "https://picsum.photos/seed/own-roots-night/600/400", label: "Night Lighting" },
+      ],
       medium: "Spray Paint & Acrylic",
       style: "Figurative",
+      collection: "Urban Voices",
       description: "A deeply personal piece exploring the artist's journey between cultures. Tree roots morph into subway maps, while branches become flight paths — connecting the places that shaped the artist's identity. The central figure stands at the crossroads, grounded but reaching upward.",
       year: "2024",
       dimensions: "15ft × 9ft",
@@ -3279,8 +3943,16 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Neon Ghosts — Kensington Nights",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-neon/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-neon/600/400", label: "Daytime View — UV Paint" },
+        { url: "https://picsum.photos/seed/own-neon-glow/600/400", label: "Night Activation — UV Glow" },
+        { url: "https://picsum.photos/seed/own-neon-proj/600/400", label: "Projection Mapping Detail" },
+        { url: "https://picsum.photos/seed/own-neon-walk/600/400", label: "Visitor Walking Through" },
+        { url: "https://picsum.photos/seed/own-neon-above/600/400", label: "Aerial View — Full Corridor" },
+      ],
       medium: "UV Paint & Projection",
       style: "Installation",
+      collection: "City Pulse Series",
       description: "An immersive night installation that transforms an alleyway into a glowing portal. UV-reactive paint on the walls activates under blacklight, while a projection maps animated spirits onto the architecture. Visitors walk through the piece, becoming part of the artwork themselves.",
       year: "2025",
       dimensions: "Site-Specific (30ft corridor)",
@@ -3295,6 +3967,49 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
     },
   ];
 
+  // Derive collections from artworks
+  const collections = useMemo(() => {
+    const collMap = new Map<string, number>();
+    artworks.forEach(a => {
+      if (a.collection) collMap.set(a.collection, (collMap.get(a.collection) || 0) + 1);
+    });
+    return Array.from(collMap.entries()).map(([name, count]) => ({ name, count }));
+  }, []);
+
+  // Sort artworks: pinned first, then by custom order
+  const sortedArtworks = useMemo(() => {
+    let filtered = collectionFilter === "all" ? [...artworks] : artworks.filter(a => a.collection === collectionFilter);
+    filtered.sort((a, b) => {
+      const aPin = pinnedIds.has(a.id) ? 0 : 1;
+      const bPin = pinnedIds.has(b.id) ? 0 : 1;
+      if (aPin !== bPin) return aPin - bPin;
+      return artworkOrder.indexOf(a.id) - artworkOrder.indexOf(b.id);
+    });
+    return filtered;
+  }, [collectionFilter, pinnedIds, artworkOrder]);
+
+  const togglePin = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const moveArtwork = (id: string, direction: "up" | "down", e: React.MouseEvent) => {
+    e.stopPropagation();
+    setArtworkOrder(prev => {
+      const idx = prev.indexOf(id);
+      if (idx < 0) return prev;
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next;
+    });
+  };
+
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setFavorites((prev) => {
@@ -3306,29 +4021,85 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
 
   return (
     <div>
+      {/* ── Collection Filter & Reorder Controls ── */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginBottom: "20px",
+      }}>
+        {/* Collection filter pills */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", flex: 1 }}>
+          <FolderOpen size={16} color={colors.textSecondary} />
+          <button
+            onClick={() => setCollectionFilter("all")}
+            style={{
+              padding: "5px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+              fontSize: "12px", fontWeight: 600,
+              background: collectionFilter === "all" ? "#eab308" : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"),
+              color: collectionFilter === "all" ? "#000" : colors.textSecondary,
+              transition: "all 0.2s",
+            }}
+          >
+            All ({artworks.length})
+          </button>
+          {collections.map(c => (
+            <button
+              key={c.name}
+              onClick={() => setCollectionFilter(collectionFilter === c.name ? "all" : c.name)}
+              style={{
+                padding: "5px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+                fontSize: "12px", fontWeight: 600,
+                background: collectionFilter === c.name ? "#eab308" : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"),
+                color: collectionFilter === c.name ? "#000" : colors.textSecondary,
+                transition: "all 0.2s",
+              }}
+            >
+              {c.name} ({c.count})
+            </button>
+          ))}
+        </div>
+        {/* Reorder toggle */}
+        <button
+          onClick={() => setReorderMode(!reorderMode)}
+          style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            padding: "6px 14px", borderRadius: "8px", border: "none", cursor: "pointer",
+            fontSize: "12px", fontWeight: 600,
+            background: reorderMode ? "rgba(234,179,8,0.15)" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+            color: reorderMode ? "#eab308" : colors.textSecondary,
+            transition: "all 0.2s",
+          }}
+        >
+          <GripVertical size={14} /> {reorderMode ? "Done Reordering" : "Reorder"}
+        </button>
+      </div>
+
       {/* Gallery Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "20px" }}>
-        {artworks.map((art, i) => {
+        {sortedArtworks.map((art) => {
           const isFav = favorites.has(art.id);
+          const isPinned = pinnedIds.has(art.id);
+          const originalIndex = artworks.findIndex(a => a.id === art.id);
           return (
             <div
               key={art.id}
-              onClick={() => setSelectedImage(i)}
+              onClick={() => !reorderMode && setSelectedImage(originalIndex)}
               style={{
                 borderRadius: "16px",
                 overflow: "hidden",
                 background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)",
-                border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-                cursor: "pointer",
+                border: isPinned
+                  ? "2px solid rgba(234,179,8,0.5)"
+                  : `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                cursor: reorderMode ? "default" : "pointer",
                 transition: "all 0.3s",
+                position: "relative",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.3)"; }}
+              onMouseEnter={(e) => { if (!reorderMode) { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.3)"; } }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
             >
               {/* Image with badges */}
               <div style={{ position: "relative", width: "100%", paddingTop: "66%", overflow: "hidden" }}>
                 <img
-                  src={art.image_url || art.thumbnail_url}
+                  src={art.image_url || (art as any).thumbnail_url}
                   alt={art.title}
                   style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
                   onError={(e) => {
@@ -3338,6 +4109,19 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                     if (p) { p.style.display = "flex"; p.style.alignItems = "center"; p.style.justifyContent = "center"; p.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"; p.innerHTML += '<div style="font-size:48px">🖼️</div>'; }
                   }}
                 />
+                {/* Pinned badge */}
+                {isPinned && (
+                  <div style={{
+                    position: "absolute", top: "12px", left: art.is_for_sale || art.is_sold ? "auto" : "12px",
+                    right: art.is_for_sale || art.is_sold ? "56px" : "auto",
+                    ...(art.is_for_sale || art.is_sold ? { top: "12px", left: "auto" } : {}),
+                    background: "rgba(234,179,8,0.9)", color: "#000", fontSize: "10px", fontWeight: 700,
+                    padding: "3px 8px", borderRadius: "5px", letterSpacing: "0.5px",
+                    display: "flex", alignItems: "center", gap: "3px", zIndex: 2,
+                  }}>
+                    <Pin size={10} /> PINNED
+                  </div>
+                )}
                 {/* FOR SALE badge */}
                 {art.is_for_sale && !art.is_sold && (
                   <div style={{
@@ -3371,6 +4155,48 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                 >
                   <Heart size={16} fill={isFav ? "#000" : "none"} color={isFav ? "#000" : "#fff"} />
                 </button>
+                {/* Reorder controls overlay */}
+                {reorderMode && (
+                  <div style={{
+                    position: "absolute", bottom: "10px", right: "10px",
+                    display: "flex", gap: "6px", zIndex: 3,
+                  }}>
+                    <button
+                      onClick={(e) => togglePin(art.id, e)}
+                      title={isPinned ? "Unpin" : "Pin to top"}
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "8px",
+                        background: isPinned ? "rgba(234,179,8,0.9)" : "rgba(0,0,0,0.6)",
+                        border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <Pin size={14} color={isPinned ? "#000" : "#fff"} />
+                    </button>
+                    <button
+                      onClick={(e) => moveArtwork(art.id, "up", e)}
+                      title="Move up"
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "8px",
+                        background: "rgba(0,0,0,0.6)", border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <ArrowUp size={14} color="#fff" />
+                    </button>
+                    <button
+                      onClick={(e) => moveArtwork(art.id, "down", e)}
+                      title="Move down"
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "8px",
+                        background: "rgba(0,0,0,0.6)", border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <ArrowDown size={14} color="#fff" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Card info */}
@@ -3380,20 +4206,67 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                   <div style={{ fontSize: "15px", fontWeight: 700, color: colors.text, flex: 1 }}>
                     {art.title}
                   </div>
-                  {art.is_for_sale && art.price && (
+                  {art.is_for_sale && !art.is_sold && art.price && (
                     <div style={{ fontSize: "15px", fontWeight: 700, color: "#eab308", marginLeft: "12px", whiteSpace: "nowrap" }}>
                       ${art.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+                  {art.is_sold && art.price && (
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "rgba(239,68,68,0.8)", marginLeft: "12px", whiteSpace: "nowrap" }}>
+                      Sold for ${art.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </div>
                   )}
                 </div>
 
                 {/* Artist */}
-                <div style={{ fontSize: "13px", color: colors.textSecondary, marginBottom: "10px" }}>
+                <div style={{ fontSize: "13px", color: colors.textSecondary, marginBottom: "6px" }}>
                   by {art.artist_name}
                 </div>
 
+                {/* Description snippet */}
+                <div style={{
+                  fontSize: "12px", color: isDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.55)",
+                  marginBottom: "10px", lineHeight: "1.5",
+                  display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const,
+                  overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {art.description}
+                </div>
+
+                {/* Inquire button for pieces that are for sale */}
+                {art.is_for_sale && !art.is_sold && (
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: "10px" }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInquiryArt(art);
+                    }}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "6px",
+                      padding: "6px 16px",
+                      borderRadius: "8px", border: "none",
+                      background: "#eab308", color: "#fff",
+                      fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+                  >
+                    <Mail size={13} /> Inquire
+                  </button>
+                  </div>
+                )}
+
                 {/* Tags */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "12px" }}>
+                  {art.collection && (
+                    <span style={{
+                      fontSize: "11px", padding: "3px 10px", borderRadius: "6px",
+                      background: "rgba(234,179,8,0.15)", color: "#eab308", fontWeight: 600,
+                    }}>
+                      {art.collection}
+                    </span>
+                  )}
                   {art.medium && (
                     <span style={{
                       fontSize: "11px", padding: "3px 10px", borderRadius: "6px",
@@ -3423,7 +4296,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                     <Heart size={13} /> {art.favorite_count || 0}
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <MessageCircle size={13} /> {art.comment_count || art.comments || 0}
+                    <MessageCircle size={13} /> {art.comment_count || (art as any).comments || 0}
                   </span>
                 </div>
               </div>
@@ -3726,9 +4599,10 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       {selectedImage !== null && artworks[selectedImage] && (() => {
         const art = artworks[selectedImage];
         const isFav = favorites.has(art.id);
+        const photos = art.gallery_images || [{ url: art.image_url, label: "Main View" }];
         return (
           <div
-            onClick={() => setSelectedImage(null)}
+            onClick={() => { setSelectedImage(null); setDetailPhotoIndex(0); }}
             style={{
               position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
               background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "flex-start", justifyContent: "center",
@@ -3737,7 +4611,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
           >
             {/* Close button */}
             <button
-              onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
+              onClick={(e) => { e.stopPropagation(); setSelectedImage(null); setDetailPhotoIndex(0); }}
               style={{
                 position: "fixed", top: "20px", right: "20px",
                 background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
@@ -3750,7 +4624,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
             {/* Nav arrows */}
             {selectedImage > 0 && (
               <button
-                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage - 1); }}
+                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage - 1); setDetailPhotoIndex(0); }}
                 style={{
                   position: "fixed", left: "20px", top: "50%", transform: "translateY(-50%)",
                   background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
@@ -3763,7 +4637,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
             )}
             {selectedImage < artworks.length - 1 && (
               <button
-                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage + 1); }}
+                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage + 1); setDetailPhotoIndex(0); }}
                 style={{
                   position: "fixed", right: "20px", top: "50%", transform: "translateY(-50%)",
                   background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
@@ -3783,13 +4657,48 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                 background: "rgba(20,20,20,0.98)", border: "1px solid rgba(255,255,255,0.08)",
               }}
             >
-              {/* Hero Image */}
+              {/* Hero Image with multi-photo nav */}
               <div style={{ width: "100%", position: "relative" }}>
                 <img
-                  src={art.image_url}
-                  alt={art.title}
+                  src={photos[detailPhotoIndex]?.url || art.image_url}
+                  alt={`${art.title} — ${photos[detailPhotoIndex]?.label || "View"}`}
                   style={{ width: "100%", maxHeight: "60vh", objectFit: "cover", display: "block" }}
                 />
+                {/* Photo label */}
+                <div style={{
+                  position: "absolute", bottom: "16px", left: "16px",
+                  background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: "12px", fontWeight: 500,
+                  padding: "5px 12px", borderRadius: "8px", backdropFilter: "blur(8px)",
+                }}>
+                  {photos[detailPhotoIndex]?.label} · {detailPhotoIndex + 1}/{photos.length}
+                </div>
+                {/* Photo nav arrows */}
+                {photos.length > 1 && detailPhotoIndex > 0 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDetailPhotoIndex(detailPhotoIndex - 1); }}
+                    style={{
+                      position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)",
+                      background: "rgba(0,0,0,0.5)", border: "none", color: "#fff",
+                      width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                )}
+                {photos.length > 1 && detailPhotoIndex < photos.length - 1 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDetailPhotoIndex(detailPhotoIndex + 1); }}
+                    style={{
+                      position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
+                      background: "rgba(0,0,0,0.5)", border: "none", color: "#fff",
+                      width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                )}
                 {/* Badges on image */}
                 {art.is_for_sale && !art.is_sold && (
                   <div style={{
@@ -3806,10 +4715,34 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                     background: "#ef4444", color: "#fff", fontSize: "12px", fontWeight: 700,
                     padding: "5px 12px", borderRadius: "8px",
                   }}>
-                    SOLD
+                    SOLD — ${art.price?.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                   </div>
                 )}
               </div>
+
+              {/* Thumbnail strip for multi-photo */}
+              {photos.length > 1 && (
+                <div style={{
+                  display: "flex", gap: "8px", padding: "12px 16px",
+                  overflowX: "auto", background: "rgba(0,0,0,0.4)",
+                }}>
+                  {photos.map((photo: any, pi: number) => (
+                    <button
+                      key={pi}
+                      onClick={() => setDetailPhotoIndex(pi)}
+                      style={{
+                        width: "72px", height: "48px", borderRadius: "6px", overflow: "hidden",
+                        border: pi === detailPhotoIndex ? "2px solid #eab308" : "2px solid transparent",
+                        cursor: "pointer", flexShrink: 0, padding: 0, background: "none",
+                        opacity: pi === detailPhotoIndex ? 1 : 0.6,
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      <img src={photo.url} alt={photo.label} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Project Info */}
               <div style={{ padding: "32px 36px" }}>
@@ -3837,6 +4770,47 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                   by {art.artist_name}
                 </div>
 
+                {/* Price + Inquire row for detail view */}
+                {art.is_for_sale && !art.is_sold && art.price && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "16px", marginBottom: "20px",
+                    padding: "16px 20px", borderRadius: "12px",
+                    background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)",
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", marginBottom: "2px" }}>Asking Price</div>
+                      <div style={{ fontSize: "24px", fontWeight: 800, color: "#eab308" }}>
+                        ${art.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setSelectedImage(null); setDetailPhotoIndex(0); setInquiryArt(art); }}
+                      style={{
+                        padding: "10px 24px", borderRadius: "10px", border: "none",
+                        background: "#eab308", color: "#000", fontSize: "14px", fontWeight: 700,
+                        cursor: "pointer", display: "flex", alignItems: "center", gap: "8px",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+                    >
+                      <Mail size={16} /> Inquire
+                    </button>
+                  </div>
+                )}
+                {art.is_sold && art.price && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px",
+                    padding: "14px 20px", borderRadius: "12px",
+                    background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+                  }}>
+                    <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", marginRight: "4px" }}>Sold for</div>
+                    <div style={{ fontSize: "20px", fontWeight: 700, color: "#ef4444" }}>
+                      ${art.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", fontSize: "13px", color: "rgba(255,255,255,0.5)", marginBottom: "24px" }}>
                   {art.year && <span>📅 {art.year}</span>}
                   {art.dimensions && <span>📐 {art.dimensions}</span>}
@@ -3859,6 +4833,14 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
 
                 {/* Medium & Style tags */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "24px" }}>
+                  {art.collection && (
+                    <span style={{
+                      fontSize: "12px", padding: "5px 14px", borderRadius: "8px",
+                      background: "rgba(234,179,8,0.15)", color: "#eab308", fontWeight: 600,
+                    }}>
+                      {art.collection}
+                    </span>
+                  )}
                   {art.medium && (
                     <span style={{
                       fontSize: "12px", padding: "5px 14px", borderRadius: "8px",
@@ -3922,6 +4904,140 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
           </div>
         );
       })()}
+
+      {/* ── Inquiry / Make an Offer Modal ── */}
+      {inquiryArt && (
+        <div
+          onClick={() => { setInquiryArt(null); setInquirySent(false); setInquiryForm({ name: "", email: "", message: "", offerAmount: "" }); }}
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 10002, padding: "20px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "520px", width: "100%", borderRadius: "16px", overflow: "hidden",
+              background: isDark ? "rgba(30,30,30,0.98)" : "#fff",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: "20px 24px", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: colors.text }}>
+                  {inquirySent ? "Inquiry Sent!" : "Inquire About This Piece"}
+                </h3>
+                <div style={{ fontSize: "13px", color: colors.textSecondary, marginTop: "4px" }}>
+                  {inquiryArt.title}
+                </div>
+              </div>
+              <button
+                onClick={() => { setInquiryArt(null); setInquirySent(false); setInquiryForm({ name: "", email: "", message: "", offerAmount: "" }); }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: colors.textSecondary }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "24px" }}>
+              {inquirySent ? (
+                <div style={{ textAlign: "center", padding: "20px 0" }}>
+                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>✅</div>
+                  <p style={{ fontSize: "15px", color: colors.text, fontWeight: 600, marginBottom: "8px" }}>
+                    Your inquiry has been sent to {inquiryArt.artist_name}!
+                  </p>
+                  <p style={{ fontSize: "13px", color: colors.textSecondary, margin: 0 }}>
+                    They'll get back to you via email. Check your inbox for updates.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Piece summary */}
+                  <div style={{
+                    display: "flex", gap: "14px", marginBottom: "20px", padding: "14px",
+                    borderRadius: "10px", background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                  }}>
+                    <img src={inquiryArt.image_url} alt="" style={{ width: "80px", height: "56px", borderRadius: "8px", objectFit: "cover" }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: colors.text }}>{inquiryArt.title}</div>
+                      <div style={{ fontSize: "12px", color: colors.textSecondary }}>by {inquiryArt.artist_name}</div>
+                      {inquiryArt.price && (
+                        <div style={{ fontSize: "14px", fontWeight: 700, color: "#eab308", marginTop: "4px" }}>
+                          ${inquiryArt.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Form fields */}
+                  {[
+                    { key: "name", label: "Your Name", placeholder: "Full name", type: "text" },
+                    { key: "email", label: "Email", placeholder: "your@email.com", type: "email" },
+                    { key: "offerAmount", label: "Your Offer (optional)", placeholder: "e.g. $2,000", type: "text" },
+                  ].map(({ key, label, placeholder, type }) => (
+                    <div key={key} style={{ marginBottom: "14px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>
+                        {label}
+                      </label>
+                      <input
+                        type={type}
+                        value={(inquiryForm as any)[key]}
+                        onChange={(e) => setInquiryForm(prev => ({ ...prev, [key]: e.target.value }))}
+                        placeholder={placeholder}
+                        style={{
+                          width: "100%", padding: "10px 14px", borderRadius: "8px",
+                          background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                          border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                          color: colors.text, fontSize: "14px", outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  ))}
+                  <div style={{ marginBottom: "20px" }}>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>
+                      Message
+                    </label>
+                    <textarea
+                      value={inquiryForm.message}
+                      onChange={(e) => setInquiryForm(prev => ({ ...prev, message: e.target.value }))}
+                      placeholder="I'm interested in this piece. I'd love to know more about..."
+                      rows={4}
+                      style={{
+                        width: "100%", padding: "10px 14px", borderRadius: "8px", resize: "vertical",
+                        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                        color: colors.text, fontSize: "14px", outline: "none", fontFamily: "inherit",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => setInquirySent(true)}
+                    disabled={!inquiryForm.name || !inquiryForm.email || !inquiryForm.message}
+                    style={{
+                      width: "100%", padding: "12px 0", borderRadius: "10px", border: "none",
+                      background: (!inquiryForm.name || !inquiryForm.email || !inquiryForm.message) ? "rgba(234,179,8,0.3)" : "#eab308",
+                      color: (!inquiryForm.name || !inquiryForm.email || !inquiryForm.message) ? "rgba(0,0,0,0.4)" : "#000",
+                      fontSize: "14px", fontWeight: 700, cursor: (!inquiryForm.name || !inquiryForm.email || !inquiryForm.message) ? "not-allowed" : "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <Send size={16} /> Send Inquiry
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5103,24 +6219,950 @@ function TabJobs({ profile, colors, isDark }: { profile: StreetProfile; colors: 
   );
 }
 
+function TabAcademy({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  type AcademySection = "courses" | "paths" | "live" | "assignments" | "peer-review" | "progress" | "certificates" | "ai-tutor" | "discussions";
+  const [activeSection, setActiveSection] = useState<AcademySection>("courses");
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [courseTab, setCourseTab] = useState<"browse" | "my-courses">("browse");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterLevel, setFilterLevel] = useState("All Levels");
+
+  const navSections = [
+    { title: "Learn", items: [
+      { id: "courses" as AcademySection, label: "Courses", icon: <BookOpen size={16} />, color: "#FFD600" },
+      { id: "paths" as AcademySection, label: "Learning Paths", icon: <Layers size={16} />, color: "#8B5CF6" },
+      { id: "live" as AcademySection, label: "Live Sessions", icon: <Camera size={16} />, color: "#10B981", badge: "LIVE" },
+    ]},
+    { title: "Activities", items: [
+      { id: "assignments" as AcademySection, label: "Assignments", icon: <FileText size={16} />, color: "#3B82F6" },
+      { id: "peer-review" as AcademySection, label: "Peer Review", icon: <Users size={16} />, color: "#A855F7" },
+    ]},
+    { title: "Progress", items: [
+      { id: "progress" as AcademySection, label: "My Progress", icon: <Star size={16} />, color: "#F59E0B" },
+      { id: "certificates" as AcademySection, label: "Certificates", icon: <CheckCircle2 size={16} />, color: "#EF4444" },
+    ]},
+    { title: "Tools", items: [
+      { id: "ai-tutor" as AcademySection, label: "AI Tutor", icon: <Sparkles size={16} />, color: "#EC4899" },
+      { id: "discussions" as AcademySection, label: "Discussions", icon: <MessageSquare size={16} />, color: "#6366F1" },
+    ]},
+  ];
+
+  const courses = [
+    {
+      id: 1, title: "Street Art Fundamentals", instructor: "Ghost Academy", category: "courses",
+      image: "https://picsum.photos/seed/academy-street/600/300", duration: "6 weeks",
+      level: "Beginner", enrolled: 234, rating: 4.8, price: "Free",
+      description: "Learn the foundations of street art from spray techniques to large-scale mural planning.",
+      modules: 12, completed: 0,
+      tags: ["Spray Paint", "Stencils", "Muralism"],
+    },
+    {
+      id: 2, title: "Business of Art: From Passion to Profit", instructor: "Creative Careers Institute", category: "courses",
+      image: "https://picsum.photos/seed/academy-biz/600/300", duration: "4 weeks",
+      level: "Intermediate", enrolled: 189, rating: 4.6, price: "$49",
+      description: "Master pricing, contracts, client management, and building a sustainable creative career.",
+      modules: 8, completed: 3,
+      tags: ["Business", "Pricing", "Contracts"],
+    },
+    {
+      id: 3, title: "Digital Art for Street Artists", instructor: "TechCanvas Lab", category: "courses",
+      image: "https://picsum.photos/seed/academy-digital/600/300", duration: "8 weeks",
+      level: "Intermediate", enrolled: 156, rating: 4.9, price: "$79",
+      description: "Bridge traditional street art skills with digital tools — Procreate, Photoshop, and projection mapping.",
+      modules: 16, completed: 0,
+      tags: ["Digital", "Procreate", "Projection Mapping"],
+    },
+    {
+      id: 4, title: "Spray Can Techniques Masterclass", instructor: profile.display_name || "This Creative", category: "workshops",
+      image: "https://picsum.photos/seed/academy-spray/600/300", duration: "3 hours",
+      level: "All Levels", enrolled: 45, rating: 5.0, price: "$25",
+      description: "Hands-on workshop covering can control, pressure techniques, fades, and detail work.",
+      modules: 1, completed: 0,
+      tags: ["Spray Paint", "Hands-On", "Live"],
+    },
+    {
+      id: 5, title: "Community Mural Project Leadership", instructor: "Urban Arts Alliance", category: "workshops",
+      image: "https://picsum.photos/seed/academy-community/600/300", duration: "2 days",
+      level: "Advanced", enrolled: 32, rating: 4.7, price: "Free",
+      description: "Lead community mural projects from concept to completion — stakeholder management, volunteer coordination, and public art permissions.",
+      modules: 1, completed: 0,
+      tags: ["Leadership", "Community", "Public Art"],
+    },
+    {
+      id: 6, title: "Street Art Safety & Certification", instructor: "SafeArt Canada", category: "certifications",
+      image: "https://picsum.photos/seed/academy-cert/600/300", duration: "Self-paced",
+      level: "All Levels", enrolled: 512, rating: 4.5, price: "Free",
+      description: "Get certified in safe practices for working at heights, with aerosols, and on public infrastructure.",
+      modules: 5, completed: 5,
+      tags: ["Safety", "Certification", "Professional"],
+    },
+  ];
+
+  const learningPaths = [
+    { slug: "job-ready", title: "Job Ready", description: "Complete path to employment readiness and interview confidence.", courses: 4, hours: 40, color: "#10B981", icon: <Briefcase size={24} /> },
+    { slug: "digital-basics", title: "Digital Basics", description: "Essential computer and internet skills for everyday work and life.", courses: 4, hours: 24, color: "#3B82F6", icon: <Grid size={24} /> },
+    { slug: "housing-stability", title: "Housing Stability", description: "Practical learning track for housing search, support, and retention.", courses: 4, hours: 32, color: "#8B5CF6", icon: <Home size={24} /> },
+  ];
+
+  const liveSessions = [
+    { id: 1, title: "Street Art Critique Circle", host: "Maya Chen", date: "Today, 2:00 PM", attendees: 18, status: "live" as const, color: "#10B981" },
+    { id: 2, title: "Portfolio Review Workshop", host: "Diego Alvarez", date: "Tomorrow, 11:00 AM", attendees: 24, status: "upcoming" as const, color: "#3B82F6" },
+    { id: 3, title: "Grant Writing for Artists", host: "Keisha Williams", date: "Apr 16, 3:00 PM", attendees: 12, status: "upcoming" as const, color: "#8B5CF6" },
+  ];
+
+  const assignments = [
+    { id: 1, title: "Mural Concept Sketch", course: "Street Art Fundamentals", due: "Apr 18, 2026", status: "pending" as const, grade: null },
+    { id: 2, title: "Pricing Strategy Document", course: "Business of Art", due: "Apr 15, 2026", status: "submitted" as const, grade: null },
+    { id: 3, title: "Digital Mockup — Projection", course: "Digital Art for Street Artists", due: "Apr 10, 2026", status: "graded" as const, grade: "A" },
+  ];
+
+  const certificates = [
+    { id: 1, title: "Street Art Safety Certified", issuer: "SafeArt Canada", date: "Mar 2026", icon: <CheckCircle2 size={20} />, color: "#22c55e" },
+    { id: 2, title: "Business of Art — Module 3", issuer: "Creative Careers Institute", date: "Feb 2026", icon: <Star size={20} />, color: "#f59e0b" },
+  ];
+
+  const progressStats = {
+    coursesEnrolled: 3, coursesCompleted: 1, totalHours: 28, streak: 5,
+    badges: [
+      { name: "First Lesson", icon: "🎓", earned: true },
+      { name: "Week Streak", icon: "🔥", earned: true },
+      { name: "Peer Helper", icon: "🤝", earned: true },
+      { name: "Quiz Master", icon: "🧠", earned: false },
+      { name: "Completionist", icon: "🏆", earned: false },
+    ],
+  };
+
+  const discussions = [
+    { id: 1, title: "Best spray paint brands in 2026?", author: "Ravi Patel", replies: 14, lastActivity: "2h ago", category: "General" },
+    { id: 2, title: "How to price a 10ft mural?", author: "Suki Park", replies: 22, lastActivity: "5h ago", category: "Business" },
+    { id: 3, title: "Procreate vs Photoshop for street art design", author: "Maya Chen", replies: 8, lastActivity: "1d ago", category: "Digital" },
+  ];
+
+  const myCourses = courses.filter(c => c.completed > 0 || c.modules === c.completed);
+
+  const filteredCourses = courses.filter(c => {
+    if (searchQuery && !c.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterLevel !== "All Levels" && c.level !== filterLevel) return false;
+    return true;
+  });
+
+  const levelColor = (l: string) => {
+    if (l === "Beginner") return { color: "#22c55e", bg: "rgba(34,197,94,0.15)" };
+    if (l === "Intermediate") return { color: "#f59e0b", bg: "rgba(245,158,11,0.15)" };
+    if (l === "Advanced") return { color: "#ef4444", bg: "rgba(239,68,68,0.15)" };
+    return { color: "#3b82f6", bg: "rgba(59,130,246,0.15)" };
+  };
+
+  // Render a course card (reusable)
+  const renderCourseCard = (course: typeof courses[0]) => {
+    const lc = levelColor(course.level);
+    const isCompleted = course.completed === course.modules && course.modules > 0;
+    const progress = course.modules > 1 ? Math.round((course.completed / course.modules) * 100) : 0;
+    return (
+      <div
+        key={course.id}
+        style={{
+          borderRadius: "16px", overflow: "hidden",
+          background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+          transition: "all 0.3s", cursor: "pointer",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.25)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+      >
+        <div style={{ position: "relative", width: "100%", paddingTop: "50%", overflow: "hidden" }}>
+          <img src={course.image} alt={course.title} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ position: "absolute", top: "12px", left: "12px", background: lc.bg, color: lc.color, fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "6px", backdropFilter: "blur(8px)" }}>
+            {course.level}
+          </div>
+          <div style={{ position: "absolute", top: "12px", right: "12px", background: course.price === "Free" ? "rgba(34,197,94,0.9)" : "rgba(234,179,8,0.9)", color: course.price === "Free" ? "#fff" : "#000", fontSize: "12px", fontWeight: 700, padding: "4px 12px", borderRadius: "6px" }}>
+            {course.price}
+          </div>
+          {isCompleted && (
+            <div style={{ position: "absolute", bottom: "12px", left: "12px", background: "rgba(34,197,94,0.9)", color: "#fff", fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <CheckCircle2 size={12} /> Completed
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "16px" }}>
+          <h4 style={{ margin: "0 0 6px 0", fontSize: "16px", fontWeight: 700, color: colors.text }}>{course.title}</h4>
+          <div style={{ fontSize: "12px", color: colors.textSecondary, marginBottom: "8px" }}>by {course.instructor}</div>
+          <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: colors.textSecondary, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
+            {course.description}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "12px" }}>
+            {course.tags.map((tag) => (
+              <span key={tag} style={{ fontSize: "10px", padding: "3px 8px", borderRadius: "5px", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", color: colors.textSecondary }}>{tag}</span>
+            ))}
+          </div>
+          {course.completed > 0 && course.modules > 1 && (
+            <div style={{ marginBottom: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>
+                <span>{course.completed}/{course.modules} modules</span>
+                <span style={{ fontWeight: 700, color: isCompleted ? "#22c55e" : colors.accent }}>{progress}%</span>
+              </div>
+              <div style={{ height: "4px", borderRadius: "100px", background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+                <div style={{ width: `${progress}%`, height: "100%", borderRadius: "100px", background: isCompleted ? "#22c55e" : `linear-gradient(90deg, ${colors.accent}, #ff8800)` }} />
+              </div>
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: colors.textSecondary }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Clock size={12} /> {course.duration}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Users size={12} /> {course.enrolled}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Star size={12} color="#eab308" fill="#eab308" /> {course.rating}</span>
+          </div>
+          <button style={{
+            marginTop: "14px", width: "100%", padding: "10px", borderRadius: "10px",
+            background: isCompleted ? "rgba(34,197,94,0.15)" : course.completed > 0 ? colors.accent : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+            color: isCompleted ? "#22c55e" : course.completed > 0 ? "#000" : colors.text,
+            fontWeight: 700, fontSize: "13px", border: isCompleted || course.completed > 0 ? "none" : `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+            cursor: "pointer",
+          }}>
+            {isCompleted ? "✓ Completed" : course.completed > 0 ? "Continue Learning" : "Enroll Now"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: "flex", gap: "24px" }}>
+      {/* ── Left Sidebar Navigation ── */}
+      <div style={{
+        width: "220px", flexShrink: 0,
+        background: isDark ? "rgba(15,15,25,0.6)" : "rgba(255,255,255,0.5)",
+        borderRadius: "16px", padding: "16px 12px",
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+        alignSelf: "flex-start", position: "sticky", top: "80px",
+      }}>
+        {navSections.map((section) => (
+          <div key={section.title} style={{ marginBottom: "16px" }}>
+            <div style={{
+              fontSize: "10px", fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase",
+              color: isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)",
+              padding: "0 10px", marginBottom: "6px",
+            }}>
+              {section.title}
+            </div>
+            {section.items.map((item) => {
+              const isActive = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveSection(item.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "10px", width: "100%",
+                    padding: "8px 10px", borderRadius: "10px", border: "none", cursor: "pointer",
+                    background: isActive ? `${item.color}18` : "transparent",
+                    borderLeft: isActive ? `2px solid ${item.color}` : "2px solid transparent",
+                    transition: "all 0.2s", textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{
+                    width: "28px", height: "28px", borderRadius: "8px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: isActive ? `${item.color}20` : "transparent",
+                    color: isActive ? item.color : (isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.4)"),
+                  }}>
+                    {item.icon}
+                  </div>
+                  <span style={{
+                    fontSize: "13px", fontWeight: isActive ? 600 : 500, flex: 1,
+                    color: isActive ? (isDark ? "#fff" : "#000") : (isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)"),
+                  }}>
+                    {item.label}
+                  </span>
+                  {item.badge && (
+                    <span style={{
+                      fontSize: "9px", fontWeight: 700, padding: "2px 6px", borderRadius: "100px",
+                      background: "rgba(16,185,129,0.2)", color: "#10B981",
+                      animation: "pulse 2s infinite",
+                    }}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Main Content Area ── */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* ── COURSES ── */}
+        {activeSection === "courses" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Courses</h2>
+            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: colors.textSecondary }}>Browse courses, workshops, and certifications.</p>
+
+            {/* Browse / My Courses tabs */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              {(["browse", "my-courses"] as const).map(t => (
+                <button key={t} onClick={() => setCourseTab(t)} style={{
+                  padding: "7px 18px", borderRadius: "100px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                  background: courseTab === t ? colors.accent : "transparent", color: courseTab === t ? "#000" : colors.textSecondary,
+                  border: courseTab === t ? "none" : `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                }}>
+                  {t === "browse" ? "Browse" : "My Courses"}
+                </button>
+              ))}
+            </div>
+
+            {courseTab === "browse" && (
+              <>
+                {/* Search + Level filter */}
+                <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
+                  <div style={{
+                    flex: 1, minWidth: "200px", display: "flex", alignItems: "center", gap: "8px",
+                    padding: "8px 14px", borderRadius: "10px",
+                    background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  }}>
+                    <Search size={14} color={colors.textSecondary} />
+                    <input
+                      value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search courses..." style={{
+                        flex: 1, background: "none", border: "none", outline: "none",
+                        color: colors.text, fontSize: "13px",
+                      }}
+                    />
+                  </div>
+                  <select value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)} style={{
+                    padding: "8px 14px", borderRadius: "10px", fontSize: "12px",
+                    background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                    color: colors.text, outline: "none", cursor: "pointer",
+                  }}>
+                    {["All Levels", "Beginner", "Intermediate", "Advanced"].map(l => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "18px" }}>
+                  {filteredCourses.map(renderCourseCard)}
+                </div>
+                {filteredCourses.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px", color: colors.textSecondary }}>
+                    <Search size={32} style={{ opacity: 0.3, marginBottom: "12px" }} />
+                    <div style={{ fontSize: "14px", fontWeight: 600 }}>No courses found</div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {courseTab === "my-courses" && (
+              <div>
+                {myCourses.length > 0 ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "18px" }}>
+                    {myCourses.map(renderCourseCard)}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "center", padding: "60px 20px", color: colors.textSecondary }}>
+                    <BookOpen size={40} style={{ opacity: 0.3, marginBottom: "12px" }} />
+                    <div style={{ fontSize: "15px", fontWeight: 600, color: colors.text }}>No courses yet</div>
+                    <div style={{ fontSize: "13px", marginTop: "4px" }}>Enroll in a course to start learning.</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── LEARNING PATHS ── */}
+        {activeSection === "paths" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Learning Paths</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Structured tracks that organize courses into clear outcomes.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "18px" }}>
+              {learningPaths.map((path) => (
+                <div key={path.slug} style={{
+                  borderRadius: "16px", padding: "24px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  cursor: "pointer", transition: "all 0.3s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = path.color; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"; }}
+                >
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "14px",
+                    background: `${path.color}18`, display: "flex", alignItems: "center", justifyContent: "center",
+                    color: path.color, marginBottom: "16px",
+                  }}>
+                    {path.icon}
+                  </div>
+                  <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", fontWeight: 700, color: colors.text }}>{path.title}</h3>
+                  <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: colors.textSecondary, lineHeight: 1.5 }}>{path.description}</p>
+                  <div style={{ display: "flex", gap: "16px", fontSize: "12px", color: colors.textSecondary }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><BookOpen size={12} /> {path.courses} courses</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Clock size={12} /> {path.hours} hours</span>
+                  </div>
+                  <button style={{
+                    marginTop: "16px", width: "100%", padding: "10px", borderRadius: "10px",
+                    background: `${path.color}15`, color: path.color, border: `1px solid ${path.color}40`,
+                    fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                  }}>
+                    Start Path
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── LIVE SESSIONS ── */}
+        {activeSection === "live" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Live Sessions</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Attendance, engagement, and upcoming live academy sessions.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {liveSessions.map((session) => (
+                <div key={session.id} style={{
+                  display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                  borderRadius: "14px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${session.status === "live" ? `${session.color}50` : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")}`,
+                }}>
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0,
+                    background: `${session.color}18`, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Camera size={20} color={session.color} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{session.title}</span>
+                      {session.status === "live" && (
+                        <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 8px", borderRadius: "100px", background: "rgba(16,185,129,0.2)", color: "#10B981" }}>
+                          LIVE NOW
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>
+                      Hosted by {session.host} · {session.date} · {session.attendees} attendees
+                    </div>
+                  </div>
+                  <button style={{
+                    padding: "8px 20px", borderRadius: "10px", border: "none", cursor: "pointer",
+                    background: session.status === "live" ? "#10B981" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+                    color: session.status === "live" ? "#fff" : colors.text,
+                    fontWeight: 700, fontSize: "12px",
+                  }}>
+                    {session.status === "live" ? "Join Now" : "RSVP"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── ASSIGNMENTS ── */}
+        {activeSection === "assignments" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Assignments</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Track and submit your coursework.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {assignments.map((a) => {
+                const statusColors = { pending: { bg: "rgba(245,158,11,0.15)", color: "#f59e0b" }, submitted: { bg: "rgba(59,130,246,0.15)", color: "#3b82f6" }, graded: { bg: "rgba(34,197,94,0.15)", color: "#22c55e" } };
+                const sc = statusColors[a.status];
+                return (
+                  <div key={a.id} style={{
+                    display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                    borderRadius: "14px",
+                    background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  }}>
+                    <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "rgba(59,130,246,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <FileText size={20} color="#3b82f6" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{a.title}</div>
+                      <div style={{ fontSize: "12px", color: colors.textSecondary }}>{a.course} · Due: {a.due}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      {a.grade && <span style={{ fontSize: "16px", fontWeight: 800, color: "#22c55e" }}>{a.grade}</span>}
+                      <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 12px", borderRadius: "100px", background: sc.bg, color: sc.color, textTransform: "capitalize" }}>
+                        {a.status}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── PEER REVIEW ── */}
+        {activeSection === "peer-review" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Peer Review</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Give and receive feedback from fellow learners.</p>
+            <div style={{
+              padding: "32px", borderRadius: "16px", textAlign: "center",
+              background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+            }}>
+              <Users size={40} color="#A855F7" style={{ opacity: 0.4, marginBottom: "12px" }} />
+              <div style={{ fontSize: "16px", fontWeight: 700, color: colors.text, marginBottom: "6px" }}>No reviews pending</div>
+              <div style={{ fontSize: "13px", color: colors.textSecondary }}>When you submit assignments, they'll appear here for peer feedback.</div>
+            </div>
+          </div>
+        )}
+
+        {/* ── MY PROGRESS ── */}
+        {activeSection === "progress" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>My Progress</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Track your learning journey.</p>
+
+            {/* Stats cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "24px" }}>
+              {[
+                { label: "Enrolled", value: progressStats.coursesEnrolled, color: "#3b82f6" },
+                { label: "Completed", value: progressStats.coursesCompleted, color: "#22c55e" },
+                { label: "Hours Learned", value: progressStats.totalHours, color: "#f59e0b" },
+                { label: "Day Streak", value: `${progressStats.streak}🔥`, color: "#ef4444" },
+              ].map(s => (
+                <div key={s.label} style={{
+                  padding: "18px", borderRadius: "14px", textAlign: "center",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                }}>
+                  <div style={{ fontSize: "28px", fontWeight: 800, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: "11px", color: colors.textSecondary, fontWeight: 600, marginTop: "4px" }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Badges */}
+            <h3 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: 700, color: colors.text }}>Badges & Achievements</h3>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              {progressStats.badges.map(b => (
+                <div key={b.name} style={{
+                  width: "90px", padding: "16px 8px", borderRadius: "14px", textAlign: "center",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  opacity: b.earned ? 1 : 0.35,
+                }}>
+                  <div style={{ fontSize: "28px", marginBottom: "6px" }}>{b.icon}</div>
+                  <div style={{ fontSize: "10px", fontWeight: 600, color: colors.text }}>{b.name}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── CERTIFICATES ── */}
+        {activeSection === "certificates" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Certificates</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Your earned certifications and credentials.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {certificates.map(cert => (
+                <div key={cert.id} style={{
+                  display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                  borderRadius: "14px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                }}>
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0,
+                    background: `${cert.color}15`, display: "flex", alignItems: "center", justifyContent: "center",
+                    color: cert.color,
+                  }}>
+                    {cert.icon}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{cert.title}</div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>{cert.issuer} · {cert.date}</div>
+                  </div>
+                  <button style={{
+                    padding: "7px 16px", borderRadius: "8px", border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                    background: "transparent", color: colors.text, fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: "6px",
+                  }}>
+                    <Download size={12} /> View
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── AI TUTOR ── */}
+        {activeSection === "ai-tutor" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>AI Tutor</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Get instant help with your coursework from the AI-powered tutor.</p>
+            <div style={{
+              borderRadius: "16px", overflow: "hidden",
+              background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+            }}>
+              {/* Chat area */}
+              <div style={{ padding: "24px", minHeight: "300px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "flex", gap: "12px" }}>
+                  <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(236,72,153,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Sparkles size={18} color="#EC4899" />
+                  </div>
+                  <div style={{ padding: "14px 18px", borderRadius: "14px", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", maxWidth: "80%" }}>
+                    <p style={{ margin: 0, fontSize: "14px", color: colors.text, lineHeight: 1.6 }}>
+                      Hi! I'm your AI Tutor. I can help with course material, explain concepts, quiz you, or give feedback on your assignments. What would you like help with today?
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {/* Input */}
+              <div style={{
+                padding: "16px 20px", borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                display: "flex", gap: "10px",
+              }}>
+                <input placeholder="Ask the AI Tutor anything..." style={{
+                  flex: 1, padding: "10px 14px", borderRadius: "10px",
+                  background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  color: colors.text, fontSize: "13px", outline: "none",
+                }} />
+                <button style={{
+                  padding: "10px 20px", borderRadius: "10px", border: "none",
+                  background: "#EC4899", color: "#fff", fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "6px",
+                }}>
+                  <Send size={14} /> Send
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── DISCUSSIONS ── */}
+        {activeSection === "discussions" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Discussions</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Join conversations with fellow learners.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {discussions.map(d => (
+                <div key={d.id} style={{
+                  display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                  borderRadius: "14px", cursor: "pointer",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  transition: "all 0.2s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#6366F1"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"; }}
+                >
+                  <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "rgba(99,102,241,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <MessageSquare size={20} color="#6366F1" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{d.title}</div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>
+                      by {d.author} · {d.replies} replies · {d.lastActivity}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "10px", fontWeight: 600, padding: "3px 10px", borderRadius: "6px", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", color: colors.textSecondary }}>
+                    {d.category}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [notifications, setNotifications] = useState([
+    {
+      id: 1, title: "Welcome to Street Voices", body: "Your universal notification center is ready.",
+      source: "SYSTEM", icon: <Send size={20} />, iconColor: "#ef4444", iconBg: "rgba(239,68,68,0.15)",
+      time: "just now", link: "/", read: false,
+    },
+    {
+      id: 2, title: "New message", body: "You have unread messages waiting for you.",
+      source: "MESSAGES", icon: <MessageCircle size={20} />, iconColor: "#22c55e", iconBg: "rgba(34,197,94,0.15)",
+      time: "just now", link: "/messages", read: false,
+    },
+    {
+      id: 3, title: "New follower", body: "Maya Chen started following you.",
+      source: "SOCIAL", icon: <Users size={20} />, iconColor: "#3b82f6", iconBg: "rgba(59,130,246,0.15)",
+      time: "2 hours ago", link: "/profile", read: false,
+    },
+    {
+      id: 4, title: "Job application viewed", body: "Black Voices Media Collective viewed your application for Youth Media Producer.",
+      source: "JOBS", icon: <Briefcase size={20} />, iconColor: "#f59e0b", iconBg: "rgba(245,158,11,0.15)",
+      time: "5 hours ago", link: "/jobs", read: false,
+    },
+    {
+      id: 5, title: "Commission deadline approaching", body: "Your mural commission for The Urban Kitchen is due in 7 days.",
+      source: "TASKS", icon: <Clock size={20} />, iconColor: "#ef4444", iconBg: "rgba(239,68,68,0.15)",
+      time: "1 day ago", link: "/tasks", read: true,
+    },
+    {
+      id: 6, title: "Gallery artwork liked", body: "Diego Alvarez loved your piece 'Chromatic Rebellion'.",
+      source: "GALLERY", icon: <Heart size={20} />, iconColor: "#ec4899", iconBg: "rgba(236,72,153,0.15)",
+      time: "1 day ago", link: "/gallery", read: true,
+    },
+    {
+      id: 7, title: "Event reminder", body: "Street Art Festival — Panel Discussion starts tomorrow at 1:00 PM.",
+      source: "CALENDAR", icon: <Calendar size={20} />, iconColor: "#8b5cf6", iconBg: "rgba(139,92,246,0.15)",
+      time: "2 days ago", link: "/calendar", read: true,
+    },
+    {
+      id: 8, title: "New comment on portfolio", body: "Suki Park commented on 'Voices of the Underground': Amazing depth in this piece!",
+      source: "SOCIAL", icon: <MessageSquare size={20} />, iconColor: "#06b6d4", iconBg: "rgba(6,182,212,0.15)",
+      time: "3 days ago", link: "/portfolio", read: true,
+    },
+  ]);
+
+  const markRead = (id: number) => {
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+  };
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const sources = ["all", ...Array.from(new Set(notifications.map((n) => n.source.toLowerCase())))];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const filtered = notifications.filter((n) => {
+    if (filter === "unread" && n.read) return false;
+    if (sourceFilter !== "all" && n.source.toLowerCase() !== sourceFilter) return false;
+    return true;
+  });
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "12px" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: "28px", fontWeight: 800, color: colors.text }}>Notifications</h2>
+          <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: colors.textSecondary }}>
+            {unreadCount === 0 ? "You're all caught up." : `${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => setNotifications([...notifications])}
+            style={{
+              padding: "10px 20px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+              color: colors.text, display: "flex", alignItems: "center", gap: "8px",
+            }}
+          >
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button
+            onClick={markAllRead}
+            style={{
+              padding: "10px 20px", borderRadius: "10px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+              background: colors.accent, border: "none", color: "#000",
+              display: "flex", alignItems: "center", gap: "8px",
+            }}
+          >
+            <CheckCheck size={14} /> Mark all read
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <GlassCard colors={colors} isDark={isDark}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+          <div style={{ display: "flex", gap: "8px" }}>
+            {(["all", "unread"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                style={{
+                  padding: "8px 20px", borderRadius: "100px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  background: filter === f ? colors.accent : "transparent",
+                  color: filter === f ? "#000" : colors.text,
+                  border: filter === f ? "none" : `1px solid ${isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
+                  textTransform: "capitalize",
+                }}
+              >
+                {f === "all" ? "All" : "Unread"}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: colors.textSecondary, letterSpacing: "0.5px", textTransform: "uppercase" }}>Source</span>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              style={{
+                padding: "8px 14px", borderRadius: "10px", fontSize: "13px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                color: colors.text, outline: "none", cursor: "pointer", textTransform: "capitalize",
+              }}
+            >
+              {sources.map((s) => (
+                <option key={s} value={s}>{s === "all" ? "All sources" : s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* Notification List */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "16px" }}>
+        {filtered.length === 0 ? (
+          <GlassCard colors={colors} isDark={isDark}>
+            <div style={{ textAlign: "center", padding: "40px 20px" }}>
+              <Bell size={40} color={colors.textSecondary} style={{ opacity: 0.3, marginBottom: "12px" }} />
+              <div style={{ fontSize: "15px", fontWeight: 600, color: colors.text }}>No notifications</div>
+              <div style={{ fontSize: "13px", color: colors.textSecondary, marginTop: "4px" }}>
+                {filter === "unread" ? "All notifications have been read." : "Nothing to show for this filter."}
+              </div>
+            </div>
+          </GlassCard>
+        ) : (
+          filtered.map((notif) => (
+            <div
+              key={notif.id}
+              style={{
+                display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                borderRadius: "14px",
+                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.8)",
+                border: `1px solid ${notif.read ? (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)") : `${colors.accent}44`}`,
+                transition: "all 0.2s",
+              }}
+            >
+              {/* Icon */}
+              <div style={{
+                width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0,
+                background: notif.iconBg, display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {(() => { const el = notif.icon; return <span style={{ color: notif.iconColor }}>{el}</span>; })()}
+              </div>
+
+              {/* Content */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{notif.title}</span>
+                  <span style={{
+                    fontSize: "10px", padding: "3px 10px", borderRadius: "6px", fontWeight: 700,
+                    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                    color: colors.textSecondary, letterSpacing: "0.5px",
+                  }}>
+                    {notif.source}
+                  </span>
+                  {!notif.read && (
+                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: colors.accent }} />
+                  )}
+                </div>
+                <p style={{ margin: 0, fontSize: "14px", color: colors.textSecondary, lineHeight: 1.4 }}>{notif.body}</p>
+                <div style={{ fontSize: "12px", color: "rgba(128,128,128,0.6)", marginTop: "6px" }}>
+                  {notif.time} · opens {notif.link}
+                </div>
+              </div>
+
+              {/* Mark Read */}
+              {!notif.read && (
+                <button
+                  onClick={() => markRead(notif.id)}
+                  style={{
+                    padding: "8px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                    background: "transparent", border: `1px solid ${colors.accent}`,
+                    color: colors.accent, display: "flex", alignItems: "center", gap: "6px",
+                    whiteSpace: "nowrap", flexShrink: 0,
+                  }}
+                >
+                  <CheckCircle2 size={14} /> Mark read
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
-  const [settings, setSettings] = useState<Record<string, boolean>>({
+  const STORAGE_KEY = "sv_profile_settings";
+  const defaults: Record<string, boolean> = {
+    // Profile Visibility
     "Public Profile": profile.is_public !== false,
     "Show in Directory": true,
     "Show Activity": true,
+    "Show Portfolio on About": true,
+    // Notifications
     "New Followers": true,
     "Messages": true,
     "Job Inquiries": true,
     "Community Updates": false,
+    "Calendar Reminders": true,
+    "Task Deadlines": true,
+    "Academy Progress": true,
+    "Gallery Interactions": true,
+    // Privacy
     "Show Email": false,
     "Allow Direct Messages": true,
     "Show Online Status": false,
+    "Allow Profile Embedding": false,
+    // Messages & Communication
+    "Read Receipts": true,
+    "Message Previews": true,
+    "Auto-Reply When Busy": false,
+    // Calendar
+    "Show Calendar Publicly": false,
+    "Allow Booking Requests": true,
+    "Weekly Digest": true,
+    "Sync Google Calendar": false,
+    // Street Gallery
+    "Gallery Visible": true,
+    "Allow Inquiries": true,
+    "Show Sold Prices": true,
+    "Enable Favorites": true,
+    "Watermark Images": false,
+    // Jobs
+    "Open to Opportunities": true,
+    "Show on Job Board": true,
+    "Job Expiry Reminders": true,
+    "Auto-Save Applications": true,
+    // Social Media
+    "Cross-Post Updates": false,
+    "Show Social Links": true,
+    "Auto-Share Gallery": false,
+    // Academy
+    "Show Certifications": true,
+    "Learning Reminders": true,
+    "Share Progress": false,
+    // Documents & Storage
+    "Auto-Organize Files": true,
+    "Storage Alerts": true,
+    "Document Versioning": true,
+    // News & Activity
+    "Show News Feed": true,
+    "Activity Log": true,
+    "Trending Alerts": false,
+  };
+  const [settings, setSettings] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) return { ...defaults, ...JSON.parse(stored) };
+    } catch {}
+    return defaults;
   });
   const [savedToast, setSavedToast] = useState(false);
+  const [settingsSearch, setSettingsSearch] = useState("");
 
   const toggleSetting = (label: string) => {
     setSettings((prev) => {
       const next = { ...prev, [label]: !prev[label] };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 2000);
       return next;
@@ -5130,32 +7172,129 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
   const sections = [
     {
       title: "Profile Visibility",
+      icon: <User size={16} />,
       items: [
         { label: "Public Profile", desc: "Allow anyone to view your profile" },
         { label: "Show in Directory", desc: "Appear in the Street Profile directory" },
         { label: "Show Activity", desc: "Display recent activity on your profile" },
+        { label: "Show Portfolio on About", desc: "Show portfolio showcase on your About tab" },
       ],
     },
     {
       title: "Notifications",
+      icon: <Bell size={16} />,
       items: [
         { label: "New Followers", desc: "Get notified when someone follows you" },
         { label: "Messages", desc: "Receive notifications for new messages" },
         { label: "Job Inquiries", desc: "Get notified about new job offers" },
         { label: "Community Updates", desc: "Receive Street Voices community news" },
+        { label: "Calendar Reminders", desc: "Get reminders for upcoming events and bookings" },
+        { label: "Task Deadlines", desc: "Alerts when tasks are approaching their due date" },
+        { label: "Academy Progress", desc: "Updates on course progress and new content" },
+        { label: "Gallery Interactions", desc: "Likes, inquiries, and comments on your artwork" },
       ],
     },
     {
-      title: "Privacy",
+      title: "Privacy & Security",
+      icon: <Eye size={16} />,
       items: [
         { label: "Show Email", desc: "Display contact email on profile" },
         { label: "Allow Direct Messages", desc: "Let anyone send you messages" },
         { label: "Show Online Status", desc: "Display when you are online" },
+        { label: "Allow Profile Embedding", desc: "Allow your profile to be embedded on external sites" },
+      ],
+    },
+    {
+      title: "Messages & Communication",
+      icon: <MessageSquare size={16} />,
+      items: [
+        { label: "Read Receipts", desc: "Show when you've read messages" },
+        { label: "Message Previews", desc: "Show message previews in notifications" },
+        { label: "Auto-Reply When Busy", desc: "Automatically reply when your status is busy" },
+      ],
+    },
+    {
+      title: "Calendar & Bookings",
+      icon: <Calendar size={16} />,
+      items: [
+        { label: "Show Calendar Publicly", desc: "Let visitors see your availability" },
+        { label: "Allow Booking Requests", desc: "Enable others to request bookings with you" },
+        { label: "Weekly Digest", desc: "Receive a weekly summary of upcoming events" },
+        { label: "Sync Google Calendar", desc: "Sync events with your Google Calendar" },
+      ],
+    },
+    {
+      title: "Street Gallery",
+      icon: <Image size={16} />,
+      items: [
+        { label: "Gallery Visible", desc: "Make your gallery visible to visitors" },
+        { label: "Allow Inquiries", desc: "Let buyers inquire about your pieces" },
+        { label: "Show Sold Prices", desc: "Display prices of sold artwork for credibility" },
+        { label: "Enable Favorites", desc: "Allow visitors to favorite your artwork" },
+        { label: "Watermark Images", desc: "Add a watermark to gallery images for protection" },
+      ],
+    },
+    {
+      title: "Jobs & Opportunities",
+      icon: <Briefcase size={16} />,
+      items: [
+        { label: "Open to Opportunities", desc: "Signal to employers that you're available" },
+        { label: "Show on Job Board", desc: "Appear in job board recommendations" },
+        { label: "Job Expiry Reminders", desc: "Get reminded before saved jobs expire" },
+        { label: "Auto-Save Applications", desc: "Automatically save draft applications" },
+      ],
+    },
+    {
+      title: "Social Media",
+      icon: <Share2 size={16} />,
+      items: [
+        { label: "Cross-Post Updates", desc: "Share profile updates to connected platforms" },
+        { label: "Show Social Links", desc: "Display social media links on your profile" },
+        { label: "Auto-Share Gallery", desc: "Automatically share new gallery pieces to social" },
+      ],
+    },
+    {
+      title: "Academy & Learning",
+      icon: <BookOpen size={16} />,
+      items: [
+        { label: "Show Certifications", desc: "Display earned certifications on your profile" },
+        { label: "Learning Reminders", desc: "Get reminders to continue your courses" },
+        { label: "Share Progress", desc: "Show course progress publicly" },
+      ],
+    },
+    {
+      title: "Documents & Storage",
+      icon: <FileText size={16} />,
+      items: [
+        { label: "Auto-Organize Files", desc: "Automatically categorize uploaded documents" },
+        { label: "Storage Alerts", desc: "Get notified when storage is running low" },
+        { label: "Document Versioning", desc: "Keep version history of uploaded documents" },
+      ],
+    },
+    {
+      title: "News & Activity",
+      icon: <TrendingUp size={16} />,
+      items: [
+        { label: "Show News Feed", desc: "Display news and updates on your profile" },
+        { label: "Activity Log", desc: "Track and display your platform activity" },
+        { label: "Trending Alerts", desc: "Get notified about trending content in your niche" },
       ],
     },
   ];
 
   const isEnabled = (label: string) => settings[label] ?? false;
+
+  // Filter sections by search
+  const filteredSections = settingsSearch.trim()
+    ? sections.map((s) => ({
+        ...s,
+        items: s.items.filter(
+          (item) =>
+            item.label.toLowerCase().includes(settingsSearch.toLowerCase()) ||
+            item.desc.toLowerCase().includes(settingsSearch.toLowerCase())
+        ),
+      })).filter((s) => s.items.length > 0)
+    : sections;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -5171,9 +7310,57 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
           <CheckCircle2 size={16} /> Settings saved
         </div>
       )}
-      {sections.map((section, si) => (
-        <GlassCard key={si} title={section.title} colors={colors} isDark={isDark}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+
+      {/* Search bar */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "10px",
+        padding: "10px 16px", borderRadius: "12px",
+        background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+        border: `1px solid ${colors.border}`,
+      }}>
+        <Search size={16} color={colors.textSecondary} />
+        <input
+          type="text"
+          placeholder="Search settings..."
+          value={settingsSearch}
+          onChange={(e) => setSettingsSearch(e.target.value)}
+          style={{
+            flex: 1, background: "transparent", border: "none", outline: "none",
+            color: colors.text, fontSize: "14px",
+          }}
+        />
+        {settingsSearch && (
+          <button
+            onClick={() => setSettingsSearch("")}
+            style={{ background: "none", border: "none", cursor: "pointer", color: colors.textSecondary, padding: "2px" }}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      {filteredSections.length === 0 && (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: colors.textSecondary }}>
+          <Search size={32} style={{ opacity: 0.3, marginBottom: "12px" }} />
+          <div style={{ fontSize: "14px", fontWeight: 600 }}>No settings match "{settingsSearch}"</div>
+        </div>
+      )}
+
+      {filteredSections.map((section, si) => (
+        <GlassCard key={si} colors={colors} isDark={isDark}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "8px",
+              background: "rgba(234,179,8,0.12)", display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#eab308",
+            }}>
+              {section.icon}
+            </div>
+            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>
+              {section.title}
+            </h3>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             {section.items.map((item, ii) => (
               <div
                 key={ii}
@@ -5181,11 +7368,11 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "10px 0",
+                  padding: "12px 0",
                   borderBottom: ii < section.items.length - 1 ? `1px solid ${colors.border}` : "none",
                 }}
               >
-                <div>
+                <div style={{ flex: 1, marginRight: "16px" }}>
                   <div style={{ fontSize: "14px", fontWeight: 600, color: colors.text }}>{item.label}</div>
                   <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "2px" }}>{item.desc}</div>
                 </div>
@@ -5213,7 +7400,7 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
                       width: "20px",
                       height: "20px",
                       borderRadius: "50%",
-                      background: item.enabled ? "#000" : isDark ? "#666" : "#fff",
+                      background: isEnabled(item.label) ? "#000" : isDark ? "#666" : "#fff",
                       transition: "left 0.2s",
                       boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
                     }}
@@ -5224,6 +7411,42 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
           </div>
         </GlassCard>
       ))}
+
+      {/* Link to General Settings */}
+      <GlassCard colors={colors} isDark={isDark}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+          <div style={{
+            width: "32px", height: "32px", borderRadius: "8px",
+            background: "rgba(234,179,8,0.12)", display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#eab308",
+          }}>
+            <Settings size={16} />
+          </div>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>
+            General Settings
+          </h3>
+        </div>
+        <div style={{ fontSize: "13px", color: colors.textSecondary, marginBottom: "14px" }}>
+          Manage your account, chat preferences, speech, data, and more from the general settings panel.
+        </div>
+        <button
+          onClick={() => {
+            const event = new CustomEvent("open-librechat-settings");
+            window.dispatchEvent(event);
+          }}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            padding: "8px 18px", borderRadius: "10px", border: "none",
+            background: "#eab308", color: "#fff",
+            fontSize: "13px", fontWeight: 700, cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+        >
+          <Settings size={14} /> Open General Settings
+        </button>
+      </GlassCard>
     </div>
   );
 }
