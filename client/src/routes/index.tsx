@@ -44,6 +44,9 @@ const EmployerDashboardPage = lazy(() => import('~/components/streetbot/jobs/Emp
 const CalendarPage = lazy(() => import('~/components/streetbot/calendar/CalendarPage'));
 const MessagesPage = lazy(() => import('~/components/streetbot/messages/MessagesPage'));
 const DocumentsPage = lazy(() => import('~/components/streetbot/documents/DocumentsPage'));
+const CaseManagementPage = lazy(
+  () => import('~/components/streetbot/case-management/CaseManagementPage'),
+);
 const AcademyPage = lazy(() => import('~/components/streetbot/academy/AcademyPage'));
 const AcademyCoursesPage = lazy(() => import('~/components/streetbot/academy/AcademyCoursesPage'));
 const AcademyPathsPage = lazy(() => import('~/components/streetbot/academy/AcademyPathsPage'));
@@ -281,6 +284,11 @@ export const router = createBrowserRouter(
                   { path: 'gallery/*', element: guardedSbPage('gallery', GalleryPage) },
                   { path: 'calendar', element: guardedSbPage('calendar', CalendarPage) },
                   { path: 'calendar/*', element: guardedSbPage('calendar', CalendarPage) },
+                  { path: 'case-management', element: guardedSbPage('case-management', CaseManagementPage) },
+                  {
+                    path: 'case-management/*',
+                    element: guardedSbPage('case-management', CaseManagementPage),
+                  },
                   { path: 'messages', element: guardedSbPage('messages', MessagesPage) },
                   { path: 'messages/*', element: guardedSbPage('messages', MessagesPage) },
                   { path: 'documents', element: guardedSbPage('documents', DocumentsPage) },
