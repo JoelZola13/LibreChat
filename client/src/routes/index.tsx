@@ -36,6 +36,7 @@ const GroupsPage = lazy(() => import('~/components/streetbot/groups/GroupsPage')
 const GroupDetailPage = lazy(() => import('~/components/streetbot/groups/GroupDetailPage'));
 const NewsPage = lazy(() => import('~/components/streetbot/news/NewsPage'));
 const NewsEditorPage = lazy(() => import('~/components/streetbot/news/editor/EditorPage'));
+const NewsDashboardPage = lazy(() => import('~/components/streetbot/news/dashboard'));
 const DirectoryPage = lazy(() => import('~/components/streetbot/directory/DirectoryPage'));
 const ServiceDetailPage = lazy(() => import('~/components/streetbot/directory/ServiceDetailPage'));
 const JobsPage = lazy(() => import('~/components/streetbot/jobs/JobsPage'));
@@ -267,6 +268,7 @@ export const router = createBrowserRouter(
             { path: 'creatives/:username/book', element: guardedSbPage('profile', BookingPage) },
             { path: 'groups', element: guardedSbPage('groups', GroupsPage) },
             { path: 'groups/:groupId', element: guardedSbPage('groups', GroupDetailPage) },
+            { path: 'news/dashboard', element: guardedSbPage('news', NewsDashboardPage) },
             { path: 'news/editor', element: guardedSbPage('news', NewsEditorPage) },
             { path: 'news/editor/:id', element: guardedSbPage('news', NewsEditorPage) },
             { path: 'news', element: guardedSbPage('news', NewsPage) },
