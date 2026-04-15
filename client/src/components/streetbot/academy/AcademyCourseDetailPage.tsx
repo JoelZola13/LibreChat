@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { BookOpen, CheckCircle2, ChevronRight, Clock3, Layers3, Users, Video } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
-import { CourseReviews } from "./CourseReviews";
 import { useAcademyUserId } from "./useAcademyUserId";
 import {
   formatCourseLevel,
@@ -56,6 +55,7 @@ type Enrollment = {
 };
 
 export default function AcademyCourseDetailPage() {
+  const reviewFormSrc = "https://airtable.com/embed/appBQoHCfq4nfspKj/pagqRRLsxVpfnq7or/form";
   const { courseId } = useParams();
   const location = useLocation();
   const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
@@ -341,18 +341,39 @@ export default function AcademyCourseDetailPage() {
         <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
           <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Student Reviews</h2>
+              <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Course Review Form</h2>
               <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                Quick ratings and feedback from learners who have taken this course.
+                Enrolled students can submit course feedback here.
               </p>
             </div>
           </div>
-          <CourseReviews
-            courseId={course.id}
-            userId={userId}
-            courseName={course.title}
-            canWriteReview={Boolean(enrollment)}
-          />
+          {enrollment ? (
+            <div className="overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+              <iframe
+                title={`${course.title} review form`}
+                src={reviewFormSrc}
+                width="100%"
+                height="533"
+                frameBorder="0"
+                loading="lazy"
+                style={{ background: "transparent", border: "none", display: "block" }}
+              />
+            </div>
+          ) : (
+            <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+              <p className="text-sm leading-7" style={{ color: colors.textSecondary }}>
+                Enroll in this course to unlock the review form and share your feedback after you start learning.
+              </p>
+              <a
+                href={`${basePath}/courses/${course.id}/enroll`}
+                className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+                style={{ background: colors.accent, color: "#000" }}
+              >
+                Enroll Now
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            </div>
+          )}
         </section>
 
         <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
