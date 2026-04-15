@@ -17,8 +17,10 @@ import {
   Award,
   MessageSquare,
   Info,
+  HelpCircle,
 } from "lucide-react";
 import { sbFetch } from "../shared/sbFetch";
+import { downloadAcademyAsset, openAcademyAsset } from "./academyFileAssets";
 
 // ============================================================================
 // Types (kept from original for UI compatibility)
@@ -40,7 +42,7 @@ export interface Assignment {
   title: string;
   description?: string;
   instructions?: string;
-  assignmentType: "file_upload" | "text" | "document" | "mixed";
+  assignmentType: "file_upload" | "text" | "document" | "mixed" | "quiz";
   maxPoints: number;
   passingScore: number;
   dueDate?: string;
@@ -64,6 +66,9 @@ export interface Assignment {
   submissionCount?: number;
   gradedCount?: number;
   averageScore?: number;
+  quizQuestions?: string[];
+  resourceFileName?: string;
+  resourceAttachment?: FileAttachment | null;
 }
 
 export interface Submission {
@@ -90,6 +95,7 @@ export interface Submission {
   feedbackAttachments: FileAttachment[];
   createdAt: string;
   updatedAt: string;
+  quizAnswers?: string[];
 }
 
 // ============================================================================
@@ -192,6 +198,7 @@ function mapSubmission(api: Record<string, unknown>): Submission {
       : [],
     createdAt: (api.created_at as string) || new Date().toISOString(),
     updatedAt: (api.updated_at as string) || new Date().toISOString(),
+    quizAnswers: Array.isArray(api.quiz_answers) ? (api.quiz_answers as string[]) : [],
   };
 }
 
@@ -218,6 +225,7 @@ export function AssignmentDetail({
   const [showRegradeModal, setShowRegradeModal] = useState(false);
   const [regradeReason, setRegradeReason] = useState("");
   const [wordCount, setWordCount] = useState(0);
+  const [quizAnswers, setQuizAnswers] = useState<string[]>([]);
 
   const pastDue = isPastDue(assignment.dueDate);
   const canSubmit =
@@ -246,6 +254,11 @@ export function AssignmentDetail({
             setSubmission(sub);
             setTextContent(sub.textContent || "");
             setFiles(sub.fileUrls || []);
+            setQuizAnswers(
+              Array.isArray(sub.quizAnswers) && sub.quizAnswers.length > 0
+                ? sub.quizAnswers
+                : Array.from({ length: assignment.quizQuestions?.length || 0 }, () => ""),
+            );
             return;
           }
         }
@@ -266,8 +279,10 @@ export function AssignmentDetail({
             feedbackAttachments: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
+            quizAnswers: Array.from({ length: assignment.quizQuestions?.length || 0 }, () => ""),
           };
           setSubmission(draft);
+          setQuizAnswers(Array.from({ length: assignment.quizQuestions?.length || 0 }, () => ""));
         }
       } catch (err) {
         console.error("Failed to load submission:", err);
@@ -299,6 +314,7 @@ export function AssignmentDetail({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text_content: textContent,
+          quiz_answers: quizAnswers,
           file_urls: files.map((f) => ({
             url: f.url,
             filename: f.filename,
@@ -324,7 +340,7 @@ export function AssignmentDetail({
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [textContent, files, isDraft, saveDraft]);
+  }, [textContent, files, isDraft, quizAnswers, saveDraft]);
 
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -395,6 +411,11 @@ export function AssignmentDetail({
       return;
     }
 
+    if (assignment.assignmentType === "quiz" && quizAnswers.some((answer) => answer.trim() === "")) {
+      setError("Please answer each quiz question before you submit.");
+      return;
+    }
+
     if (assignment.assignmentType === "file_upload" && files.length === 0) {
       setError("Please upload at least one file");
       return;
@@ -408,20 +429,35 @@ export function AssignmentDetail({
       const resp = await sbFetch(`/api/academy/moodle/assignments/${assignment.id}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: textContent }),
+        body: JSON.stringify({
+          user_id: userId,
+          text:
+            assignment.assignmentType === "quiz"
+              ? quizAnswers
+                  .map((answer, index) => `Question ${index + 1}: ${answer}`)
+                  .join("\n\n")
+              : textContent,
+          quiz_answers: assignment.assignmentType === "quiz" ? quizAnswers : undefined,
+        }),
       });
 
       if (resp.ok) {
         const data = await resp.json();
 
         // Update local submission state to show submitted status
-        setSubmission({
-          ...submission,
-          status: "submitted",
-          submittedAt: new Date().toISOString(),
-          textContent,
-          fileUrls: files,
-        });
+          setSubmission({
+            ...submission,
+            status: "submitted",
+            submittedAt: new Date().toISOString(),
+            textContent:
+              assignment.assignmentType === "quiz"
+                ? quizAnswers
+                    .map((answer, index) => `Question ${index + 1}: ${answer}`)
+                    .join("\n\n")
+                : textContent,
+            fileUrls: files,
+            quizAnswers,
+          });
 
         // Fetch grades for this course to show post-submission feedback
         if (assignment.courseId) {
@@ -618,9 +654,55 @@ export function AssignmentDetail({
                 className="text-lg font-semibold mb-4 flex items-center gap-2"
                 style={{ color: "rgba(255, 255, 255, 0.95)" }}
               >
-                <FileText className="w-5 h-5" style={{ color: "rgba(139, 92, 246, 0.8)" }} />
-                Your Submission
+                {assignment.assignmentType === "quiz" ? (
+                  <HelpCircle className="w-5 h-5" style={{ color: "rgba(139, 92, 246, 0.8)" }} />
+                ) : (
+                  <FileText className="w-5 h-5" style={{ color: "rgba(139, 92, 246, 0.8)" }} />
+                )}
+                {assignment.assignmentType === "quiz" ? "Your Quiz Responses" : "Your Submission"}
               </h2>
+
+              {assignment.assignmentType === "quiz" && (
+                <div className="mb-6 space-y-4">
+                  {(assignment.quizQuestions || []).map((question, index) => (
+                    <div
+                      key={`${assignment.id}-question-${index}`}
+                      className="rounded-lg p-4"
+                      style={{ background: "rgba(0, 0, 0, 0.2)" }}
+                    >
+                      <p
+                        className="mb-3 text-sm font-semibold"
+                        style={{ color: "rgba(255, 255, 255, 0.92)" }}
+                      >
+                        Question {index + 1}
+                      </p>
+                      <p className="mb-3 text-sm" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
+                        {question}
+                      </p>
+                      <textarea
+                        value={quizAnswers[index] || ""}
+                        onChange={(event) =>
+                          setQuizAnswers((prev) => {
+                            const next = [...prev];
+                            next[index] = event.target.value;
+                            return next;
+                          })
+                        }
+                        placeholder="Type your answer here..."
+                        rows={4}
+                        className="w-full rounded-lg p-4 resize-y"
+                        style={{
+                          background: "rgba(0, 0, 0, 0.3)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: "rgba(255, 255, 255, 0.9)",
+                          fontSize: "14px",
+                          lineHeight: "1.6",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Text Input */}
               {(assignment.assignmentType === "text" ||
@@ -782,7 +864,7 @@ export function AssignmentDetail({
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      Submit Assignment
+                      {assignment.assignmentType === "quiz" ? "Submit Quiz" : "Submit Assignment"}
                     </>
                   )}
                 </motion.button>
@@ -948,6 +1030,49 @@ export function AssignmentDetail({
                   {assignment.assignmentType.replace("_", " ")}
                 </span>
               </div>
+              {assignment.assignmentType === "quiz" && (
+                <div className="flex justify-between">
+                  <span style={{ color: "rgba(255, 255, 255, 0.5)" }}>Questions</span>
+                  <span style={{ color: "rgba(255, 255, 255, 0.9)" }}>
+                    {assignment.quizQuestions?.length || 0}
+                  </span>
+                </div>
+              )}
+              {assignment.resourceFileName && (
+                <div className="space-y-3">
+                  <div className="flex justify-between gap-4">
+                    <span style={{ color: "rgba(255, 255, 255, 0.5)" }}>Attached File</span>
+                    <span
+                      className="truncate text-right"
+                      style={{ color: "rgba(255, 255, 255, 0.9)" }}
+                    >
+                      {assignment.resourceFileName}
+                    </span>
+                  </div>
+                  {assignment.resourceAttachment?.url && (
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openAcademyAsset(assignment.resourceAttachment || undefined)}
+                        className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold"
+                        style={{ background: "rgba(139, 92, 246, 0.18)", color: "#DDD6FE" }}
+                      >
+                        <Paperclip className="h-3.5 w-3.5" />
+                        Open file
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadAcademyAsset(assignment.resourceAttachment || undefined)}
+                        className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold"
+                        style={{ background: "rgba(255, 255, 255, 0.1)", color: "rgba(255,255,255,0.8)" }}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Download
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </motion.div>
 

@@ -5,6 +5,7 @@ import {
   getSession,
   joinSession,
   leaveSession,
+  updateSession,
   getSessionStatus,
   formatSessionDuration,
   getSessionTypeLabel,
@@ -178,6 +179,12 @@ export function LiveSessionViewer({
   const [hasJoined, setHasJoined] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [detailsForm, setDetailsForm] = useState({
+    meetingId: "",
+    meetingUrl: "",
+    sessionNotes: "",
+  });
+  const [savingDetails, setSavingDetails] = useState(false);
 
   useEffect(() => {
     loadSession();
@@ -195,6 +202,14 @@ export function LiveSessionViewer({
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    setDetailsForm({
+      meetingId: session?.meeting_id || "",
+      meetingUrl: session?.meeting_url || "",
+      sessionNotes: session?.session_notes || "",
+    });
+  }, [session]);
 
   const handleJoin = async () => {
     try {
@@ -222,6 +237,26 @@ export function LiveSessionViewer({
     }
   };
 
+  const handleSaveSessionDetails = async () => {
+    if (!session) {
+      return;
+    }
+
+    setSavingDetails(true);
+    try {
+      const updated = await updateSession(sessionId, {
+        meeting_id: detailsForm.meetingId.trim() || null,
+        meeting_url: detailsForm.meetingUrl.trim() || null,
+        session_notes: detailsForm.sessionNotes.trim() || null,
+      });
+      setSession(updated);
+    } catch (error) {
+      console.error("Failed to save session details:", error);
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -243,6 +278,7 @@ export function LiveSessionViewer({
 
   const status = getSessionStatus(session);
   const startDate = new Date(session.scheduled_start);
+  const isInstructorView = isInstructor || session.instructor_id === userId;
 
   // Show feedback form after session
   if (showFeedback && !feedbackSubmitted) {
@@ -496,6 +532,87 @@ export function LiveSessionViewer({
                 )}
               </div>
             )}
+
+            {(session.meeting_id || session.meeting_url || session.session_notes || isInstructorView) && (
+              <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
+                    Meeting Details
+                  </p>
+                  {isInstructorView ? (
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <label className="mb-1 block text-sm text-gray-400">Meeting ID</label>
+                        <input
+                          value={detailsForm.meetingId}
+                          onChange={(event) =>
+                            setDetailsForm((current) => ({ ...current, meetingId: event.target.value }))
+                          }
+                          placeholder="Zoom Meeting ID"
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm text-gray-400">Meeting Link</label>
+                        <input
+                          value={detailsForm.meetingUrl}
+                          onChange={(event) =>
+                            setDetailsForm((current) => ({ ...current, meetingUrl: event.target.value }))
+                          }
+                          placeholder="https://zoom.us/j/..."
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm text-gray-400">Notes for Students</label>
+                        <textarea
+                          value={detailsForm.sessionNotes}
+                          onChange={(event) =>
+                            setDetailsForm((current) => ({ ...current, sessionNotes: event.target.value }))
+                          }
+                          rows={4}
+                          placeholder="Add any prep notes, reminders, or instructions students should see before joining."
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveSessionDetails}
+                        disabled={savingDetails}
+                        className="w-full rounded-lg bg-purple-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-60"
+                      >
+                        {savingDetails ? "Saving..." : "Save Session Details"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      {session.meeting_id && (
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-gray-500">Meeting ID</p>
+                          <p className="mt-2 text-sm text-white">{session.meeting_id}</p>
+                        </div>
+                      )}
+                      {session.meeting_url && (
+                        <a
+                          href={session.meeting_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                        >
+                          Open Meeting Link
+                        </a>
+                      )}
+                      {session.session_notes && (
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-gray-500">Notes from your instructor</p>
+                          <p className="mt-2 text-sm leading-6 text-gray-300">{session.session_notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -503,7 +620,7 @@ export function LiveSessionViewer({
           <SessionQA
             sessionId={sessionId}
             userId={userId}
-            isInstructor={isInstructor}
+            isInstructor={isInstructorView}
             isLive={status.isLive}
           />
         )}
@@ -512,7 +629,7 @@ export function LiveSessionViewer({
           <SessionPolls
             sessionId={sessionId}
             userId={userId}
-            isInstructor={isInstructor}
+            isInstructor={isInstructorView}
             isLive={status.isLive}
           />
         )}

@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText,
-  Filter,
   Search,
   ChevronDown,
   Clock,
   CheckCircle,
-  AlertCircle,
   Calendar,
   BarChart3,
 } from "lucide-react";
@@ -18,7 +16,6 @@ import {
   Submission,
   getCourseAssignments,
   getMySubmission,
-  getUserAssignmentStats,
   isPastDue,
 } from "./api/assignments";
 
@@ -26,38 +23,76 @@ interface AssignmentListProps {
   courseId: string;
   userId: string;
   showInstructorView?: boolean;
+  contentType?: "all" | "assignment" | "quiz";
 }
 
 type FilterStatus = "all" | "pending" | "submitted" | "graded" | "late";
+
+type AssignmentStats = {
+  totalAssignments: number;
+  submitted: number;
+  graded: number;
+  averageScore: number;
+  onTime: number;
+  late: number;
+};
+
+function buildLocalAssignmentStats(
+  assignments: Assignment[],
+  submissions: Record<string, Submission | null>,
+): AssignmentStats {
+  const allowedAssignmentIds = new Set(assignments.map((assignment) => assignment.id));
+  const realSubmissions = Object.entries(submissions)
+    .filter((entry): entry is [string, Submission] => {
+      const [assignmentId, submission] = entry;
+      return allowedAssignmentIds.has(assignmentId) && submission !== null;
+    })
+    .map(([, submission]) => submission);
+  const gradedSubmissions = realSubmissions.filter(
+    (submission) => submission.status === "graded" || submission.status === "returned",
+  );
+  const totalScore = gradedSubmissions.reduce(
+    (sum, submission) => sum + (submission.adjustedScore ?? submission.score ?? 0),
+    0,
+  );
+
+  return {
+    totalAssignments: assignments.length,
+    submitted: realSubmissions.filter((submission) => submission.status !== "draft").length,
+    graded: gradedSubmissions.length,
+    averageScore: gradedSubmissions.length > 0 ? totalScore / gradedSubmissions.length : 0,
+    onTime: realSubmissions.filter((submission) => !submission.isLate && submission.status !== "draft").length,
+    late: realSubmissions.filter((submission) => submission.isLate).length,
+  };
+}
 
 export function AssignmentList({
   courseId,
   userId,
   showInstructorView = false,
+  contentType = "all",
 }: AssignmentListProps) {
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, Submission | null>>({});
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [stats, setStats] = useState({
-    totalAssignments: 0,
-    submitted: 0,
-    graded: 0,
-    averageScore: 0,
-    onTime: 0,
-    late: 0,
-  });
 
   // Load assignments and submissions
   useEffect(() => {
+    setSelectedAssignment(null);
+    setSearchQuery("");
+    setFilterStatus("all");
+    setAllAssignments([]);
+    setSubmissions({});
+
     async function loadData() {
       setIsLoading(true);
       try {
         // Load assignments
         const assignmentData = await getCourseAssignments(courseId, showInstructorView);
-        setAssignments(assignmentData);
+        setAllAssignments(assignmentData);
 
         // Load user's submissions for each assignment
         const submissionPromises = assignmentData.map(async (a) => {
@@ -67,10 +102,6 @@ export function AssignmentList({
         const submissionResults = await Promise.all(submissionPromises);
         const submissionMap = Object.fromEntries(submissionResults);
         setSubmissions(submissionMap);
-
-        // Load stats
-        const statsData = await getUserAssignmentStats(userId, courseId);
-        setStats(statsData);
       } catch (err) {
         console.error("Failed to load assignments:", err);
       } finally {
@@ -80,6 +111,26 @@ export function AssignmentList({
 
     loadData();
   }, [courseId, userId, showInstructorView]);
+
+  const assignments = useMemo(() => {
+    if (contentType === "quiz") {
+      return allAssignments.filter((assignment) => assignment.assignmentType === "quiz");
+    }
+    if (contentType === "assignment") {
+      return allAssignments.filter((assignment) => assignment.assignmentType !== "quiz");
+    }
+    return allAssignments;
+  }, [allAssignments, contentType]);
+
+  const stats = useMemo(
+    () => buildLocalAssignmentStats(assignments, submissions),
+    [assignments, submissions],
+  );
+
+  const contentLabelPlural =
+    contentType === "quiz" ? "Quizzes" : contentType === "assignment" ? "Assignments" : "Assignments";
+  const emptyLabel =
+    contentType === "quiz" ? "quizzes" : contentType === "assignment" ? "assignments" : "assignments";
 
   // Filter assignments
   const filteredAssignments = assignments.filter((assignment) => {
@@ -184,123 +235,124 @@ export function AssignmentList({
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.08)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="p-2 rounded-lg"
-              style={{ background: "rgba(59, 130, 246, 0.2)" }}
-            >
-              <FileText className="w-5 h-5" style={{ color: "#3B82F6" }} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold" style={{ color: "rgba(255, 255, 255, 0.95)" }}>
-                {stats.totalAssignments}
-              </p>
-              <p className="text-xs" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                Total
-              </p>
-            </div>
-          </div>
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="p-4 rounded-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.08)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="p-2 rounded-lg"
-              style={{ background: "rgba(16, 185, 129, 0.2)" }}
-            >
-              <CheckCircle className="w-5 h-5" style={{ color: "#10B981" }} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold" style={{ color: "rgba(255, 255, 255, 0.95)" }}>
-                {stats.graded}
-              </p>
-              <p className="text-xs" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                Graded
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="p-4 rounded-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.08)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="p-2 rounded-lg"
-              style={{ background: "rgba(139, 92, 246, 0.2)" }}
-            >
-              <BarChart3 className="w-5 h-5" style={{ color: "#8B5CF6" }} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold" style={{ color: "rgba(255, 255, 255, 0.95)" }}>
-                {stats.averageScore.toFixed(0)}%
-              </p>
-              <p className="text-xs" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                Average
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="p-4 rounded-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.08)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="p-2 rounded-lg"
-              style={{ background: "rgba(245, 158, 11, 0.2)" }}
-            >
-              <Clock className="w-5 h-5" style={{ color: "#F59E0B" }} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold" style={{ color: "rgba(255, 255, 255, 0.95)" }}>
-                {stats.totalAssignments - stats.submitted}
-              </p>
-              <p className="text-xs" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                Pending
-              </p>
-            </div>
-          </div>
-        </motion.div>
+{/* Stats Cards */}
+<div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="rounded-xl p-3"
+    style={{
+      background: "rgba(255, 255, 255, 0.08)",
+      backdropFilter: "blur(20px)",
+      border: "1px solid rgba(255, 255, 255, 0.12)",
+    }}
+  >
+    <div className="flex items-center gap-2.5">
+      <div
+        className="rounded-lg p-1.5"
+        style={{ background: "rgba(59, 130, 246, 0.2)" }}
+      >
+        <FileText className="h-4 w-4" style={{ color: "#3B82F6" }} />
       </div>
+      <div className="min-w-0">
+        <p className="text-xl font-bold leading-none" style={{ color: "rgba(255, 255, 255, 0.95)" }}>
+          {stats.totalAssignments}
+        </p>
+        <p className="mt-1 text-[11px] leading-tight" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+          Total
+        </p>
+      </div>
+    </div>
+  </motion.div>
+
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.1 }}
+    className="rounded-xl p-3"
+    style={{
+      background: "rgba(255, 255, 255, 0.08)",
+      backdropFilter: "blur(20px)",
+      border: "1px solid rgba(255, 255, 255, 0.12)",
+    }}
+  >
+    <div className="flex items-center gap-2.5">
+      <div
+        className="rounded-lg p-1.5"
+        style={{ background: "rgba(16, 185, 129, 0.2)" }}
+      >
+        <CheckCircle className="h-4 w-4" style={{ color: "#10B981" }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-bold leading-none" style={{ color: "rgba(255, 255, 255, 0.95)" }}>
+          {stats.graded}
+        </p>
+        <p className="mt-1 text-[11px] leading-tight" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+          Graded
+        </p>
+      </div>
+    </div>
+  </motion.div>
+
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.2 }}
+    className="rounded-xl p-3"
+    style={{
+      background: "rgba(255, 255, 255, 0.08)",
+      backdropFilter: "blur(20px)",
+      border: "1px solid rgba(255, 255, 255, 0.12)",
+    }}
+  >
+    <div className="flex items-center gap-2.5">
+      <div
+        className="rounded-lg p-1.5"
+        style={{ background: "rgba(139, 92, 246, 0.2)" }}
+      >
+        <BarChart3 className="h-4 w-4" style={{ color: "#8B5CF6" }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-bold leading-none" style={{ color: "rgba(255, 255, 255, 0.95)" }}>
+          {stats.averageScore.toFixed(0)}%
+        </p>
+        <p className="mt-1 text-[11px] leading-tight" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+          Average
+        </p>
+      </div>
+    </div>
+  </motion.div>
+
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.3 }}
+    className="rounded-xl p-3"
+    style={{
+      background: "rgba(255, 255, 255, 0.08)",
+      backdropFilter: "blur(20px)",
+      border: "1px solid rgba(255, 255, 255, 0.12)",
+    }}
+  >
+    <div className="flex items-center gap-2.5">
+      <div
+        className="rounded-lg p-1.5"
+        style={{ background: "rgba(245, 158, 11, 0.2)" }}
+      >
+        <Clock className="h-4 w-4" style={{ color: "#F59E0B" }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-bold leading-none" style={{ color: "rgba(255, 255, 255, 0.95)" }}>
+          {stats.totalAssignments - stats.submitted}
+        </p>
+        <p className="mt-1 text-[11px] leading-tight" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+          Pending
+        </p>
+      </div>
+    </div>
+  </motion.div>
+</div>
 
       {/* Filter Bar */}
       <motion.div
@@ -320,7 +372,7 @@ export function AssignmentList({
           <Search className="w-5 h-5" style={{ color: "rgba(255, 255, 255, 0.4)" }} />
           <input
             type="text"
-            placeholder="Search assignments..."
+            placeholder={`Search ${emptyLabel}...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent outline-none"
@@ -340,7 +392,7 @@ export function AssignmentList({
               color: "rgba(255, 255, 255, 0.9)",
             }}
           >
-            <option value="all">All Assignments</option>
+            <option value="all">All {contentLabelPlural}</option>
             <option value="pending">Pending</option>
             <option value="submitted">Submitted</option>
             <option value="graded">Graded</option>
@@ -388,13 +440,13 @@ export function AssignmentList({
                 style={{ color: "rgba(255, 255, 255, 0.7)" }}
               >
                 {searchQuery || filterStatus !== "all"
-                  ? "No assignments match your filters"
-                  : "No assignments yet"}
+                  ? `No ${emptyLabel} match your filters`
+                  : `No ${emptyLabel} yet`}
               </h3>
               <p style={{ color: "rgba(255, 255, 255, 0.4)" }}>
                 {searchQuery || filterStatus !== "all"
                   ? "Try adjusting your search or filter"
-                  : "Check back later for new assignments"}
+                  : `Check back later for new ${emptyLabel}`}
               </p>
             </motion.div>
           )}

@@ -26,7 +26,7 @@ export interface Assignment {
   title: string;
   description?: string;
   instructions?: string;
-  assignmentType: 'file_upload' | 'text' | 'document' | 'mixed';
+  assignmentType: 'file_upload' | 'text' | 'document' | 'mixed' | 'quiz';
   maxPoints: number;
   passingScore: number;
   dueDate?: string;
@@ -50,6 +50,9 @@ export interface Assignment {
   submissionCount?: number;
   gradedCount?: number;
   averageScore?: number;
+  quizQuestions?: string[];
+  resourceFileName?: string;
+  resourceAttachment?: FileAttachment | null;
 }
 
 export interface Submission {
@@ -76,6 +79,31 @@ export interface Submission {
   feedbackAttachments: FileAttachment[];
   createdAt: string;
   updatedAt: string;
+  quizAnswers?: string[];
+}
+
+export interface CreateCourseAssignmentInput {
+  title: string;
+  description?: string;
+  instructions?: string;
+  assignmentType: Assignment['assignmentType'];
+  dueDate?: string;
+  availableFrom?: string;
+  maxPoints?: number;
+  passingScore?: number;
+  maxAttempts?: number;
+  allowLateSubmissions?: boolean;
+  latePenaltyPercent?: number;
+  maxLateDays?: number;
+  allowedFileTypes?: string[];
+  maxFileSizeMb?: number;
+  maxFiles?: number;
+  peerReviewEnabled?: boolean;
+  peerReviewsRequired?: number;
+  isPublished?: boolean;
+  quizQuestions?: string[];
+  resourceFileName?: string;
+  resourceAttachment?: FileAttachment;
 }
 
 export interface AssignmentAvailability {
@@ -93,6 +121,7 @@ export interface SubmissionCreate {
   textContent?: string;
   documentId?: string;
   fileUrls?: FileAttachment[];
+  quizAnswers?: string[];
 }
 
 export interface GradingQueueItem {
@@ -113,6 +142,25 @@ export interface GradingQueueItem {
   maxPoints: number;
   rubricId?: string;
   gradingLockedBy?: string;
+}
+
+export interface CourseSubmissionListItem {
+  submissionId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  assignmentType: 'quiz' | 'assignment';
+  courseId: string;
+  courseTitle: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  attemptNumber: number;
+  status: Submission['status'];
+  submittedAt?: string;
+  gradedAt?: string;
+  score?: number;
+  letterGrade?: string;
+  maxPoints: number;
 }
 
 export interface RubricLevel {
@@ -203,6 +251,9 @@ function transformAssignment(api: any): Assignment {
     calendarEventId: api.calendar_event_id, isPublished: api.is_published,
     createdBy: api.created_by, createdAt: api.created_at, updatedAt: api.updated_at,
     submissionCount: api.submission_count, gradedCount: api.graded_count, averageScore: api.average_score,
+    quizQuestions: api.quiz_questions || [],
+    resourceFileName: api.resource_file_name,
+    resourceAttachment: api.resource_attachment ? transformFile(api.resource_attachment) : null,
   };
 }
 
@@ -218,6 +269,7 @@ function transformSubmission(api: any): Submission {
     adjustedScore: api.adjusted_score, letterGrade: api.letter_grade,
     feedback: api.feedback, feedbackAttachments: (api.feedback_attachments || []).map(transformFile),
     createdAt: api.created_at, updatedAt: api.updated_at,
+    quizAnswers: api.quiz_answers || [],
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -293,6 +345,63 @@ export async function getUserAvailableAssignments(userId: string, courseId: stri
   } catch { return getMockAssignments(courseId); }
 }
 
+export async function createCourseAssignment(
+  courseId: string,
+  instructorId: string,
+  data: CreateCourseAssignmentInput,
+): Promise<Assignment | null> {
+  try {
+    const response = await sbFetch(`${BASE}/courses/${courseId}/assignments?created_by=${encodeURIComponent(instructorId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: data.title,
+        description: data.description,
+        instructions: data.instructions,
+        assignment_type: data.assignmentType,
+        due_date: data.dueDate,
+        available_from: data.availableFrom,
+        max_points: data.maxPoints,
+        passing_score: data.passingScore,
+        max_attempts: data.maxAttempts,
+        allow_late_submissions: data.allowLateSubmissions,
+        late_penalty_percent: data.latePenaltyPercent,
+        max_late_days: data.maxLateDays,
+        allowed_file_types: data.allowedFileTypes,
+        max_file_size_mb: data.maxFileSizeMb,
+        max_files: data.maxFiles,
+        peer_review_enabled: data.peerReviewEnabled,
+        peer_reviews_required: data.peerReviewsRequired,
+        is_published: data.isPublished,
+        quiz_questions: data.quizQuestions,
+        resource_file_name: data.resourceFileName,
+        resource_attachment: data.resourceAttachment
+          ? {
+              url: data.resourceAttachment.url,
+              filename: data.resourceAttachment.filename,
+              size_bytes: data.resourceAttachment.sizeBytes,
+              mime_type: data.resourceAttachment.mimeType,
+              uploaded_at: data.resourceAttachment.uploadedAt,
+            }
+          : undefined,
+      }),
+    });
+    if (!response.ok) return null;
+    return transformAssignment(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCourseAssignment(assignmentId: string): Promise<boolean> {
+  try {
+    const response = await sbFetch(`${BASE}/assignments/${assignmentId}`, { method: 'DELETE' });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function createSubmission(assignmentId: string, userId: string): Promise<Submission | null> {
   try {
     const response = await sbFetch(`${BASE}/assignments/${assignmentId}/submissions?user_id=${userId}`, { method: 'POST' });
@@ -313,7 +422,7 @@ export async function updateSubmission(submissionId: string, data: SubmissionCre
   try {
     const response = await sbFetch(`${BASE}/submissions/${submissionId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text_content: data.textContent, document_id: data.documentId, file_urls: data.fileUrls?.map(f => ({ url: f.url, filename: f.filename, size_bytes: f.sizeBytes, mime_type: f.mimeType, uploaded_at: f.uploadedAt })) }),
+      body: JSON.stringify({ text_content: data.textContent, document_id: data.documentId, quiz_answers: data.quizAnswers, file_urls: data.fileUrls?.map(f => ({ url: f.url, filename: f.filename, size_bytes: f.sizeBytes, mime_type: f.mimeType, uploaded_at: f.uploadedAt })) }),
     });
     if (!response.ok) return null;
     return transformSubmission(await response.json());
@@ -344,7 +453,7 @@ export async function getUserAssignmentStats(userId: string, courseId: string): 
     if (!response.ok) throw new Error('fail');
     const d = await response.json();
     return { totalAssignments: d.total_assignments || 0, submitted: d.submitted || 0, graded: d.graded || 0, averageScore: d.average_score || 0, onTime: d.on_time || 0, late: d.late || 0 };
-  } catch { return { totalAssignments: 3, submitted: 2, graded: 1, averageScore: 85, onTime: 2, late: 0 }; }
+  } catch { return { totalAssignments: 0, submitted: 0, graded: 0, averageScore: 0, onTime: 0, late: 0 }; }
 }
 
 // Grading
@@ -363,6 +472,39 @@ export async function getGradingQueue(instructorId: string, courseId?: string): 
       maxPoints: api.max_points, rubricId: api.rubric_id, gradingLockedBy: api.grading_locked_by,
     }));
   } catch { return []; }
+}
+
+export async function getCourseSubmissionList(
+  courseId: string,
+  assignmentType: 'quiz' | 'assignment',
+): Promise<CourseSubmissionListItem[]> {
+  try {
+    const response = await sbFetch(
+      `${BASE}/courses/${courseId}/submissions?assignment_type=${encodeURIComponent(assignmentType)}`,
+    );
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.map((api: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      submissionId: api.submission_id,
+      assignmentId: api.assignment_id,
+      assignmentTitle: api.assignment_title,
+      assignmentType: api.assignment_type,
+      courseId: api.course_id,
+      courseTitle: api.course_title,
+      userId: api.user_id,
+      userName: api.user_name,
+      userEmail: api.user_email,
+      attemptNumber: api.attempt_number,
+      status: api.status,
+      submittedAt: api.submitted_at,
+      gradedAt: api.graded_at,
+      score: api.score,
+      letterGrade: api.letter_grade,
+      maxPoints: api.max_points,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function getSubmissionForGrading(submissionId: string): Promise<Submission | null> {

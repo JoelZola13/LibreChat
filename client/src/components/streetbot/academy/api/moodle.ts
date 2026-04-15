@@ -22,18 +22,37 @@ export interface MoodleForum {
   numdiscussions?: number;
 }
 
+export interface MoodleDiscussionReply {
+  id: number;
+  message: string;
+  userfullname: string;
+  userid: string | number;
+  author_role?: 'student' | 'instructor';
+  created: number;
+}
+
+export interface MoodleDiscussionReactions {
+  up: Array<string | number>;
+  down: Array<string | number>;
+}
+
+export type MoodleDiscussionReactionType = 'up' | 'down';
+
 export interface MoodleDiscussion {
   id: number;
   name: string;
   subject: string;
   message: string;
   userfullname: string;
-  userid: number;
+  userid: string | number;
+  author_role?: 'student' | 'instructor';
   created: number;
   modified: number;
   numreplies: number;
   pinned: boolean;
   timemodified: number;
+  replies?: MoodleDiscussionReply[];
+  reactions?: MoodleDiscussionReactions;
 }
 
 export interface MoodleGradeItem {
@@ -93,6 +112,12 @@ export interface MoodleAssignment {
   submissiondrafts: number;
 }
 
+export interface CreateForumDiscussionOptions {
+  authorName?: string;
+  authorId?: string | number;
+  authorRole?: 'student' | 'instructor';
+}
+
 // =============================================================================
 // Forums API
 // =============================================================================
@@ -121,12 +146,67 @@ export async function createForumDiscussion(
   forumId: number,
   subject: string,
   message: string,
-): Promise<unknown> {
+  options: CreateForumDiscussionOptions = {},
+): Promise<MoodleDiscussion> {
   const res = await sbFetch(`${MOODLE_BASE}/forums/${forumId}/discussions`, {
     method: 'POST',
-    body: JSON.stringify({ subject, message }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      subject,
+      message,
+      author_name: options.authorName,
+      author_id: options.authorId,
+      author_role: options.authorRole,
+    }),
   });
   if (!res.ok) throw new Error(`Failed to create discussion: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteForumDiscussion(forumId: number, discussionId: number): Promise<void> {
+  const res = await sbFetch(`${MOODLE_BASE}/forums/${forumId}/discussions/${discussionId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Failed to delete discussion: ${res.status}`);
+}
+
+export async function replyToForumDiscussion(
+  forumId: number,
+  discussionId: number,
+  message: string,
+  options: CreateForumDiscussionOptions = {},
+): Promise<MoodleDiscussion> {
+  const res = await sbFetch(`${MOODLE_BASE}/forums/${forumId}/discussions/${discussionId}/replies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      author_name: options.authorName,
+      author_id: options.authorId,
+      author_role: options.authorRole,
+    }),
+  });
+  if (!res.ok) throw new Error(`Failed to reply to discussion: ${res.status}`);
+  return res.json();
+}
+
+export async function reactToForumDiscussion(
+  forumId: number,
+  discussionId: number,
+  reaction: MoodleDiscussionReactionType,
+  options: CreateForumDiscussionOptions = {},
+): Promise<MoodleDiscussion> {
+  const res = await sbFetch(`${MOODLE_BASE}/forums/${forumId}/discussions/${discussionId}/reactions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      reaction,
+      author_name: options.authorName,
+      author_id: options.authorId,
+      author_role: options.authorRole,
+    }),
+  });
+  if (!res.ok) throw new Error(`Failed to update discussion reaction: ${res.status}`);
   return res.json();
 }
 

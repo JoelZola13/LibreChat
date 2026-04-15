@@ -4,9 +4,17 @@
  */
 
 const USER_ID_STORAGE_KEY = "streetbot:user-id";
+const LOCAL_USER_PREFIX = "academy-local-user";
 
-// Default user ID for demo/development
-const DEFAULT_DEMO_USER_ID = "demo-user";
+export type AcademyAuthUser =
+  | {
+      id?: string | null;
+      _id?: string | null;
+      username?: string | null;
+      email?: string | null;
+    }
+  | null
+  | undefined;
 
 /**
  * Get or create a user ID.
@@ -14,7 +22,7 @@ const DEFAULT_DEMO_USER_ID = "demo-user";
  * Priority:
  * 1. If authUserId is provided (from useAuth), use that
  * 2. If stored in localStorage, use that (for backwards compatibility)
- * 3. Fall back to demo-user for development
+ * 3. Fall back to a stable local Academy user ID for compatibility
  */
 export function getOrCreateUserId(authUserId?: string | null): string {
   // If auth user ID is provided, use it and store it
@@ -25,12 +33,25 @@ export function getOrCreateUserId(authUserId?: string | null): string {
 
   // Check localStorage for existing user ID
   const storedUserId = window.localStorage.getItem(USER_ID_STORAGE_KEY);
-  if (storedUserId && storedUserId !== DEFAULT_DEMO_USER_ID) {
+  if (storedUserId && storedUserId !== "anonymous") {
     return storedUserId;
   }
 
-  // Fall back to demo-user for development/unauthenticated
-  return DEFAULT_DEMO_USER_ID;
+  const localUserId =
+    typeof window.crypto?.randomUUID === "function"
+      ? `${LOCAL_USER_PREFIX}-${window.crypto.randomUUID()}`
+      : `${LOCAL_USER_PREFIX}-${Date.now().toString(36)}`;
+  window.localStorage.setItem(USER_ID_STORAGE_KEY, localUserId);
+  return localUserId;
+}
+
+export function resolveAcademyUserId(user?: AcademyAuthUser): string | null {
+  if (!user) {
+    return null;
+  }
+
+  const candidate = user.id || user._id || user.username || user.email;
+  return candidate && candidate !== "anonymous" ? candidate : null;
 }
 
 /**
@@ -52,5 +73,5 @@ export function clearUserId(): void {
  */
 export function isDemoUser(): boolean {
   const userId = window.localStorage.getItem(USER_ID_STORAGE_KEY);
-  return !userId || userId === DEFAULT_DEMO_USER_ID || userId === "anonymous";
+  return !userId || userId.startsWith(LOCAL_USER_PREFIX) || userId === "anonymous";
 }

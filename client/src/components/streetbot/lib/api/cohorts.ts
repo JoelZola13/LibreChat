@@ -3,7 +3,9 @@
  * Time-bound group learning with cohort management.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/sbapi';
+import { sbFetch } from '../../shared/sbFetch';
+
+const API_BASE = '/api/academy/cohorts';
 
 export interface Cohort {
   id: string;
@@ -67,7 +69,7 @@ export async function createCohort(
   data: Omit<Cohort, 'id' | 'current_enrollment' | 'status' | 'created_at' | 'updated_at'>,
   instructorId: string
 ): Promise<Cohort> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts?instructor_id=${encodeURIComponent(instructorId)}`, {
+  const response = await sbFetch(`${API_BASE}?instructor_id=${encodeURIComponent(instructorId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -77,19 +79,19 @@ export async function createCohort(
 }
 
 export async function getCohort(cohortId: string): Promise<Cohort> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}`);
+  const response = await sbFetch(`${API_BASE}/${cohortId}`);
   if (!response.ok) throw new Error('Cohort not found');
   return response.json();
 }
 
 export async function getCourseCohorts(courseId: string, includePast = false): Promise<Cohort[]> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/course/${courseId}?include_past=${includePast}`);
+  const response = await sbFetch(`${API_BASE}/course/${courseId}?include_past=${includePast}`);
   if (!response.ok) throw new Error('Failed to fetch cohorts');
   return response.json();
 }
 
 export async function updateCohort(cohortId: string, data: Partial<Cohort>): Promise<Cohort> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}`, {
+  const response = await sbFetch(`${API_BASE}/${cohortId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -99,33 +101,33 @@ export async function updateCohort(cohortId: string, data: Partial<Cohort>): Pro
 }
 
 export async function deleteCohort(cohortId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}`, { method: 'DELETE' });
+  const response = await sbFetch(`${API_BASE}/${cohortId}`, { method: 'DELETE' });
   if (!response.ok) throw new Error('Failed to delete cohort');
 }
 
 // Enrollment
 export async function enrollInCohort(cohortId: string, userId: string): Promise<{ success: boolean; message: string; enrollment?: CohortEnrollment }> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}/enroll?user_id=${encodeURIComponent(userId)}`, {
+  const response = await sbFetch(`${API_BASE}/${cohortId}/enroll?user_id=${encodeURIComponent(userId)}`, {
     method: 'POST',
   });
   return response.json();
 }
 
 export async function unenrollFromCohort(cohortId: string, userId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}/enroll?user_id=${encodeURIComponent(userId)}`, {
+  const response = await sbFetch(`${API_BASE}/${cohortId}/enroll?user_id=${encodeURIComponent(userId)}`, {
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to unenroll');
 }
 
 export async function getCohortEnrollments(cohortId: string): Promise<CohortEnrollment[]> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}/enrollments`);
+  const response = await sbFetch(`${API_BASE}/${cohortId}/enrollments`);
   if (!response.ok) throw new Error('Failed to fetch enrollments');
   return response.json();
 }
 
 export async function getUserCohorts(userId: string): Promise<Cohort[]> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/user/${encodeURIComponent(userId)}`);
+  const response = await sbFetch(`${API_BASE}/user/${encodeURIComponent(userId)}`);
   if (!response.ok) throw new Error('Failed to fetch user cohorts');
   return response.json();
 }
@@ -135,7 +137,7 @@ export async function createDeadline(
   cohortId: string,
   data: { module_id?: string; lesson_id?: string; assignment_id?: string; deadline: string; description?: string }
 ): Promise<CohortDeadline> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}/deadlines`, {
+  const response = await sbFetch(`${API_BASE}/${cohortId}/deadlines`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -145,13 +147,13 @@ export async function createDeadline(
 }
 
 export async function getCohortDeadlines(cohortId: string): Promise<CohortDeadline[]> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}/deadlines`);
+  const response = await sbFetch(`${API_BASE}/${cohortId}/deadlines`);
   if (!response.ok) throw new Error('Failed to fetch deadlines');
   return response.json();
 }
 
 export async function getUserDeadlines(userId: string, daysAhead = 14): Promise<CohortDeadline[]> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/user/${encodeURIComponent(userId)}/deadlines?days_ahead=${daysAhead}`);
+  const response = await sbFetch(`${API_BASE}/user/${encodeURIComponent(userId)}/deadlines?days_ahead=${daysAhead}`);
   if (!response.ok) throw new Error('Failed to fetch deadlines');
   return response.json();
 }
@@ -162,7 +164,7 @@ export async function createAnnouncement(
   data: { title: string; content: string; is_pinned?: boolean },
   authorId: string
 ): Promise<CohortAnnouncement> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}/announcements?author_id=${encodeURIComponent(authorId)}`, {
+  const response = await sbFetch(`${API_BASE}/${cohortId}/announcements?author_id=${encodeURIComponent(authorId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -172,14 +174,14 @@ export async function createAnnouncement(
 }
 
 export async function getCohortAnnouncements(cohortId: string, limit = 20): Promise<CohortAnnouncement[]> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}/announcements?limit=${limit}`);
+  const response = await sbFetch(`${API_BASE}/${cohortId}/announcements?limit=${limit}`);
   if (!response.ok) throw new Error('Failed to fetch announcements');
   return response.json();
 }
 
 // Analytics
 export async function getCohortAnalytics(cohortId: string): Promise<CohortAnalytics> {
-  const response = await fetch(`${API_BASE}/api/academy/cohorts/${cohortId}/analytics`);
+  const response = await sbFetch(`${API_BASE}/${cohortId}/analytics`);
   if (!response.ok) throw new Error('Failed to fetch analytics');
   return response.json();
 }

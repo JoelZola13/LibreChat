@@ -1,76 +1,66 @@
 import React from "react";
 import { motion } from "framer-motion";
 import {
-  BookOpen,
-  Users,
-  Video,
-  Trophy,
-  FileText,
-  ClipboardCheck,
-  Calendar,
-  Map,
-  Brain,
   Award,
-  MessageSquare,
+  Compass,
+  LayoutDashboard,
+  BookOpen,
+  ClipboardCheck,
+  Map,
   ChevronLeft,
 } from "lucide-react";
+import { useAcademyEnrollmentAccess } from "./useAcademyEnrollmentAccess";
 
 interface AcademySidebarProps {
   isCollapsed?: boolean;
   onToggle?: () => void;
+  layout?: "fixed" | "inline";
+  offsetLeft?: number;
 }
 
-const navSections = [
-  {
-    title: "Learn",
-    items: [
-      { href: "/academy/courses", label: "Courses", icon: BookOpen, color: "#FFD600" },
-      { href: "/academy/paths", label: "Learning Paths", icon: Map, color: "#8B5CF6" },
-      { href: "/academy/live-sessions", label: "Live Sessions", icon: Video, color: "#10B981", badge: "LIVE" },
-    ],
-  },
-  {
-    title: "Activities",
-    items: [
-      { href: "/academy/assignments", label: "Assignments", icon: FileText, color: "#3B82F6" },
-      { href: "/academy/peer-review", label: "Peer Review", icon: Users, color: "#A855F7" },
-      { href: "/academy/attendance", label: "Attendance", icon: Calendar, color: "#10B981" },
-    ],
-  },
-  {
-    title: "Progress",
-    items: [
-      { href: "/academy/progress", label: "My Progress", icon: Trophy, color: "#F59E0B" },
-      { href: "/academy/certificates", label: "Certificates", icon: Award, color: "#EF4444" },
-    ],
-  },
-  {
-    title: "Tools",
-    items: [
-      { href: "/academy/ai-tutor", label: "AI Tutor", icon: Brain, color: "#EC4899" },
-      { href: "/academy/discussions", label: "Discussions", icon: MessageSquare, color: "#6366F1" },
-    ],
-  },
-  {
-    title: "Instructor",
-    items: [
-      { href: "/academy/instructor/grading", label: "Grading", icon: ClipboardCheck, color: "#F97316" },
-    ],
-  },
-];
-
-export function AcademySidebar({ isCollapsed = false, onToggle }: AcademySidebarProps) {
+export function AcademySidebar({
+  isCollapsed = false,
+  onToggle,
+  layout = "fixed",
+  offsetLeft = 0,
+}: AcademySidebarProps) {
   const pathname = window.location.pathname;
+  const basePath = pathname.startsWith("/learning") ? "/learning" : "/academy";
+  const isInline = layout === "inline";
+  const { hasEnrollment } = useAcademyEnrollmentAccess();
+  const navSections = [
+    {
+      title: "Journey",
+      items: [
+        { href: `${basePath}`, label: "Home", icon: Compass, color: "#60A5FA" },
+        { href: `${basePath}/paths`, label: "Learning Paths", icon: Map, color: "#8B5CF6" },
+        { href: `${basePath}/courses`, label: "Courses", icon: BookOpen, color: "#FFD600" },
+        ...(hasEnrollment
+          ? [
+              { href: `${basePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard, color: "#FACC15" },
+              { href: `${basePath}/certificates`, label: "Certificates", icon: Award, color: "#F59E0B" },
+            ]
+          : []),
+      ],
+    },
+    {
+      title: "Instructor",
+      items: [
+        { href: `${basePath}/instructor`, label: "Instructor", icon: ClipboardCheck, color: "#F97316" },
+      ],
+    },
+  ];
 
   return (
     <motion.aside
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      className="fixed bottom-0 z-50 flex flex-col"
+      className={`${isInline ? "relative" : "fixed bottom-0"} z-50 flex flex-col`}
       style={{
-        left: "var(--sidebar-width, 0px)",
-        top: "64px",
-        width: isCollapsed ? "64px" : "240px",
+        left: isInline ? 0 : `${offsetLeft}px`,
+        top: isInline ? 0 : "64px",
+        width: isInline ? "100%" : isCollapsed ? "64px" : "240px",
+        height: isInline ? "100%" : undefined,
         background: "rgba(15, 15, 25, 0.98)",
         backdropFilter: "blur(24px) saturate(180%)",
         WebkitBackdropFilter: "blur(24px) saturate(180%)",
@@ -79,7 +69,7 @@ export function AcademySidebar({ isCollapsed = false, onToggle }: AcademySidebar
       }}
     >
       {/* Collapse Toggle */}
-      {onToggle && (
+      {onToggle && !isInline && (
         <button
           onClick={onToggle}
           className="absolute -right-3 top-4 w-6 h-6 rounded-full flex items-center justify-center z-50"
@@ -109,7 +99,10 @@ export function AcademySidebar({ isCollapsed = false, onToggle }: AcademySidebar
             )}
             <div className="space-y-1">
               {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+                const isRootAcademyLink = item.href === basePath;
+                const isActive = isRootAcademyLink
+                  ? pathname === item.href
+                  : pathname === item.href || pathname?.startsWith(item.href + "/");
                 return (
                   <a
                     key={item.href}
@@ -170,25 +163,6 @@ export function AcademySidebar({ isCollapsed = false, onToggle }: AcademySidebar
           </div>
         ))}
       </nav>
-
-      {/* Bottom Section - Community Link */}
-      <div className="p-2 border-t border-white/10">
-        <a
-          href="/groups"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors"
-          style={{ justifyContent: isCollapsed ? "center" : "flex-start" }}
-          title={isCollapsed ? "Community" : undefined}
-        >
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg">
-            <Users className="w-5 h-5" style={{ color: "rgba(255, 255, 255, 0.6)" }} />
-          </div>
-          {!isCollapsed && (
-            <span className="text-sm font-medium" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
-              Community
-            </span>
-          )}
-        </a>
-      </div>
     </motion.aside>
   );
 }

@@ -1,52 +1,41 @@
-import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState, useMemo } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useOutletContext } from "react-router-dom";
 import {
-  Play,
-  BookOpen,
-  Award,
   ArrowRight,
-  Sparkles,
-  Video,
-  Brain,
-  Trophy,
-  Clock,
-  TrendingUp,
-  Target,
-  ChevronRight,
-  Briefcase,
-  Laptop,
-  Home,
-  ClipboardCheck,
-  MessageCircle,
-  Search,
-  Bell,
-  Menu,
-  X,
-  GraduationCap,
+  Award,
+  BookOpen,
   CalendarDays,
+  Compass,
+  GraduationCap,
+  LayoutDashboard,
+  Menu,
+  PlayCircle,
+  Target,
+  X,
 } from "lucide-react";
-import { CrossLink } from "../shared/CrossLink";
+import type { ContextType } from "~/common";
+import { NAV_WIDTH } from "~/components/Nav";
+import { AiTutorFloatingButton, DashboardSkeleton } from ".";
 import { AcademySidebar } from "./AcademySidebar";
-import {
-  AiTutorFloatingButton,
-  DashboardSkeleton,
-  Breadcrumb,
-  BreadcrumbCompact,
-} from ".";
+import { AssignmentList } from "./AssignmentList";
+import { CourseMaterialsBrowser } from "./CourseMaterialsBrowser";
+import { ForumsPanel } from "./ForumsPanel";
 import { sbFetch } from "../shared/sbFetch";
+import { resolveLearningPathCourses } from "./academyLearningPaths";
+import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
+import { useAcademyUserId } from "./useAcademyUserId";
+import { listSessions, type LiveSession } from "./api/live-sessions";
 
-// =============================================================================
-// Inline helpers (replace SBP-specific imports)
-// =============================================================================
-
-/** Simple responsive hook (replaces @/hooks/useResponsive) */
 function useResponsive() {
   const [width, setWidth] = useState(window.innerWidth);
+
   useEffect(() => {
     const handler = () => setWidth(window.innerWidth);
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
+
   return {
     isMobile: width < 768,
     isTablet: width >= 768 && width < 1024,
@@ -56,35 +45,22 @@ function useResponsive() {
 
 function useResponsiveSidebar() {
   const [isOpen, setIsOpen] = useState(false);
+
   return {
     isOpen,
-    toggle: () => setIsOpen((v) => !v),
+    toggle: () => setIsOpen((value) => !value),
     close: () => setIsOpen(false),
   };
 }
 
-/** Personalized greeting (replaces @/lib/utils/greeting) */
-function getPersonalizedGreeting(name: string | null): string {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  return name ? `${greeting}, ${name}` : `${greeting}!`;
-}
-
-function getMotivationalMessage(inProgressCount: number, streakDays: number): string {
-  if (streakDays >= 7) return `Amazing ${streakDays}-day streak! Keep the momentum going.`;
-  if (inProgressCount > 0) return `You have ${inProgressCount} course${inProgressCount > 1 ? "s" : ""} in progress. Let's keep learning!`;
-  return "Ready to start something new today?";
-}
-
-/** Simple layout wrapper (replaces @/components/UnifiedLayout) */
-function UnifiedLayout({ children, bgToUse }: { children: React.ReactNode; variant?: string; bgToUse?: string }) {
+function UnifiedLayout({ children, bgToUse }: { children: React.ReactNode; bgToUse?: string }) {
   return (
     <div
       style={{
         minHeight: "100vh",
         background: bgToUse || "var(--sb-color-background, #0f0f19)",
         position: "relative",
-        overflow: "hidden",
+        overflowX: "hidden",
       }}
     >
       {children}
@@ -92,9 +68,34 @@ function UnifiedLayout({ children, bgToUse }: { children: React.ReactNode; varia
   );
 }
 
-/** Learning hat icon (replaces @/components/LearningHatIcon) */
-function LearningHatIcon({ size = 24 }: { size?: number; strokeWidth?: number }) {
+function LearningHatIcon({ size = 24 }: { size?: number }) {
   return <GraduationCap style={{ width: size, height: size, color: "#000" }} />;
+}
+
+function getPersonalizedGreeting(name: string | null) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  return name ? `${greeting}, ${name}` : greeting;
+}
+
+function formatCountdown(isoDate: string) {
+  const diffMs = new Date(isoDate).getTime() - Date.now();
+  if (diffMs <= 0) {
+    return "Starting now";
+  }
+
+  const totalMinutes = Math.round(diffMs / 60000);
+  if (totalMinutes < 60) {
+    return `Starts in ${totalMinutes}m`;
+  }
+
+  const totalHours = Math.floor(totalMinutes / 60);
+  if (totalHours < 24) {
+    return `Starts in ${totalHours}h ${totalMinutes % 60}m`;
+  }
+
+  const totalDays = Math.floor(totalHours / 24);
+  return `Starts in ${totalDays}d ${totalHours % 24}h`;
 }
 
 type Course = {
@@ -106,633 +107,368 @@ type Course = {
   category?: string;
   instructor?: string;
   instructor_name?: string;
-  thumbnail?: string;
-  image_url?: string;
   progress?: number;
   state?: "draft" | "published" | "archived";
-  tags?: string[];
   module_count?: number;
   lesson_count?: number;
-  enrolled_count?: number;
-  created_at?: string;
-  updated_at?: string;
 };
 
-const features = [
-  {
-    icon: BookOpen,
-    title: "Interactive Courses",
-    description: "Engage with video, audio, articles, and interactive content designed for modern learners.",
-  },
-  {
-    icon: Target,
-    title: "Learning Paths",
-    description: "Follow curated sequences of courses to achieve specific goals like job readiness or housing stability.",
-  },
-  {
-    icon: Brain,
-    title: "AI-Powered Learning",
-    description: "Get personalized study plans, smart recommendations, and AI tutor assistance.",
-  },
-  {
-    icon: Trophy,
-    title: "Certificates & Badges",
-    description: "Earn verified certificates and OpenBadges to showcase your achievements.",
-  },
-];
+type Enrollment = {
+  id: string;
+  user_id: string;
+  course_id: string;
+  status: "active" | "completed" | "dropped";
+  progress_percent: number;
+  last_accessed_at?: string | null;
+};
 
-const stats = [
-  { value: "10K+", label: "Active Learners" },
-  { value: "500+", label: "Courses" },
-  { value: "98%", label: "Completion Rate" },
-  { value: "4.9", label: "Average Rating" },
-];
+type Module = {
+  id: string;
+  title?: string | null;
+  name?: string | null;
+  description?: string | null;
+};
 
-const dashboardStats = [
-  { label: "Courses Enrolled", value: "12", icon: BookOpen, color: "text-yellow-400", bg: "bg-yellow-400/10" },
-  { label: "Hours Learned", value: "48", icon: Clock, color: "text-blue-400", bg: "bg-blue-400/10" },
-  { label: "Certificates", value: "3", icon: Award, color: "text-green-400", bg: "bg-green-400/10" },
-  { label: "Current Streak", value: "7 days", icon: TrendingUp, color: "text-purple-400", bg: "bg-purple-400/10" },
-];
+type Lesson = {
+  id: string;
+  title?: string | null;
+  name?: string | null;
+  description?: string | null;
+  duration?: string | null;
+};
 
 async function fetchCourses(): Promise<Course[]> {
-  try {
-    // Use Street Voices academy courses endpoint with local fallback data.
-    const response = await sbFetch('/api/academy/courses');
-    if (!response.ok) throw new Error("Failed to fetch courses");
-    const data = await response.json();
-    return Array.isArray(data) ? data : data.courses || [];
-  } catch (error) {
-    console.error("Error fetching courses:", error);
-    return getFallbackCourses();
+  const response = await sbFetch("/api/academy/courses");
+  if (!response.ok) {
+    throw new Error("Failed to fetch courses");
   }
-}
-
-function getFallbackCourses(): Course[] {
-  return [
-    {
-      id: "1",
-      title: "Digital Marketing Fundamentals",
-      description: "Learn the basics of digital marketing, social media strategy, and content creation",
-      level: "Beginner",
-      duration: "6 weeks",
-      category: "Marketing",
-      instructor: "Sarah Johnson",
-      progress: 65,
-    },
-    {
-      id: "2",
-      title: "Web Development Bootcamp",
-      description: "Full-stack web development with React, Node.js, and MongoDB",
-      level: "Intermediate",
-      duration: "12 weeks",
-      category: "Technology",
-      instructor: "Michael Chen",
-      progress: 30,
-    },
-    {
-      id: "3",
-      title: "Entrepreneurship 101",
-      description: "Start and grow your own business with practical strategies and real-world examples",
-      level: "Beginner",
-      duration: "8 weeks",
-      category: "Business",
-      instructor: "David Williams",
-      progress: 0,
-    },
-    {
-      id: "4",
-      title: "Graphic Design Essentials",
-      description: "Master the fundamentals of graphic design, typography, and visual communication",
-      level: "Beginner",
-      duration: "10 weeks",
-      category: "Design",
-      instructor: "Emily Rodriguez",
-      progress: 90,
-    },
-  ];
+  const data = await response.json();
+  return Array.isArray(data) ? data : data.courses || [];
 }
 
 export default function AcademyClient() {
+  const userId = useAcademyUserId();
+  const location = useLocation();
+  const { paths: learningPaths } = useAcademyLearningPaths();
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
-  const { isMobile, isTablet } = useResponsive();
+  const { isMobile, isTablet, isDesktop } = useResponsive();
   const sidebar = useResponsiveSidebar();
+  const outletContext = useOutletContext<ContextType | undefined>();
+  const navVisible = outletContext?.navVisible ?? false;
+  const academyBasePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
+  const isDashboardRoute = /\/dashboard\/?$/.test(location.pathname);
 
-  const navPaddingLeft = isMobile ? "16px" : "calc(max(16px, var(--sidebar-width, 0px)) + 20px)";
-  const [view, setView] = useState<"landing" | "dashboard">("landing");
+  const pagePaddingX = isMobile ? "16px" : isTablet ? "24px" : "32px";
+  const collapsedNavRailWidth = 56;
+  const desktopNavInset = isDesktop ? (navVisible ? NAV_WIDTH.DESKTOP : collapsedNavRailWidth) : 0;
+  const contentMaxWidth = isDesktop ? 1220 : 1160;
+  const dashboardBasePaddingLeft = isDesktop ? `${desktopNavInset + 240 + 32}px` : pagePaddingX;
+
   const [courses, setCourses] = useState<Course[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // User state for personalization (would typically come from auth context)
   const [userName, setUserName] = useState<string | null>(null);
-  const [userStats] = useState({
-    coursesEnrolled: 0,
-    hoursLearned: 0,
-    certificates: 0,
-    streakDays: 0,
-  });
+  const [selectedDashboardCourseId, setSelectedDashboardCourseId] = useState<string | null>(null);
+  const [dashboardModules, setDashboardModules] = useState<Array<Module & { lessons: Lesson[] }>>([]);
+  const [dashboardModulesLoading, setDashboardModulesLoading] = useState(false);
 
-  // Fetch user profile for personalization
   useEffect(() => {
-    async function fetchUserProfile() {
+    const storedName = localStorage.getItem("sv_user_name");
+    if (storedName) {
+      setUserName(storedName);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function load() {
       try {
-        // Try to get user from localStorage or API
-        const storedName = localStorage.getItem("sv_user_name");
-        if (storedName) {
-          setUserName(storedName);
+        const [courseData, enrollmentsResp, sessionResponse] = await Promise.all([
+          fetchCourses().catch(() => []),
+          sbFetch(`/api/academy/enrollments?user_id=${encodeURIComponent(userId)}`),
+          listSessions({ userId }).catch(() => ({ sessions: [], total: 0, upcoming_count: 0, live_count: 0 })),
+        ]);
+
+        if (!isMounted) {
+          return;
         }
-        // In production, you would fetch from API:
-        // const response = await fetch(`${API_BASE_URL}/users/me`);
-        // const user = await response.json();
-        // setUserName(user.name);
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
+
+        setCourses(courseData);
+        setSessions(sessionResponse.sessions || []);
+
+        if (enrollmentsResp.ok) {
+          const enrollmentData = await enrollmentsResp.json();
+          setEnrollments(Array.isArray(enrollmentData) ? enrollmentData : []);
+        } else {
+          setEnrollments([]);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
-    fetchUserProfile();
-  }, []);
 
-  useEffect(() => {
-    fetchCourses().then((data) => {
-      const courseList = data.length > 0 ? data : getFallbackCourses();
-      setCourses(courseList);
-      setLoading(false);
-    });
-  }, []);
+    load();
 
-  // Theme-aware colors - TRUE GLASSMORPHISM
+    return () => {
+      isMounted = false;
+    };
+  }, [userId]);
+
   const colors = useMemo(
     () => ({
-      bg: isDark ? "var(--sb-color-background)" : "var(--sb-color-background)",
-      // Glass surfaces - VERY translucent so background shows through
+      bg: "var(--sb-color-background)",
       surface: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.25)",
       surfaceHover: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.35)",
-      // Glass borders - subtle white edge to catch light
       border: isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.5)",
       borderHover: isDark ? "rgba(255, 255, 255, 0.25)" : "rgba(255, 255, 255, 0.7)",
       text: isDark ? "#fff" : "#111",
       textSecondary: isDark ? "rgba(255, 255, 255, 0.7)" : "#4b5563",
       textMuted: isDark ? "rgba(255, 255, 255, 0.5)" : "#6b7280",
       accent: "#FFD600",
-      // Glass card - very translucent
       cardBg: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.3)",
-      // Glass shadow - soft and subtle
-      glassShadow: isDark
-        ? "0 8px 32px rgba(0, 0, 0, 0.3)"
-        : "0 8px 32px rgba(31, 38, 135, 0.15)",
+      cardBgStrong: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.5)",
+      glassShadow: isDark ? "0 8px 32px rgba(0, 0, 0, 0.3)" : "0 8px 32px rgba(31, 38, 135, 0.15)",
     }),
-    [isDark]
+    [isDark],
   );
 
-  if (view === "dashboard") {
+  const publishedCourses = useMemo(
+    () => courses.filter((course) => !course.state || course.state === "published"),
+    [courses],
+  );
+
+  const activeEnrollments = useMemo(
+    () => enrollments.filter((enrollment) => enrollment.status !== "dropped"),
+    [enrollments],
+  );
+
+  const hasEnrollment = activeEnrollments.length > 0;
+  const dashboardPaddingLeft = isDesktop && hasEnrollment ? dashboardBasePaddingLeft : pagePaddingX;
+  const showDesktopAcademySidebar = isDashboardRoute && isDesktop && hasEnrollment;
+  const showOverlayAcademySidebar = isDashboardRoute && !isDesktop && hasEnrollment;
+
+  const enrollmentByCourseId = useMemo(
+    () => Object.fromEntries(activeEnrollments.map((enrollment) => [enrollment.course_id, enrollment])),
+    [activeEnrollments],
+  );
+  const enrolledCourseIds = useMemo(
+    () => new Set(activeEnrollments.map((enrollment) => enrollment.course_id)),
+    [activeEnrollments],
+  );
+  const enrolledCourses = useMemo(
+    () => publishedCourses.filter((course) => enrolledCourseIds.has(course.id)),
+    [enrolledCourseIds, publishedCourses],
+  );
+
+  const pathSummaries = useMemo(() => {
+    return learningPaths.map((path) => {
+      const includedCourses = resolveLearningPathCourses(path, publishedCourses);
+      const completedCount = includedCourses.filter(
+        (course) => (enrollmentByCourseId[course.id]?.progress_percent ?? 0) >= 100,
+      ).length;
+      const totalProgress = includedCourses.reduce(
+        (sum, course) => sum + (enrollmentByCourseId[course.id]?.progress_percent ?? 0),
+        0,
+      );
+      const progress = includedCourses.length > 0 ? Math.round(totalProgress / includedCourses.length) : 0;
+      const nextCourse =
+        includedCourses.find((course) => (enrollmentByCourseId[course.id]?.progress_percent ?? 0) < 100) ??
+        includedCourses[0] ??
+        null;
+
+      return {
+        path,
+        includedCourses,
+        completedCount,
+        progress,
+        nextCourse,
+      };
+    });
+  }, [enrollmentByCourseId, learningPaths, publishedCourses]);
+
+  const enrolledPathSummaries = useMemo(
+    () =>
+      pathSummaries.filter((summary) =>
+        summary.includedCourses.some((course) => enrolledCourseIds.has(course.id)),
+      ),
+    [enrolledCourseIds, pathSummaries],
+  );
+
+  const recommendedPath = useMemo(() => {
+    const inProgressPath = [...pathSummaries]
+      .filter((summary) => summary.progress > 0)
+      .sort((left, right) => right.progress - left.progress)[0];
+
     return (
-      <UnifiedLayout variant="dashboard" bgToUse={colors.bg}>
-        {/* GLASSMORPHISM Background - Vivid colors that show through glass */}
-        {/* Primary gradient orb - top center (purple/violet) */}
-        <div
-          style={{
-            position: "fixed",
-            top: "-30%",
-            left: "30%",
-            width: "800px",
-            height: "800px",
-            background: isDark
-              ? "radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(139, 92, 246, 0.2) 30%, transparent 60%)"
-              : "radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, rgba(139, 92, 246, 0.1) 30%, transparent 60%)",
-            pointerEvents: "none",
-            zIndex: 0,
-            filter: "blur(40px)",
-          }}
-          aria-hidden="true"
-        />
-        {/* Secondary gradient orb - right (pink/magenta) */}
-        <div
-          style={{
-            position: "fixed",
-            top: "20%",
-            right: "-10%",
-            width: "600px",
-            height: "600px",
-            background: isDark
-              ? "radial-gradient(circle, rgba(236, 72, 153, 0.4) 0%, rgba(236, 72, 153, 0.15) 30%, transparent 60%)"
-              : "radial-gradient(circle, rgba(236, 72, 153, 0.25) 0%, rgba(236, 72, 153, 0.08) 30%, transparent 60%)",
-            pointerEvents: "none",
-            zIndex: 0,
-            filter: "blur(60px)",
-          }}
-          aria-hidden="true"
-        />
-        {/* Tertiary gradient orb - bottom left (cyan/teal) */}
-        <div
-          style={{
-            position: "fixed",
-            bottom: "-10%",
-            left: "-10%",
-            width: "700px",
-            height: "700px",
-            background: isDark
-              ? "radial-gradient(circle, rgba(6, 182, 212, 0.35) 0%, rgba(6, 182, 212, 0.1) 30%, transparent 60%)"
-              : "radial-gradient(circle, rgba(6, 182, 212, 0.2) 0%, rgba(6, 182, 212, 0.05) 30%, transparent 60%)",
-            pointerEvents: "none",
-            zIndex: 0,
-            filter: "blur(50px)",
-          }}
-          aria-hidden="true"
-        />
-        {/* Accent gradient orb - center right (yellow/gold) */}
-        <div
-          style={{
-            position: "fixed",
-            top: "50%",
-            right: "20%",
-            width: "400px",
-            height: "400px",
-            background: isDark
-              ? "radial-gradient(circle, rgba(255, 214, 0, 0.25) 0%, transparent 50%)"
-              : "radial-gradient(circle, rgba(255, 214, 0, 0.15) 0%, transparent 50%)",
-            pointerEvents: "none",
-            zIndex: 0,
-            filter: "blur(40px)",
-          }}
-          aria-hidden="true"
-        />
-
-        <nav style={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 50,
-          background: colors.surface, backdropFilter: "blur(24px) saturate(180%)",
-          WebkitBackdropFilter: "blur(24px) saturate(180%)",
-          borderBottom: `1px solid ${colors.border}`,
-          boxShadow: colors.glassShadow,
-        }}>
-          <div
-            className="w-full pr-4 sm:pr-6 lg:pr-8"
-            style={{ paddingLeft: navPaddingLeft }}
-          >
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-3">
-                {/* Mobile menu toggle */}
-                {isMobile && (
-                  <button
-                    onClick={sidebar.toggle}
-                    className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                    aria-label={sidebar.isOpen ? "Close menu" : "Open menu"}
-                  >
-                    {sidebar.isOpen ? (
-                      <X className="w-6 h-6" style={{ color: colors.text }} />
-                    ) : (
-                      <Menu className="w-6 h-6" style={{ color: colors.text }} />
-                    )}
-                  </button>
-                )}
-
-                <button
-                  onClick={() => setView("landing")}
-                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center">
-                    <LearningHatIcon size={24} strokeWidth={1.8} />
-                  </div>
-                  {!isMobile && (
-                    <span className="font-bold text-xl">Street Voices Academy</span>
-                  )}
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2 sm:gap-3">
-                <button
-                  className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                  title="Search courses"
-                >
-                  <Search className="w-5 h-5 text-gray-400" />
-                </button>
-                <button
-                  className="p-2 rounded-lg hover:bg-white/10 transition-colors relative"
-                  title="Notifications"
-                >
-                  <Bell className="w-5 h-5 text-gray-400" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-                </button>
-                {!isMobile && (
-                  <button
-                    onClick={() => setView("landing")}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-                  >
-                    Exit Dashboard
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </nav>
-
-        {/* Mobile Sidebar Overlay */}
-        <AnimatePresence>
-          {isMobile && sidebar.isOpen && (
-            <>
-              {/* Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={sidebar.close}
-                className="fixed inset-0 z-40"
-                style={{ background: "rgba(0, 0, 0, 0.5)", backdropFilter: "blur(4px)" }}
-              />
-              {/* Sidebar */}
-              <motion.div
-                initial={{ x: "-100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "-100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                className="fixed left-0 top-0 bottom-0 z-50 w-72"
-                style={{
-                  background: colors.surface,
-                  backdropFilter: "blur(24px)",
-                  borderRight: `1px solid ${colors.border}`,
-                }}
-              >
-                <div className="p-4 border-b" style={{ borderColor: colors.border }}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-lg" style={{ color: colors.text }}>Menu</span>
-                    <button onClick={sidebar.close} className="p-2 rounded-lg hover:bg-white/10">
-                      <X className="w-5 h-5" style={{ color: colors.text }} />
-                    </button>
-                  </div>
-                </div>
-                <AcademySidebar />
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-
-        {/* Desktop Sidebar */}
-        {!isMobile && <AcademySidebar />}
-
-        {/* Dashboard Content */}
-        <div
-          className="pt-24 px-4 sm:px-6 pb-8"
-          style={{
-            marginLeft: isMobile ? 0 : isTablet ? "60px" : "calc(var(--sidebar-width, 0px) + 240px)",
-            transition: "margin-left 0.3s ease",
-          }}
-        >
-          {/* Breadcrumb Navigation */}
-          {isMobile ? (
-            <BreadcrumbCompact
-              items={[
-                { label: "Academy", href: "/academy", icon: "home" },
-                { label: "Dashboard", icon: "home" },
-              ]}
-              className="mb-4"
-            />
-          ) : (
-            <Breadcrumb
-              items={[
-                { label: "Academy", href: "/academy", icon: "home" },
-                { label: "Dashboard" },
-              ]}
-              className="mb-6"
-            />
-          )}
-
-          {/* Loading State with Skeleton */}
-          {loading ? (
-            <DashboardSkeleton />
-          ) : (
-            <>
-              <>
-              {/* Welcome Section - Personalized */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-8"
-              >
-                <h2 className="text-2xl sm:text-3xl font-bold mb-2" style={{ color: colors.text }}>
-                  {getPersonalizedGreeting(userName)}
-                </h2>
-                <p style={{ color: colors.textSecondary }}>
-                  {getMotivationalMessage(courses.filter(c => (c.progress || 0) > 0 && (c.progress || 0) < 100).length, userStats.streakDays)}
-                </p>
-              </motion.div>
-
-              {/* Stats Grid - Responsive */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8 sm:mb-12">
-                {dashboardStats.map((stat, index) => (
-                  <motion.div
-                    key={stat.label}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    style={{
-                      background: colors.cardBg,
-                      backdropFilter: "blur(24px) saturate(180%)",
-                      WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                      borderRadius: isMobile ? "16px" : "24px",
-                      border: `1px solid ${colors.border}`,
-                      padding: isMobile ? "16px" : "24px",
-                      boxShadow: colors.glassShadow,
-                      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isMobile) {
-                        e.currentTarget.style.transform = "translateY(-4px)";
-                        e.currentTarget.style.borderColor = colors.borderHover;
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isMobile) {
-                        e.currentTarget.style.transform = "translateY(0)";
-                        e.currentTarget.style.borderColor = colors.border;
-                      }
-                    }}
-                  >
-                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${stat.bg} flex items-center justify-center mb-3 sm:mb-4`}>
-                      <stat.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.color}`} />
-                    </div>
-                    <div className="text-xl sm:text-3xl font-bold mb-1" style={{ color: colors.text }}>{stat.value}</div>
-                    <div style={{ color: colors.textSecondary }} className="text-xs sm:text-sm">{stat.label}</div>
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Continue Learning - Responsive */}
-              <div className="mb-8 sm:mb-12">
-                <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <h3 className="text-xl sm:text-2xl font-bold" style={{ color: colors.text }}>Continue Learning</h3>
-                  <a
-                    href="/academy/courses"
-                    className="text-yellow-400 hover:text-yellow-300 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2"
-                  >
-                    View All <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
-                  </a>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                  {courses.slice(0, 2).map((course, index) => (
-                    <motion.div
-                      key={course.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 + index * 0.1 }}
-                      style={{
-                        background: colors.cardBg,
-                        backdropFilter: "blur(24px) saturate(180%)",
-                        WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                        borderRadius: isMobile ? "16px" : "24px",
-                        border: `1px solid ${colors.border}`,
-                        padding: isMobile ? "16px" : "24px",
-                        boxShadow: colors.glassShadow,
-                        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                      }}
-                      className="group"
-                      onMouseEnter={(e) => {
-                        if (!isMobile) {
-                          e.currentTarget.style.transform = "translateY(-4px)";
-                          e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.5)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isMobile) {
-                          e.currentTarget.style.transform = "translateY(0)";
-                          e.currentTarget.style.borderColor = colors.border;
-                        }
-                      }}
-                    >
-                      <div className="flex items-start justify-between mb-3 sm:mb-4">
-                        <div className="flex-1 min-w-0">
-                          <span style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wide">{course.category}</span>
-                          <h4 style={{ color: colors.text }} className="text-base sm:text-lg font-bold mt-1 group-hover:text-yellow-400 transition-colors truncate">
-                            {course.title}
-                          </h4>
-                        </div>
-                        <Play className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2" />
-                      </div>
-                      <p style={{ color: colors.textSecondary }} className="text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2">{course.description}</p>
-
-                      {/* Progress Bar */}
-                      {course.progress !== undefined && (
-                        <div>
-                          <div className="flex items-center justify-between text-xs sm:text-sm mb-2">
-                            <span style={{ color: colors.textSecondary }}>Progress</span>
-                            <span className="text-yellow-400 font-medium">{course.progress}%</span>
-                          </div>
-                          <div style={{ background: "rgba(255, 255, 255, 0.1)" }} className="w-full rounded-full h-1.5 sm:h-2">
-                            <motion.div
-                              className="bg-yellow-400 h-full rounded-full"
-                              initial={{ width: 0 }}
-                              animate={{ width: `${course.progress}%` }}
-                              transition={{ duration: 0.8, ease: "easeOut" }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-
-              {/* All Courses - Responsive */}
-              <div>
-                <h3 style={{ color: colors.text }} className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Explore Courses</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                  {courses.map((course, index) => (
-                    <motion.div
-                      key={course.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      viewport={{ once: true }}
-                      style={{
-                        background: colors.cardBg,
-                        backdropFilter: "blur(24px) saturate(180%)",
-                        WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                        borderRadius: isMobile ? "16px" : "24px",
-                        border: `1px solid ${colors.border}`,
-                        overflow: "hidden",
-                        boxShadow: colors.glassShadow,
-                        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                        cursor: "pointer",
-                      }}
-                      className="group"
-                      onMouseEnter={(e) => {
-                        if (!isMobile) {
-                          e.currentTarget.style.transform = "translateY(-4px)";
-                          e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.5)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isMobile) {
-                          e.currentTarget.style.transform = "translateY(0)";
-                          e.currentTarget.style.borderColor = colors.border;
-                        }
-                      }}
-                    >
-                      {/* Thumbnail Placeholder */}
-                      <div className="h-24 sm:h-40 bg-gradient-to-br from-yellow-400/20 to-purple-600/20 flex items-center justify-center">
-                        <BookOpen className="w-8 h-8 sm:w-12 sm:h-12 text-yellow-400 opacity-50" />
-                      </div>
-
-                      <div className="p-3 sm:p-4">
-                        <span style={{ color: colors.textMuted }} className="text-[10px] sm:text-xs uppercase tracking-wide">{course.category}</span>
-                        <h4 style={{ color: colors.text }} className="font-bold text-sm sm:text-base mt-1 mb-1 sm:mb-2 group-hover:text-yellow-400 transition-colors line-clamp-1 sm:line-clamp-none">
-                          {course.title}
-                        </h4>
-                        <p style={{ color: colors.textSecondary }} className="text-xs sm:text-sm mb-2 sm:mb-3 line-clamp-2 hidden sm:block">{course.description}</p>
-
-                        <div style={{ color: colors.textMuted }} className="flex items-center justify-between text-[10px] sm:text-xs">
-                          <span>{course.level}</span>
-                          <span className="hidden sm:inline">{course.duration}</span>
-                        </div>
-
-                        {/* Ask Instructor Button - Hidden on mobile for space */}
-                        {course.instructor && !isMobile && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const context = encodeURIComponent(
-                                `I have a question about the course "${course.title}"${course.instructor ? ` taught by ${course.instructor}` : ""}. Can you help me?`
-                              );
-                              window.location.href = `/chat?context=${context}`;
-                            }}
-                            className="mt-3 w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all"
-                            style={{
-                              background: isDark ? "rgba(255, 214, 0, 0.15)" : "rgba(255, 214, 0, 0.2)",
-                              color: colors.accent,
-                              border: `1px solid ${isDark ? "rgba(255, 214, 0, 0.3)" : "rgba(255, 214, 0, 0.4)"}`,
-                            }}
-                          >
-                            <MessageCircle size={14} />
-                            Ask About Course
-                          </button>
-                        )}
-                        {!isMobile && (
-                          <div style={{ marginTop: 8 }}>
-                            <CrossLink
-                              icon={CalendarDays}
-                              label="Schedule Study"
-                              to={`/calendar?action=new&title=${encodeURIComponent('Study: ' + course.title)}`}
-                              variant="chip"
-                              color="#8b5cf6"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-              </>
-            </>
-          )}
-        </div>
-      </UnifiedLayout>
+      inProgressPath ??
+      pathSummaries.find((summary) => summary.path.slug === "digital-basics") ??
+      pathSummaries[0] ??
+      null
     );
-  }
+  }, [pathSummaries]);
 
-  return (
-    <UnifiedLayout variant="full" bgToUse={colors.bg}>
-      {/* GLASSMORPHISM Background - Vivid colors that show through glass */}
-      {/* Primary gradient orb - top center (purple/violet) */}
+  const continueCourse = useMemo(() => {
+    return (
+      enrolledCourses.find((course) => {
+        const progress = enrollmentByCourseId[course.id]?.progress_percent ?? 0;
+        return progress > 0 && progress < 100;
+      }) ??
+      enrolledCourses[0] ??
+      null
+    );
+  }, [enrollmentByCourseId, enrolledCourses]);
+
+  const completedCourses = useMemo(
+    () => activeEnrollments.filter((enrollment) => enrollment.progress_percent >= 100).length,
+    [activeEnrollments],
+  );
+
+  const inProgressCourses = useMemo(
+    () =>
+      activeEnrollments.filter(
+        (enrollment) => enrollment.progress_percent > 0 && enrollment.progress_percent < 100,
+      ).length,
+    [activeEnrollments],
+  );
+
+  const upcomingSessions = useMemo(() => {
+    const now = Date.now();
+    return [...sessions]
+      .filter((session) => session.status === "scheduled" && new Date(session.scheduled_end).getTime() >= now)
+      .sort((left, right) => new Date(left.scheduled_start).getTime() - new Date(right.scheduled_start).getTime());
+  }, [sessions]);
+
+  const enrolledUpcomingSessions = useMemo(
+    () => upcomingSessions.filter((session) => enrolledCourseIds.has(session.course_id)),
+    [enrolledCourseIds, upcomingSessions],
+  );
+
+  const dashboardStats = useMemo(
+    () => [
+      { label: "Courses Enrolled", value: `${activeEnrollments.length}`, icon: BookOpen, color: "#FACC15" },
+      { label: "In Progress", value: `${inProgressCourses}`, icon: Target, color: "#8B5CF6" },
+      { label: "Upcoming Live", value: `${enrolledUpcomingSessions.length}`, icon: CalendarDays, color: "#10B981" },
+      { label: "Completed", value: `${completedCourses}`, icon: PlayCircle, color: "#60A5FA" },
+    ],
+    [activeEnrollments.length, completedCourses, enrolledUpcomingSessions.length, inProgressCourses],
+  );
+
+  useEffect(() => {
+    if (!hasEnrollment) {
+      setSelectedDashboardCourseId(null);
+      return;
+    }
+
+    if (
+      selectedDashboardCourseId &&
+      enrolledCourses.some((course) => course.id === selectedDashboardCourseId)
+    ) {
+      return;
+    }
+
+    setSelectedDashboardCourseId(continueCourse?.id ?? enrolledCourses[0]?.id ?? null);
+  }, [continueCourse, enrolledCourses, hasEnrollment, selectedDashboardCourseId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDashboardModules() {
+      if (!isDashboardRoute || !selectedDashboardCourseId) {
+        setDashboardModules([]);
+        return;
+      }
+
+      setDashboardModulesLoading(true);
+
+      try {
+        const modulesResponse = await sbFetch(`/api/academy/courses/${selectedDashboardCourseId}/modules`);
+        const modulesData = modulesResponse.ok ? await modulesResponse.json() : [];
+        const sortedModules = Array.isArray(modulesData) ? modulesData : [];
+
+        const modulesWithLessons = await Promise.all(
+          sortedModules.map(async (module: Module) => {
+            const lessonsResponse = await sbFetch(`/api/academy/modules/${module.id}/lessons`);
+            const lessonsData = lessonsResponse.ok ? await lessonsResponse.json() : [];
+
+            return {
+              ...module,
+              lessons: Array.isArray(lessonsData) ? lessonsData : [],
+            };
+          }),
+        );
+
+        if (isMounted) {
+          setDashboardModules(modulesWithLessons);
+        }
+      } catch {
+        if (isMounted) {
+          setDashboardModules([]);
+        }
+      } finally {
+        if (isMounted) {
+          setDashboardModulesLoading(false);
+        }
+      }
+    }
+
+    loadDashboardModules();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isDashboardRoute, selectedDashboardCourseId]);
+
+  const selectedDashboardCourse = useMemo(
+    () => enrolledCourses.find((course) => course.id === selectedDashboardCourseId) ?? continueCourse ?? enrolledCourses[0] ?? null,
+    [continueCourse, enrolledCourses, selectedDashboardCourseId],
+  );
+
+  const selectedDashboardPath = useMemo(() => {
+    if (!selectedDashboardCourse) {
+      return recommendedPath ?? null;
+    }
+
+    return (
+      pathSummaries.find((summary) =>
+        summary.includedCourses.some((course) => course.id === selectedDashboardCourse.id),
+      ) ?? recommendedPath ?? null
+    );
+  }, [pathSummaries, recommendedPath, selectedDashboardCourse]);
+
+  const selectedDashboardPathCourses = useMemo(() => {
+    if (!selectedDashboardPath) {
+      return [];
+    }
+
+    return selectedDashboardPath.includedCourses.filter((course) => enrolledCourseIds.has(course.id));
+  }, [enrolledCourseIds, selectedDashboardPath]);
+
+  const selectedDashboardSessions = useMemo(() => {
+    if (!selectedDashboardCourse) {
+      return [];
+    }
+
+    return enrolledUpcomingSessions.filter((session) => session.course_id === selectedDashboardCourse.id);
+  }, [enrolledUpcomingSessions, selectedDashboardCourse]);
+
+  const navLinks = [
+    { href: `${academyBasePath}`, label: "Home", icon: Compass },
+    { href: `${academyBasePath}/paths`, label: "Learning Paths", icon: Target },
+    { href: `${academyBasePath}/courses`, label: "Courses", icon: BookOpen },
+    ...(hasEnrollment
+      ? [
+          { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
+          { href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award },
+        ]
+      : []),
+  ];
+
+  const backgroundOrbs = (
+    <>
       <div
         style={{
           position: "fixed",
@@ -749,7 +485,6 @@ export default function AcademyClient() {
         }}
         aria-hidden="true"
       />
-      {/* Secondary gradient orb - right (pink/magenta) */}
       <div
         style={{
           position: "fixed",
@@ -766,7 +501,6 @@ export default function AcademyClient() {
         }}
         aria-hidden="true"
       />
-      {/* Tertiary gradient orb - bottom left (cyan/teal) */}
       <div
         style={{
           position: "fixed",
@@ -783,7 +517,6 @@ export default function AcademyClient() {
         }}
         aria-hidden="true"
       />
-      {/* Accent gradient orb - center right (yellow/gold) */}
       <div
         style={{
           position: "fixed",
@@ -800,502 +533,728 @@ export default function AcademyClient() {
         }}
         aria-hidden="true"
       />
+    </>
+  );
 
-      {/* Navigation */}
-      <nav style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 50,
-        background: colors.surface, backdropFilter: "blur(24px) saturate(180%)",
+  const topNav = (
+    <nav
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 50,
+        background: colors.surface,
+        backdropFilter: "blur(24px) saturate(180%)",
         WebkitBackdropFilter: "blur(24px) saturate(180%)",
         borderBottom: `1px solid ${colors.border}`,
         boxShadow: colors.glassShadow,
-      }}>
-          <div
-            className="w-full pr-4 sm:pr-6 lg:pr-8"
-            style={{ paddingLeft: navPaddingLeft }}
-          >
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center">
-                <LearningHatIcon size={24} strokeWidth={1.8} />
-              </div>
-              <span className="font-bold text-xl">Street Voices Academy</span>
+      }}
+    >
+      <div
+        style={{
+          marginLeft: isDesktop ? desktopNavInset : 0,
+          width: isDesktop ? `calc(100% - ${desktopNavInset}px)` : "100%",
+          paddingLeft: pagePaddingX,
+          paddingRight: pagePaddingX,
+          transition: "margin-left 0.2s ease-out, width 0.2s ease-out",
+        }}
+      >
+        <div className="relative h-16">
+          <div className="flex h-full items-center justify-between gap-4 md:hidden">
+            <div className="w-10">
+              {showOverlayAcademySidebar && (
+                <button
+                  onClick={sidebar.toggle}
+                  className="rounded-lg p-2 hover:bg-white/10 transition-colors"
+                  aria-label={sidebar.isOpen ? "Close menu" : "Open menu"}
+                >
+                  {sidebar.isOpen ? (
+                    <X className="h-6 w-6" style={{ color: colors.text }} />
+                  ) : (
+                    <Menu className="h-6 w-6" style={{ color: colors.text }} />
+                  )}
+                </button>
+              )}
             </div>
 
-            {/* Nav Links - Clean landing page nav */}
-            <div className="hidden md:flex items-center gap-6">
-              <a href="/academy/courses" className="text-gray-400 hover:text-white transition-colors">
-                Courses
-              </a>
-              <a href="/academy/paths" className="text-gray-400 hover:text-white transition-colors">
-                Learning Paths
-              </a>
-              <a href="/academy/live-sessions" className="text-green-400 hover:text-green-300 transition-colors flex items-center gap-1">
-                <Video className="w-4 h-4" />
-                Live
-              </a>
-              <a href="/academy/instructor" className="text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1">
-                <ClipboardCheck className="w-4 h-4" />
-                Instructor
-              </a>
-              <a href="/groups" className="text-gray-400 hover:text-white transition-colors">
-                Community
-              </a>
+            <div className="flex min-w-0 flex-1 items-center justify-center gap-4 overflow-x-auto">
+              {navLinks.map((item) => {
+                const isRootAcademyLink = item.href === academyBasePath;
+                const isActive = isRootAcademyLink
+                  ? location.pathname === item.href
+                  : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className="whitespace-nowrap text-sm transition-colors"
+                    style={{ color: isActive ? colors.text : colors.textSecondary }}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
             </div>
 
-            {/* CTA Button */}
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setView("dashboard")}
-                className="px-6 py-2 bg-yellow-400 text-black rounded-full font-medium hover:bg-yellow-300 transition-colors"
+            <div className="w-10" />
+          </div>
+
+          <div className="hidden h-full items-center md:grid md:grid-cols-[1fr_auto_1fr]">
+            <div />
+
+            <div
+              className="flex items-center justify-center gap-6"
+              style={{ maxWidth: `min(${contentMaxWidth}px, calc(100vw - ${desktopNavInset}px - 240px))` }}
+            >
+              {navLinks.map((item) => {
+                const isRootAcademyLink = item.href === academyBasePath;
+                const isActive = isRootAcademyLink
+                  ? location.pathname === item.href
+                  : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className="whitespace-nowrap transition-colors"
+                    style={{ color: isActive ? colors.text : colors.textSecondary }}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
+            </div>
+
+            <div className="justify-self-end text-right">
+              <a
+                href={`${academyBasePath}/instructor`}
+                className="inline-flex text-sm font-medium"
+                style={{ color: "#C084FC" }}
               >
-                Get Started
-              </button>
+                Instructor Workspace
+              </a>
             </div>
           </div>
         </div>
-      </nav>
+      </div>
+    </nav>
+  );
 
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-20 px-4 overflow-hidden" style={{ zIndex: 1 }}>
-        {/* Background Effects */}
+  if (isDashboardRoute) {
+    return (
+      <UnifiedLayout bgToUse={colors.bg}>
+        {backgroundOrbs}
+        {topNav}
+
+        <AnimatePresence>
+          {showOverlayAcademySidebar && sidebar.isOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={sidebar.close}
+                className="fixed inset-0 z-40"
+                style={{ background: "rgba(0, 0, 0, 0.5)", backdropFilter: "blur(4px)" }}
+              />
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="fixed left-0 top-0 bottom-0 z-50 w-72"
+                style={{
+                  background: colors.surface,
+                  backdropFilter: "blur(24px)",
+                  borderRight: `1px solid ${colors.border}`,
+                }}
+              >
+                <div className="border-b p-4" style={{ borderColor: colors.border }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold" style={{ color: colors.text }}>
+                      Academy
+                    </span>
+                    <button onClick={sidebar.close} className="rounded-lg p-2 hover:bg-white/10">
+                      <X className="h-5 w-5" style={{ color: colors.text }} />
+                    </button>
+                  </div>
+                </div>
+                <AcademySidebar layout="inline" />
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        {showDesktopAcademySidebar && <AcademySidebar offsetLeft={desktopNavInset} />}
+
+        <div
+          className="pb-8 pt-24"
+          style={{
+            paddingLeft: dashboardPaddingLeft,
+            paddingRight: pagePaddingX,
+            transition: "padding-left 0.2s ease-out",
+          }}
+        >
+          <div className="mx-auto w-full max-w-6xl">
+            {loading ? (
+              <DashboardSkeleton />
+            ) : !hasEnrollment ? (
+              <section>
+                <div
+                  className="rounded-[28px] border p-8 text-center md:p-10"
+                  style={{
+                    borderColor: colors.border,
+                    background: colors.cardBg,
+                    backdropFilter: "blur(24px)",
+                    boxShadow: colors.glassShadow,
+                  }}
+                >
+                  <div
+                    className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
+                    style={{ background: "rgba(255,214,0,0.12)" }}
+                  >
+                    <LayoutDashboard className="h-7 w-7" style={{ color: colors.accent }} />
+                  </div>
+                  <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
+                    Enroll to unlock your dashboard
+                  </h1>
+                  <p className="mx-auto mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
+                    Start with a learning path or a course first, then your dashboard will open here.
+                  </p>
+                  <a
+                    href={`${academyBasePath}/paths`}
+                    className="mt-6 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+                    style={{ background: colors.accent, color: "#000" }}
+                  >
+                    Choose a path
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                </div>
+              </section>
+            ) : (
+              <>
+                <section className="mb-8">
+                  <div
+                    className="rounded-[28px] border p-6 md:p-8"
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBg,
+                      backdropFilter: "blur(24px)",
+                      boxShadow: colors.glassShadow,
+                    }}
+                  >
+                    <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
+                      <div>
+                        <div
+                          className="mb-4 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold"
+                          style={{ background: "rgba(255,214,0,0.12)", color: colors.accent }}
+                        >
+                          <LayoutDashboard className="h-3.5 w-3.5" />
+                          Dashboard
+                        </div>
+                        <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
+                          {getPersonalizedGreeting(userName)}
+                        </h1>
+                        <p className="mt-3 max-w-2xl text-base" style={{ color: colors.textSecondary }}>
+                          Continue your course and see what is next.
+                        </p>
+                      </div>
+
+                      <div
+                        className="rounded-[24px] border p-5"
+                        style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                      >
+                        <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                          Recommended next step
+                        </p>
+                        <h2 className="mt-2 text-xl font-semibold" style={{ color: colors.text }}>
+                          {continueCourse?.title ?? "Choose your first course"}
+                        </h2>
+                        <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+                          {selectedDashboardPath ? `From ${selectedDashboardPath.path.title}.` : "Pick a path to begin."}
+                        </p>
+                        <a
+                          href={continueCourse ? `${academyBasePath}/courses/${continueCourse.id}` : `${academyBasePath}/paths`}
+                          className="mt-4 inline-flex items-center gap-2 text-sm font-semibold"
+                          style={{ color: colors.accent }}
+                        >
+                          {continueCourse ? "Continue Learning" : "Choose a Learning Path"}
+                          <ArrowRight className="h-4 w-4" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-6">
+                  {dashboardStats.map((stat) => (
+                    <div
+                      key={stat.label}
+                      style={{
+                        background: colors.cardBg,
+                        backdropFilter: "blur(24px)",
+                        borderRadius: isMobile ? "16px" : "24px",
+                        border: `1px solid ${colors.border}`,
+                        padding: isMobile ? "16px" : "24px",
+                        boxShadow: colors.glassShadow,
+                      }}
+                    >
+                      <div
+                        className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
+                        style={{ background: `${stat.color}20` }}
+                      >
+                        <stat.icon className="h-6 w-6" style={{ color: stat.color }} />
+                      </div>
+                      <div className="text-3xl font-bold" style={{ color: colors.text }}>
+                        {stat.value}
+                      </div>
+                      <div className="mt-1 text-sm" style={{ color: colors.textSecondary }}>
+                        {stat.label}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+
+                <section className="mb-8 grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
+                  <div
+                    className="rounded-[28px] border p-6"
+                    style={{ borderColor: colors.border, background: colors.cardBg }}
+                  >
+                    <div className="mb-5 flex items-center justify-between gap-4">
+                      <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                        Your Enrolled Paths
+                      </h2>
+                      <span className="text-sm" style={{ color: colors.textMuted }}>
+                        {enrolledPathSummaries.length} active
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {enrolledPathSummaries.map((summary) => {
+                        const isSelected = selectedDashboardPath?.path.slug === summary.path.slug;
+                        return (
+                          <div
+                            key={summary.path.slug}
+                            className="rounded-[22px] border p-4"
+                            style={{
+                              borderColor: isSelected ? summary.path.color : colors.border,
+                              background: isSelected ? colors.cardBgStrong : colors.cardBg,
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                                  {summary.path.title}
+                                </p>
+                                <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
+                                  {summary.includedCourses.filter((course) => enrolledCourseIds.has(course.id)).length} enrolled courses
+                                </p>
+                              </div>
+                              <span className="text-sm font-semibold" style={{ color: summary.path.color }}>
+                                {summary.progress}%
+                              </span>
+                            </div>
+                            <div className="mt-3 h-2 w-full rounded-full" style={{ background: "rgba(255,255,255,0.12)" }}>
+                              <div className="h-full rounded-full" style={{ width: `${summary.progress}%`, background: summary.path.color }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div
+                    className="rounded-[28px] border p-6"
+                    style={{ borderColor: colors.border, background: colors.cardBg }}
+                  >
+                    <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                      Current path
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
+                      {selectedDashboardPath?.path.title ?? "Your learning path"}
+                    </h2>
+                    <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+                      {selectedDashboardPath?.path.description ??
+                        "Enroll in a path to see your full program plan here."}
+                    </p>
+
+                    <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
+                      <span>{selectedDashboardPathCourses.length} enrolled courses</span>
+                      <span>{selectedDashboardPath?.completedCount ?? 0} completed</span>
+                      <span>{selectedDashboardPath?.progress ?? 0}% complete</span>
+                    </div>
+
+                    <div className="mt-5 space-y-3">
+                      {selectedDashboardPathCourses.map((course) => {
+                        const progress = enrollmentByCourseId[course.id]?.progress_percent ?? 0;
+                        return (
+                          <div
+                            key={course.id}
+                            className="rounded-[22px] border p-4"
+                            style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                                  {course.title}
+                                </p>
+                                <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
+                                  {course.duration || "Self-paced"}
+                                </p>
+                              </div>
+                              <span className="text-sm font-semibold" style={{ color: colors.accent }}>
+                                {progress}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {selectedDashboardPathCourses.length === 0 && (
+                        <div className="rounded-[22px] border p-5 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+                          Your enrolled classes will appear here as part of your learning path.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="mb-8 grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
+                  <div
+                    className="rounded-[28px] border p-6"
+                    style={{ borderColor: colors.border, background: colors.cardBg }}
+                  >
+                    <div className="mb-5 flex items-center justify-between gap-4">
+                      <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                        Your Enrolled Classes
+                      </h2>
+                      <span className="text-sm" style={{ color: colors.textMuted }}>
+                        {enrolledCourses.length} active
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {enrolledCourses.map((course) => {
+                        const progress = enrollmentByCourseId[course.id]?.progress_percent ?? 0;
+                        const isActive = selectedDashboardCourse?.id === course.id;
+                        return (
+                          <button
+                            key={course.id}
+                            onClick={() => setSelectedDashboardCourseId(course.id)}
+                            className="w-full rounded-[22px] border p-4 text-left transition-colors"
+                            style={{
+                              borderColor: isActive ? colors.accent : colors.border,
+                              background: isActive ? colors.cardBgStrong : colors.cardBg,
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                                  {course.title}
+                                </p>
+                                <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
+                                  {course.category || "General"} · {course.duration || "Self-paced"}
+                                </p>
+                              </div>
+                              <span className="text-sm font-semibold" style={{ color: colors.accent }}>
+                                {progress}%
+                              </span>
+                            </div>
+                            <div className="mt-3 h-2 w-full rounded-full" style={{ background: "rgba(255,255,255,0.12)" }}>
+                              <div className="h-full rounded-full" style={{ width: `${progress}%`, background: colors.accent }} />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div
+                    className="rounded-[28px] border p-6"
+                    style={{ borderColor: colors.border, background: colors.cardBg }}
+                  >
+                    <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                      Selected class
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
+                      {selectedDashboardCourse?.title ?? "Choose a class"}
+                    </h2>
+                    <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+                      {selectedDashboardCourse?.description ??
+                        "Choose an enrolled class to see its curriculum, live sessions, assignments, materials, and discussion space."}
+                    </p>
+
+                    <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
+                      <span>{selectedDashboardPath?.path.title ?? "Learning path"}</span>
+                      <span>{selectedDashboardCourse?.duration || "Self-paced"}</span>
+                      <span>{selectedDashboardSessions.length} live sessions</span>
+                      <span>{selectedDashboardCourse?.instructor_name || selectedDashboardCourse?.instructor || "Street Voices Academy"}</span>
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <a
+                        href={selectedDashboardCourse ? `${academyBasePath}/courses/${selectedDashboardCourse.id}` : `${academyBasePath}/courses`}
+                        className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+                        style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
+                      >
+                        Learn More
+                      </a>
+                      <a
+                        href={
+                          selectedDashboardSessions[0]
+                            ? `${academyBasePath}/live-sessions/${selectedDashboardSessions[0].id}`
+                            : "#academy-dashboard-live-sessions"
+                        }
+                        className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+                        style={{ background: colors.accent, color: "#000" }}
+                      >
+                        View Live Sessions
+                        <ArrowRight className="h-4 w-4" />
+                      </a>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="mb-8 grid gap-6 lg:grid-cols-2">
+                  <div
+                    className="rounded-[28px] border p-6"
+                    style={{ borderColor: colors.border, background: colors.cardBg }}
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-4">
+                      <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                        Curriculum
+                      </h2>
+                      <a
+                        href={selectedDashboardCourse ? `${academyBasePath}/courses/${selectedDashboardCourse.id}` : `${academyBasePath}/courses`}
+                        className="text-sm font-semibold"
+                        style={{ color: colors.accent }}
+                      >
+                        View course
+                      </a>
+                    </div>
+
+                    <div className="space-y-4">
+                      {dashboardModulesLoading && (
+                        <div className="rounded-[22px] border p-5 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+                          Loading curriculum...
+                        </div>
+                      )}
+
+                      {!dashboardModulesLoading &&
+                        dashboardModules.slice(0, 3).map((module, index) => (
+                          <div
+                            key={module.id}
+                            className="rounded-[22px] border p-4"
+                            style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                          >
+                            <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                              Module {index + 1}
+                            </p>
+                            <p className="mt-2 text-sm font-semibold" style={{ color: colors.text }}>
+                              {module.title || module.name || "Untitled module"}
+                            </p>
+                            <p className="mt-2 text-xs" style={{ color: colors.textSecondary }}>
+                              {module.lessons.length} lessons
+                            </p>
+                          </div>
+                        ))}
+
+                      {!dashboardModulesLoading && dashboardModules.length === 0 && (
+                        <div className="rounded-[22px] border p-5 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+                          This enrolled class has no curriculum loaded yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    className="rounded-[28px] border p-6"
+                    style={{ borderColor: colors.border, background: colors.cardBg }}
+                  >
+                    <div id="academy-dashboard-live-sessions" />
+                    <h2 className="mb-4 text-2xl font-semibold" style={{ color: colors.text }}>
+                      Live Sessions
+                    </h2>
+                    <div className="space-y-4">
+                      {selectedDashboardSessions.slice(0, 3).map((session) => (
+                        <a
+                          key={session.id}
+                          href={`${academyBasePath}/live-sessions/${session.id}`}
+                          className="block rounded-[22px] border p-4 transition-colors hover:border-white/30"
+                          style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                                {session.title}
+                              </p>
+                              <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
+                                {new Date(session.scheduled_start).toLocaleDateString(undefined, {
+                                  weekday: "short",
+                                  month: "short",
+                                  day: "numeric",
+                                })}{" "}
+                                ·{" "}
+                                {new Date(session.scheduled_start).toLocaleTimeString(undefined, {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            </div>
+                            <span
+                              className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                              style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}
+                            >
+                              {formatCountdown(session.scheduled_start)}
+                            </span>
+                          </div>
+                        </a>
+                      ))}
+
+                      {selectedDashboardSessions.length === 0 && (
+                        <div className="rounded-[22px] border p-5 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+                          No live sessions are scheduled for this enrolled class yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                {selectedDashboardCourse && (
+                  <>
+                    <section className="mb-8 grid gap-6 lg:grid-cols-2">
+                      <div
+                        className="rounded-[28px] border p-6"
+                        style={{ borderColor: colors.border, background: colors.cardBg }}
+                      >
+                        <div className="mb-4 flex items-center justify-between gap-4">
+                          <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                            Materials
+                          </h2>
+                        </div>
+                        <CourseMaterialsBrowser entityType="course" entityId={selectedDashboardCourse.id} />
+                      </div>
+
+                      <div
+                        className="rounded-[28px] border p-6"
+                        style={{ borderColor: colors.border, background: colors.cardBg }}
+                      >
+                        <div className="mb-4 flex items-center justify-between gap-4">
+                          <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                            Assignments
+                          </h2>
+                        </div>
+                        <AssignmentList courseId={selectedDashboardCourse.id} userId={userId} />
+                      </div>
+                    </section>
+
+                    <section
+                      className="rounded-[28px] border p-6"
+                      style={{ borderColor: colors.border, background: colors.cardBg }}
+                    >
+                      <div className="mb-4 flex items-center justify-between gap-4">
+                        <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                          Discussion With Instructors
+                        </h2>
+                        <span className="text-sm" style={{ color: colors.textMuted }}>
+                          {selectedDashboardCourse.title}
+                        </span>
+                      </div>
+                      <ForumsPanel courseId={selectedDashboardCourse.id} colors={colors} />
+                    </section>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        <AiTutorFloatingButton
+          position="bottom-right"
+          theme="dark"
+          onClick={() => {
+            window.location.href = `${academyBasePath}/courses`;
+          }}
+        />
+      </UnifiedLayout>
+    );
+  }
+
+  return (
+    <UnifiedLayout bgToUse={colors.bg}>
+      {backgroundOrbs}
+      {topNav}
+
+      <section
+        className="relative"
+        style={{
+          zIndex: 1,
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          paddingTop: "128px",
+          paddingBottom: "96px",
+          paddingLeft: pagePaddingX,
+          paddingRight: pagePaddingX,
+        }}
+      >
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,215,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,215,0,0.03)_1px,transparent_1px)] bg-[size:50px_50px] opacity-30" />
-
-        <div className="relative max-w-7xl mx-auto text-center">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            {/* Badge */}
+        <div className="relative mx-auto max-w-3xl text-center">
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
             <div
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "8px",
-                padding: "8px 16px",
+                gap: "12px",
+                padding: "10px 18px",
+                marginBottom: "28px",
                 borderRadius: "9999px",
                 background: colors.cardBg,
-                backdropFilter: "blur(24px) saturate(180%)",
-                WebkitBackdropFilter: "blur(24px) saturate(180%)",
+                backdropFilter: "blur(24px)",
+                WebkitBackdropFilter: "blur(24px)",
                 border: `1px solid rgba(255, 214, 0, 0.3)`,
-                marginBottom: "32px",
+                boxShadow: colors.glassShadow,
               }}
             >
-              <Sparkles className="w-4 h-4 text-yellow-400" />
-              <span className="text-sm text-yellow-400 font-medium">AI-Powered Learning Platform</span>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-400">
+                <LearningHatIcon size={20} />
+              </div>
+              <span className="text-sm font-semibold uppercase tracking-[0.08em] text-yellow-400 sm:text-base">
+                Street Voices Academy
+              </span>
             </div>
 
-            {/* Headline */}
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-              The Future of
+            <h1 className="text-5xl font-bold leading-tight md:text-7xl">
+              Learn with
               <br />
               <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                Learning is Here
+                a clear path
               </span>
             </h1>
-
-            {/* Subheadline */}
-            <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-10">
-              Immerse yourself in a futuristic learning experience with AI tutors, live classes, and personalized
-              learning paths designed for the next generation of creators.
+            <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-400 md:text-xl">
+              Join practical learning paths and courses designed to help you build real skills without getting lost.
             </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
-                onClick={() => setView("dashboard")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "16px 32px",
-                  background: colors.accent,
-                  color: "#000",
-                  borderRadius: "9999px",
-                  fontWeight: 700,
-                  fontSize: "18px",
-                  border: "none",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 20px rgba(255, 214, 0, 0.4)",
-                  transition: "all 0.3s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow = "0 6px 30px rgba(255, 214, 0, 0.5)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 4px 20px rgba(255, 214, 0, 0.4)";
-                }}
-              >
-                Start Learning Free
-                <ArrowRight className="w-5 h-5" />
-              </button>
+            <div className="mt-8">
               <a
-                href="/academy/courses"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "16px 32px",
-                  background: colors.cardBg,
-                  backdropFilter: "blur(24px) saturate(180%)",
-                  WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                  color: colors.text,
-                  borderRadius: "9999px",
-                  fontWeight: 500,
-                  fontSize: "18px",
-                  border: `1px solid ${colors.border}`,
-                  textDecoration: "none",
-                  transition: "all 0.3s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.5)";
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = colors.border;
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
+                href={`${academyBasePath}/paths`}
+                className="inline-flex items-center gap-2 rounded-full px-6 py-4 text-base font-semibold"
+                style={{ background: colors.accent, color: "#000" }}
               >
-                <Play className="w-5 h-5" />
-                Explore Courses
+                Start Now
+                <ArrowRight className="h-5 w-5" />
               </a>
             </div>
           </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-20"
-          >
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="text-4xl md:text-5xl font-bold text-yellow-400 mb-2">{stat.value}</div>
-                <div className="text-gray-400">{stat.label}</div>
-              </div>
-            ))}
-          </motion.div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-20 px-4" style={{ position: "relative", zIndex: 1 }}>
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 style={{ color: colors.text }} className="text-3xl md:text-4xl font-bold mb-4">
-              Everything You Need to
-              <span className="text-yellow-400"> Level Up</span>
-            </h2>
-            <p style={{ color: colors.textSecondary }} className="max-w-2xl mx-auto">
-              A complete learning ecosystem designed for the modern creator, powered by cutting-edge technology.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {features.map((feature, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                style={{
-                  background: colors.cardBg,
-                  backdropFilter: "blur(24px) saturate(180%)",
-                  WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                  borderRadius: "24px",
-                  border: `1px solid ${colors.border}`,
-                  padding: "24px",
-                  boxShadow: colors.glassShadow,
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-                className="group"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                  e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.5)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.borderColor = colors.border;
-                }}
-              >
-                <div className="w-12 h-12 rounded-xl bg-yellow-400/10 flex items-center justify-center mb-4 group-hover:bg-yellow-400/20 transition-colors">
-                  <feature.icon className="w-6 h-6 text-yellow-400" />
-                </div>
-                <h3 style={{ color: colors.text }} className="text-lg font-semibold mb-2">{feature.title}</h3>
-                <p style={{ color: colors.textSecondary }} className="text-sm">{feature.description}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Learning Paths Section */}
-      <section className="py-20 px-4" style={{ position: "relative", zIndex: 1 }}>
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 style={{ color: colors.text }} className="text-3xl md:text-4xl font-bold mb-4">
-              Follow a <span className="text-yellow-400">Learning Path</span>
-            </h2>
-            <p style={{ color: colors.textSecondary }} className="max-w-2xl mx-auto">
-              Structured sequences of courses designed to help you achieve specific goals.
-              Perfect for building skills progressively.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
-            {[
-              {
-                icon: Briefcase,
-                title: "Job Ready",
-                description: "Complete path to employment readiness",
-                color: "#10B981",
-                courses: 4,
-                hours: 40,
-                slug: "job-ready",
-              },
-              {
-                icon: Laptop,
-                title: "Digital Basics",
-                description: "Essential computer and internet skills",
-                color: "#3B82F6",
-                courses: 4,
-                hours: 24,
-                slug: "digital-basics",
-              },
-              {
-                icon: Home,
-                title: "Housing Stability",
-                description: "Skills for finding and keeping housing",
-                color: "#8B5CF6",
-                courses: 4,
-                hours: 32,
-                slug: "housing-stability",
-              },
-            ].map((path, index) => (
-              <motion.div
-                key={path.slug}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <a href={`/academy/paths/${path.slug}`}>
-                  <div
-                    style={{
-                      background: colors.cardBg,
-                      backdropFilter: "blur(24px) saturate(180%)",
-                      WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                      borderRadius: "24px",
-                      border: `1px solid ${colors.border}`,
-                      padding: "24px",
-                      boxShadow: colors.glassShadow,
-                      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                      height: "100%",
-                    }}
-                    className="group"
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-4px)";
-                      e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.5)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.borderColor = colors.border;
-                    }}
-                  >
-                    <div
-                      className="w-14 h-14 rounded-xl flex items-center justify-center mb-4"
-                      style={{ backgroundColor: `${path.color}20` }}
-                    >
-                      <path.icon className="w-7 h-7" style={{ color: path.color }} />
-                    </div>
-                    <h3 style={{ color: colors.text }} className="font-bold text-xl mb-2 group-hover:text-yellow-400 transition-colors">
-                      {path.title}
-                    </h3>
-                    <p style={{ color: colors.textSecondary }} className="text-sm mb-4">{path.description}</p>
-                    <div style={{ color: colors.textMuted }} className="flex items-center gap-4 text-sm">
-                      <span className="flex items-center gap-1">
-                        <BookOpen className="w-4 h-4" />
-                        {path.courses} courses
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        {path.hours}h
-                      </span>
-                    </div>
-                  </div>
-                </a>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="text-center">
-            <a
-              href="/academy/paths"
-              className="inline-flex items-center gap-2 text-yellow-400 hover:text-yellow-300 font-medium"
-            >
-              View All Learning Paths
-              <ChevronRight className="w-5 h-5" />
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Courses */}
-      {!loading && courses.length > 0 && (
-        <section className="py-20 px-4" style={{ position: "relative", zIndex: 1 }}>
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-8">
-              <h2 style={{ color: colors.text }} className="text-3xl font-bold">Popular Courses</h2>
-              <a
-                href="/academy/courses"
-                className="text-yellow-400 hover:text-yellow-300 font-medium flex items-center gap-2"
-              >
-                View All <ChevronRight className="w-5 h-5" />
-              </a>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {courses.slice(0, 4).map((course, index) => (
-                <motion.div
-                  key={course.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                  style={{
-                    background: colors.cardBg,
-                    backdropFilter: "blur(24px) saturate(180%)",
-                    WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                    borderRadius: "24px",
-                    border: `1px solid ${colors.border}`,
-                    overflow: "hidden",
-                    boxShadow: colors.glassShadow,
-                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                    cursor: "pointer",
-                  }}
-                  className="group"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-4px)";
-                    e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.5)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.borderColor = colors.border;
-                  }}
-                >
-                  <div className="h-40 bg-gradient-to-br from-yellow-400/20 to-purple-600/20 flex items-center justify-center">
-                    <BookOpen className="w-12 h-12 text-yellow-400 opacity-50" />
-                  </div>
-
-                  <div className="p-4">
-                    <span style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wide">{course.category}</span>
-                    <h4 style={{ color: colors.text }} className="font-bold mt-1 mb-2 group-hover:text-yellow-400 transition-colors">
-                      {course.title}
-                    </h4>
-                    <p style={{ color: colors.textSecondary }} className="text-sm mb-3 line-clamp-2">{course.description}</p>
-
-                    <div style={{ color: colors.textMuted }} className="flex items-center justify-between text-xs">
-                      <span>{course.level}</span>
-                      <span>{course.duration}</span>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* CTA Section */}
-      <section className="py-20 px-4" style={{ position: "relative", zIndex: 1 }}>
-        <div className="max-w-4xl mx-auto">
-          <div
-            style={{
-              position: "relative",
-              background: colors.cardBg,
-              backdropFilter: "blur(24px) saturate(180%)",
-              WebkitBackdropFilter: "blur(24px) saturate(180%)",
-              border: `1px solid ${colors.border}`,
-              borderRadius: "32px",
-              padding: "48px",
-              textAlign: "center",
-              overflow: "hidden",
-              boxShadow: colors.glassShadow,
-            }}
-          >
-            {/* Inner gradient glow */}
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: "radial-gradient(ellipse at center, rgba(255, 214, 0, 0.1) 0%, transparent 70%)",
-                pointerEvents: "none",
-              }}
-            />
-            <div className="relative">
-              <h2 style={{ color: colors.text }} className="text-3xl md:text-4xl font-bold mb-4">Ready to Transform Your Learning?</h2>
-              <p style={{ color: colors.textSecondary }} className="mb-8 max-w-xl mx-auto">
-                Join thousands of learners already experiencing the future of education. Start your journey today.
-              </p>
-              <button
-                onClick={() => setView("dashboard")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "16px 32px",
-                  background: colors.accent,
-                  color: "#000",
-                  borderRadius: "9999px",
-                  fontWeight: 700,
-                  fontSize: "18px",
-                  border: "none",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 20px rgba(255, 214, 0, 0.4)",
-                  transition: "all 0.3s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow = "0 6px 30px rgba(255, 214, 0, 0.5)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 4px 20px rgba(255, 214, 0, 0.4)";
-                }}
-              >
-                Get Started for Free
-                <ArrowRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer
-        style={{
-          borderTop: `1px solid ${colors.border}`,
-          padding: "48px 0",
-          background: colors.surface,
-          backdropFilter: "blur(24px) saturate(180%)",
-          WebkitBackdropFilter: "blur(24px) saturate(180%)",
-          position: "relative",
-          zIndex: 1,
+      <AiTutorFloatingButton
+        position="bottom-right"
+        theme="dark"
+        onClick={() => {
+          window.location.href = `${academyBasePath}/paths`;
         }}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center" style={{ color: colors.textMuted }}>
-            <p>&copy; 2024 Street Voices. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
-
-      {/* AI Tutor Floating Button */}
-      <AiTutorFloatingButton showPulse />
+      />
     </UnifiedLayout>
   );
 }
