@@ -1,15 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import {
-  Award,
-  Compass,
-  LayoutDashboard,
-  BookOpen,
-  ClipboardCheck,
-  Map,
-  ChevronLeft,
-} from "lucide-react";
-import { useAcademyEnrollmentAccess } from "./useAcademyEnrollmentAccess";
+import { Award, Compass, LayoutDashboard, BookOpen, ClipboardCheck, Map, ChevronLeft } from "lucide-react";
 
 interface AcademySidebarProps {
   isCollapsed?: boolean;
@@ -27,7 +18,6 @@ export function AcademySidebar({
   const pathname = window.location.pathname;
   const basePath = pathname.startsWith("/learning") ? "/learning" : "/academy";
   const isInline = layout === "inline";
-  const { hasEnrollment } = useAcademyEnrollmentAccess();
   const navSections = [
     {
       title: "Journey",
@@ -35,12 +25,8 @@ export function AcademySidebar({
         { href: `${basePath}`, label: "Home", icon: Compass, color: "#60A5FA" },
         { href: `${basePath}/paths`, label: "Learning Paths", icon: Map, color: "#8B5CF6" },
         { href: `${basePath}/courses`, label: "Courses", icon: BookOpen, color: "#FFD600" },
-        ...(hasEnrollment
-          ? [
-              { href: `${basePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard, color: "#FACC15" },
-              { href: `${basePath}/certificates`, label: "Certificates", icon: Award, color: "#F59E0B" },
-            ]
-          : []),
+        { href: `${basePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard, color: "#FACC15" },
+        { href: `${basePath}/certificates`, label: "Certificates", icon: Award, color: "#F59E0B" },
       ],
     },
     {

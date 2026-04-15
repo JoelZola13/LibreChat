@@ -247,9 +247,9 @@ export default function AcademyClient() {
   );
 
   const hasEnrollment = activeEnrollments.length > 0;
-  const dashboardPaddingLeft = isDesktop && hasEnrollment ? dashboardBasePaddingLeft : pagePaddingX;
-  const showDesktopAcademySidebar = isDashboardRoute && isDesktop && hasEnrollment;
-  const showOverlayAcademySidebar = isDashboardRoute && !isDesktop && hasEnrollment;
+  const dashboardPaddingLeft = isDesktop && isDashboardRoute ? dashboardBasePaddingLeft : pagePaddingX;
+  const showDesktopAcademySidebar = isDashboardRoute && isDesktop;
+  const showOverlayAcademySidebar = isDashboardRoute && !isDesktop;
 
   const enrollmentByCourseId = useMemo(
     () => Object.fromEntries(activeEnrollments.map((enrollment) => [enrollment.course_id, enrollment])),

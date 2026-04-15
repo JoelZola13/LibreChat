@@ -324,12 +324,8 @@ export default function AcademyCertificatesPage() {
     { href: `${academyBasePath}`, label: "Home", icon: Compass },
     { href: `${academyBasePath}/paths`, label: "Learning Paths", icon: Target },
     { href: `${academyBasePath}/courses`, label: "Courses", icon: BookOpen },
-    ...(hasEnrollment
-      ? [
-          { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-          { href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award },
-        ]
-      : []),
+    { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
+    { href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award },
   ];
 
   const copyCode = async (certificateId: string, code: string) => {

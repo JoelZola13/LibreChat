@@ -161,16 +161,14 @@ export default function AcademyCoursesPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {activeEnrollments.length > 0 && (
-              <a
-                href={`${basePath}/dashboard`}
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-                style={{ background: colors.accent, color: "#000" }}
-              >
-                Open Dashboard
-                <ArrowRight className="h-4 w-4" />
-              </a>
-            )}
+            <a
+              href={`${basePath}/dashboard`}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+              style={{ background: colors.accent, color: "#000" }}
+            >
+              Open Dashboard
+              <ArrowRight className="h-4 w-4" />
+            </a>
             <a
               href={basePath}
               className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
