@@ -452,6 +452,10 @@ export function GradingDashboard({
           </motion.button>
         </div>
 
+        <p style={{ margin: "0 0 16px 0", fontSize: "14px", color: "#9CA3AF" }}>
+          Track and manage student submissions in real time.
+        </p>
+
         {/* Stats Grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
           <StatCard
@@ -618,12 +622,12 @@ export function GradingDashboard({
         >
           <CheckCircle2 size={48} color="#10B981" style={{ opacity: 0.5, margin: "0 auto 16px" }} />
           <h3 style={{ margin: "0 0 8px 0", color: "#fff", fontSize: "18px" }}>
-            {searchQuery || filterStatus !== "all" ? "No matching submissions" : "All caught up!"}
+            {searchQuery || filterStatus !== "all" ? "No matching submissions" : "You're all caught up!"}
           </h3>
           <p style={{ margin: 0, color: "#9CA3AF", fontSize: "14px" }}>
             {searchQuery || filterStatus !== "all"
               ? "Try adjusting your filters"
-              : "No submissions awaiting your review"}
+              : "There are no submissions waiting for review right now."}
           </p>
         </div>
       ) : (

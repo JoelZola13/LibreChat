@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useOfflineAcademy } from './api/useOfflineAcademy';
-import { getOrCreateUserId } from './api/userId';
+import { useAcademyUserId } from './useAcademyUserId';
 
 interface OfflineDownloadButtonProps {
   courseId: string;
@@ -18,11 +18,7 @@ export function OfflineDownloadButton({
   courseName,
   className = '',
 }: OfflineDownloadButtonProps) {
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setUserId(getOrCreateUserId());
-  }, []);
+  const userId = useAcademyUserId();
 
   const {
     isOnline,
@@ -34,7 +30,7 @@ export function OfflineDownloadButton({
     pendingSyncCount,
     syncNow,
     storageUsage,
-  } = useOfflineAcademy(userId || '');
+  } = useOfflineAcademy(userId);
 
   const [isOffline, setIsOffline] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -80,8 +76,6 @@ export function OfflineDownloadButton({
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
-
-  if (!userId) return null;
 
   return (
     <div className={`relative ${className}`}>

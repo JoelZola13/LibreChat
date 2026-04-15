@@ -10,6 +10,8 @@ import {
   MessageSquare,
   Users,
   ChevronRight,
+  HelpCircle,
+  Paperclip,
 } from "lucide-react";
 import {
   Assignment,
@@ -80,6 +82,8 @@ export function AssignmentCard({
   // Get assignment type icon
   const getTypeIcon = () => {
     switch (assignment.assignmentType) {
+      case "quiz":
+        return <HelpCircle className="w-4 h-4" />;
       case "file_upload":
         return <Upload className="w-4 h-4" />;
       case "text":
@@ -185,6 +189,16 @@ export function AssignmentCard({
               >
                 <Users className="w-4 h-4" />
                 <span>Peer Review</span>
+              </div>
+            )}
+
+            {(assignment.resourceAttachment || assignment.resourceFileName) && (
+              <div
+                className="flex items-center gap-1.5"
+                style={{ color: "rgba(250, 204, 21, 0.85)" }}
+              >
+                <Paperclip className="w-4 h-4" />
+                <span>Attachment included</span>
               </div>
             )}
           </div>

@@ -17,7 +17,7 @@ import {
   VideoNote,
 } from './api/video-progress';
 import { getLessonCaptions, Caption } from './api/captions';
-import { getOrCreateUserId } from './api/userId';
+import { useAcademyUserId } from './useAcademyUserId';
 
 interface VideoPlayerProps {
   lessonId: string;
@@ -34,7 +34,7 @@ export function VideoPlayer({
   onComplete,
   className = '',
 }: VideoPlayerProps) {
-  const [userId, setUserId] = useState<string | null>(null);
+  const userId = useAcademyUserId();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -56,14 +56,9 @@ export function VideoPlayer({
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const progressUpdateRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    setUserId(getOrCreateUserId());
-  }, []);
-
   // Load saved progress
   useEffect(() => {
     const loadProgress = async () => {
-      if (!userId) return;
       const savedProgress = await getVideoProgress(lessonId, userId);
       if (savedProgress && videoRef.current) {
         videoRef.current.currentTime = savedProgress.current_time;
@@ -77,7 +72,6 @@ export function VideoPlayer({
   // Load bookmarks and notes
   useEffect(() => {
     const loadData = async () => {
-      if (!userId) return;
       const [loadedBookmarks, loadedNotes] = await Promise.all([
         getBookmarks(lessonId, userId),
         getNotes(lessonId, userId),
@@ -108,7 +102,7 @@ export function VideoPlayer({
 
   // Save progress periodically
   const saveProgress = useCallback(async () => {
-    if (!userId || !videoRef.current) return;
+    if (!videoRef.current) return;
     try {
       await updateVideoProgress(
         lessonId,

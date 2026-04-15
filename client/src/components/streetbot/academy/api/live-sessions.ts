@@ -27,7 +27,9 @@ export interface LiveSession {
   status: 'scheduled' | 'live' | 'ended' | 'cancelled';
   max_attendees: number | null;
   platform: 'internal' | 'zoom' | 'meet' | 'teams' | 'custom';
+  meeting_id: string | null;
   meeting_url: string | null;
+  session_notes: string | null;
   recording_url: string | null;
   recording_available: boolean;
   is_mandatory: boolean;
@@ -115,7 +117,9 @@ export interface CreateSessionData {
   scheduled_end: string;
   max_attendees?: number;
   platform?: string;
+  meeting_id?: string;
   meeting_url?: string;
+  session_notes?: string;
   is_mandatory?: boolean;
   attendance_required_percent?: number;
   points_for_attending?: number;
@@ -127,7 +131,9 @@ export interface UpdateSessionData {
   scheduled_start?: string;
   scheduled_end?: string;
   max_attendees?: number;
+  meeting_id?: string | null;
   meeting_url?: string;
+  session_notes?: string | null;
   status?: string;
   recording_url?: string;
 }
@@ -149,9 +155,27 @@ export interface SessionFeedbackData {
   would_recommend?: boolean;
 }
 
+export interface ListSessionsOptions {
+  courseId?: string;
+  status?: string;
+  userId?: string;
+  instructorId?: string;
+}
+
 // =============================================================================
 // Session Management
 // =============================================================================
+
+export async function listSessions(options: ListSessionsOptions = {}): Promise<SessionListResponse> {
+  const params = new URLSearchParams();
+  if (options.courseId) params.set('course_id', options.courseId);
+  if (options.status) params.set('status', options.status);
+  if (options.userId) params.set('user_id', options.userId);
+  if (options.instructorId) params.set('instructor_id', options.instructorId);
+  const response = await sbFetch(`${BASE}?${params}`);
+  if (!response.ok) throw new Error('Failed to fetch live sessions');
+  return response.json();
+}
 
 export async function createSession(data: CreateSessionData, instructorId: string): Promise<LiveSession> {
   const response = await sbFetch(`${BASE}?instructor_id=${instructorId}`, {

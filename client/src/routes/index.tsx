@@ -46,10 +46,35 @@ const MessagesPage = lazy(() => import('~/components/streetbot/messages/Messages
 const DocumentsPage = lazy(() => import('~/components/streetbot/documents/DocumentsPage'));
 const AcademyPage = lazy(() => import('~/components/streetbot/academy/AcademyPage'));
 const AcademyCoursesPage = lazy(() => import('~/components/streetbot/academy/AcademyCoursesPage'));
+const AcademyCourseDetailPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyCourseDetailPage'),
+);
 const AcademyPathsPage = lazy(() => import('~/components/streetbot/academy/AcademyPathsPage'));
+const AcademyPathDetailPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyPathDetailPage'),
+);
+const AcademyEnrollmentPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyEnrollmentPage'),
+);
+const AcademySavedPage = lazy(() => import('~/components/streetbot/academy/AcademySavedPage'));
 const AcademyLivePage = lazy(() => import('~/components/streetbot/academy/AcademyLivePage'));
+const AcademyLiveSessionDetailPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyLiveSessionDetailPage'),
+);
+const AcademyDashboardPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyDashboardPage'),
+);
+const AcademyCertificatesPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyCertificatesPage'),
+);
 const AcademyInstructorPage = lazy(
   () => import('~/components/streetbot/academy/AcademyInstructorPage'),
+);
+const AcademyInstructorCoursePage = lazy(
+  () => import('~/components/streetbot/academy/AcademyInstructorCoursePage'),
+);
+const AcademyInstructorSubmissionListPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyInstructorSubmissionListPage'),
 );
 const MissionControlPage = lazy(() => import('~/components/streetbot/mission-control/MissionControlPage'));
 const NotificationsPage = lazy(
@@ -286,20 +311,38 @@ export const router = createBrowserRouter(
                   { path: 'documents', element: guardedSbPage('documents', DocumentsPage) },
                   { path: 'documents/*', element: guardedSbPage('documents', DocumentsPage) },
                   { path: 'academy/courses', element: sbPage(AcademyCoursesPage) },
-                  { path: 'academy/courses/*', element: sbPage(AcademyCoursesPage) },
+                  { path: 'academy/courses/:courseId', element: sbPage(AcademyCourseDetailPage) },
+                  { path: 'academy/courses/:courseId/enroll', element: sbPage(AcademyEnrollmentPage) },
                   { path: 'academy/paths', element: sbPage(AcademyPathsPage) },
-                  { path: 'academy/paths/*', element: sbPage(AcademyPathsPage) },
+                  { path: 'academy/paths/:slug', element: sbPage(AcademyPathDetailPage) },
+                  { path: 'academy/paths/:slug/enroll', element: sbPage(AcademyEnrollmentPage) },
+                  { path: 'academy/saved', element: sbPage(AcademySavedPage) },
                   { path: 'academy/live-sessions', element: sbPage(AcademyLivePage) },
-                  { path: 'academy/live-sessions/*', element: sbPage(AcademyLivePage) },
+                  { path: 'academy/live-sessions/:sessionId', element: sbPage(AcademyLiveSessionDetailPage) },
+                  { path: 'academy/dashboard', element: sbPage(AcademyDashboardPage) },
+                  { path: 'academy/dashboard/*', element: sbPage(AcademyDashboardPage) },
+                  { path: 'academy/certificates', element: sbPage(AcademyCertificatesPage) },
                   { path: 'academy/instructor', element: sbPage(AcademyInstructorPage) },
+                  { path: 'academy/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
+                  { path: 'academy/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'academy/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
                   { path: 'academy/instructor/*', element: sbPage(AcademyInstructorPage) },
                   { path: 'learning/courses', element: sbPage(AcademyCoursesPage) },
-                  { path: 'learning/courses/*', element: sbPage(AcademyCoursesPage) },
+                  { path: 'learning/courses/:courseId', element: sbPage(AcademyCourseDetailPage) },
+                  { path: 'learning/courses/:courseId/enroll', element: sbPage(AcademyEnrollmentPage) },
                   { path: 'learning/paths', element: sbPage(AcademyPathsPage) },
-                  { path: 'learning/paths/*', element: sbPage(AcademyPathsPage) },
+                  { path: 'learning/paths/:slug', element: sbPage(AcademyPathDetailPage) },
+                  { path: 'learning/paths/:slug/enroll', element: sbPage(AcademyEnrollmentPage) },
+                  { path: 'learning/saved', element: sbPage(AcademySavedPage) },
                   { path: 'learning/live-sessions', element: sbPage(AcademyLivePage) },
-                  { path: 'learning/live-sessions/*', element: sbPage(AcademyLivePage) },
+                  { path: 'learning/live-sessions/:sessionId', element: sbPage(AcademyLiveSessionDetailPage) },
+                  { path: 'learning/dashboard', element: sbPage(AcademyDashboardPage) },
+                  { path: 'learning/dashboard/*', element: sbPage(AcademyDashboardPage) },
+                  { path: 'learning/certificates', element: sbPage(AcademyCertificatesPage) },
                   { path: 'learning/instructor', element: sbPage(AcademyInstructorPage) },
+                  { path: 'learning/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
+                  { path: 'learning/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'learning/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
                   { path: 'learning/instructor/*', element: sbPage(AcademyInstructorPage) },
                   { path: 'academy', element: sbPage(AcademyPage) },
                   { path: 'academy/*', element: sbPage(AcademyPage) },

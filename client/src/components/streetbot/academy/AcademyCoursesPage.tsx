@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { BookOpen, Clock, MessageCircle, Search, Filter, Users, Star, Plus, ArrowLeft, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { ArrowLeft, ArrowRight, Clock, Heart, Search } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
+import { getLearningPathCourseMap } from "./academyLearningPaths";
+import { getCourseCardArt } from "./academyCardArt";
+import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
+import { useAcademyUserId } from "./useAcademyUserId";
+import { useAcademySavedItems } from "./useAcademySavedItems";
 
 type Course = {
   id: string;
@@ -9,62 +15,39 @@ type Course = {
   level?: string | null;
   duration?: string | null;
   category?: string | null;
-  image_url?: string | null;
   instructor_name?: string | null;
-  instructor?: string;
+  instructor?: string | null;
   state?: "draft" | "published" | "archived";
-  tags?: string[];
   module_count?: number;
   lesson_count?: number;
-  enrolled_count?: number;
-  created_at?: string;
-  updated_at?: string;
-  progress?: number;
+  image_url?: string | null;
+  thumbnail_url?: string | null;
 };
 
 type Enrollment = {
-  id: string;
-  user_id: string;
   course_id: string;
   status: "active" | "completed" | "dropped";
   progress_percent: number;
-  enrolled_at: string;
-  completed_at?: string | null;
-  last_accessed_at?: string | null;
 };
 
-const CURRENT_USER_ID = "user-123";
-const categories = ["All", "Technology", "Business", "Marketing", "Design", "Development"];
-const levels = ["All Levels", "Beginner", "Intermediate", "Advanced"];
-
 export default function AcademyCoursesPage() {
+  const currentUserId = useAcademyUserId();
+  const location = useLocation();
+  const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
+  const { paths: learningPaths } = useAcademyLearningPaths();
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"browse" | "my-courses" | "create">("browse");
-  const [filterCategory, setFilterCategory] = useState("All");
-  const [filterLevel, setFilterLevel] = useState("All Levels");
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Course creation form
-  const [draft, setDraft] = useState({
-    title: "",
-    description: "",
-    level: "beginner" as "beginner" | "intermediate" | "advanced",
-    duration: "",
-    category: "",
-    image_url: "",
-    instructor_name: "",
-    tags: "",
-  });
-  const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState("All");
+  const { isCourseSaved, toggleCourseSaved } = useAcademySavedItems();
 
   const colors = useMemo(
     () => ({
       bg: "var(--sb-color-background)",
       cardBg: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.35)",
+      cardBgStrong: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.58)",
       border: isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(255, 255, 255, 0.6)",
       text: isDark ? "#fff" : "#111",
       textSecondary: isDark ? "rgba(255, 255, 255, 0.72)" : "#4b5563",
@@ -75,390 +58,273 @@ export default function AcademyCoursesPage() {
     [isDark],
   );
 
-  const loadCourses = useCallback(async () => {
-    try {
-      const resp = await sbFetch("/api/academy/courses");
-      if (!resp.ok) throw new Error(`Failed to load courses (${resp.status})`);
-      const data = await resp.json();
-      setCourses(Array.isArray(data) ? data : []);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to load courses";
-      setError(msg);
-    }
-  }, []);
-
-  const loadEnrollments = useCallback(async () => {
-    try {
-      const resp = await sbFetch(`/api/academy/enrollments?user_id=${CURRENT_USER_ID}`);
-      if (!resp.ok) return;
-      const data = await resp.json();
-      setEnrollments(Array.isArray(data) ? data : []);
-    } catch {
-      // Enrollments are optional
-    }
-  }, []);
-
   useEffect(() => {
-    Promise.all([loadCourses(), loadEnrollments()]).finally(() => setIsLoading(false));
-  }, [loadCourses, loadEnrollments]);
+    async function load() {
+      try {
+        const [coursesResp, enrollmentsResp] = await Promise.all([
+          sbFetch("/api/academy/courses"),
+          sbFetch(`/api/academy/enrollments?user_id=${encodeURIComponent(currentUserId)}`),
+        ]);
 
-  const handleCreateCourse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormMessage(null);
-    try {
-      const resp = await sbFetch("/api/academy/courses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...draft,
-          tags: draft.tags.split(",").map((t) => t.trim()).filter(Boolean),
-        }),
-      });
-      if (!resp.ok) throw new Error("Failed to create course");
-      const course = await resp.json();
-      // Auto-publish the course
-      await sbFetch(`/api/academy/courses/${course.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state: "published" }),
-      });
-      setFormMessage("Course created and published!");
-      setDraft({ title: "", description: "", level: "beginner", duration: "", category: "", image_url: "", instructor_name: "", tags: "" });
-      loadCourses();
-      setActiveTab("browse");
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Error creating course";
-      setFormMessage(msg);
-    }
-  };
+        if (coursesResp.ok) {
+          const data = await coursesResp.json();
+          setCourses(Array.isArray(data) ? data : []);
+        }
 
-  const handleEnroll = async (courseId: string) => {
-    try {
-      const resp = await sbFetch("/api/academy/enrollments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ course_id: courseId, user_id: CURRENT_USER_ID }),
-      });
-      if (resp.ok) {
-        loadEnrollments();
+        if (enrollmentsResp.ok) {
+          const data = await enrollmentsResp.json();
+          setEnrollments(Array.isArray(data) ? data : []);
+        }
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
-      // silent fail
     }
-  };
 
-  const enrolledCourseIds = new Set(enrollments.map((e) => e.course_id));
+    load();
+  }, [currentUserId]);
 
-  const filteredCourses = courses.filter((course) => {
-    if (course.state && course.state !== "published") return false;
-    if (filterCategory !== "All" && course.category !== filterCategory) return false;
-    if (filterLevel !== "All Levels" && course.level?.toLowerCase() !== filterLevel.toLowerCase()) return false;
-    if (searchQuery && !course.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
+  const activeEnrollments = useMemo(
+    () => enrollments.filter((enrollment) => enrollment.status !== "dropped"),
+    [enrollments],
+  );
+  const enrolledCourseIds = useMemo(
+    () => new Set(activeEnrollments.map((enrollment) => enrollment.course_id)),
+    [activeEnrollments],
+  );
+  const coursePathMap = useMemo(() => getLearningPathCourseMap(courses, learningPaths), [courses, learningPaths]);
 
-  const myCourses = courses.filter((c) => enrolledCourseIds.has(c.id));
+  const filteredCourses = useMemo(() => {
+    return courses.filter((course) => {
+      if (course.state && course.state !== "published") {
+        return false;
+      }
+
+      if (
+        selectedLevel !== "All" &&
+        (course.level ? course.level.toLowerCase() : "beginner") !== selectedLevel.toLowerCase()
+      ) {
+        return false;
+      }
+
+      if (!searchQuery) {
+        return true;
+      }
+
+      const haystack = `${course.title} ${course.description ?? ""}`.toLowerCase();
+      return haystack.includes(searchQuery.toLowerCase());
+    });
+  }, [courses, searchQuery, selectedLevel]);
 
   const tabStyle = (active: boolean) => ({
-    padding: "8px 20px",
-    borderRadius: 10,
+    padding: "10px 18px",
+    borderRadius: 9999,
     fontSize: 14,
     fontWeight: 600 as const,
-    cursor: "pointer" as const,
-    border: "none",
     background: active ? colors.accent : "transparent",
     color: active ? "#000" : colors.textSecondary,
-    transition: "all 0.2s",
+    border: active ? "none" : `1px solid ${colors.border}`,
   });
 
-  const inputStyle = {
-    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
-    border: `1px solid ${colors.border}`,
-    borderRadius: 10,
-    padding: "10px 14px",
-    color: colors.text,
-    fontSize: 14,
+  const inputStyle: CSSProperties = {
     width: "100%",
+    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)",
+    border: `1px solid ${colors.border}`,
+    borderRadius: 9999,
+    color: colors.text,
+    padding: "12px 16px",
+    fontSize: 14,
     outline: "none",
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 40px" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        {/* Breadcrumb */}
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <a href="/academy" className="text-sm font-medium hover:opacity-80" style={{ color: colors.textSecondary }}>Academy</a>
-          <span style={{ color: colors.textMuted }}>/</span>
-          <span className="text-sm font-medium" style={{ color: colors.accent }}>Courses</span>
-        </div>
-
-        {/* Header */}
-        <div className="mb-6 flex items-center justify-between gap-4">
+    <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 48px" }}>
+      <div style={{ maxWidth: 1160, margin: "0 auto" }}>
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold" style={{ color: colors.text }}>Courses</h1>
-            <p className="mt-2" style={{ color: colors.textSecondary }}>
-              Explore all academy courses and continue where you left off.
+            <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
+              Pick a single course.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
+              Choose one course now, or go back to learning paths for a full plan.
             </p>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="mb-6 flex items-center gap-2" style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", borderRadius: 14, padding: 4, display: "inline-flex" }}>
-          <button style={tabStyle(activeTab === "browse")} onClick={() => setActiveTab("browse")}>
-            <BookOpen className="mr-2 inline h-4 w-4" />Browse
-          </button>
-          <button style={tabStyle(activeTab === "my-courses")} onClick={() => setActiveTab("my-courses")}>
-            <Star className="mr-2 inline h-4 w-4" />My Courses ({myCourses.length})
-          </button>
-          <button style={tabStyle(activeTab === "create")} onClick={() => setActiveTab("create")}>
-            <Plus className="mr-2 inline h-4 w-4" />Create
-          </button>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="mb-4 rounded-lg p-3 text-sm" style={{ background: "rgba(255,100,100,0.15)", color: "#ff6b6b", border: "1px solid rgba(255,100,100,0.3)" }}>
-            {error}
-          </div>
-        )}
-
-        {/* Browse tab */}
-        {activeTab === "browse" && (
-          <>
-            {/* Filters */}
-            <div className="mb-6 flex flex-wrap items-center gap-3">
-              <div className="relative" style={{ flex: "1 1 200px", maxWidth: 320 }}>
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: colors.textMuted }} />
-                <input
-                  type="text"
-                  placeholder="Search courses..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ ...inputStyle, paddingLeft: 36 }}
-                />
-              </div>
-              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} style={inputStyle as React.CSSProperties}>
-                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)} style={inputStyle as React.CSSProperties}>
-                {levels.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full p-1" style={{ background: colors.cardBgStrong }}>
+              <a href={`${basePath}/paths`} style={tabStyle(false)}>
+                Learning Paths
+              </a>
+              <a href={`${basePath}/courses`} style={tabStyle(true)}>
+                Courses
+              </a>
+              <a href={`${basePath}/saved`} style={tabStyle(false)}>
+                Saved
+              </a>
             </div>
+          </div>
 
-            {isLoading ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} style={{ height: 260, borderRadius: 20, border: `1px solid ${colors.border}`, background: colors.cardBg, backdropFilter: "blur(20px)" }} />
-                ))}
-              </div>
-            ) : filteredCourses.length === 0 ? (
-              <div className="py-16 text-center" style={{ color: colors.textMuted }}>
-                <BookOpen className="mx-auto mb-4 h-12 w-12 opacity-40" />
-                <p className="text-lg font-medium">No courses found</p>
-                <p className="mt-1 text-sm">Try adjusting your filters or search query.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredCourses.map((course) => {
-                  const isEnrolled = enrolledCourseIds.has(course.id);
-                  const enrollment = enrollments.find((e) => e.course_id === course.id);
-                  const displayInstructor = course.instructor_name || course.instructor;
-                  return (
-                    <article
-                      key={course.id}
-                      style={{
-                        borderRadius: 20,
-                        border: `1px solid ${colors.border}`,
-                        background: colors.cardBg,
-                        backdropFilter: "blur(20px)",
-                        padding: 20,
-                        boxShadow: colors.shadow,
-                        cursor: "pointer",
+          <div className="flex flex-wrap items-center gap-3">
+            {activeEnrollments.length > 0 && (
+              <a
+                href={`${basePath}/dashboard`}
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+                style={{ background: colors.accent, color: "#000" }}
+              >
+                Open Dashboard
+                <ArrowRight className="h-4 w-4" />
+              </a>
+            )}
+            <a
+              href={basePath}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+              style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Homepage
+            </a>
+          </div>
+        </div>
+
+        <section className="grid gap-4 rounded-[28px] border p-5 md:grid-cols-[1.2fr,0.8fr,0.6fr]" style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: colors.textMuted }} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search courses"
+              style={{ ...inputStyle, paddingLeft: 40 }}
+            />
+          </div>
+          <select value={selectedLevel} onChange={(event) => setSelectedLevel(event.target.value)} style={inputStyle}>
+            <option value="All">All levels</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+          </select>
+          <a
+            href={`${basePath}/paths`}
+            className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+            style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
+          >
+            View Paths
+          </a>
+        </section>
+
+        <section className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {isLoading &&
+            [1, 2, 3].map((item) => (
+              <div key={item} className="h-[280px] rounded-[26px] border" style={{ borderColor: colors.border, background: colors.cardBg }} />
+            ))}
+
+          {!isLoading &&
+            filteredCourses.map((course) => {
+              const linkedPaths = coursePathMap.get(course.id) ?? [];
+              const enrollment = activeEnrollments.find((entry) => entry.course_id === course.id);
+              const visual = getCourseCardArt(course);
+
+              return (
+                <article
+                  key={course.id}
+                  className="rounded-[26px] border p-6"
+                  style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}
+                >
+                  <div className="relative mb-5 overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border }}>
+                    <img
+                      src={visual.src}
+                      alt={course.title}
+                      className="h-[220px] w-full object-cover"
+                      onError={(event) => {
+                        if (event.currentTarget.dataset.fallbackApplied === "true") {
+                          return;
+                        }
+                        event.currentTarget.dataset.fallbackApplied = "true";
+                        event.currentTarget.src = visual.fallbackSrc;
                       }}
-                      onClick={() => { window.location.href = `/academy/courses/${course.id}`; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+                    <div className="absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: "rgba(15,23,42,0.65)", color: visual.accent }}>
+                      {visual.eyebrow}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        {linkedPaths.slice(0, 2).map((path) => (
+                          <span
+                            key={path.slug}
+                            className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                            style={{ background: `${path.color}18`, color: path.color }}
+                          >
+                            Part of {path.title}
+                          </span>
+                        ))}
+                      </div>
+                      <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                        {course.title}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => toggleCourseSaved(course.id)}
+                      className="rounded-full p-2"
+                      style={{ background: "rgba(255,214,0,0.12)", border: `1px solid ${colors.border}` }}
+                      aria-label="Save course"
                     >
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-wide" style={{ color: colors.textMuted }}>
-                            {course.category || "General"}
-                          </p>
-                          <h2 className="mt-1 text-lg font-semibold" style={{ color: colors.text }}>{course.title}</h2>
-                        </div>
-                        <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: colors.accent }} />
+                      <Heart
+                        className="h-4 w-4"
+                        style={{ color: colors.accent, fill: isCourseSaved(course.id) ? colors.accent : "transparent" }}
+                      />
+                    </button>
+                  </div>
+
+                  <p className="mt-3 text-sm" style={{ color: colors.textSecondary }}>
+                    {course.description || "Open this course to view the overview, requirements, and what you will learn."}
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs" style={{ color: colors.textMuted }}>
+                    <span>{course.level ? course.level.charAt(0).toUpperCase() + course.level.slice(1) : "Beginner"}</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      {course.duration || "Self-paced"}
+                    </span>
+                    <span>{course.module_count || 0} modules</span>
+                  </div>
+
+                  {enrollment && (
+                    <div className="mt-4">
+                      <div className="mb-2 flex items-center justify-between text-xs">
+                        <span style={{ color: colors.textSecondary }}>Progress</span>
+                        <span style={{ color: colors.accent }}>{enrollment.progress_percent}%</span>
                       </div>
-
-                      <p className="mb-4 line-clamp-2 text-sm" style={{ color: colors.textSecondary }}>
-                        {course.description || "No description available."}
-                      </p>
-
-                      <div className="mb-3 flex flex-wrap items-center gap-3 text-xs" style={{ color: colors.textMuted }}>
-                        <span>{course.level ? course.level.charAt(0).toUpperCase() + course.level.slice(1) : "All levels"}</span>
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5" />{course.duration || "Self-paced"}
-                        </span>
-                        {(course.module_count ?? 0) > 0 && <span>{course.module_count} modules</span>}
-                        {(course.lesson_count ?? 0) > 0 && <span>{course.lesson_count} lessons</span>}
-                        {(course.enrolled_count ?? 0) > 0 && (
-                          <span className="inline-flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5" />{course.enrolled_count}
-                          </span>
-                        )}
+                      <div className="h-2 w-full rounded-full" style={{ background: "rgba(255,255,255,0.14)" }}>
+                        <div className="h-full rounded-full" style={{ width: `${enrollment.progress_percent}%`, background: colors.accent }} />
                       </div>
+                    </div>
+                  )}
 
-                      {displayInstructor && (
-                        <p className="mb-3 text-xs" style={{ color: colors.textMuted }}>By {displayInstructor}</p>
-                      )}
-
-                      {enrollment && (
-                        <div className="mb-3">
-                          <div className="mb-1 flex items-center justify-between text-xs">
-                            <span style={{ color: colors.textSecondary }}>Progress</span>
-                            <span style={{ color: colors.accent }}>{enrollment.progress_percent}%</span>
-                          </div>
-                          <div className="h-2 w-full rounded-full" style={{ background: "rgba(255,255,255,0.14)" }}>
-                            <div className="h-full rounded-full" style={{ width: `${enrollment.progress_percent}%`, background: colors.accent }} />
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2">
-                        {isEnrolled ? (
-                          <span className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium"
-                            style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.3)" }}>
-                            Enrolled
-                          </span>
-                        ) : (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleEnroll(course.id); }}
-                            className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium"
-                            style={{ background: colors.accent, color: "#000", border: "none" }}>
-                            Enroll <ChevronRight className="h-3 w-3" />
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const context = encodeURIComponent(`I have a question about the course "${course.title}". Can you help me?`);
-                            window.location.href = `/chat?context=${context}`;
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium"
-                          style={{
-                            background: isDark ? "rgba(255, 214, 0, 0.12)" : "rgba(255, 214, 0, 0.18)",
-                            border: `1px solid ${isDark ? "rgba(255, 214, 0, 0.3)" : "rgba(255, 214, 0, 0.45)"}`,
-                            color: colors.accent,
-                          }}>
-                          <MessageCircle className="h-3.5 w-3.5" /> Ask
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* My Courses tab */}
-        {activeTab === "my-courses" && (
-          <>
-            {myCourses.length === 0 ? (
-              <div className="py-16 text-center" style={{ color: colors.textMuted }}>
-                <Star className="mx-auto mb-4 h-12 w-12 opacity-40" />
-                <p className="text-lg font-medium">No enrolled courses yet</p>
-                <p className="mt-1 text-sm">Browse courses and enroll to get started.</p>
-                <button onClick={() => setActiveTab("browse")} className="mt-4 rounded-lg px-4 py-2 text-sm font-medium" style={{ background: colors.accent, color: "#000" }}>
-                  Browse Courses
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {myCourses.map((course) => {
-                  const enrollment = enrollments.find((e) => e.course_id === course.id);
-                  return (
-                    <article
-                      key={course.id}
-                      onClick={() => { window.location.href = `/academy/courses/${course.id}`; }}
-                      style={{ borderRadius: 20, border: `1px solid ${colors.border}`, background: colors.cardBg, backdropFilter: "blur(20px)", padding: 20, boxShadow: colors.shadow, cursor: "pointer" }}>
-                      <p className="text-xs uppercase tracking-wide" style={{ color: colors.textMuted }}>{course.category || "General"}</p>
-                      <h2 className="mt-1 mb-2 text-lg font-semibold" style={{ color: colors.text }}>{course.title}</h2>
-                      {enrollment && (
-                        <div className="mb-3">
-                          <div className="mb-1 flex items-center justify-between text-xs">
-                            <span style={{ color: colors.textSecondary }}>{enrollment.status === "completed" ? "Completed" : "Progress"}</span>
-                            <span style={{ color: colors.accent }}>{enrollment.progress_percent}%</span>
-                          </div>
-                          <div className="h-2 w-full rounded-full" style={{ background: "rgba(255,255,255,0.14)" }}>
-                            <div className="h-full rounded-full" style={{ width: `${enrollment.progress_percent}%`, background: enrollment.status === "completed" ? "#22c55e" : colors.accent }} />
-                          </div>
-                        </div>
-                      )}
-                      <span className="text-xs" style={{ color: colors.textMuted }}>{enrollment?.last_accessed_at ? `Last accessed: ${new Date(enrollment.last_accessed_at).toLocaleDateString()}` : ""}</span>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Create tab */}
-        {activeTab === "create" && (
-          <div style={{ maxWidth: 600, margin: "0 auto" }}>
-            <div style={{ borderRadius: 20, border: `1px solid ${colors.border}`, background: colors.cardBg, backdropFilter: "blur(20px)", padding: 28, boxShadow: colors.shadow }}>
-              <h2 className="mb-6 text-xl font-bold" style={{ color: colors.text }}>Create New Course</h2>
-
-              {formMessage && (
-                <div className="mb-4 rounded-lg p-3 text-sm" style={{
-                  background: formMessage.includes("success") ? "rgba(34,197,94,0.15)" : "rgba(255,100,100,0.15)",
-                  color: formMessage.includes("success") ? "#22c55e" : "#ff6b6b",
-                  border: `1px solid ${formMessage.includes("success") ? "rgba(34,197,94,0.3)" : "rgba(255,100,100,0.3)"}`,
-                }}>
-                  {formMessage}
-                </div>
-              )}
-
-              <form onSubmit={handleCreateCourse} className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>Title *</label>
-                  <input required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} style={inputStyle} placeholder="Course title" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>Description</label>
-                  <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={3} style={{ ...inputStyle, resize: "vertical" as const }} placeholder="Course description" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>Level</label>
-                    <select value={draft.level} onChange={(e) => setDraft({ ...draft, level: e.target.value as typeof draft.level })} style={inputStyle as React.CSSProperties}>
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <a
+                      href={`${basePath}/courses/${course.id}`}
+                      className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+                      style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
+                    >
+                      Learn More
+                    </a>
+                    <a
+                      href={enrolledCourseIds.has(course.id) ? `${basePath}/courses/${course.id}` : `${basePath}/courses/${course.id}/enroll`}
+                      className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+                      style={{ background: colors.accent, color: "#000" }}
+                    >
+                      {enrolledCourseIds.has(course.id) ? "Open Course" : "Enroll Now"}
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>Duration</label>
-                    <input value={draft.duration} onChange={(e) => setDraft({ ...draft, duration: e.target.value })} style={inputStyle} placeholder="e.g. 6 weeks" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>Category</label>
-                    <input value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} style={inputStyle} placeholder="e.g. Technology" />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>Instructor</label>
-                    <input value={draft.instructor_name} onChange={(e) => setDraft({ ...draft, instructor_name: e.target.value })} style={inputStyle} placeholder="Instructor name" />
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>Tags (comma-separated)</label>
-                  <input value={draft.tags} onChange={(e) => setDraft({ ...draft, tags: e.target.value })} style={inputStyle} placeholder="e.g. python, programming, ai" />
-                </div>
-                <button type="submit" className="w-full rounded-lg py-3 text-sm font-bold" style={{ background: colors.accent, color: "#000", border: "none", cursor: "pointer" }}>
-                  Create Course
-                </button>
-              </form>
-            </div>
+                </article>
+              );
+            })}
+        </section>
+
+        {!isLoading && filteredCourses.length === 0 && (
+          <div className="mt-10 rounded-[26px] border p-8 text-center" style={{ borderColor: colors.border, background: colors.cardBg, color: colors.textSecondary }}>
+            No courses match this filter yet. Try a different level, search, or switch back to Learning Paths.
           </div>
         )}
       </div>
