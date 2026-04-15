@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Plus,
   Trash2,
+  Users,
   Video,
 } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
@@ -32,6 +33,12 @@ import {
   type CourseScheduleCategory,
   type CourseScheduleItem,
 } from "./api/course-schedule";
+import {
+  getCourseAttendance,
+  markCourseAttendance,
+  type AttendanceStatus,
+  type CourseAttendanceStudent,
+} from "./api/course-attendance";
 import { createSession, cancelSession, listSessions, type LiveSession } from "./api/live-sessions";
 import { useAcademyUserId } from "./useAcademyUserId";
 import { sbFetch } from "../shared/sbFetch";
@@ -49,7 +56,7 @@ type Course = {
   duration?: string | null;
 };
 
-type InstructorCourseTab = "schedule" | "discussions" | "sessions" | "grading" | "builder" | "materials";
+type InstructorCourseTab = "schedule" | "discussions" | "sessions" | "attendance" | "grading" | "builder" | "materials";
 
 type ScheduleFormState = {
   title: string;
@@ -135,6 +142,11 @@ export default function AcademyInstructorCoursePage() {
   const [selectedQueueItem, setSelectedQueueItem] = useState<GradingQueueItem | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [loadingSubmission, setLoadingSubmission] = useState(false);
+  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [attendanceRows, setAttendanceRows] = useState<CourseAttendanceStudent[]>([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [attendanceSavingUserId, setAttendanceSavingUserId] = useState<string | null>(null);
+  const [attendanceMessage, setAttendanceMessage] = useState<string | null>(null);
 
   const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
   const [scheduleSaving, setScheduleSaving] = useState(false);
@@ -239,6 +251,33 @@ export default function AcademyInstructorCoursePage() {
       void loadCourseWorkspace();
     },
     [loadCourseWorkspace],
+  );
+
+  const loadAttendance = useCallback(async function () {
+    if (courseId === "") {
+      setAttendanceRows([]);
+      return;
+    }
+
+    setLoadingAttendance(true);
+    try {
+      const roster = await getCourseAttendance(courseId, attendanceDate);
+      setAttendanceRows(roster.students);
+    } catch (error) {
+      console.error("Failed to load attendance roster:", error);
+      setAttendanceRows([]);
+    } finally {
+      setLoadingAttendance(false);
+    }
+  }, [attendanceDate, courseId]);
+
+  useEffect(
+    function () {
+      if (openTab === "attendance") {
+        void loadAttendance();
+      }
+    },
+    [loadAttendance, openTab],
   );
 
   const handleSelectSubmission = useCallback(async function (item: GradingQueueItem) {
@@ -434,6 +473,42 @@ export default function AcademyInstructorCoursePage() {
     }
   }
 
+  async function handleAttendanceMark(userId: string, attendanceStatus: AttendanceStatus) {
+    if (course == null) {
+      return;
+    }
+
+    setAttendanceSavingUserId(userId);
+    setAttendanceMessage(null);
+    try {
+      const savedRecord = await markCourseAttendance(course.id, {
+        classDate: attendanceDate,
+        userId,
+        attendanceStatus,
+        markedBy: instructorId,
+      });
+      setAttendanceRows(function (current) {
+        return current.map(function (student) {
+          return student.userId === userId
+            ? {
+                ...student,
+                attendanceStatus: savedRecord.attendanceStatus,
+                recordId: savedRecord.recordId,
+                updatedAt: savedRecord.updatedAt,
+              }
+            : student;
+        });
+      });
+      setAttendanceMessage(
+        `${savedRecord.userName} marked ${attendanceStatus} for ${new Date(attendanceDate + "T12:00:00").toLocaleDateString()}.`,
+      );
+    } catch (error) {
+      setAttendanceMessage(error instanceof Error ? error.message : "Failed to save attendance.");
+    } finally {
+      setAttendanceSavingUserId(null);
+    }
+  }
+
   const customScheduleItems = useMemo(
     function () {
       return [...scheduleItems].sort(function (left, right) {
@@ -561,6 +636,24 @@ export default function AcademyInstructorCoursePage() {
     [homeworkAssignments, quizAssignments],
   );
 
+  const attendanceSummary = useMemo(
+    function () {
+      const presentCount = attendanceRows.filter(function (student) {
+        return student.attendanceStatus === "present";
+      }).length;
+      const absentCount = attendanceRows.filter(function (student) {
+        return student.attendanceStatus === "absent";
+      }).length;
+      return {
+        total: attendanceRows.length,
+        presentCount,
+        absentCount,
+        unmarkedCount: Math.max(attendanceRows.length - presentCount - absentCount, 0),
+      };
+    },
+    [attendanceRows],
+  );
+
   const sectionTabs: Array<{ tab: InstructorCourseTab; label: string; description: string; icon: typeof CalendarDays }> = [
     {
       tab: "schedule",
@@ -579,6 +672,12 @@ export default function AcademyInstructorCoursePage() {
       label: "Live Sessions",
       description: "Run live sessions connected to your courses and students.",
       icon: Video,
+    },
+    {
+      tab: "attendance",
+      label: "Attendance",
+      description: "Mark students present or absent for each class date in this course.",
+      icon: Users,
     },
     {
       tab: "grading",
@@ -1067,6 +1166,145 @@ export default function AcademyInstructorCoursePage() {
       );
     }
 
+    if (openTab === "attendance") {
+      return (
+        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
+                Attendance
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm" style={{ color: colors.textSecondary }}>
+                Mark each enrolled learner as present or absent for a specific class date. When you switch the class date, the list starts fresh for that class.
+              </p>
+            </div>
+            <div className="min-w-[220px]">
+              <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                Class date
+              </label>
+              <input
+                type="date"
+                value={attendanceDate}
+                onChange={function (event) {
+                  setAttendanceDate(event.target.value);
+                  setAttendanceMessage(null);
+                }}
+                className="w-full rounded-xl border px-3 py-2"
+                style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+              />
+            </div>
+          </div>
+
+          {attendanceMessage && (
+            <div className="mt-4 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
+              {attendanceMessage}
+            </div>
+          )}
+
+          <div className="mt-5 grid gap-4 md:grid-cols-4">
+            {[
+              { label: "Enrolled", value: attendanceSummary.total },
+              { label: "Present", value: attendanceSummary.presentCount },
+              { label: "Absent", value: attendanceSummary.absentCount },
+              { label: "Unmarked", value: attendanceSummary.unmarkedCount },
+            ].map(function (item) {
+              return (
+                <div
+                  key={item.label}
+                  className="rounded-[20px] border p-4"
+                  style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                >
+                  <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
+                    {item.value}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 rounded-[24px] border" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+            <div className="border-b px-5 py-4" style={{ borderColor: colors.border }}>
+              <p className="text-sm" style={{ color: colors.textSecondary }}>
+                This attendance sheet is saved only for {new Date(attendanceDate + "T12:00:00").toLocaleDateString()}.
+              </p>
+            </div>
+
+            {loadingAttendance ? (
+              <div className="flex items-center gap-2 px-5 py-8 text-sm" style={{ color: colors.textSecondary }}>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading attendance roster...
+              </div>
+            ) : attendanceRows.length > 0 ? (
+              <div className="divide-y" style={{ borderColor: colors.border }}>
+                {attendanceRows.map(function (student) {
+                  const isSaving = attendanceSavingUserId === student.userId;
+                  const isPresent = student.attendanceStatus === "present";
+                  const isAbsent = student.attendanceStatus === "absent";
+                  return (
+                    <div
+                      key={student.userId}
+                      className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold" style={{ color: colors.text }}>
+                          {student.userName}
+                        </h3>
+                        <div className="mt-1 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
+                          <span>Student ID: {student.studentId}</span>
+                          <span>Progress: {student.progressPercent || 0}%</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={function () {
+                            void handleAttendanceMark(student.userId, "present");
+                          }}
+                          disabled={isSaving}
+                          className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                          style={{
+                            background: isPresent ? "rgba(34,197,94,0.16)" : colors.cardBg,
+                            color: isPresent ? "#22C55E" : colors.text,
+                            border: "1px solid " + (isPresent ? "rgba(34,197,94,0.35)" : colors.border),
+                          }}
+                        >
+                          Present
+                        </button>
+                        <button
+                          type="button"
+                          onClick={function () {
+                            void handleAttendanceMark(student.userId, "absent");
+                          }}
+                          disabled={isSaving}
+                          className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                          style={{
+                            background: isAbsent ? "rgba(239,68,68,0.16)" : colors.cardBg,
+                            color: isAbsent ? "#EF4444" : colors.text,
+                            border: "1px solid " + (isAbsent ? "rgba(239,68,68,0.35)" : colors.border),
+                          }}
+                        >
+                          Absent
+                        </button>
+                        {isSaving && <Loader2 className="h-4 w-4 animate-spin" style={{ color: colors.textSecondary }} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="px-5 py-8 text-sm" style={{ color: colors.textSecondary }}>
+                No active students are enrolled in this course yet.
+              </div>
+            )}
+          </div>
+        </section>
+      );
+    }
+
     if (openTab === "grading") {
       return (
         <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
@@ -1406,7 +1644,7 @@ export default function AcademyInstructorCoursePage() {
             </section>
 
 
-<div className="mb-6 grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+<div className="mb-6 grid gap-2 md:grid-cols-2 xl:grid-cols-7">
   {sectionTabs.map(function (item) {
     const isOpen = openTab === item.tab;
     return (
