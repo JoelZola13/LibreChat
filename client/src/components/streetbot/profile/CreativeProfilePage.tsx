@@ -407,6 +407,9 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
 
   const isOwnProfile = Boolean(user?.id && profile?.user_id === user.id);
   const visibleTabs = TABS.filter((tab) => tab.id !== "settings" || isOwnProfile);
+  const [availabilityStatus, setAvailabilityStatus] = useState(profile?.availability_status || "open");
+  const [showAvailabilityDropdown, setShowAvailabilityDropdown] = useState(false);
+  const availability = getAvailabilityInfo(availabilityStatus);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -434,6 +437,10 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
       setActiveTab("about");
     }
   }, [activeTab, isOwnProfile]);
+
+  useEffect(() => {
+    setAvailabilityStatus(profile?.availability_status || "open");
+  }, [profile?.availability_status]);
 
   const handleTabSelect = (tabId: TabId) => {
     setActiveTab(tabId);
@@ -515,10 +522,6 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
       </div>
     );
   }
-
-  const [availabilityStatus, setAvailabilityStatus] = useState(profile.availability_status || "open");
-  const [showAvailabilityDropdown, setShowAvailabilityDropdown] = useState(false);
-  const availability = getAvailabilityInfo(availabilityStatus);
 
   return (
     <div style={{ minHeight: "100vh", position: "relative" }}>
