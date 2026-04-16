@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, Clock, Video } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
+import { useAuthContext } from "~/hooks/AuthContext";
 import { sbFetch } from "../shared/sbFetch";
+import { ensureStreetProfileForAcademyUser } from "../profile/academyProfileSync";
 import {
   getAcademyLearningPathFromCollection,
   getLearningPathDurationLabel,
@@ -35,6 +37,7 @@ type Enrollment = {
 export default function AcademyEnrollmentPage() {
   const { slug, courseId } = useParams();
   const location = useLocation();
+  const { user } = useAuthContext();
   const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
   const userId = useAcademyUserId();
   const { paths: learningPaths, loading: learningPathsLoading } = useAcademyLearningPaths();
@@ -158,6 +161,13 @@ export default function AcademyEnrollmentPage() {
           body: JSON.stringify({ course_id: item.id, user_id: userId }),
         });
       }
+
+      await ensureStreetProfileForAcademyUser({
+        userId,
+        user,
+        roleHint: "student",
+        force: true,
+      });
 
       setMessage("Enrollment complete. Opening your dashboard...");
       window.setTimeout(() => {

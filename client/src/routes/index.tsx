@@ -86,6 +86,9 @@ const DatabasePage = lazy(() => import('~/components/streetbot/database/Database
 const GrantWriterPage = lazy(() => import('~/components/streetbot/grantwriter/GrantWriterPage'));
 const AgentMarketplacePage = lazy(() => import('~/components/streetbot/agents/AgentMarketplacePage'));
 const CreativeProfilePage = lazy(() => import('~/components/streetbot/profile/CreativeProfilePage'));
+const StreetProfileAcademySectionPage = lazy(
+  () => import('~/components/streetbot/profile/StreetProfileAcademySectionPage'),
+);
 const BookingPage = lazy(() => import('~/components/streetbot/profile/BookingPage'));
 const MyProfilePage = lazy(() => import('~/components/streetbot/profile/MyProfilePage'));
 const SettingsPage = lazy(() => import('~/components/streetbot/settings/SettingsPage'));
@@ -260,6 +263,7 @@ export const router = createBrowserRouter(
             // Street Bot Pro pages — shared across both variants
             { path: 'profile', element: guardedSbPage('profile', ProfilePage) },
             { path: 'profile/*', element: guardedSbPage('profile', ProfilePage) },
+            { path: 'creatives/:username/academy/:section', element: guardedSbPage('profile', StreetProfileAcademySectionPage) },
             { path: 'creatives/:username', element: guardedSbPage('profile', CreativeProfilePage) },
             { path: 'creatives/:username/book', element: guardedSbPage('profile', BookingPage) },
             { path: 'groups', element: guardedSbPage('groups', GroupsPage) },
@@ -295,6 +299,7 @@ export const router = createBrowserRouter(
             // Notifications — always accessible (not a nav item)
             { path: 'notifications', element: sbPage(NotificationsPage) },
             { path: 'notifications/*', element: sbPage(NotificationsPage) },
+            { path: 'settings/academy/:section', element: guardedSbPage('settings', StreetProfileAcademySectionPage) },
             { path: 'settings', element: guardedSbPage('settings', MyProfilePage) },
             { path: 'settings/*', element: guardedSbPage('settings', MyProfilePage) },
             // StreetBot-only pages

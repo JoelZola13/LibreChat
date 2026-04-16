@@ -1,9 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useGlassStyles } from "../shared/useGlassStyles";
 import { GlassBackground } from "../shared/GlassBackground";
 import { useResponsive } from "../hooks/useResponsive";
 import { SB_API_BASE } from "~/components/streetbot/shared/apiConfig";
+import { useAuthContext } from "~/hooks/AuthContext";
+import StreetProfileAcademyTab from "./StreetProfileAcademyTab";
+import { findAcademyStreetProfileByUsername, hydrateStreetProfileRecord } from "./academyStreetProfiles";
+import { ensureStreetProfilesForActiveAcademyUsers, fetchCmsStreetProfileByUsername } from "./academyProfileSync";
+import { getStreetProfileAvatarUrl } from "./profileAvatarResolver";
+import type { AcademyProfileRole } from "./academyStreetProfiles";
 import {
   ArrowLeft,
   MapPin,
@@ -84,6 +90,8 @@ export type StreetProfile = {
   completeness_score: number;
   created_at: string;
   updated_at: string;
+  academy_role?: AcademyProfileRole | null;
+  academy_instructor_name?: string | null;
 };
 
 type TabId =
@@ -156,6 +164,8 @@ const TABS: TabDef[] = [
   { id: "settings", label: "", icon: <Settings size={16} /> },
 ];
 
+const TAB_IDS = new Set<TabId>(TABS.map((tab) => tab.id));
+
 // =============================================================================
 // Global Search Bar
 // =============================================================================
@@ -216,6 +226,8 @@ function GlobalSearchBar({ colors, isDark, navigate }: { colors: any; isDark: bo
 export default function CreativeProfilePage({ initialProfile }: { initialProfile?: StreetProfile }) {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuthContext();
   const { isDark, colors: sharedColors } = useGlassStyles();
   const { isMobile } = useResponsive();
 
@@ -238,27 +250,72 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
     }),
     [sharedColors, isDark]
   );
+  const resolvedAvatarUrl = getStreetProfileAvatarUrl(profile);
 
   useEffect(() => {
-    // Skip API fetch if we have an initialProfile
-    if (initialProfile) return;
-    if (!username) return;
-    setLoading(true);
-    setError(null);
+    let isMounted = true;
 
-    fetch(`${SB_API_BASE}/street-profiles/${encodeURIComponent(username)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Profile not found (${res.status})`);
-        return res.json();
-      })
-      .then((data) => {
-        setProfile(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    async function loadProfile() {
+      if (initialProfile || !username) {
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      const resolveFallbackProfile = async () => {
+        await ensureStreetProfilesForActiveAcademyUsers().catch(() => []);
+        const cmsProfile = await fetchCmsStreetProfileByUsername(username).catch(() => null);
+        if (cmsProfile) {
+          return hydrateStreetProfileRecord(cmsProfile as any);
+        }
+
+        return findAcademyStreetProfileByUsername(username);
+      };
+
+      try {
+        const response = await fetch(`${SB_API_BASE}/street-profiles/${encodeURIComponent(username)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (isMounted) {
+            setProfile(data);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const fallbackProfile = await resolveFallbackProfile();
+        if (fallbackProfile) {
+          if (isMounted) {
+            setProfile(fallbackProfile);
+            setLoading(false);
+          }
+          return;
+        }
+
+        throw new Error(`Profile not found (${response.status})`);
+      } catch (error: any) {
+        const fallbackProfile = await resolveFallbackProfile();
+        if (fallbackProfile) {
+          if (isMounted) {
+            setProfile(fallbackProfile);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setError(error?.message || "Profile not found");
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
   }, [username, initialProfile]);
 
   // Check scroll state for tab arrows
@@ -282,6 +339,56 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
     const el = tabScrollRef.current;
     if (!el) return;
     el.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" });
+  };
+
+  const isOwnProfile = Boolean(user?.id && profile?.user_id === user.id);
+  const visibleTabs = TABS.filter((tab) => tab.id !== "settings" || isOwnProfile);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedTab = params.get("tab");
+    if (!requestedTab) {
+      if (activeTab !== "about") {
+        setActiveTab("about");
+      }
+      return;
+    }
+
+    const normalizedTab = requestedTab.trim().toLowerCase() as TabId;
+    const nextTab =
+      TAB_IDS.has(normalizedTab) && (normalizedTab !== "settings" || isOwnProfile)
+        ? normalizedTab
+        : "about";
+
+    if (activeTab !== nextTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeTab, isOwnProfile, location.search]);
+
+  useEffect(() => {
+    if (!isOwnProfile && activeTab === "settings") {
+      setActiveTab("about");
+    }
+  }, [activeTab, isOwnProfile]);
+
+  const handleTabSelect = (tabId: TabId) => {
+    setActiveTab(tabId);
+
+    const params = new URLSearchParams(location.search);
+    if (tabId === "about") {
+      params.delete("tab");
+    } else {
+      params.set("tab", tabId);
+    }
+
+    const nextSearch = params.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true },
+    );
   };
 
   if (loading) {
@@ -509,47 +616,51 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
               }}
             >
               {/* Banner Upload */}
-              <input
-                ref={bannerInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const url = URL.createObjectURL(file);
-                    setBannerUrl(url);
-                  }
-                }}
-              />
-              <button
-                onClick={() => bannerInputRef.current?.click()}
-                title="Upload banner image"
-                style={{
-                  position: "absolute",
-                  bottom: "12px",
-                  right: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 14px",
-                  borderRadius: "10px",
-                  background: "rgba(0,0,0,0.5)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  cursor: "pointer",
-                  backdropFilter: "blur(8px)",
-                  color: "#fff",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  transition: "all 0.2s",
-                  zIndex: 5,
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.7)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.5)"; }}
-              >
-                <Camera size={16} />
-                {bannerUrl ? "Change Banner" : "Add Banner"}
-              </button>
+              {isOwnProfile && (
+                <>
+                  <input
+                    ref={bannerInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const url = URL.createObjectURL(file);
+                        setBannerUrl(url);
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => bannerInputRef.current?.click()}
+                    title="Upload banner image"
+                    style={{
+                      position: "absolute",
+                      bottom: "12px",
+                      right: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 14px",
+                      borderRadius: "10px",
+                      background: "rgba(0,0,0,0.5)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      cursor: "pointer",
+                      backdropFilter: "blur(8px)",
+                      color: "#fff",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      transition: "all 0.2s",
+                      zIndex: 5,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.7)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.5)"; }}
+                  >
+                    <Camera size={16} />
+                    {bannerUrl ? "Change Banner" : "Add Banner"}
+                  </button>
+                </>
+              )}
 
               {profile.is_featured && (
                 <div
@@ -620,9 +731,9 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                   boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
                 }}
               >
-                {profile.avatar_url ? (
+                {resolvedAvatarUrl ? (
                   <img
-                    src={profile.avatar_url}
+                    src={resolvedAvatarUrl}
                     alt={profile.display_name}
                     style={{
                       width: "100%",
@@ -829,13 +940,13 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
               <style>{`
                 .sv-tab-scroll::-webkit-scrollbar { display: none; }
               `}</style>
-              {TABS.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 const isSettingsTab = tab.id === "settings";
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleTabSelect(tab.id)}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -941,6 +1052,9 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
             {activeTab === "social-media" && (
               <TabSocialMedia profile={profile} colors={colors} isDark={isDark} />
             )}
+            {activeTab === "academy" && (
+              <TabAcademy profile={profile} colors={colors} isDark={isDark} canEditProfile={isOwnProfile} />
+            )}
             {activeTab === "activity" && (
               <TabActivity profile={profile} colors={colors} isDark={isDark} />
             )}
@@ -950,7 +1064,7 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
             {activeTab === "jobs" && (
               <TabJobs profile={profile} colors={colors} isDark={isDark} />
             )}
-            {activeTab === "settings" && (
+            {activeTab === "settings" && isOwnProfile && (
               <TabSettings profile={profile} colors={colors} isDark={isDark} />
             )}
           </div>
@@ -2605,8 +2719,8 @@ function TabAbout({
                     display: "flex", alignItems: "center", justifyContent: "center",
                     overflow: "hidden",
                   }}>
-                    {profile.avatar_url ? (
-                      <img src={profile.avatar_url} alt={profile.display_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    {resolvedAvatarUrl ? (
+                      <img src={resolvedAvatarUrl} alt={profile.display_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
                       <User size={24} color="rgba(255,255,255,0.5)" />
                     )}
@@ -5103,6 +5217,895 @@ function TabJobs({ profile, colors, isDark }: { profile: StreetProfile; colors: 
   );
 }
 
+function TabAcademy({
+  profile,
+  colors,
+  isDark,
+  canEditProfile,
+}: {
+  profile: StreetProfile;
+  colors: any;
+  isDark: boolean;
+  canEditProfile: boolean;
+}) {
+  return (
+    <StreetProfileAcademyTab
+      profile={profile}
+      canEditProfile={canEditProfile}
+      colors={colors}
+      isDark={isDark}
+    />
+  );
+
+  type AcademySection = "courses" | "paths" | "live" | "assignments" | "peer-review" | "progress" | "certificates" | "ai-tutor" | "discussions";
+  const [activeSection, setActiveSection] = useState<AcademySection>("courses");
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [courseTab, setCourseTab] = useState<"browse" | "my-courses">("browse");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterLevel, setFilterLevel] = useState("All Levels");
+
+  const navSections = [
+    { title: "Learn", items: [
+      { id: "courses" as AcademySection, label: "Courses", icon: <BookOpen size={16} />, color: "#FFD600" },
+      { id: "paths" as AcademySection, label: "Learning Paths", icon: <Layers size={16} />, color: "#8B5CF6" },
+      { id: "live" as AcademySection, label: "Live Sessions", icon: <Camera size={16} />, color: "#10B981", badge: "LIVE" },
+    ]},
+    { title: "Activities", items: [
+      { id: "assignments" as AcademySection, label: "Assignments", icon: <FileText size={16} />, color: "#3B82F6" },
+      { id: "peer-review" as AcademySection, label: "Peer Review", icon: <Users size={16} />, color: "#A855F7" },
+    ]},
+    { title: "Progress", items: [
+      { id: "progress" as AcademySection, label: "My Progress", icon: <Star size={16} />, color: "#F59E0B" },
+      { id: "certificates" as AcademySection, label: "Certificates", icon: <CheckCircle2 size={16} />, color: "#EF4444" },
+    ]},
+    { title: "Tools", items: [
+      { id: "ai-tutor" as AcademySection, label: "AI Tutor", icon: <Sparkles size={16} />, color: "#EC4899" },
+      { id: "discussions" as AcademySection, label: "Discussions", icon: <MessageSquare size={16} />, color: "#6366F1" },
+    ]},
+  ];
+
+  const courses = [
+    {
+      id: 1, title: "Street Art Fundamentals", instructor: "Ghost Academy", category: "courses",
+      image: "https://picsum.photos/seed/academy-street/600/300", duration: "6 weeks",
+      level: "Beginner", enrolled: 234, rating: 4.8, price: "Free",
+      description: "Learn the foundations of street art from spray techniques to large-scale mural planning.",
+      modules: 12, completed: 0,
+      tags: ["Spray Paint", "Stencils", "Muralism"],
+    },
+    {
+      id: 2, title: "Business of Art: From Passion to Profit", instructor: "Creative Careers Institute", category: "courses",
+      image: "https://picsum.photos/seed/academy-biz/600/300", duration: "4 weeks",
+      level: "Intermediate", enrolled: 189, rating: 4.6, price: "$49",
+      description: "Master pricing, contracts, client management, and building a sustainable creative career.",
+      modules: 8, completed: 3,
+      tags: ["Business", "Pricing", "Contracts"],
+    },
+    {
+      id: 3, title: "Digital Art for Street Artists", instructor: "TechCanvas Lab", category: "courses",
+      image: "https://picsum.photos/seed/academy-digital/600/300", duration: "8 weeks",
+      level: "Intermediate", enrolled: 156, rating: 4.9, price: "$79",
+      description: "Bridge traditional street art skills with digital tools — Procreate, Photoshop, and projection mapping.",
+      modules: 16, completed: 0,
+      tags: ["Digital", "Procreate", "Projection Mapping"],
+    },
+    {
+      id: 4, title: "Spray Can Techniques Masterclass", instructor: profile.display_name || "This Creative", category: "workshops",
+      image: "https://picsum.photos/seed/academy-spray/600/300", duration: "3 hours",
+      level: "All Levels", enrolled: 45, rating: 5.0, price: "$25",
+      description: "Hands-on workshop covering can control, pressure techniques, fades, and detail work.",
+      modules: 1, completed: 0,
+      tags: ["Spray Paint", "Hands-On", "Live"],
+    },
+    {
+      id: 5, title: "Community Mural Project Leadership", instructor: "Urban Arts Alliance", category: "workshops",
+      image: "https://picsum.photos/seed/academy-community/600/300", duration: "2 days",
+      level: "Advanced", enrolled: 32, rating: 4.7, price: "Free",
+      description: "Lead community mural projects from concept to completion — stakeholder management, volunteer coordination, and public art permissions.",
+      modules: 1, completed: 0,
+      tags: ["Leadership", "Community", "Public Art"],
+    },
+    {
+      id: 6, title: "Street Art Safety & Certification", instructor: "SafeArt Canada", category: "certifications",
+      image: "https://picsum.photos/seed/academy-cert/600/300", duration: "Self-paced",
+      level: "All Levels", enrolled: 512, rating: 4.5, price: "Free",
+      description: "Get certified in safe practices for working at heights, with aerosols, and on public infrastructure.",
+      modules: 5, completed: 5,
+      tags: ["Safety", "Certification", "Professional"],
+    },
+  ];
+
+  const learningPaths = [
+    { slug: "job-ready", title: "Job Ready", description: "Complete path to employment readiness and interview confidence.", courses: 4, hours: 40, color: "#10B981", icon: <Briefcase size={24} /> },
+    { slug: "digital-basics", title: "Digital Basics", description: "Essential computer and internet skills for everyday work and life.", courses: 4, hours: 24, color: "#3B82F6", icon: <Grid size={24} /> },
+    { slug: "housing-stability", title: "Housing Stability", description: "Practical learning track for housing search, support, and retention.", courses: 4, hours: 32, color: "#8B5CF6", icon: <Home size={24} /> },
+  ];
+
+  const liveSessions = [
+    { id: 1, title: "Street Art Critique Circle", host: "Maya Chen", date: "Today, 2:00 PM", attendees: 18, status: "live" as const, color: "#10B981" },
+    { id: 2, title: "Portfolio Review Workshop", host: "Diego Alvarez", date: "Tomorrow, 11:00 AM", attendees: 24, status: "upcoming" as const, color: "#3B82F6" },
+    { id: 3, title: "Grant Writing for Artists", host: "Keisha Williams", date: "Apr 16, 3:00 PM", attendees: 12, status: "upcoming" as const, color: "#8B5CF6" },
+  ];
+
+  const assignments = [
+    { id: 1, title: "Mural Concept Sketch", course: "Street Art Fundamentals", due: "Apr 18, 2026", status: "pending" as const, grade: null },
+    { id: 2, title: "Pricing Strategy Document", course: "Business of Art", due: "Apr 15, 2026", status: "submitted" as const, grade: null },
+    { id: 3, title: "Digital Mockup — Projection", course: "Digital Art for Street Artists", due: "Apr 10, 2026", status: "graded" as const, grade: "A" },
+  ];
+
+  const certificates = [
+    { id: 1, title: "Street Art Safety Certified", issuer: "SafeArt Canada", date: "Mar 2026", icon: <CheckCircle2 size={20} />, color: "#22c55e" },
+    { id: 2, title: "Business of Art — Module 3", issuer: "Creative Careers Institute", date: "Feb 2026", icon: <Star size={20} />, color: "#f59e0b" },
+  ];
+
+  const progressStats = {
+    coursesEnrolled: 3, coursesCompleted: 1, totalHours: 28, streak: 5,
+    badges: [
+      { name: "First Lesson", icon: "🎓", earned: true },
+      { name: "Week Streak", icon: "🔥", earned: true },
+      { name: "Peer Helper", icon: "🤝", earned: true },
+      { name: "Quiz Master", icon: "🧠", earned: false },
+      { name: "Completionist", icon: "🏆", earned: false },
+    ],
+  };
+
+  const discussions = [
+    { id: 1, title: "Best spray paint brands in 2026?", author: "Ravi Patel", replies: 14, lastActivity: "2h ago", category: "General" },
+    { id: 2, title: "How to price a 10ft mural?", author: "Suki Park", replies: 22, lastActivity: "5h ago", category: "Business" },
+    { id: 3, title: "Procreate vs Photoshop for street art design", author: "Maya Chen", replies: 8, lastActivity: "1d ago", category: "Digital" },
+  ];
+
+  const myCourses = courses.filter(c => c.completed > 0 || c.modules === c.completed);
+
+  const filteredCourses = courses.filter(c => {
+    if (searchQuery && !c.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterLevel !== "All Levels" && c.level !== filterLevel) return false;
+    return true;
+  });
+
+  const levelColor = (l: string) => {
+    if (l === "Beginner") return { color: "#22c55e", bg: "rgba(34,197,94,0.15)" };
+    if (l === "Intermediate") return { color: "#f59e0b", bg: "rgba(245,158,11,0.15)" };
+    if (l === "Advanced") return { color: "#ef4444", bg: "rgba(239,68,68,0.15)" };
+    return { color: "#3b82f6", bg: "rgba(59,130,246,0.15)" };
+  };
+
+  // Render a course card (reusable)
+  const renderCourseCard = (course: typeof courses[0]) => {
+    const lc = levelColor(course.level);
+    const isCompleted = course.completed === course.modules && course.modules > 0;
+    const progress = course.modules > 1 ? Math.round((course.completed / course.modules) * 100) : 0;
+    return (
+      <div
+        key={course.id}
+        style={{
+          borderRadius: "16px", overflow: "hidden",
+          background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+          transition: "all 0.3s", cursor: "pointer",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.25)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+      >
+        <div style={{ position: "relative", width: "100%", paddingTop: "50%", overflow: "hidden" }}>
+          <img src={course.image} alt={course.title} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ position: "absolute", top: "12px", left: "12px", background: lc.bg, color: lc.color, fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "6px", backdropFilter: "blur(8px)" }}>
+            {course.level}
+          </div>
+          <div style={{ position: "absolute", top: "12px", right: "12px", background: course.price === "Free" ? "rgba(34,197,94,0.9)" : "rgba(234,179,8,0.9)", color: course.price === "Free" ? "#fff" : "#000", fontSize: "12px", fontWeight: 700, padding: "4px 12px", borderRadius: "6px" }}>
+            {course.price}
+          </div>
+          {isCompleted && (
+            <div style={{ position: "absolute", bottom: "12px", left: "12px", background: "rgba(34,197,94,0.9)", color: "#fff", fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <CheckCircle2 size={12} /> Completed
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "16px" }}>
+          <h4 style={{ margin: "0 0 6px 0", fontSize: "16px", fontWeight: 700, color: colors.text }}>{course.title}</h4>
+          <div style={{ fontSize: "12px", color: colors.textSecondary, marginBottom: "8px" }}>by {course.instructor}</div>
+          <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: colors.textSecondary, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
+            {course.description}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "12px" }}>
+            {course.tags.map((tag) => (
+              <span key={tag} style={{ fontSize: "10px", padding: "3px 8px", borderRadius: "5px", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", color: colors.textSecondary }}>{tag}</span>
+            ))}
+          </div>
+          {course.completed > 0 && course.modules > 1 && (
+            <div style={{ marginBottom: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>
+                <span>{course.completed}/{course.modules} modules</span>
+                <span style={{ fontWeight: 700, color: isCompleted ? "#22c55e" : colors.accent }}>{progress}%</span>
+              </div>
+              <div style={{ height: "4px", borderRadius: "100px", background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+                <div style={{ width: `${progress}%`, height: "100%", borderRadius: "100px", background: isCompleted ? "#22c55e" : `linear-gradient(90deg, ${colors.accent}, #ff8800)` }} />
+              </div>
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: colors.textSecondary }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Clock size={12} /> {course.duration}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Users size={12} /> {course.enrolled}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Star size={12} color="#eab308" fill="#eab308" /> {course.rating}</span>
+          </div>
+          <button style={{
+            marginTop: "14px", width: "100%", padding: "10px", borderRadius: "10px",
+            background: isCompleted ? "rgba(34,197,94,0.15)" : course.completed > 0 ? colors.accent : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+            color: isCompleted ? "#22c55e" : course.completed > 0 ? "#000" : colors.text,
+            fontWeight: 700, fontSize: "13px", border: isCompleted || course.completed > 0 ? "none" : `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+            cursor: "pointer",
+          }}>
+            {isCompleted ? "✓ Completed" : course.completed > 0 ? "Continue Learning" : "Enroll Now"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: "flex", gap: "24px" }}>
+      {/* ── Left Sidebar Navigation ── */}
+      <div style={{
+        width: "220px", flexShrink: 0,
+        background: isDark ? "rgba(15,15,25,0.6)" : "rgba(255,255,255,0.5)",
+        borderRadius: "16px", padding: "16px 12px",
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+        alignSelf: "flex-start", position: "sticky", top: "80px",
+      }}>
+        {navSections.map((section) => (
+          <div key={section.title} style={{ marginBottom: "16px" }}>
+            <div style={{
+              fontSize: "10px", fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase",
+              color: isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)",
+              padding: "0 10px", marginBottom: "6px",
+            }}>
+              {section.title}
+            </div>
+            {section.items.map((item) => {
+              const isActive = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveSection(item.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "10px", width: "100%",
+                    padding: "8px 10px", borderRadius: "10px", border: "none", cursor: "pointer",
+                    background: isActive ? `${item.color}18` : "transparent",
+                    borderLeft: isActive ? `2px solid ${item.color}` : "2px solid transparent",
+                    transition: "all 0.2s", textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{
+                    width: "28px", height: "28px", borderRadius: "8px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: isActive ? `${item.color}20` : "transparent",
+                    color: isActive ? item.color : (isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.4)"),
+                  }}>
+                    {item.icon}
+                  </div>
+                  <span style={{
+                    fontSize: "13px", fontWeight: isActive ? 600 : 500, flex: 1,
+                    color: isActive ? (isDark ? "#fff" : "#000") : (isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)"),
+                  }}>
+                    {item.label}
+                  </span>
+                  {item.badge && (
+                    <span style={{
+                      fontSize: "9px", fontWeight: 700, padding: "2px 6px", borderRadius: "100px",
+                      background: "rgba(16,185,129,0.2)", color: "#10B981",
+                      animation: "pulse 2s infinite",
+                    }}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Main Content Area ── */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* ── COURSES ── */}
+        {activeSection === "courses" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Courses</h2>
+            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: colors.textSecondary }}>Browse courses, workshops, and certifications.</p>
+
+            {/* Browse / My Courses tabs */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              {(["browse", "my-courses"] as const).map(t => (
+                <button key={t} onClick={() => setCourseTab(t)} style={{
+                  padding: "7px 18px", borderRadius: "100px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                  background: courseTab === t ? colors.accent : "transparent", color: courseTab === t ? "#000" : colors.textSecondary,
+                  border: courseTab === t ? "none" : `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                }}>
+                  {t === "browse" ? "Browse" : "My Courses"}
+                </button>
+              ))}
+            </div>
+
+            {courseTab === "browse" && (
+              <>
+                {/* Search + Level filter */}
+                <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
+                  <div style={{
+                    flex: 1, minWidth: "200px", display: "flex", alignItems: "center", gap: "8px",
+                    padding: "8px 14px", borderRadius: "10px",
+                    background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  }}>
+                    <Search size={14} color={colors.textSecondary} />
+                    <input
+                      value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search courses..." style={{
+                        flex: 1, background: "none", border: "none", outline: "none",
+                        color: colors.text, fontSize: "13px",
+                      }}
+                    />
+                  </div>
+                  <select value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)} style={{
+                    padding: "8px 14px", borderRadius: "10px", fontSize: "12px",
+                    background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                    color: colors.text, outline: "none", cursor: "pointer",
+                  }}>
+                    {["All Levels", "Beginner", "Intermediate", "Advanced"].map(l => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "18px" }}>
+                  {filteredCourses.map(renderCourseCard)}
+                </div>
+                {filteredCourses.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px", color: colors.textSecondary }}>
+                    <Search size={32} style={{ opacity: 0.3, marginBottom: "12px" }} />
+                    <div style={{ fontSize: "14px", fontWeight: 600 }}>No courses found</div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {courseTab === "my-courses" && (
+              <div>
+                {myCourses.length > 0 ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "18px" }}>
+                    {myCourses.map(renderCourseCard)}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "center", padding: "60px 20px", color: colors.textSecondary }}>
+                    <BookOpen size={40} style={{ opacity: 0.3, marginBottom: "12px" }} />
+                    <div style={{ fontSize: "15px", fontWeight: 600, color: colors.text }}>No courses yet</div>
+                    <div style={{ fontSize: "13px", marginTop: "4px" }}>Enroll in a course to start learning.</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── LEARNING PATHS ── */}
+        {activeSection === "paths" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Learning Paths</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Structured tracks that organize courses into clear outcomes.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "18px" }}>
+              {learningPaths.map((path) => (
+                <div key={path.slug} style={{
+                  borderRadius: "16px", padding: "24px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  cursor: "pointer", transition: "all 0.3s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = path.color; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"; }}
+                >
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "14px",
+                    background: `${path.color}18`, display: "flex", alignItems: "center", justifyContent: "center",
+                    color: path.color, marginBottom: "16px",
+                  }}>
+                    {path.icon}
+                  </div>
+                  <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", fontWeight: 700, color: colors.text }}>{path.title}</h3>
+                  <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: colors.textSecondary, lineHeight: 1.5 }}>{path.description}</p>
+                  <div style={{ display: "flex", gap: "16px", fontSize: "12px", color: colors.textSecondary }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><BookOpen size={12} /> {path.courses} courses</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Clock size={12} /> {path.hours} hours</span>
+                  </div>
+                  <button style={{
+                    marginTop: "16px", width: "100%", padding: "10px", borderRadius: "10px",
+                    background: `${path.color}15`, color: path.color, border: `1px solid ${path.color}40`,
+                    fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                  }}>
+                    Start Path
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── LIVE SESSIONS ── */}
+        {activeSection === "live" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Live Sessions</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Attendance, engagement, and upcoming live academy sessions.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {liveSessions.map((session) => (
+                <div key={session.id} style={{
+                  display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                  borderRadius: "14px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${session.status === "live" ? `${session.color}50` : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")}`,
+                }}>
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0,
+                    background: `${session.color}18`, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Camera size={20} color={session.color} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{session.title}</span>
+                      {session.status === "live" && (
+                        <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 8px", borderRadius: "100px", background: "rgba(16,185,129,0.2)", color: "#10B981" }}>
+                          LIVE NOW
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>
+                      Hosted by {session.host} · {session.date} · {session.attendees} attendees
+                    </div>
+                  </div>
+                  <button style={{
+                    padding: "8px 20px", borderRadius: "10px", border: "none", cursor: "pointer",
+                    background: session.status === "live" ? "#10B981" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+                    color: session.status === "live" ? "#fff" : colors.text,
+                    fontWeight: 700, fontSize: "12px",
+                  }}>
+                    {session.status === "live" ? "Join Now" : "RSVP"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── ASSIGNMENTS ── */}
+        {activeSection === "assignments" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Assignments</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Track and submit your coursework.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {assignments.map((a) => {
+                const statusColors = { pending: { bg: "rgba(245,158,11,0.15)", color: "#f59e0b" }, submitted: { bg: "rgba(59,130,246,0.15)", color: "#3b82f6" }, graded: { bg: "rgba(34,197,94,0.15)", color: "#22c55e" } };
+                const sc = statusColors[a.status];
+                return (
+                  <div key={a.id} style={{
+                    display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                    borderRadius: "14px",
+                    background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  }}>
+                    <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "rgba(59,130,246,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <FileText size={20} color="#3b82f6" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{a.title}</div>
+                      <div style={{ fontSize: "12px", color: colors.textSecondary }}>{a.course} · Due: {a.due}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      {a.grade && <span style={{ fontSize: "16px", fontWeight: 800, color: "#22c55e" }}>{a.grade}</span>}
+                      <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 12px", borderRadius: "100px", background: sc.bg, color: sc.color, textTransform: "capitalize" }}>
+                        {a.status}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── PEER REVIEW ── */}
+        {activeSection === "peer-review" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Peer Review</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Give and receive feedback from fellow learners.</p>
+            <div style={{
+              padding: "32px", borderRadius: "16px", textAlign: "center",
+              background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+            }}>
+              <Users size={40} color="#A855F7" style={{ opacity: 0.4, marginBottom: "12px" }} />
+              <div style={{ fontSize: "16px", fontWeight: 700, color: colors.text, marginBottom: "6px" }}>No reviews pending</div>
+              <div style={{ fontSize: "13px", color: colors.textSecondary }}>When you submit assignments, they'll appear here for peer feedback.</div>
+            </div>
+          </div>
+        )}
+
+        {/* ── MY PROGRESS ── */}
+        {activeSection === "progress" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>My Progress</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Track your learning journey.</p>
+
+            {/* Stats cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "24px" }}>
+              {[
+                { label: "Enrolled", value: progressStats.coursesEnrolled, color: "#3b82f6" },
+                { label: "Completed", value: progressStats.coursesCompleted, color: "#22c55e" },
+                { label: "Hours Learned", value: progressStats.totalHours, color: "#f59e0b" },
+                { label: "Day Streak", value: `${progressStats.streak}🔥`, color: "#ef4444" },
+              ].map(s => (
+                <div key={s.label} style={{
+                  padding: "18px", borderRadius: "14px", textAlign: "center",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                }}>
+                  <div style={{ fontSize: "28px", fontWeight: 800, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: "11px", color: colors.textSecondary, fontWeight: 600, marginTop: "4px" }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Badges */}
+            <h3 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: 700, color: colors.text }}>Badges & Achievements</h3>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              {progressStats.badges.map(b => (
+                <div key={b.name} style={{
+                  width: "90px", padding: "16px 8px", borderRadius: "14px", textAlign: "center",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  opacity: b.earned ? 1 : 0.35,
+                }}>
+                  <div style={{ fontSize: "28px", marginBottom: "6px" }}>{b.icon}</div>
+                  <div style={{ fontSize: "10px", fontWeight: 600, color: colors.text }}>{b.name}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── CERTIFICATES ── */}
+        {activeSection === "certificates" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Certificates</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Your earned certifications and credentials.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {certificates.map(cert => (
+                <div key={cert.id} style={{
+                  display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                  borderRadius: "14px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                }}>
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0,
+                    background: `${cert.color}15`, display: "flex", alignItems: "center", justifyContent: "center",
+                    color: cert.color,
+                  }}>
+                    {cert.icon}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{cert.title}</div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>{cert.issuer} · {cert.date}</div>
+                  </div>
+                  <button style={{
+                    padding: "7px 16px", borderRadius: "8px", border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                    background: "transparent", color: colors.text, fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: "6px",
+                  }}>
+                    <Download size={12} /> View
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── AI TUTOR ── */}
+        {activeSection === "ai-tutor" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>AI Tutor</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Get instant help with your coursework from the AI-powered tutor.</p>
+            <div style={{
+              borderRadius: "16px", overflow: "hidden",
+              background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+            }}>
+              {/* Chat area */}
+              <div style={{ padding: "24px", minHeight: "300px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "flex", gap: "12px" }}>
+                  <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(236,72,153,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Sparkles size={18} color="#EC4899" />
+                  </div>
+                  <div style={{ padding: "14px 18px", borderRadius: "14px", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", maxWidth: "80%" }}>
+                    <p style={{ margin: 0, fontSize: "14px", color: colors.text, lineHeight: 1.6 }}>
+                      Hi! I'm your AI Tutor. I can help with course material, explain concepts, quiz you, or give feedback on your assignments. What would you like help with today?
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {/* Input */}
+              <div style={{
+                padding: "16px 20px", borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                display: "flex", gap: "10px",
+              }}>
+                <input placeholder="Ask the AI Tutor anything..." style={{
+                  flex: 1, padding: "10px 14px", borderRadius: "10px",
+                  background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  color: colors.text, fontSize: "13px", outline: "none",
+                }} />
+                <button style={{
+                  padding: "10px 20px", borderRadius: "10px", border: "none",
+                  background: "#EC4899", color: "#fff", fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "6px",
+                }}>
+                  <Send size={14} /> Send
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── DISCUSSIONS ── */}
+        {activeSection === "discussions" && (
+          <div>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Discussions</h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Join conversations with fellow learners.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {discussions.map(d => (
+                <div key={d.id} style={{
+                  display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                  borderRadius: "14px", cursor: "pointer",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.85)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  transition: "all 0.2s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#6366F1"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"; }}
+                >
+                  <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "rgba(99,102,241,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <MessageSquare size={20} color="#6366F1" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{d.title}</div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>
+                      by {d.author} · {d.replies} replies · {d.lastActivity}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "10px", fontWeight: 600, padding: "3px 10px", borderRadius: "6px", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", color: colors.textSecondary }}>
+                    {d.category}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [notifications, setNotifications] = useState([
+    {
+      id: 1, title: "Welcome to Street Voices", body: "Your universal notification center is ready.",
+      source: "SYSTEM", icon: <Send size={20} />, iconColor: "#ef4444", iconBg: "rgba(239,68,68,0.15)",
+      time: "just now", link: "/", read: false,
+    },
+    {
+      id: 2, title: "New message", body: "You have unread messages waiting for you.",
+      source: "MESSAGES", icon: <MessageCircle size={20} />, iconColor: "#22c55e", iconBg: "rgba(34,197,94,0.15)",
+      time: "just now", link: "/messages", read: false,
+    },
+    {
+      id: 3, title: "New follower", body: "Maya Chen started following you.",
+      source: "SOCIAL", icon: <Users size={20} />, iconColor: "#3b82f6", iconBg: "rgba(59,130,246,0.15)",
+      time: "2 hours ago", link: "/profile", read: false,
+    },
+    {
+      id: 4, title: "Job application viewed", body: "Black Voices Media Collective viewed your application for Youth Media Producer.",
+      source: "JOBS", icon: <Briefcase size={20} />, iconColor: "#f59e0b", iconBg: "rgba(245,158,11,0.15)",
+      time: "5 hours ago", link: "/jobs", read: false,
+    },
+    {
+      id: 5, title: "Commission deadline approaching", body: "Your mural commission for The Urban Kitchen is due in 7 days.",
+      source: "TASKS", icon: <Clock size={20} />, iconColor: "#ef4444", iconBg: "rgba(239,68,68,0.15)",
+      time: "1 day ago", link: "/tasks", read: true,
+    },
+    {
+      id: 6, title: "Gallery artwork liked", body: "Diego Alvarez loved your piece 'Chromatic Rebellion'.",
+      source: "GALLERY", icon: <Heart size={20} />, iconColor: "#ec4899", iconBg: "rgba(236,72,153,0.15)",
+      time: "1 day ago", link: "/gallery", read: true,
+    },
+    {
+      id: 7, title: "Event reminder", body: "Street Art Festival — Panel Discussion starts tomorrow at 1:00 PM.",
+      source: "CALENDAR", icon: <Calendar size={20} />, iconColor: "#8b5cf6", iconBg: "rgba(139,92,246,0.15)",
+      time: "2 days ago", link: "/calendar", read: true,
+    },
+    {
+      id: 8, title: "New comment on portfolio", body: "Suki Park commented on 'Voices of the Underground': Amazing depth in this piece!",
+      source: "SOCIAL", icon: <MessageSquare size={20} />, iconColor: "#06b6d4", iconBg: "rgba(6,182,212,0.15)",
+      time: "3 days ago", link: "/portfolio", read: true,
+    },
+  ]);
+
+  const markRead = (id: number) => {
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+  };
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const sources = ["all", ...Array.from(new Set(notifications.map((n) => n.source.toLowerCase())))];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const filtered = notifications.filter((n) => {
+    if (filter === "unread" && n.read) return false;
+    if (sourceFilter !== "all" && n.source.toLowerCase() !== sourceFilter) return false;
+    return true;
+  });
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "12px" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: "28px", fontWeight: 800, color: colors.text }}>Notifications</h2>
+          <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: colors.textSecondary }}>
+            {unreadCount === 0 ? "You're all caught up." : `${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => setNotifications([...notifications])}
+            style={{
+              padding: "10px 20px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+              color: colors.text, display: "flex", alignItems: "center", gap: "8px",
+            }}
+          >
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button
+            onClick={markAllRead}
+            style={{
+              padding: "10px 20px", borderRadius: "10px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+              background: colors.accent, border: "none", color: "#000",
+              display: "flex", alignItems: "center", gap: "8px",
+            }}
+          >
+            <CheckCheck size={14} /> Mark all read
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <GlassCard colors={colors} isDark={isDark}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+          <div style={{ display: "flex", gap: "8px" }}>
+            {(["all", "unread"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                style={{
+                  padding: "8px 20px", borderRadius: "100px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  background: filter === f ? colors.accent : "transparent",
+                  color: filter === f ? "#000" : colors.text,
+                  border: filter === f ? "none" : `1px solid ${isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
+                  textTransform: "capitalize",
+                }}
+              >
+                {f === "all" ? "All" : "Unread"}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: colors.textSecondary, letterSpacing: "0.5px", textTransform: "uppercase" }}>Source</span>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              style={{
+                padding: "8px 14px", borderRadius: "10px", fontSize: "13px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                color: colors.text, outline: "none", cursor: "pointer", textTransform: "capitalize",
+              }}
+            >
+              {sources.map((s) => (
+                <option key={s} value={s}>{s === "all" ? "All sources" : s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* Notification List */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "16px" }}>
+        {filtered.length === 0 ? (
+          <GlassCard colors={colors} isDark={isDark}>
+            <div style={{ textAlign: "center", padding: "40px 20px" }}>
+              <Bell size={40} color={colors.textSecondary} style={{ opacity: 0.3, marginBottom: "12px" }} />
+              <div style={{ fontSize: "15px", fontWeight: 600, color: colors.text }}>No notifications</div>
+              <div style={{ fontSize: "13px", color: colors.textSecondary, marginTop: "4px" }}>
+                {filter === "unread" ? "All notifications have been read." : "Nothing to show for this filter."}
+              </div>
+            </div>
+          </GlassCard>
+        ) : (
+          filtered.map((notif) => (
+            <div
+              key={notif.id}
+              style={{
+                display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
+                borderRadius: "14px",
+                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.8)",
+                border: `1px solid ${notif.read ? (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)") : `${colors.accent}44`}`,
+                transition: "all 0.2s",
+              }}
+            >
+              {/* Icon */}
+              <div style={{
+                width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0,
+                background: notif.iconBg, display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {(() => { const el = notif.icon; return <span style={{ color: notif.iconColor }}>{el}</span>; })()}
+              </div>
+
+              {/* Content */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{notif.title}</span>
+                  <span style={{
+                    fontSize: "10px", padding: "3px 10px", borderRadius: "6px", fontWeight: 700,
+                    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                    color: colors.textSecondary, letterSpacing: "0.5px",
+                  }}>
+                    {notif.source}
+                  </span>
+                  {!notif.read && (
+                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: colors.accent }} />
+                  )}
+                </div>
+                <p style={{ margin: 0, fontSize: "14px", color: colors.textSecondary, lineHeight: 1.4 }}>{notif.body}</p>
+                <div style={{ fontSize: "12px", color: "rgba(128,128,128,0.6)", marginTop: "6px" }}>
+                  {notif.time} · opens {notif.link}
+                </div>
+              </div>
+
+              {/* Mark Read */}
+              {!notif.read && (
+                <button
+                  onClick={() => markRead(notif.id)}
+                  style={{
+                    padding: "8px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                    background: "transparent", border: `1px solid ${colors.accent}`,
+                    color: colors.accent, display: "flex", alignItems: "center", gap: "6px",
+                    whiteSpace: "nowrap", flexShrink: 0,
+                  }}
+                >
+                  <CheckCircle2 size={14} /> Mark read
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
   const [settings, setSettings] = useState<Record<string, boolean>>({
     "Public Profile": profile.is_public !== false,

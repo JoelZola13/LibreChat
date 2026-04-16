@@ -24,6 +24,8 @@ import { isDirectory } from '~/config/appVariant';
 import { Banner } from '~/components/Banners';
 import { ThemeProvider } from '~/components/streetbot/shared/theme-provider';
 import SbpBackgroundOrbs from '~/components/streetbot/shared/SbpBackgroundOrbs';
+import { useAcademyUserId } from '~/components/streetbot/academy/useAcademyUserId';
+import { ensureStreetProfileForAcademyUser } from '~/components/streetbot/profile/academyProfileSync';
 
 /** Theme toggle + profile button — matches HomepageTopNav right-side pattern.
  *  Hidden on homepage (which has its own in HomepageTopNav). */
@@ -120,7 +122,8 @@ export default function Root() {
   });
   const { pathname } = useLocation();
 
-  const { isAuthenticated, logout } = useAuthContext();
+  const { isAuthenticated, logout, user } = useAuthContext();
+  const academyUserId = useAcademyUserId();
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
 
   // StreetBot only: keep desktop sidebar visible for signed-in sessions.
@@ -153,6 +156,18 @@ export default function Root() {
       setShowTerms(!termsData.termsAccepted);
     }
   }, [termsData]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !academyUserId) {
+      return;
+    }
+
+    void ensureStreetProfileForAcademyUser({
+      userId: academyUserId,
+      user,
+      roleHint: 'student',
+    });
+  }, [academyUserId, isAuthenticated, user]);
 
   const handleAcceptTerms = () => {
     setShowTerms(false);

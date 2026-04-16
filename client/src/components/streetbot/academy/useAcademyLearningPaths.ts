@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Compass } from "lucide-react";
 import { sbFetch } from "../shared/sbFetch";
+import { subscribeToAcademyDataRefresh } from "../shared/academyDataSync";
 import { academyLearningPaths, type AcademyLearningPath } from "./academyLearningPaths";
 
 type LearningPathApiRecord = {
@@ -19,6 +20,7 @@ type LearningPathApiRecord = {
   outcomes?: string[];
   preferred_categories?: string[];
   course_ids?: string[];
+  courseIds?: string[];
   created_by?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -36,7 +38,7 @@ function transformApiLearningPath(record: LearningPathApiRecord): AcademyLearnin
     return null;
   }
 
-  const courseIds = toStringArray(record.course_ids);
+  const courseIds = toStringArray(record.course_ids ?? record.courseIds);
 
   return {
     id: record.id,
@@ -92,10 +94,26 @@ export function useAcademyLearningPaths() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    return subscribeToAcademyDataRefresh(() => {
+      void refresh();
+    });
+  }, [refresh]);
+
   const paths = useMemo(() => {
     const merged = new Map<string, AcademyLearningPath>();
-    academyLearningPaths.forEach((path) => merged.set(path.slug, path));
-    runtimePaths.forEach((path) => merged.set(path.slug, path));
+    academyLearningPaths.forEach((path) =>
+      merged.set(path.slug, {
+        ...path,
+        courseIds: Array.isArray(path.courseIds) ? path.courseIds : [],
+      }),
+    );
+    runtimePaths.forEach((path) =>
+      merged.set(path.slug, {
+        ...path,
+        courseIds: Array.isArray(path.courseIds) ? path.courseIds : [],
+      }),
+    );
     return Array.from(merged.values());
   }, [runtimePaths]);
 
