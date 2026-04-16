@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useGlassStyles } from "../shared/useGlassStyles";
 import { GlassBackground } from "../shared/GlassBackground";
 import { useResponsive } from "../hooks/useResponsive";
 import { SB_API_BASE } from "~/components/streetbot/shared/apiConfig";
+import { useAuthContext } from "~/hooks/AuthContext";
+import StreetProfileAcademyTab from "./StreetProfileAcademyTab";
+import { findAcademyStreetProfileByUsername, hydrateStreetProfileRecord } from "./academyStreetProfiles";
+import { ensureStreetProfilesForActiveAcademyUsers, fetchCmsStreetProfileByUsername } from "./academyProfileSync";
+import { getStreetProfileAvatarUrl } from "./profileAvatarResolver";
+import type { AcademyProfileRole } from "./academyStreetProfiles";
 import {
   ArrowLeft,
   MapPin,
@@ -102,6 +108,8 @@ export type StreetProfile = {
   completeness_score: number;
   created_at: string;
   updated_at: string;
+  academy_role?: AcademyProfileRole | null;
+  academy_instructor_name?: string | null;
 };
 
 type TabId =
@@ -177,6 +185,8 @@ const TABS: TabDef[] = [
   { id: "settings", label: "", icon: <Settings size={16} /> },
 ];
 
+const TAB_IDS = new Set<TabId>(TABS.map((tab) => tab.id));
+
 // =============================================================================
 // Global Search Bar
 // =============================================================================
@@ -237,6 +247,8 @@ function GlobalSearchBar({ colors, isDark, navigate }: { colors: any; isDark: bo
 export default function CreativeProfilePage({ initialProfile }: { initialProfile?: StreetProfile }) {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuthContext();
   const { isDark, colors: sharedColors } = useGlassStyles();
   const { isMobile } = useResponsive();
 
@@ -302,27 +314,72 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
     }),
     [sharedColors, isDark]
   );
+  const resolvedAvatarUrl = getStreetProfileAvatarUrl(profile);
 
   useEffect(() => {
-    // Skip API fetch if we have an initialProfile
-    if (initialProfile) return;
-    if (!username) return;
-    setLoading(true);
-    setError(null);
+    let isMounted = true;
 
-    fetch(`${SB_API_BASE}/street-profiles/${encodeURIComponent(username)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Profile not found (${res.status})`);
-        return res.json();
-      })
-      .then((data) => {
-        setProfile(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    async function loadProfile() {
+      if (initialProfile || !username) {
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      const resolveFallbackProfile = async () => {
+        await ensureStreetProfilesForActiveAcademyUsers().catch(() => []);
+        const cmsProfile = await fetchCmsStreetProfileByUsername(username).catch(() => null);
+        if (cmsProfile) {
+          return hydrateStreetProfileRecord(cmsProfile as any);
+        }
+
+        return findAcademyStreetProfileByUsername(username);
+      };
+
+      try {
+        const response = await fetch(`${SB_API_BASE}/street-profiles/${encodeURIComponent(username)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (isMounted) {
+            setProfile(data);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const fallbackProfile = await resolveFallbackProfile();
+        if (fallbackProfile) {
+          if (isMounted) {
+            setProfile(fallbackProfile);
+            setLoading(false);
+          }
+          return;
+        }
+
+        throw new Error(`Profile not found (${response.status})`);
+      } catch (error: any) {
+        const fallbackProfile = await resolveFallbackProfile();
+        if (fallbackProfile) {
+          if (isMounted) {
+            setProfile(fallbackProfile);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setError(error?.message || "Profile not found");
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
   }, [username, initialProfile]);
 
   // Check scroll state for tab arrows
@@ -346,6 +403,56 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
     const el = tabScrollRef.current;
     if (!el) return;
     el.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" });
+  };
+
+  const isOwnProfile = Boolean(user?.id && profile?.user_id === user.id);
+  const visibleTabs = TABS.filter((tab) => tab.id !== "settings" || isOwnProfile);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedTab = params.get("tab");
+    if (!requestedTab) {
+      if (activeTab !== "about") {
+        setActiveTab("about");
+      }
+      return;
+    }
+
+    const normalizedTab = requestedTab.trim().toLowerCase() as TabId;
+    const nextTab =
+      TAB_IDS.has(normalizedTab) && (normalizedTab !== "settings" || isOwnProfile)
+        ? normalizedTab
+        : "about";
+
+    if (activeTab !== nextTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeTab, isOwnProfile, location.search]);
+
+  useEffect(() => {
+    if (!isOwnProfile && activeTab === "settings") {
+      setActiveTab("about");
+    }
+  }, [activeTab, isOwnProfile]);
+
+  const handleTabSelect = (tabId: TabId) => {
+    setActiveTab(tabId);
+
+    const params = new URLSearchParams(location.search);
+    if (tabId === "about") {
+      params.delete("tab");
+    } else {
+      params.set("tab", tabId);
+    }
+
+    const nextSearch = params.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true },
+    );
   };
 
   if (loading) {
@@ -575,47 +682,51 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
               }}
             >
               {/* Banner Upload */}
-              <input
-                ref={bannerInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const url = URL.createObjectURL(file);
-                    setBannerUrl(url);
-                  }
-                }}
-              />
-              <button
-                onClick={() => bannerInputRef.current?.click()}
-                title="Upload banner image"
-                style={{
-                  position: "absolute",
-                  bottom: "12px",
-                  right: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 14px",
-                  borderRadius: "10px",
-                  background: "rgba(0,0,0,0.5)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  cursor: "pointer",
-                  backdropFilter: "blur(8px)",
-                  color: "#fff",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  transition: "all 0.2s",
-                  zIndex: 5,
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.7)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.5)"; }}
-              >
-                <Camera size={16} />
-                {bannerUrl ? "Change Banner" : "Add Banner"}
-              </button>
+              {isOwnProfile && (
+                <>
+                  <input
+                    ref={bannerInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const url = URL.createObjectURL(file);
+                        setBannerUrl(url);
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => bannerInputRef.current?.click()}
+                    title="Upload banner image"
+                    style={{
+                      position: "absolute",
+                      bottom: "12px",
+                      right: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 14px",
+                      borderRadius: "10px",
+                      background: "rgba(0,0,0,0.5)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      cursor: "pointer",
+                      backdropFilter: "blur(8px)",
+                      color: "#fff",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      transition: "all 0.2s",
+                      zIndex: 5,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.7)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.5)"; }}
+                  >
+                    <Camera size={16} />
+                    {bannerUrl ? "Change Banner" : "Add Banner"}
+                  </button>
+                </>
+              )}
 
               {profile.is_featured && (
                 <div
@@ -696,9 +807,9 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                   if (overlay) overlay.style.opacity = "0";
                 }}
               >
-                {(customAvatar || profile.avatar_url) ? (
+                {(customAvatar || resolvedAvatarUrl) ? (
                   <img
-                    src={customAvatar || profile.avatar_url!}
+                    src={customAvatar || resolvedAvatarUrl!}
                     alt={profile.display_name}
                     style={{
                       width: "100%",
@@ -1116,13 +1227,13 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
               <style>{`
                 .sv-tab-scroll::-webkit-scrollbar { display: none; }
               `}</style>
-              {TABS.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 const isSettingsTab = tab.id === "settings";
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleTabSelect(tab.id)}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -1232,7 +1343,7 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
               <TabSocialMedia profile={profile} colors={colors} isDark={isDark} />
             )}
             {activeTab === "academy" && (
-              <TabAcademy profile={profile} colors={colors} isDark={isDark} />
+              <TabAcademy profile={profile} colors={colors} isDark={isDark} canEditProfile={isOwnProfile} />
             )}
             {activeTab === "activity" && (
               <TabActivity profile={profile} colors={colors} isDark={isDark} />
@@ -1246,7 +1357,7 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
             {activeTab === "jobs" && (
               <TabJobs profile={profile} colors={colors} isDark={isDark} />
             )}
-            {activeTab === "settings" && (
+            {activeTab === "settings" && isOwnProfile && (
               <TabSettings profile={profile} colors={colors} isDark={isDark} />
             )}
           </div>
@@ -4132,8 +4243,8 @@ function TabAbout({
                     display: "flex", alignItems: "center", justifyContent: "center",
                     overflow: "hidden",
                   }}>
-                    {profile.avatar_url ? (
-                      <img src={profile.avatar_url} alt={profile.display_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    {resolvedAvatarUrl ? (
+                      <img src={resolvedAvatarUrl} alt={profile.display_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
                       <User size={24} color="rgba(255,255,255,0.5)" />
                     )}
@@ -7903,7 +8014,26 @@ function TabJobs({ profile, colors, isDark }: { profile: StreetProfile; colors: 
   );
 }
 
-function TabAcademy({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+function TabAcademy({
+  profile,
+  colors,
+  isDark,
+  canEditProfile,
+}: {
+  profile: StreetProfile;
+  colors: any;
+  isDark: boolean;
+  canEditProfile: boolean;
+}) {
+  return (
+    <StreetProfileAcademyTab
+      profile={profile}
+      canEditProfile={canEditProfile}
+      colors={colors}
+      isDark={isDark}
+    />
+  );
+
   type AcademySection = "courses" | "paths" | "live" | "assignments" | "peer-review" | "progress" | "certificates" | "ai-tutor" | "discussions";
   const [activeSection, setActiveSection] = useState<AcademySection>("courses");
   const [activeCategory, setActiveCategory] = useState("all");

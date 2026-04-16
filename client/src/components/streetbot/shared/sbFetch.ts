@@ -5,6 +5,7 @@
  * and attaches it as an Authorization header on every /sbapi request.
  */
 import axios from 'axios';
+import { emitAcademyDataUpdated, shouldBroadcastAcademyDataUpdate } from './academyDataSync';
 import { SB_API_BASE } from './apiConfig';
 
 /** Read the current LibreChat JWT from axios defaults. */
@@ -26,6 +27,7 @@ function getAuthToken(): string | undefined {
 export async function sbFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const url = path.startsWith('/sbapi') ? path : `${SB_API_BASE}${path}`;
   const authHeader = getAuthToken();
+  const normalizedMethod = String(init.method || 'GET').toUpperCase();
 
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string> || {}),
@@ -44,10 +46,18 @@ export async function sbFetch(path: string, init: RequestInit = {}): Promise<Res
   if (!init.signal) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15_000);
-    return fetch(url, { ...init, headers, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+    const response = await fetch(url, { ...init, headers, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+    if (shouldBroadcastAcademyDataUpdate(url, normalizedMethod, response)) {
+      emitAcademyDataUpdated({ method: normalizedMethod, path: url });
+    }
+    return response;
   }
 
-  return fetch(url, { ...init, headers });
+  const response = await fetch(url, { ...init, headers });
+  if (shouldBroadcastAcademyDataUpdate(url, normalizedMethod, response)) {
+    emitAcademyDataUpdated({ method: normalizedMethod, path: url });
+  }
+  return response;
 }
 
 /** Convenience: GET + parse JSON */

@@ -21,6 +21,7 @@ import {
   Mail,
   FileText,
 } from "lucide-react";
+import { getStreetProfileAvatarUrl } from "./profileAvatarResolver";
 
 // =============================================================================
 // Services catalog (mirrors CreativeProfilePage)
@@ -236,6 +237,7 @@ export default function BookingPage() {
   // Profile data
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const resolvedAvatarUrl = getStreetProfileAvatarUrl(profile);
 
   // Booking state
   const initialServiceId = searchParams.get("service") || "";
@@ -929,8 +931,8 @@ export default function BookingPage() {
                       overflow: "hidden",
                     }}
                   >
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    {resolvedAvatarUrl ? (
+                      <img src={resolvedAvatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
                       <Star size={24} color={colors.accent} />
                     )}

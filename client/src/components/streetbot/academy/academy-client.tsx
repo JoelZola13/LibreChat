@@ -16,12 +16,14 @@ import {
 } from "lucide-react";
 import type { ContextType } from "~/common";
 import { NAV_WIDTH } from "~/components/Nav";
+import { useAuthContext } from "~/hooks/AuthContext";
 import { AiTutorFloatingButton, DashboardSkeleton } from ".";
 import { AcademySidebar } from "./AcademySidebar";
 import { AssignmentList } from "./AssignmentList";
 import { CourseMaterialsBrowser } from "./CourseMaterialsBrowser";
 import { ForumsPanel } from "./ForumsPanel";
 import { sbFetch } from "../shared/sbFetch";
+import { ensureStreetProfileForAcademyUser } from "../profile/academyProfileSync";
 import { resolveLearningPathCourses } from "./academyLearningPaths";
 import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyUserId } from "./useAcademyUserId";
@@ -147,6 +149,7 @@ async function fetchCourses(): Promise<Course[]> {
 }
 
 export default function AcademyClient() {
+  const { user } = useAuthContext();
   const userId = useAcademyUserId();
   const location = useLocation();
   const { paths: learningPaths } = useAcademyLearningPaths();
@@ -245,6 +248,19 @@ export default function AcademyClient() {
     () => enrollments.filter((enrollment) => enrollment.status !== "dropped"),
     [enrollments],
   );
+
+  useEffect(() => {
+    if (!userId || activeEnrollments.length === 0) {
+      return;
+    }
+
+    void ensureStreetProfileForAcademyUser({
+      userId,
+      user,
+      roleHint: "student",
+      force: true,
+    });
+  }, [activeEnrollments.length, user, userId]);
 
   const hasEnrollment = activeEnrollments.length > 0;
   const dashboardPaddingLeft = isDesktop && isDashboardRoute ? dashboardBasePaddingLeft : pagePaddingX;

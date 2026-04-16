@@ -23,6 +23,9 @@ import {
 } from "lucide-react";
 import { SB_API_BASE } from "~/components/streetbot/shared/apiConfig";
 import { useResponsive } from '../hooks/useResponsive';
+import { getAcademyStreetProfiles, hydrateStreetProfileRecord, mergeStreetProfiles } from "./academyStreetProfiles";
+import { ensureStreetProfilesForActiveAcademyUsers, listCmsDirectoryStreetProfiles } from "./academyProfileSync";
+import { getStreetProfileAvatarUrl } from "./profileAvatarResolver";
 
 // =============================================================================
 // Types
@@ -56,6 +59,10 @@ type FilterState = {
 // =============================================================================
 
 const ROLE_OPTIONS = [
+  "Instructor",
+  "Student",
+  "Facilitator",
+  "Community Learner",
   "Visual Artist",
   "Muralist",
   "Illustrator",
@@ -77,6 +84,7 @@ const ROLE_OPTIONS = [
 ];
 
 const ROLE_CATEGORIES: Record<string, string[]> = {
+  Academy: ["Instructor", "Student", "Facilitator", "Community Learner"],
   Visual: ["Visual Artist", "Muralist", "Illustrator", "Photographer", "Videographer", "Filmmaker"],
   Audio: ["DJ", "Music Producer", "Sound Designer"],
   Design: ["UI/UX Designer", "Brand Designer", "Graphic Designer", "Motion Designer", "3D Artist"],
@@ -98,6 +106,42 @@ const AVAILABILITY_OPTIONS = [
   { value: "open", label: "Open to work" },
   { value: "busy", label: "Currently busy" },
 ];
+
+function matchesFilters(profile: StreetProfile, searchTerm: string, filters: FilterState) {
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  if (normalizedSearch) {
+    const searchable = [
+      profile.display_name,
+      profile.username,
+      profile.tagline || "",
+      profile.location_display || "",
+      ...(profile.primary_roles || []),
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    if (!searchable.includes(normalizedSearch)) {
+      return false;
+    }
+  }
+
+  if (filters.roles.length > 0 && !filters.roles.some((role) => profile.primary_roles.includes(role))) {
+    return false;
+  }
+
+  if (filters.city) {
+    const location = [profile.city || "", profile.location_display || "", profile.country || ""].join(" ").toLowerCase();
+    if (!location.includes(filters.city.toLowerCase())) {
+      return false;
+    }
+  }
+
+  if (filters.availability && profile.availability_status !== filters.availability) {
+    return false;
+  }
+
+  return true;
+}
 
 // =============================================================================
 // Component
@@ -154,14 +198,30 @@ export default function ProfilePage() {
       if (filters.availability) params.append("availability", filters.availability);
 
       const url = `${SB_API_BASE}/street-profiles/directory${params.toString() ? `?${params.toString()}` : ""}`;
-      const response = await fetch(url);
+      const seededAcademyProfiles = getAcademyStreetProfiles().filter((profile) =>
+        matchesFilters(profile, debouncedSearchTerm, filters),
+      ) as StreetProfile[];
+      await ensureStreetProfilesForActiveAcademyUsers().catch(() => []);
+      const [response, cmsProfiles] = await Promise.all([
+        fetch(url),
+        listCmsDirectoryStreetProfiles().catch(() => []),
+      ]);
+      const cmsAcademyProfiles = cmsProfiles
+        .map((profile) => hydrateStreetProfileRecord(profile as any) as StreetProfile)
+        .filter((profile) => matchesFilters(profile, debouncedSearchTerm, filters));
+      const academyProfiles = mergeStreetProfiles(cmsAcademyProfiles, seededAcademyProfiles);
 
       if (response.ok) {
         const data = await response.json();
-        setProfiles(Array.isArray(data) ? data : []);
+        setProfiles(mergeStreetProfiles(Array.isArray(data) ? data : [], academyProfiles));
+      } else {
+        setProfiles(academyProfiles);
       }
     } catch (error) {
       console.error("Failed to load profiles:", error);
+      setProfiles(
+        getAcademyStreetProfiles().filter((profile) => matchesFilters(profile, debouncedSearchTerm, filters)) as StreetProfile[],
+      );
     } finally {
       setLoading(false);
     }
@@ -171,12 +231,16 @@ export default function ProfilePage() {
   const loadFeatured = useCallback(async () => {
     try {
       const response = await fetch(`${SB_API_BASE}/street-profiles/featured?limit=5`);
+      const academyFeatured = getAcademyStreetProfiles().filter((profile) => profile.is_featured) as StreetProfile[];
       if (response.ok) {
         const data = await response.json();
-        setFeaturedProfiles(Array.isArray(data) ? data : []);
+        setFeaturedProfiles(mergeStreetProfiles(Array.isArray(data) ? data : [], academyFeatured));
+      } else {
+        setFeaturedProfiles(academyFeatured);
       }
     } catch (error) {
       console.error("Failed to load featured profiles:", error);
+      setFeaturedProfiles(getAcademyStreetProfiles().filter((profile) => profile.is_featured) as StreetProfile[]);
     }
   }, []);
 
@@ -879,7 +943,10 @@ export default function ProfilePage() {
                   gap: isMobile ? "16px" : "24px",
                 }}
               >
-                {profiles.map((profile) => (
+                {profiles.map((profile) => {
+                  const avatarUrl = getStreetProfileAvatarUrl(profile);
+
+                  return (
                   <div
                     key={profile.id}
                     onClick={() => navigate(`/creatives/${profile.username}`)}
@@ -915,9 +982,9 @@ export default function ProfilePage() {
                   >
                     {/* Top Half: Image */}
                     <div style={{ height: "50%", position: "relative", width: "100%" }}>
-                      {profile.avatar_url ? (
+                      {avatarUrl ? (
                         <img
-                          src={profile.avatar_url}
+                          src={avatarUrl}
                           alt={profile.display_name}
                           style={{
                             position: "absolute",
@@ -1120,12 +1187,16 @@ export default function ProfilePage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                );
+                })}
               </div>
             ) : (
               // List View
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {profiles.map((profile) => (
+                {profiles.map((profile) => {
+                  const avatarUrl = getStreetProfileAvatarUrl(profile);
+
+                  return (
                   <div
                     key={profile.id}
                     onClick={() => navigate(`/creatives/${profile.username}`)}
@@ -1159,7 +1230,7 @@ export default function ProfilePage() {
                     }}
                   >
                     {/* Avatar */}
-                    {profile.avatar_url ? (
+                    {avatarUrl ? (
                       <div
                         style={{
                           width: 64,
@@ -1171,7 +1242,7 @@ export default function ProfilePage() {
                         }}
                       >
                         <img
-                          src={profile.avatar_url}
+                          src={avatarUrl}
                           alt={profile.display_name}
                           style={{
                             width: "100%",
@@ -1296,7 +1367,8 @@ export default function ProfilePage() {
                       </button>
                     </div>
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
           </div>
