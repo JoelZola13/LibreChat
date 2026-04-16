@@ -145,11 +145,11 @@ export default function AcademyCoursesPage() {
               Pick a single course.
             </h1>
             <p className="mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
-              Choose one course now, or go back to learning paths for a full plan.
+              Choose one course now, or go back to programs for a full plan.
             </p>
             <div className="mt-5 inline-flex items-center gap-2 rounded-full p-1" style={{ background: colors.cardBgStrong }}>
               <a href={`${basePath}/paths`} style={tabStyle(false)}>
-                Learning Paths
+                Programs
               </a>
               <a href={`${basePath}/courses`} style={tabStyle(true)}>
                 Courses
@@ -322,7 +322,7 @@ export default function AcademyCoursesPage() {
 
         {!isLoading && filteredCourses.length === 0 && (
           <div className="mt-10 rounded-[26px] border p-8 text-center" style={{ borderColor: colors.border, background: colors.cardBg, color: colors.textSecondary }}>
-            No courses match this filter yet. Try a different level, search, or switch back to Learning Paths.
+            No courses match this filter yet. Try a different level, search, or switch back to Programs.
           </div>
         )}
       </div>

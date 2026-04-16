@@ -44,7 +44,7 @@ function transformApiLearningPath(record: LearningPathApiRecord): AcademyLearnin
     id: record.id,
     slug,
     title,
-    description: String(record.description || "").trim() || `${title} is a guided Academy learning path.`,
+    description: String(record.description || "").trim() || `${title} is a guided Academy program.`,
     courses: courseIds.length || Number(record.courses) || 0,
     hours: Number(record.hours) || Math.max(courseIds.length * 8, 8),
     level: String(record.level || "").trim() || "Beginner",
@@ -73,7 +73,7 @@ export function useAcademyLearningPaths() {
     try {
       const response = await sbFetch("/api/academy/learning-paths");
       if (!response.ok) {
-        throw new Error("Failed to fetch learning paths");
+        throw new Error("Failed to fetch programs");
       }
 
       const data = await response.json();

@@ -135,7 +135,7 @@ export default function AcademySavedPage() {
             </p>
             <div className="mt-5 inline-flex items-center gap-2 rounded-full p-1" style={{ background: colors.cardBgStrong }}>
               <a href={`${basePath}/paths`} style={tabStyle(false)}>
-                Learning Paths
+                Programs
               </a>
               <a href={`${basePath}/courses`} style={tabStyle(false)}>
                 Courses
@@ -159,7 +159,7 @@ export default function AcademySavedPage() {
         <section className="rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}>
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
-              Saved Learning Paths
+              Saved Programs
             </h2>
             <span className="text-sm" style={{ color: colors.textMuted }}>
               {loading ? "Loading..." : `${savedPathSummaries.length} saved`}

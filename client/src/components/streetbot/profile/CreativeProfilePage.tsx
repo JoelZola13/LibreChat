@@ -8047,7 +8047,7 @@ function TabAcademy({
   const navSections = [
     { title: "Learn", items: [
       { id: "courses" as AcademySection, label: "Courses", icon: <BookOpen size={16} />, color: "#FFD600" },
-      { id: "paths" as AcademySection, label: "Learning Paths", icon: <Layers size={16} />, color: "#8B5CF6" },
+      { id: "paths" as AcademySection, label: "Programs", icon: <Layers size={16} />, color: "#8B5CF6" },
       { id: "live" as AcademySection, label: "Live Sessions", icon: <Camera size={16} />, color: "#10B981", badge: "LIVE" },
     ]},
     { title: "Activities", items: [
@@ -8392,7 +8392,7 @@ function TabAcademy({
         {/* ── LEARNING PATHS ── */}
         {activeSection === "paths" && (
           <div>
-            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Learning Paths</h2>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Programs</h2>
             <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Structured tracks that organize courses into clear outcomes.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "18px" }}>
               {learningPaths.map((path) => (

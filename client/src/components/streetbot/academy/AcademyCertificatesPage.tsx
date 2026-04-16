@@ -322,7 +322,7 @@ export default function AcademyCertificatesPage() {
 
   const navLinks = [
     { href: `${academyBasePath}`, label: "Home", icon: Compass },
-    { href: `${academyBasePath}/paths`, label: "Learning Paths", icon: Target },
+    { href: `${academyBasePath}/paths`, label: "Programs", icon: Target },
     { href: `${academyBasePath}/courses`, label: "Courses", icon: BookOpen },
     { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
     { href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award },
@@ -547,7 +547,7 @@ export default function AcademyCertificatesPage() {
                         {userName ? `${userName}'s achievements` : "Your achievements"}
                       </h1>
                       <p className="mt-3 max-w-2xl text-base" style={{ color: colors.textSecondary }}>
-                        See the courses you passed, the certificates you earned, and the learning paths you completed.
+                        See the courses you passed, the certificates you earned, and the programs you completed.
                       </p>
                     </div>
 
@@ -652,7 +652,7 @@ export default function AcademyCertificatesPage() {
                           certificate.target_title ||
                           path?.title ||
                           course?.title ||
-                          (targetType === "learning_path" ? "Completed learning path" : "Completed course");
+                          (targetType === "learning_path" ? "Completed program" : "Completed course");
                         const issuerName =
                           certificate.signature_name ||
                           certificate.issuer_name ||
@@ -677,7 +677,7 @@ export default function AcademyCertificatesPage() {
                                   style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}
                                 >
                                   <CheckCircle2 className="h-3.5 w-3.5" />
-                                  {targetType === "learning_path" ? "Learning Path" : "Course"}
+                                  {targetType === "learning_path" ? "Program" : "Course"}
                                 </div>
                                 <h3 className="mt-3 text-xl font-semibold" style={{ color: colors.text }}>
                                   {awardTitle}
@@ -717,7 +717,7 @@ export default function AcademyCertificatesPage() {
                                 className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                                 style={{ background: colors.cardBg, color: colors.text, border: `1px solid ${colors.border}` }}
                               >
-                                {targetType === "learning_path" ? "View learning path" : "View course"}
+                                {targetType === "learning_path" ? "View program" : "View course"}
                               </a>
                               <a
                                 href={`${academyBasePath}/dashboard`}
@@ -796,7 +796,7 @@ export default function AcademyCertificatesPage() {
                       Completed paths
                     </p>
                     <h2 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
-                      Learning paths you finished
+                      Programs you finished
                     </h2>
                   </div>
 

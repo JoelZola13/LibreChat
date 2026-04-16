@@ -451,7 +451,7 @@ export default function AcademyDashboardPage() {
 
   const navLinks = [
     { href: `${academyBasePath}`, label: "Home", icon: Compass },
-    { href: `${academyBasePath}/paths`, label: "Learning Paths", icon: Target },
+    { href: `${academyBasePath}/paths`, label: "Programs", icon: Target },
     { href: `${academyBasePath}/courses`, label: "Courses", icon: BookOpen },
     ...(hasEnrollment
       ? [
@@ -632,7 +632,7 @@ export default function AcademyDashboardPage() {
                   Enroll to unlock your student dashboard
                 </h1>
                 <p className="mx-auto mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
-                  Start with a learning path or a course first, then your enrolled classes will open here.
+                  Start with a program or a course first, then your enrolled classes will open here.
                 </p>
                 <a
                   href={`${academyBasePath}/paths`}
@@ -692,7 +692,7 @@ export default function AcademyDashboardPage() {
                         className="mt-4 inline-flex items-center gap-2 text-sm font-semibold"
                         style={{ color: colors.accent }}
                       >
-                        {selectedCourse ? "Open course overview" : "Choose a learning path"}
+                        {selectedCourse ? "Open course overview" : "Choose a program"}
                         <ArrowRight className="h-4 w-4" />
                       </a>
                     </div>
@@ -829,7 +829,7 @@ export default function AcademyDashboardPage() {
                   </p>
 
                   <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
-                    <span>{selectedPath?.path.title ?? "Learning path"}</span>
+                    <span>{selectedPath?.path.title ?? "Program"}</span>
                     <span>{selectedCourse?.duration || "Self-paced"}</span>
                     <span>{selectedCourseSessions.length} live sessions</span>
                     <span>{selectedCourse?.instructor_name || selectedCourse?.instructor || "Street Voices Academy"}</span>
@@ -867,7 +867,7 @@ export default function AcademyDashboardPage() {
                     Current path
                   </p>
                   <h2 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
-                    {selectedPath?.path.title ?? "Your learning path"}
+                    {selectedPath?.path.title ?? "Your program"}
                   </h2>
                   <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
                     {selectedPath?.path.description ?? "Enroll in a path to see your full program plan here."}

@@ -152,10 +152,10 @@ export default function AcademyPathDetailPage() {
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div className="rounded-3xl border p-10 text-center" style={{ borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)" }}>
             <Map className="mx-auto mb-4 h-12 w-12" style={{ color: "#8B5CF6" }} />
-            <h1 className="text-3xl font-bold text-white">Learning path not found</h1>
+            <h1 className="text-3xl font-bold text-white">Program not found</h1>
             <p className="mt-3 text-sm text-white/70">This path is not available in the current Academy catalog.</p>
             <a href={`${basePath}/paths`} className="mt-6 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold" style={{ background: "#8B5CF6", color: "#fff" }}>
-              Back to learning paths
+              Back to programs
             </a>
           </div>
         </div>
@@ -168,7 +168,7 @@ export default function AcademyPathDetailPage() {
       <div style={{ maxWidth: 1120, margin: "0 auto" }}>
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <a href={`${basePath}/paths`} className="text-sm font-medium hover:opacity-80" style={{ color: colors.textSecondary }}>
-            Learning Paths
+            Programs
           </a>
           <span style={{ color: colors.textMuted }}>/</span>
           <span className="text-sm font-medium" style={{ color: colors.accent }}>{path.title}</span>

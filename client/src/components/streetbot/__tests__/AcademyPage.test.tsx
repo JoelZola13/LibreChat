@@ -162,7 +162,7 @@ describe('AcademyClient', () => {
     await waitFor(() => {
       expect(screen.getByText('Interactive Courses')).toBeInTheDocument();
     });
-    expect(screen.getByText('Learning Paths')).toBeInTheDocument();
+    expect(screen.getByText('Programs')).toBeInTheDocument();
     expect(screen.getByText('AI-Powered Learning')).toBeInTheDocument();
     expect(screen.getByText('Certificates & Badges')).toBeInTheDocument();
   });

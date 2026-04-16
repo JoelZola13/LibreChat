@@ -23,7 +23,7 @@ export function AcademySidebar({
       title: "Journey",
       items: [
         { href: `${basePath}`, label: "Home", icon: Compass, color: "#60A5FA" },
-        { href: `${basePath}/paths`, label: "Learning Paths", icon: Map, color: "#8B5CF6" },
+        { href: `${basePath}/paths`, label: "Programs", icon: Map, color: "#8B5CF6" },
         { href: `${basePath}/courses`, label: "Courses", icon: BookOpen, color: "#FFD600" },
         { href: `${basePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard, color: "#FACC15" },
         { href: `${basePath}/certificates`, label: "Certificates", icon: Award, color: "#F59E0B" },

@@ -830,7 +830,7 @@ export default function StreetProfileAcademySectionPage() {
         id: certificate.id,
         title: isPathCertificate ? `${title} - Completed` : `Certificate: ${certificate.certificate_title || title}`,
         detail: isPathCertificate
-          ? "Completed learning path"
+          ? "Completed program"
           : `Issued ${formatRelativeDate(certificateSortDate(certificate))}`,
       };
     });
@@ -840,7 +840,7 @@ export default function StreetProfileAcademySectionPage() {
       .map((summary) => ({
         id: `path-${summary.path.slug}`,
         title: `${summary.path.title} - Completed`,
-        detail: "Completed learning path",
+        detail: "Completed program",
       }));
 
     return Array.from(
@@ -1002,13 +1002,13 @@ export default function StreetProfileAcademySectionPage() {
         };
       case "learning-paths":
         return {
-          title: "Learning Paths",
-          description: "Every learning path this instructor has created or contributed to through Academy.",
+          title: "Programs",
+          description: "Every program this instructor has created or contributed to through Academy.",
           badge: "Instructor Academy",
           heroIcon: <Compass size={16} />,
           rowIcon: <Compass size={16} />,
-          emptyMessage: "There are no learning paths to show yet.",
-          addLabel: "Add learning path",
+          emptyMessage: "There are no programs to show yet.",
+          addLabel: "Add program",
         };
       case "live-sessions":
         return {
@@ -1033,7 +1033,7 @@ export default function StreetProfileAcademySectionPage() {
           items.push({
             id: `path-${currentPath.path.slug}`,
             title: currentPath.path.title,
-            detail: `Learning path - ${currentPath.progress}% complete`,
+            detail: `Program - ${currentPath.progress}% complete`,
             badge: `${currentPath.progress}% complete`,
           });
         }

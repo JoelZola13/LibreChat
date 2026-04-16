@@ -215,7 +215,7 @@ export default function AcademyLivePage() {
             <Lock className="mx-auto mb-4 h-12 w-12" style={{ color: colors.accent }} />
             <h1 className="text-3xl font-bold" style={{ color: colors.text }}>Enroll to unlock Live</h1>
             <p className="mt-3 text-sm" style={{ color: colors.textSecondary }}>
-              Start with a learning path or course first, then your live sessions will open here.
+              Start with a program or course first, then your live sessions will open here.
             </p>
             <a
               href={`${basePath}/paths`}

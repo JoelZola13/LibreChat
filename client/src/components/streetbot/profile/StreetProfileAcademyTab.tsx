@@ -374,7 +374,7 @@ export default function StreetProfileAcademyTab({
         id: certificate.id,
         title: isPathCertificate ? `${title} - Completed` : `Certificate: ${certificate.certificate_title || title}`,
         detail: isPathCertificate
-          ? "Completed learning path"
+          ? "Completed program"
           : `Issued ${formatRelativeDate(certificateSortDate(certificate))}`,
         href: isPathCertificate
           ? matchingPath
@@ -391,7 +391,7 @@ export default function StreetProfileAcademyTab({
       .map((summary) => ({
         id: `path-${summary.path.slug}`,
         title: `${summary.path.title} - Completed`,
-        detail: "Completed learning path",
+        detail: "Completed program",
         href: `/academy/paths/${summary.path.slug}`,
       }));
 
@@ -503,7 +503,7 @@ export default function StreetProfileAcademyTab({
   }, [instructorCourseEnrollmentMap]);
 
   const studentStats = [
-    { label: "Learning Paths", value: `${enrolledPathSummaries.length || (currentPath ? 1 : 0)}`, icon: Compass, color: "#FACC15" },
+    { label: "Programs", value: `${enrolledPathSummaries.length || (currentPath ? 1 : 0)}`, icon: Compass, color: "#FACC15" },
     { label: "In Progress", value: `${inProgressCoursesCount}`, icon: Target, color: "#8B5CF6" },
     { label: "Completed", value: `${completedCoursesCount}`, icon: CheckCircle2, color: "#10B981" },
     { label: "Achievements", value: `${achievementItems.length}`, icon: Award, color: "#60A5FA" },
@@ -513,7 +513,7 @@ export default function StreetProfileAcademyTab({
     { label: "Courses Taught", value: `${instructorCourses.length}`, icon: BookOpen, color: "#FACC15" },
     { label: "Students Taught", value: `${totalStudentsTaught}`, icon: Users, color: "#8B5CF6" },
     { label: "Live Sessions", value: `${sortedInstructorSessions.length}`, icon: Video, color: "#10B981" },
-    { label: "Learning Paths", value: `${instructorPaths.length}`, icon: Layers3, color: "#60A5FA" },
+    { label: "Programs", value: `${instructorPaths.length}`, icon: Layers3, color: "#60A5FA" },
   ];
 
   const heroTitle =
@@ -522,7 +522,7 @@ export default function StreetProfileAcademyTab({
       : "What I'm learning and what I've completed";
   const heroDescription =
     effectiveRole === "instructor"
-      ? "This is what I teach. Courses, learning paths, live sessions, and the impact I have built through Street Voices Academy all live here inside the same Street Profile system."
+      ? "This is what I teach. Courses, programs, live sessions, and the impact I have built through Street Voices Academy all live here inside the same Street Profile system."
       : "This is what I'm learning. Courses, completions, achievements, and recent activity are connected directly to Street Voices Academy so growth shows up right on the profile.";
   const detailBasePath = location.pathname.startsWith("/settings")
     ? "/settings/academy"
@@ -806,10 +806,10 @@ export default function StreetProfileAcademyTab({
             </SectionCard>
 
             <SectionCard
-              title="Learning Paths"
-              description="Learning paths this instructor contributes to or has created."
+              title="Programs"
+              description="Programs this instructor contributes to or has created."
               href={learningPathsHref}
-              footerLabel="View all learning paths"
+              footerLabel="View all programs"
               colors={colors}
               isDark={isDark}
             >
@@ -825,7 +825,7 @@ export default function StreetProfileAcademyTab({
                   icon={<Compass size={16} />}
                 />
               ) : (
-                <EmptyMessage message="Learning paths linked to this instructor will appear here." colors={colors} />
+                <EmptyMessage message="Programs linked to this instructor will appear here." colors={colors} />
               )}
             </SectionCard>
 
@@ -888,7 +888,7 @@ export default function StreetProfileAcademyTab({
               title="Currently Learning"
               description="What I'm learning right now and how far I've come in the current path."
               href={currentLearningHref}
-              footerLabel="View all learning paths"
+              footerLabel="View all programs"
               colors={colors}
               isDark={isDark}
             >
@@ -902,7 +902,7 @@ export default function StreetProfileAcademyTab({
                   }}
                 >
                   <div style={{ fontSize: "12px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: colors.textSecondary }}>
-                    Current Learning Path
+                    Current Program
                   </div>
                   <div style={{ marginTop: "8px", fontSize: "20px", fontWeight: 800, color: colors.text }}>
                     {currentPath.path.title}
@@ -956,7 +956,7 @@ export default function StreetProfileAcademyTab({
 
             <SectionCard
               title="Achievements"
-              description="Certificates earned and learning paths completed through Academy."
+              description="Certificates earned and programs completed through Academy."
               href={achievementsHref}
               footerLabel="View all achievements"
               colors={colors}
@@ -973,7 +973,7 @@ export default function StreetProfileAcademyTab({
                   icon={<Award size={16} />}
                 />
               ) : (
-                <EmptyMessage message="Certificates and completed learning paths will appear here as progress turns into milestones." colors={colors} />
+                <EmptyMessage message="Certificates and completed programs will appear here as progress turns into milestones." colors={colors} />
               )}
             </SectionCard>
 

@@ -45,6 +45,18 @@ export function getCourseDeliveryModeFromTags(tags?: string[] | null) {
   return getTaggedLines(tags, 'delivery:')[0] ?? null;
 }
 
+export function getCourseStartDateFromTags(tags?: string[] | null) {
+  return getTaggedLines(tags, 'start_date:')[0] ?? null;
+}
+
+export function getCourseMeetingDaysFromTags(tags?: string[] | null) {
+  return getTaggedLines(tags, 'meeting_day:');
+}
+
+export function getCourseScheduleNotesFromTags(tags?: string[] | null) {
+  return getTaggedLines(tags, 'schedule_notes:')[0] ?? null;
+}
+
 export function getCourseDeliveryMode(options: { sessionCount?: number; cohortCount?: number }) {
   if ((options.sessionCount ?? 0) > 0 && (options.cohortCount ?? 0) > 0) {
     return 'In person and live stream';

@@ -15,11 +15,13 @@ type Course = {
   title: string;
   description?: string | null;
   category?: string | null;
+  level?: string | null;
   state?: string;
   instructor_id?: string | null;
   instructor_name?: string | null;
   instructor?: string | null;
   duration?: string | null;
+  tags?: string[] | null;
   image_url?: string | null;
   thumbnail_url?: string | null;
 };
@@ -50,6 +52,8 @@ type ScheduleItem = {
   subtitle: string;
   href: string;
 };
+
+const COURSE_WEEKDAY_OPTIONS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
 
 function getInstructorTab(pathname: string): InstructorTab {
   if (pathname.endsWith("/certificate-generator")) return "certificate-generator";
@@ -88,6 +92,12 @@ export default function AcademyInstructorPage() {
   const [genRequirements, setGenRequirements] = useState("");
   const [genOutcomes, setGenOutcomes] = useState("");
   const [genDelivery, setGenDelivery] = useState("Online and In person");
+  const [genStartDate, setGenStartDate] = useState("");
+  const [genMeetingDays, setGenMeetingDays] = useState<string[]>([]);
+  const [genScheduleNotes, setGenScheduleNotes] = useState("");
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [pendingDeleteCourseId, setPendingDeleteCourseId] = useState<string | null>(null);
+  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genResult, setGenResult] = useState<string | null>(null);
   const [pathTitle, setPathTitle] = useState("");
@@ -171,6 +181,22 @@ export default function AcademyInstructorPage() {
     loadWorkspaceData();
   }, [loadWorkspaceData]);
 
+  const resetGenerateForm = useCallback(() => {
+    setEditingCourseId(null);
+    setGenTopic("");
+    setGenLevel("beginner");
+    setGenCategory("");
+    setGenDuration("");
+    setGenInstructor("");
+    setGenOverview("");
+    setGenRequirements("");
+    setGenOutcomes("");
+    setGenDelivery("Online and In person");
+    setGenStartDate("");
+    setGenMeetingDays([]);
+    setGenScheduleNotes("");
+  }, []);
+
   const handleGenerate = async (e: FormEvent) => {
     e.preventDefault();
     if (!genTopic.trim()) return;
@@ -182,37 +208,54 @@ export default function AcademyInstructorPage() {
       const requirementTags = splitTextareaLines(genRequirements).map((item) => `requirement:${item}`);
       const outcomeTags = splitTextareaLines(genOutcomes).map((item) => `outcome:${item}`);
       const deliveryTags = genDelivery.trim() ? [`delivery:${genDelivery.trim()}`] : [];
+      const startDateTags = genStartDate.trim() ? [`start_date:${genStartDate.trim()}`] : [];
+      const meetingDayTags = genMeetingDays.map((day) => `meeting_day:${day}`);
+      const scheduleNoteTags = normalizeScheduleNotes(genScheduleNotes)
+        ? [`schedule_notes:${normalizeScheduleNotes(genScheduleNotes)}`]
+        : [];
+      const existingCourse = editingCourseId ? allCourses.find((course) => course.id === editingCourseId) ?? null : null;
+      const extraExistingTags = Array.isArray(existingCourse?.tags)
+        ? existingCourse.tags.filter((tag) => !isManagedCourseTag(tag))
+        : [];
+      const payload = {
+        title: genTopic,
+        description: genOverview.trim() || `AI-generated Academy course: ${genTopic}`,
+        level: genLevel,
+        category: genCategory || undefined,
+        duration: genDuration || undefined,
+        state: "published",
+        instructor_name: genInstructor || existingCourse?.instructor_name || "Street Voices Academy",
+        instructor_id: existingCourse?.instructor_id || instructorId,
+        tags: [
+          ...extraExistingTags,
+          "academy",
+          "ai-generated",
+          ...deliveryTags,
+          ...startDateTags,
+          ...meetingDayTags,
+          ...scheduleNoteTags,
+          ...requirementTags,
+          ...outcomeTags,
+        ],
+      };
 
-      const resp = await sbFetch("/api/academy/courses", {
-        method: "POST",
+      const resp = await sbFetch(editingCourseId ? `/api/academy/courses/${editingCourseId}` : "/api/academy/courses", {
+        method: editingCourseId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: genTopic,
-          description: genOverview.trim() || `AI-generated Academy course: ${genTopic}`,
-          level: genLevel,
-          category: genCategory || undefined,
-          duration: genDuration || undefined,
-          state: "published",
-          instructor_name: genInstructor || "Street Voices Academy",
-          instructor_id: instructorId,
-          tags: ["academy", "ai-generated", ...deliveryTags, ...requirementTags, ...outcomeTags],
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!resp.ok) {
-        throw new Error(`Failed to create course: ${resp.status}`);
+        throw new Error(`Failed to ${editingCourseId ? "update" : "create"} course: ${resp.status}`);
       }
 
       const course = await resp.json();
-      setGenResult(`Course created successfully. Open ${course.title} in Courses.`);
-      setGenTopic("");
-      setGenCategory("");
-      setGenDuration("");
-      setGenInstructor("");
-      setGenOverview("");
-      setGenRequirements("");
-      setGenOutcomes("");
-      setGenDelivery("Online and In person");
+      setGenResult(
+        editingCourseId
+          ? `${course.title} was updated successfully.`
+          : `Course created successfully. Open ${course.title} in Courses.`,
+      );
+      resetGenerateForm();
       await loadWorkspaceData();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Generation failed";
@@ -220,6 +263,68 @@ export default function AcademyInstructorPage() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleEditCourse = (course: Course) => {
+    const tagSections = parseCourseTags(course.tags);
+    setEditingCourseId(course.id);
+    setPendingDeleteCourseId(null);
+    setGenResult(`Editing ${course.title}. Update the details below and save your changes.`);
+    setGenTopic(course.title || "");
+    setGenLevel(normalizeCourseLevel(course.level));
+    setGenCategory(course.category || "");
+    setGenDuration(course.duration || "");
+    setGenInstructor(course.instructor_name || course.instructor || "Street Voices Academy");
+    setGenOverview(course.description || "");
+    setGenRequirements(tagSections.requirements.join("\n"));
+    setGenOutcomes(tagSections.outcomes.join("\n"));
+    setGenDelivery(tagSections.delivery);
+    setGenStartDate(tagSections.startDate);
+    setGenMeetingDays(tagSections.meetingDays);
+    setGenScheduleNotes(tagSections.scheduleNotes);
+
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleCancelEditingCourse = () => {
+    resetGenerateForm();
+    setGenResult("Course editing cancelled.");
+  };
+
+  const handleDeleteCourse = async (course: Course) => {
+    setDeletingCourseId(course.id);
+    setGenResult(null);
+
+    try {
+      const response = await sbFetch(`/api/academy/courses/${course.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete course: ${response.status}`);
+      }
+
+      if (editingCourseId === course.id) {
+        resetGenerateForm();
+      }
+
+      setPendingDeleteCourseId(null);
+      setGenResult(`${course.title} was deleted from the Academy.`);
+      await loadWorkspaceData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete this course right now.";
+      setGenResult(`Error: ${message}`);
+    } finally {
+      setDeletingCourseId(null);
+    }
+  };
+
+  const toggleMeetingDay = (day: string) => {
+    setGenMeetingDays((current) =>
+      current.includes(day) ? current.filter((item) => item !== day) : [...current, day],
+    );
   };
 
   const handleClaimCourse = async (course: Course) => {
@@ -313,16 +418,16 @@ export default function AcademyInstructorPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to create learning path: ${response.status}`);
+        throw new Error(`Failed to create program: ${response.status}`);
       }
 
       const createdPath = await response.json();
-      setPathResult(`Learning path created successfully. Open ${createdPath.title} in Learning Paths.`);
+      setPathResult(`Program created successfully. Open ${createdPath.title} in Programs.`);
       setPathTitle("");
       setSelectedPathCourseIds([]);
       await refreshLearningPaths();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to create this learning path right now.";
+      const message = error instanceof Error ? error.message : "Unable to create this program right now.";
       setPathResult(`Error: ${message}`);
     } finally {
       setCreatingPath(false);
@@ -339,14 +444,14 @@ export default function AcademyInstructorPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to delete learning path: ${response.status}`);
+        throw new Error(`Failed to delete program: ${response.status}`);
       }
 
-      setPathResult("Learning path deleted successfully.");
+      setPathResult("Program deleted successfully.");
       setPendingDeletePathSlug(null);
       await refreshLearningPaths();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to delete this learning path right now.";
+      const message = error instanceof Error ? error.message : "Unable to delete this program right now.";
       setPathResult(`Error: ${message}`);
     } finally {
       setDeletingPathSlug(null);
@@ -502,7 +607,7 @@ export default function AcademyInstructorPage() {
   const handlePrintCertificate = () => {
     const recipientName = certificateFullName.trim();
     if (!recipientName || !selectedCertificateTargetTitle) {
-      setCertificateResult("Add a student name and choose a course or learning path before printing.");
+      setCertificateResult("Add a student name and choose a course or program before printing.");
       return;
     }
 
@@ -585,7 +690,7 @@ export default function AcademyInstructorPage() {
     },
     {
       tab: "learning-path-generator",
-      label: "Learning Path Generator",
+      label: "Program Generator",
       href: `${basePath}/learning-path-generator`,
       icon: Target,
     },
@@ -751,7 +856,7 @@ export default function AcademyInstructorPage() {
   );
 
   const renderGenerateTab = () => (
-    <div style={{ maxWidth: 760, margin: "0 auto" }}>
+    <div className="space-y-6" style={{ maxWidth: 1120, margin: "0 auto" }}>
       <div
         style={{
           borderRadius: 24,
@@ -774,6 +879,15 @@ export default function AcademyInstructorPage() {
             </p>
           </div>
         </div>
+
+        {editingCourseId && (
+          <div
+            className="mb-4 rounded-[18px] border px-4 py-3 text-sm"
+            style={{ borderColor: "rgba(249,115,22,0.26)", background: "rgba(249,115,22,0.08)", color: colors.text }}
+          >
+            You are editing an existing Academy course. Save your changes below or cancel to return to generator mode.
+          </div>
+        )}
 
         {genResult && (
           <div
@@ -902,25 +1016,238 @@ export default function AcademyInstructorPage() {
             </select>
           </div>
 
-          <button
-            type="submit"
-            disabled={generating || !genTopic.trim()}
-            className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-opacity disabled:opacity-50"
-            style={{ background: colors.accent, color: "#fff", border: "none", cursor: generating ? "wait" : "pointer" }}
-          >
-            {generating ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Generating Course...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                Generate Course with AI
-              </>
+          <div className="grid gap-4 md:grid-cols-[0.9fr,1.1fr]">
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={genStartDate}
+                onChange={(e) => setGenStartDate(e.target.value)}
+                style={inputStyle(colors, isDark)}
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                Class Days
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {COURSE_WEEKDAY_OPTIONS.map((day) => {
+                  const isSelected = genMeetingDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleMeetingDay(day)}
+                      className="rounded-full px-3 py-2 text-sm font-semibold"
+                      style={{
+                        background: isSelected ? "rgba(249,115,22,0.14)" : colors.cardBg,
+                        color: isSelected ? colors.accent : colors.textSecondary,
+                        border: `1px solid ${isSelected ? "rgba(249,115,22,0.26)" : colors.border}`,
+                      }}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+              Additional Schedule Details
+            </label>
+            <textarea
+              value={genScheduleNotes}
+              onChange={(e) => setGenScheduleNotes(e.target.value)}
+              rows={3}
+              style={{ ...inputStyle(colors, isDark), minHeight: 96, resize: "vertical" }}
+              placeholder="Add any extra schedule details here, like time, weekend dates, or special notes."
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={generating || !genTopic.trim()}
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-opacity disabled:opacity-50"
+              style={{ background: colors.accent, color: "#fff", border: "none", cursor: generating ? "wait" : "pointer" }}
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {editingCourseId ? "Saving..." : "Generating Course..."}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  {editingCourseId ? "Save Course Changes" : "Generate Course with AI"}
+                </>
+              )}
+            </button>
+            {editingCourseId && (
+              <button
+                type="button"
+                onClick={handleCancelEditingCourse}
+                className="rounded-lg px-5 py-3 text-sm font-semibold"
+                style={{ background: colors.cardBg, color: colors.text, border: `1px solid ${colors.border}` }}
+              >
+                Cancel Edit
+              </button>
             )}
-          </button>
+          </div>
         </form>
+      </div>
+
+      <div className="rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+              All Courses
+            </p>
+            <h2 className="mt-2 text-xl font-semibold" style={{ color: colors.text }}>
+              Manage Academy courses
+            </h2>
+            <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+              Edit course details or delete a course directly from the generator workspace.
+            </p>
+          </div>
+          <span className="text-sm" style={{ color: colors.textMuted }}>
+            {allCourses.length} total
+          </span>
+        </div>
+
+        {workspaceLoading ? (
+          <div className="mt-5 rounded-[22px] border p-5 text-sm" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading Academy courses...
+            </span>
+          </div>
+        ) : allCourses.length > 0 ? (
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {allCourses.map((course) => {
+              const visual = getCourseCardArt(course);
+              const isEditing = editingCourseId === course.id;
+              const isPendingDelete = pendingDeleteCourseId === course.id;
+              const isDeleting = deletingCourseId === course.id;
+
+              return (
+                <div
+                  key={course.id}
+                  className="rounded-[22px] border p-5"
+                  style={{
+                    borderColor: isEditing ? colors.accent : colors.border,
+                    background: colors.cardBgStrong,
+                  }}
+                >
+                  <div className="relative mb-5 overflow-hidden rounded-[20px] border" style={{ borderColor: colors.border }}>
+                    <img
+                      src={visual.src}
+                      alt={course.title}
+                      className="h-[180px] w-full object-cover"
+                      onError={(event) => {
+                        if (event.currentTarget.dataset.fallbackApplied === "true") {
+                          return;
+                        }
+                        event.currentTarget.dataset.fallbackApplied = "true";
+                        event.currentTarget.src = visual.fallbackSrc;
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+                    <div
+                      className="absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                      style={{ background: "rgba(15,23,42,0.65)", color: visual.accent }}
+                    >
+                      {visual.eyebrow}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                        {course.category || "Academy"}
+                      </p>
+                      <h3 className="mt-2 text-lg font-semibold" style={{ color: colors.text }}>
+                        {course.title}
+                      </h3>
+                    </div>
+                    {isEditing && (
+                      <span
+                        className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                        style={{ background: "rgba(249,115,22,0.14)", color: colors.accent }}
+                      >
+                        Editing
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-3 text-sm" style={{ color: colors.textSecondary }}>
+                    {course.description || "Academy course ready to be updated from the instructor workspace."}
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium" style={{ color: colors.textMuted }}>
+                    <span>{course.duration || "Flexible duration"}</span>
+                    <span>{normalizeCourseLevel(course.level)}</span>
+                    <span>{course.instructor_name || course.instructor || "Street Voices Academy"}</span>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => (isEditing ? handleCancelEditingCourse() : handleEditCourse(course))}
+                      className="rounded-full px-4 py-2 text-sm font-semibold"
+                      style={{
+                        background: isEditing ? "rgba(249,115,22,0.12)" : colors.cardBg,
+                        color: isEditing ? colors.accent : colors.text,
+                        border: `1px solid ${isEditing ? "rgba(249,115,22,0.22)" : colors.border}`,
+                      }}
+                    >
+                      {isEditing ? "Cancel Edit" : "Edit"}
+                    </button>
+
+                    {isPendingDelete ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteCourseId(null)}
+                          className="rounded-full px-4 py-2 text-sm font-semibold"
+                          style={{ background: colors.cardBg, color: colors.text, border: `1px solid ${colors.border}` }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={() => void handleDeleteCourse(course)}
+                          className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                          style={{ background: "#ef4444", color: "#fff", border: "none" }}
+                        >
+                          {isDeleting ? "Deleting..." : "Confirm Delete"}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPendingDeleteCourseId(course.id)}
+                        className="rounded-full px-4 py-2 text-sm font-semibold"
+                        style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.22)" }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-[22px] border p-5 text-sm" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
+            No Academy courses are available to manage yet.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -937,7 +1264,7 @@ export default function AcademyInstructorPage() {
           </div>
           <div>
             <h2 className="text-xl font-bold" style={{ color: colors.text }}>
-              Learning Path Generator
+              Program Generator
             </h2>
             <p className="text-sm" style={{ color: colors.textSecondary }}>
               Build a guided Academy plan by naming the path and choosing the courses it should include.
@@ -961,7 +1288,7 @@ export default function AcademyInstructorPage() {
         <form onSubmit={handleCreateLearningPath} className="space-y-5">
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
-              Learning Path Title *
+              Program Title *
             </label>
             <input
               required
@@ -1025,7 +1352,7 @@ export default function AcademyInstructorPage() {
                       {course.title}
                     </h3>
                     <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                      {course.description || "This course can be added into a guided Academy learning path."}
+                      {course.description || "This course can be added into a guided Academy program."}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium" style={{ color: colors.textMuted }}>
                       <span>{course.duration || "Flexible duration"}</span>
@@ -1046,12 +1373,12 @@ export default function AcademyInstructorPage() {
             {creatingPath ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Generating Learning Path...
+                Generating Program...
               </>
             ) : (
               <>
                 <Target className="h-4 w-4" />
-                Generate Learning Path
+                Generate Program
               </>
             )}
           </button>
@@ -1065,7 +1392,7 @@ export default function AcademyInstructorPage() {
               Generated Paths
             </p>
             <h2 className="mt-2 text-xl font-semibold" style={{ color: colors.text }}>
-              Learning paths already created
+              Programs already created
             </h2>
           </div>
           <span className="text-sm" style={{ color: colors.textMuted }}>
@@ -1108,7 +1435,7 @@ export default function AcademyInstructorPage() {
                     </div>
                   </div>
                   <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                    {path.source === "generated" ? "AI Powered Path" : "Learning Path"}
+                    {path.source === "generated" ? "AI Powered Program" : "Program"}
                   </p>
                   <h3 className="mt-2 text-lg font-semibold" style={{ color: colors.text }}>
                     {path.title}
@@ -1166,7 +1493,7 @@ export default function AcademyInstructorPage() {
             })
           ) : (
             <div className="rounded-[22px] border p-5 text-sm md:col-span-2 xl:col-span-3" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
-              No generated learning paths yet. Create one above to make it available on the learner path pages.
+              No generated programs yet. Create one above to make it available on the learner program pages.
             </div>
           )}
         </div>
@@ -1220,19 +1547,19 @@ export default function AcademyInstructorPage() {
                   style={inputStyle(colors, isDark)}
                 >
                   <option value="course">Course</option>
-                  <option value="learning_path">Learning Path</option>
+                  <option value="learning_path">Program</option>
                 </select>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
-                  {certificateAwardType === "course" ? "Choose Course" : "Choose Learning Path"}
+                  {certificateAwardType === "course" ? "Choose Course" : "Choose Program"}
                 </label>
                 <select
                   value={certificateTargetId}
                   onChange={(event) => setCertificateTargetId(event.target.value)}
                   style={inputStyle(colors, isDark)}
                 >
-                  <option value="">{certificateAwardType === "course" ? "Select a course" : "Select a learning path"}</option>
+                  <option value="">{certificateAwardType === "course" ? "Select a course" : "Select a program"}</option>
                   {certificateAwardType === "course"
                     ? certificateCourseTargets.map((target) => (
                         <option key={target.id} value={target.id}>
@@ -1399,9 +1726,9 @@ export default function AcademyInstructorPage() {
               </p>
               <div className="mx-auto mt-4 h-px w-40" style={{ background: "rgba(180,83,9,0.26)" }} />
               <p className="mx-auto mt-8 max-w-xl text-base leading-8" style={{ color: "#374151" }}>
-                For successfully completing this {certificateAwardType === "course" ? "course" : "learning path"} of{" "}
+                For successfully completing this {certificateAwardType === "course" ? "course" : "program"} of{" "}
                 <span style={{ fontWeight: 700, color: "#111827" }}>
-                  {selectedCertificateTargetTitle || (certificateAwardType === "course" ? "Course Name" : "Learning Path Name")}
+                  {selectedCertificateTargetTitle || (certificateAwardType === "course" ? "Course Name" : "Program Name")}
                 </span>
               </p>
             </div>
@@ -1650,6 +1977,51 @@ function splitTextareaLines(value: string) {
     .filter(Boolean);
 }
 
+function parseCourseTags(tags?: string[] | null) {
+  const safeTags = Array.isArray(tags) ? tags : [];
+  const findByPrefix = (prefix: string) =>
+    safeTags
+      .filter((tag) => tag.startsWith(prefix))
+      .map((tag) => tag.slice(prefix.length).trim())
+      .filter(Boolean);
+
+  return {
+    requirements: findByPrefix("requirement:"),
+    outcomes: findByPrefix("outcome:"),
+    delivery: findByPrefix("delivery:")[0] || "Online and In person",
+    startDate: findByPrefix("start_date:")[0] || "",
+    meetingDays: findByPrefix("meeting_day:"),
+    scheduleNotes: findByPrefix("schedule_notes:")[0] || "",
+  };
+}
+
+function normalizeCourseLevel(level?: string | null): "beginner" | "intermediate" | "advanced" {
+  const normalized = String(level || "").trim().toLowerCase();
+  if (normalized === "advanced") return "advanced";
+  if (normalized === "intermediate") return "intermediate";
+  return "beginner";
+}
+
+function normalizeScheduleNotes(value: string) {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function isManagedCourseTag(tag: string) {
+  const normalized = tag.toLowerCase();
+  return [
+    "delivery:",
+    "requirement:",
+    "outcome:",
+    "start_date:",
+    "meeting_day:",
+    "schedule_notes:",
+  ].some((prefix) => normalized.startsWith(prefix));
+}
+
 function inputStyle(
   colors: { border: string; text: string },
   isDark: boolean,
@@ -1696,7 +2068,7 @@ function buildLearningPathPayload(title: string, courses: Course[], instructorId
     outcomes: [
       `Finish a guided plan across ${courses.length} Academy ${courses.length === 1 ? "course" : "courses"}.`,
       "Build steady progress with a clear next step after each class.",
-      "Move toward your goal with one connected Academy learning path.",
+      "Move toward your goal with one connected Academy program.",
     ],
     preferred_categories: categories,
     course_ids: courses.map((course) => course.id),
@@ -1749,7 +2121,7 @@ function buildCertificatePrintMarkup({
     }),
   );
   const safeSignatureName = escapeHtml(signatureName);
-  const safeAwardType = awardType === "course" ? "course" : "learning path";
+  const safeAwardType = awardType === "course" ? "course" : "program";
 
   return `<!doctype html>
   <html>
