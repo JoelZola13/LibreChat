@@ -218,11 +218,11 @@ export default function AcademyPathsPage() {
               Choose how you want to learn.
             </h1>
             <p className="mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
-              Pick a full learning path or switch to individual courses.
+              Pick a full program or switch to individual courses.
             </p>
             <div className="mt-5 inline-flex items-center gap-2 rounded-full p-1" style={{ background: colors.cardBgStrong }}>
               <a href={`${basePath}/paths`} style={tabStyle(true)}>
-                Learning Paths
+                Programs
               </a>
               <a href={`${basePath}/courses`} style={tabStyle(false)}>
                 Courses
@@ -294,7 +294,7 @@ export default function AcademyPathsPage() {
               <div className="relative mb-5 overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border }}>
                 <img
                   src={recommendedPathVisual.src}
-                  alt={recommendedPath?.path.title ?? "Learning path"}
+                  alt={recommendedPath?.path.title ?? "Program"}
                   className="h-[210px] w-full object-cover"
                   onError={(event) => {
                     if (event.currentTarget.dataset.fallbackApplied === "true") {
@@ -316,7 +316,7 @@ export default function AcademyPathsPage() {
             <div className="mt-3 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold" style={{ color: colors.text }}>
-                  {recommendedPath?.path.title ?? "Learning Path"}
+                  {recommendedPath?.path.title ?? "Program"}
                 </h2>
                 <p className="mt-3 text-sm" style={{ color: colors.textSecondary }}>
                   {recommendedPath?.path.description ?? "Pick a path to see a full plan of courses."}
@@ -332,7 +332,7 @@ export default function AcademyPathsPage() {
                   onClick={() => togglePathSaved(recommendedPath.path.slug)}
                   className="rounded-full p-2"
                   style={{ background: `${recommendedPath.path.color}18`, border: `1px solid ${colors.border}` }}
-                  aria-label="Save learning path"
+                  aria-label="Save program"
                 >
                   <Heart
                     className="h-4 w-4"
@@ -448,11 +448,11 @@ export default function AcademyPathsPage() {
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
-                Learning Paths
+                Programs
               </h2>
               {generatedPathSummaries.length > 0 && (
                 <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                  New instructor-created learning paths appear first below so learners can open them right away.
+                  New instructor-created programs appear first below so learners can open them right away.
                 </p>
               )}
             </div>
@@ -510,7 +510,7 @@ export default function AcademyPathsPage() {
                       onClick={() => togglePathSaved(summary.path.slug)}
                       className="rounded-full p-2"
                       style={{ background: `${summary.path.color}18`, border: `1px solid ${colors.border}` }}
-                      aria-label="Save learning path"
+                      aria-label="Save program"
                     >
                       <Heart
                         className="h-4 w-4"

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, CheckCircle2, ChevronRight, Clock3, Layers3, Users, Video } from "lucide-react";
+import { BookOpen, CalendarDays, CheckCircle2, ChevronRight, Clock3, Layers3, Mail, MapPin, Phone, Users, Video } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
 import { useAcademyUserId } from "./useAcademyUserId";
@@ -10,6 +10,9 @@ import {
   getCourseDetailedOverview,
   getCourseLearningPoints,
   getCourseRequirements,
+  getCourseMeetingDaysFromTags,
+  getCourseScheduleNotesFromTags,
+  getCourseStartDateFromTags,
 } from "./academyCourseMeta";
 
 type Course = {
@@ -168,6 +171,26 @@ export default function AcademyCourseDetailPage() {
         })
       : [];
   }, [course, courseDuration, deliveryMode, modules]);
+  const courseStartDate = useMemo(() => getCourseStartDateFromTags(course?.tags), [course?.tags]);
+  const courseMeetingDays = useMemo(() => getCourseMeetingDaysFromTags(course?.tags), [course?.tags]);
+  const courseScheduleNotes = useMemo(() => getCourseScheduleNotesFromTags(course?.tags), [course?.tags]);
+  const formattedCourseStartDate = useMemo(() => {
+    if (!courseStartDate) {
+      return null;
+    }
+
+    const parsed = new Date(`${courseStartDate}T12:00:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      return courseStartDate;
+    }
+
+    return parsed.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }, [courseStartDate]);
+  const hasScheduleMeta = Boolean(formattedCourseStartDate || courseMeetingDays.length > 0 || courseScheduleNotes);
 
   async function handleUnenroll() {
     if (!enrollment?.id) {
@@ -311,6 +334,49 @@ export default function AcademyCourseDetailPage() {
             ))}
           </div>
         </section>
+
+        {hasScheduleMeta && (
+          <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+            <div className="mb-4 flex items-center gap-3">
+              <CalendarDays className="h-5 w-5" style={{ color: colors.accent }} />
+              <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Course Schedule</h2>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {formattedCourseStartDate && (
+                <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+                  <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                    Start Date
+                  </p>
+                  <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
+                    {formattedCourseStartDate}
+                  </p>
+                </div>
+              )}
+
+              {courseMeetingDays.length > 0 && (
+                <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+                  <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                    Class Days
+                  </p>
+                  <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
+                    {courseMeetingDays.join(", ")}
+                  </p>
+                </div>
+              )}
+
+              {courseScheduleNotes && (
+                <div className="rounded-[24px] border p-5 md:col-span-3" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+                  <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                    Additional Schedule Details
+                  </p>
+                  <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
+                    {courseScheduleNotes}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="mt-8 grid gap-6 lg:grid-cols-2">
           <div className="rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
@@ -465,6 +531,58 @@ export default function AcademyCourseDetailPage() {
             )}
           </section>
         )}
+
+        <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+          <div className="mb-4 flex items-center gap-3">
+            <Phone className="h-5 w-5" style={{ color: colors.accent }} />
+            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Contact Information</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+              <div className="flex items-center gap-3">
+                <MapPin className="h-5 w-5" style={{ color: colors.accent }} />
+                <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                  Address
+                </p>
+              </div>
+              <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
+                791 St Clair Ave West
+              </p>
+            </div>
+
+            <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+              <div className="flex items-center gap-3">
+                <Phone className="h-5 w-5" style={{ color: colors.accent }} />
+                <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                  Phone
+                </p>
+              </div>
+              <a
+                href="tel:+14165583101"
+                className="mt-4 inline-flex text-sm font-medium hover:opacity-80"
+                style={{ color: colors.textSecondary }}
+              >
+                (416) 558-3101
+              </a>
+            </div>
+
+            <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+              <div className="flex items-center gap-3">
+                <Mail className="h-5 w-5" style={{ color: colors.accent }} />
+                <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                  Email
+                </p>
+              </div>
+              <a
+                href="mailto:info@skillsforchange.org"
+                className="mt-4 inline-flex text-sm font-medium hover:opacity-80"
+                style={{ color: colors.textSecondary }}
+              >
+                info@skillsforchange.org
+              </a>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

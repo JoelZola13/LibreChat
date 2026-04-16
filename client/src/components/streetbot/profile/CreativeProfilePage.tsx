@@ -38,6 +38,7 @@ import {
   Search,
   Clock,
   Star,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Image,
@@ -52,7 +53,24 @@ import {
   Plus,
   Home,
   User,
+  UserCheck,
   MessageCircle,
+  Bell,
+  RefreshCw,
+  CheckCheck,
+  Send,
+  BookOpen,
+  Pin,
+  GripVertical,
+  FolderOpen,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  Check,
+  Award,
+  DollarSign,
+  Link as LucideLink,
+  LogIn,
 } from "lucide-react";
 
 // =============================================================================
@@ -108,6 +126,8 @@ type TabId =
   | "activity"
   | "street-gallery"
   | "jobs"
+  | "notifications"
+  | "academy"
   | "settings";
 
 type TabDef = {
@@ -151,15 +171,16 @@ function getAvailabilityInfo(status: string): { label: string; color: string; bg
 const TABS: TabDef[] = [
   { id: "about", label: "About", icon: <Info size={16} /> },
   { id: "news", label: "News", icon: <TrendingUp size={16} /> },
-  { id: "services", label: "Services", icon: <Wrench size={16} /> },
   { id: "messages", label: "Messages", icon: <MessageSquare size={16} /> },
+  { id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={16} /> },
   { id: "calendar", label: "Calendar", icon: <Calendar size={16} /> },
   { id: "documents", label: "Documents", icon: <FileText size={16} /> },
   { id: "storage", label: "Storage", icon: <HardDrive size={16} /> },
-  { id: "social-media", label: "Social Media", icon: <Share2 size={16} /> },
-  { id: "activity", label: "Activity", icon: <Activity size={16} /> },
   { id: "street-gallery", label: "Street Gallery", icon: <Image size={16} /> },
+  { id: "social-media", label: "Social Media", icon: <Share2 size={16} /> },
+  { id: "academy", label: "Academy", icon: <BookOpen size={16} /> },
+  { id: "activity", label: "Activity", icon: <Activity size={16} /> },
   { id: "jobs", label: "Jobs", icon: <Briefcase size={16} /> },
   { id: "settings", label: "", icon: <Settings size={16} /> },
 ];
@@ -237,7 +258,50 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
   const [isSaved, setIsSaved] = useState(false);
   const [bannerUrl, setBannerUrl] = useState<string | null>(profile?.cover_url || null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const [customAvatar, setCustomAvatar] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [customName, setCustomName] = useState(profile?.display_name || "");
+  const [editingRoles, setEditingRoles] = useState(false);
+  const [customRoles, setCustomRoles] = useState<string[]>(profile?.primary_roles || []);
+  const [newRoleInput, setNewRoleInput] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("about");
+
+  // Follow & Message state
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [messageSent, setMessageSent] = useState(false);
+  const [displayLocation, setDisplayLocation] = useState("");
+  const [editingDisplayLocation, setEditingDisplayLocation] = useState(false);
+  const [editLocationValue, setEditLocationValue] = useState("");
+
+  // Initialize follower count from profile
+  useEffect(() => {
+    if (profile) {
+      setFollowerCount(profile.followers_count || 0);
+      setDisplayLocation(profile.location_display || profile.city || "Toronto, ON");
+    }
+  }, [profile]);
+
+  const handleFollow = () => {
+    setIsFollowing((prev) => {
+      const next = !prev;
+      setFollowerCount((c) => (next ? c + 1 : Math.max(0, c - 1)));
+      return next;
+    });
+  };
+
+  const handleSendMessage = () => {
+    if (!messageText.trim()) return;
+    setMessageSent(true);
+    setTimeout(() => {
+      setShowMessageModal(false);
+      setMessageText("");
+      setMessageSent(false);
+    }, 1500);
+  };
 
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -343,6 +407,9 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
 
   const isOwnProfile = Boolean(user?.id && profile?.user_id === user.id);
   const visibleTabs = TABS.filter((tab) => tab.id !== "settings" || isOwnProfile);
+  const [availabilityStatus, setAvailabilityStatus] = useState(profile?.availability_status || "open");
+  const [showAvailabilityDropdown, setShowAvailabilityDropdown] = useState(false);
+  const availability = getAvailabilityInfo(availabilityStatus);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -371,6 +438,9 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
     }
   }, [activeTab, isOwnProfile]);
 
+  useEffect(() => {
+    setAvailabilityStatus(profile?.availability_status || "open");
+  }, [profile?.availability_status]);
   const handleTabSelect = (tabId: TabId) => {
     setActiveTab(tabId);
 
@@ -451,8 +521,6 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
       </div>
     );
   }
-
-  const availability = getAvailabilityInfo(profile.availability_status);
 
   return (
     <div style={{ minHeight: "100vh", position: "relative" }}>
@@ -717,8 +785,9 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                 position: "relative",
               }}
             >
-              {/* Avatar - overlapping the cover */}
+              {/* Avatar - overlapping the cover, clickable to change */}
               <div
+                onClick={() => avatarInputRef.current?.click()}
                 style={{
                   position: "absolute",
                   top: isMobile ? "-50px" : "-60px",
@@ -729,11 +798,20 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                   overflow: "hidden",
                   border: `4px solid ${isDark ? "#1a1a2e" : "#fff"}`,
                   boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  const overlay = e.currentTarget.querySelector('.avatar-overlay') as HTMLElement;
+                  if (overlay) overlay.style.opacity = "1";
+                }}
+                onMouseLeave={(e) => {
+                  const overlay = e.currentTarget.querySelector('.avatar-overlay') as HTMLElement;
+                  if (overlay) overlay.style.opacity = "0";
                 }}
               >
-                {resolvedAvatarUrl ? (
+                {(customAvatar || resolvedAvatarUrl) ? (
                   <img
-                    src={resolvedAvatarUrl}
+                    src={customAvatar || resolvedAvatarUrl!}
                     alt={profile.display_name}
                     style={{
                       width: "100%",
@@ -758,6 +836,33 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                     {profile.display_name.charAt(0)}
                   </div>
                 )}
+                {/* Camera overlay on hover */}
+                <div
+                  className="avatar-overlay"
+                  style={{
+                    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                    background: "rgba(0,0,0,0.5)",
+                    display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center",
+                    gap: "4px", opacity: 0, transition: "opacity 0.2s",
+                  }}
+                >
+                  <Camera size={22} color="#fff" />
+                  <span style={{ fontSize: "10px", color: "#fff", fontWeight: 600 }}>Change</span>
+                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onloadend = () => setCustomAvatar(reader.result as string);
+                    reader.readAsDataURL(file);
+                  }}
+                />
               </div>
 
               {/* Name & Info - offset for avatar */}
@@ -773,35 +878,114 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <h1
-                      style={{
-                        fontSize: isMobile ? "1.75rem" : "2rem",
-                        fontWeight: 800,
-                        color: colors.text,
-                        margin: 0,
-                      }}
-                    >
-                      {profile.display_name}
-                    </h1>
+                    {editingName ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <input
+                          autoFocus
+                          value={customName}
+                          onChange={(e) => setCustomName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") setEditingName(false); if (e.key === "Escape") { setCustomName(profile.display_name); setEditingName(false); } }}
+                          style={{
+                            fontSize: isMobile ? "1.75rem" : "2rem",
+                            fontWeight: 800, color: colors.text,
+                            background: "transparent", border: "none",
+                            borderBottom: `2px solid ${colors.accent}`,
+                            outline: "none", padding: "0 0 2px 0",
+                            width: `${Math.max(customName.length, 5)}ch`,
+                          }}
+                        />
+                        <button
+                          onClick={() => setEditingName(false)}
+                          style={{ background: colors.accent, border: "none", borderRadius: "6px", padding: "4px 10px", cursor: "pointer", color: "#000", fontSize: "12px", fontWeight: 700 }}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}
+                        onClick={() => setEditingName(true)}
+                        onMouseEnter={(e) => { const icon = e.currentTarget.querySelector('.name-edit-icon') as HTMLElement; if (icon) icon.style.opacity = "1"; }}
+                        onMouseLeave={(e) => { const icon = e.currentTarget.querySelector('.name-edit-icon') as HTMLElement; if (icon) icon.style.opacity = "0"; }}
+                      >
+                        <h1
+                          style={{
+                            fontSize: isMobile ? "1.75rem" : "2rem",
+                            fontWeight: 800,
+                            color: colors.text,
+                            margin: 0,
+                          }}
+                        >
+                          {customName || profile.display_name}
+                        </h1>
+                        <span className="name-edit-icon" style={{ opacity: 0, transition: "opacity 0.2s" }}>
+                          <Pencil size={16} color={colors.textSecondary} />
+                        </span>
+                      </div>
+                    )}
                     {profile.is_verified && (
                       <CheckCircle2 size={24} color={colors.accent} fill={colors.accent} />
                     )}
                   </div>
 
-                  {/* Availability Badge */}
-                  <span
-                    style={{
-                      padding: "6px 14px",
-                      borderRadius: "100px",
-                      background: availability.bg,
-                      color: availability.color,
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      border: `1px solid ${availability.color}30`,
-                    }}
-                  >
-                    {availability.label}
-                  </span>
+                  {/* Availability Badge — clickable */}
+                  <div style={{ position: "relative" }}>
+                    <button
+                      onClick={() => setShowAvailabilityDropdown(!showAvailabilityDropdown)}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "100px",
+                        background: availability.bg,
+                        color: availability.color,
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        border: `1px solid ${availability.color}30`,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.8"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+                    >
+                      {availability.label}
+                    </button>
+                    {showAvailabilityDropdown && (
+                      <div style={{
+                        position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 100,
+                        background: isDark ? "rgba(25,25,35,0.98)" : "#fff",
+                        borderRadius: "12px", border: `1px solid ${colors.border}`,
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                        padding: "6px", minWidth: "180px",
+                      }}>
+                        {[
+                          { status: "open", label: "Open to Work", color: "#22c55e" },
+                          { status: "busy", label: "Currently Busy", color: "#f59e0b" },
+                          { status: "unavailable", label: "Not Available", color: "#ef4444" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.status}
+                            onClick={() => { setAvailabilityStatus(opt.status); setShowAvailabilityDropdown(false); }}
+                            style={{
+                              width: "100%", padding: "8px 12px", borderRadius: "8px",
+                              border: "none", cursor: "pointer", textAlign: "left",
+                              display: "flex", alignItems: "center", gap: "8px",
+                              background: availabilityStatus === opt.status ? (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)") : "transparent",
+                              color: colors.text, fontSize: "13px", fontWeight: 500,
+                              transition: "background 0.15s",
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = availabilityStatus === opt.status ? (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)") : "transparent"; }}
+                          >
+                            <span style={{
+                              width: "8px", height: "8px", borderRadius: "50%",
+                              background: opt.color, flexShrink: 0,
+                            }} />
+                            {opt.label}
+                            {availabilityStatus === opt.status && <Check size={14} color={opt.color} style={{ marginLeft: "auto" }} />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Username */}
@@ -830,16 +1014,17 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                   </p>
                 )}
 
-                {/* Roles */}
+                {/* Roles — editable */}
                 <div
                   style={{
                     display: "flex",
                     flexWrap: "wrap",
                     gap: "8px",
                     marginBottom: "24px",
+                    alignItems: "center",
                   }}
                 >
-                  {profile.primary_roles.map((role) => (
+                  {customRoles.map((role) => (
                     <span
                       key={role}
                       style={{
@@ -850,11 +1035,80 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                         color: isDark ? colors.accent : "#333",
                         fontWeight: 600,
                         border: `1px solid ${isDark ? "rgba(255,214,0,0.2)" : "rgba(0,0,0,0.1)"}`,
+                        display: "inline-flex", alignItems: "center", gap: "6px",
                       }}
                     >
                       {role}
+                      {editingRoles && (
+                        <button
+                          onClick={() => setCustomRoles((prev) => prev.filter((r) => r !== role))}
+                          style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)",
+                            padding: 0, display: "flex", alignItems: "center",
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
                     </span>
                   ))}
+                  {editingRoles ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <input
+                        autoFocus
+                        value={newRoleInput}
+                        onChange={(e) => setNewRoleInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newRoleInput.trim()) {
+                            setCustomRoles((prev) => [...prev, newRoleInput.trim()]);
+                            setNewRoleInput("");
+                          }
+                          if (e.key === "Escape") { setEditingRoles(false); setNewRoleInput(""); }
+                        }}
+                        placeholder="Add role..."
+                        style={{
+                          fontSize: "13px", padding: "6px 12px",
+                          borderRadius: "100px", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                          border: `1px solid ${colors.border}`, color: colors.text,
+                          outline: "none", width: "120px",
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          if (newRoleInput.trim()) {
+                            setCustomRoles((prev) => [...prev, newRoleInput.trim()]);
+                          }
+                          setNewRoleInput("");
+                          setEditingRoles(false);
+                        }}
+                        style={{
+                          fontSize: "11px", padding: "5px 10px", borderRadius: "6px",
+                          background: colors.accent, border: "none", color: "#000",
+                          fontWeight: 700, cursor: "pointer",
+                        }}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEditingRoles(true)}
+                      style={{
+                        fontSize: "13px", padding: "6px 12px",
+                        borderRadius: "100px", cursor: "pointer",
+                        background: "transparent",
+                        border: `1px dashed ${isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
+                        color: colors.textSecondary,
+                        display: "inline-flex", alignItems: "center", gap: "4px",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"; e.currentTarget.style.color = colors.textSecondary; }}
+                    >
+                      <Pencil size={11} /> Edit / Delete
+                    </button>
+                  )}
                 </div>
 
                 {/* Stats Row */}
@@ -867,13 +1121,48 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                     borderBottom: `1px solid ${colors.border}`,
                   }}
                 >
-                  <StatItem icon={<Users size={16} />} value={formatFollowers(profile.followers_count)} label="Followers" colors={colors} />
+                  <StatItem icon={<Users size={16} />} value={formatFollowers(followerCount)} label="Followers" colors={colors} />
                   <StatItem icon={<Users size={16} />} value={formatFollowers(profile.following_count)} label="Following" colors={colors} />
                   <StatItem icon={<Eye size={16} />} value={formatFollowers(profile.profile_views)} label="Views" colors={colors} />
-                  {profile.location_display && (
-                    <StatItem icon={<MapPin size={16} />} value={profile.location_display} label="Location" colors={colors} />
-                  )}
                   <StatItem icon={<Calendar size={16} />} value={formatDate(profile.created_at)} label="Joined" colors={colors} />
+                  {editingDisplayLocation ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <input
+                        autoFocus
+                        value={editLocationValue}
+                        onChange={(e) => setEditLocationValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { setDisplayLocation(editLocationValue.trim() || displayLocation); setEditingDisplayLocation(false); }
+                          if (e.key === "Escape") setEditingDisplayLocation(false);
+                        }}
+                        placeholder="City, Country"
+                        style={{
+                          width: "120px", padding: "4px 8px", borderRadius: "6px",
+                          background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+                          border: `1px solid ${colors.accent}`, color: colors.text,
+                          fontSize: "12px", outline: "none",
+                        }}
+                      />
+                      <button
+                        onClick={() => { setDisplayLocation(editLocationValue.trim() || displayLocation); setEditingDisplayLocation(false); }}
+                        style={{
+                          padding: "4px 8px", borderRadius: "6px", border: "none",
+                          background: colors.accent, color: "#000",
+                          fontWeight: 700, fontSize: "11px", cursor: "pointer",
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => { setEditLocationValue(displayLocation); setEditingDisplayLocation(true); }}
+                      style={{ cursor: "pointer" }}
+                      title="Click to edit location"
+                    >
+                      <StatItem icon={<MapPin size={16} />} value={displayLocation || "Not set"} label="Location" colors={colors} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1028,9 +1317,6 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
             {activeTab === "portfolio" && (
               <TabPortfolio profile={profile} colors={colors} isDark={isDark} />
             )}
-            {activeTab === "services" && (
-              <TabServices profile={profile} colors={colors} isDark={isDark} />
-            )}
             {activeTab === "messages" && (
               <TabMessages profile={profile} colors={colors} isDark={isDark} />
             )}
@@ -1044,7 +1330,13 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
               <TabDocuments profile={profile} colors={colors} isDark={isDark} />
             )}
             {activeTab === "about" && (
-              <TabAbout profile={profile} colors={colors} isDark={isDark} isMobile={isMobile} />
+              <TabAbout profile={profile} colors={colors} isDark={isDark} isMobile={isMobile}
+                isFollowing={isFollowing} onFollow={handleFollow}
+                onMessage={() => setShowMessageModal(true)}
+                showMessageModal={showMessageModal} setShowMessageModal={setShowMessageModal}
+                messageText={messageText} setMessageText={setMessageText}
+                messageSent={messageSent} onSendMessage={handleSendMessage}
+              />
             )}
             {activeTab === "storage" && (
               <TabStorage profile={profile} colors={colors} isDark={isDark} />
@@ -1060,6 +1352,9 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
             )}
             {activeTab === "street-gallery" && (
               <TabStreetGallery profile={profile} colors={colors} isDark={isDark} />
+            )}
+            {activeTab === "notifications" && (
+              <TabNotifications profile={profile} colors={colors} isDark={isDark} />
             )}
             {activeTab === "jobs" && (
               <TabJobs profile={profile} colors={colors} isDark={isDark} />
@@ -2282,30 +2577,466 @@ function TabTasks({ profile, colors, isDark }: { profile: StreetProfile; colors:
 }
 
 function TabCalendar({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [viewMode, setViewMode] = useState<"month" | "week" | "day" | "agenda">("month");
+  const [selectedDate, setSelectedDate] = useState<number | null>(today.getDate());
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [calendarFilters, setCalendarFilters] = useState({ personal: true, community: true, work: true });
+
+  // Sample events with calendar categories
   const events = [
-    { title: "Live Mural Painting — Downtown Arts District", date: "Apr 8, 2026", time: "10:00 AM — 4:00 PM" },
-    { title: "Portfolio Review with Gallery Owner", date: "Apr 11, 2026", time: "2:00 PM" },
-    { title: "Street Art Festival — Panel Discussion", date: "Apr 15, 2026", time: "1:00 PM — 3:00 PM" },
-    { title: "Workshop: Spray Can Techniques", date: "Apr 20, 2026", time: "11:00 AM — 1:00 PM" },
+    { title: "Live Mural Painting — Downtown Arts District", date: 8, month: 3, year: 2026, time: "10:00 AM — 4:00 PM", calendar: "work", color: "#3b82f6" },
+    { title: "Portfolio Review with Gallery Owner", date: 11, month: 3, year: 2026, time: "2:00 PM", calendar: "work", color: "#3b82f6" },
+    { title: "Street Art Festival — Panel Discussion", date: 15, month: 3, year: 2026, time: "1:00 PM — 3:00 PM", calendar: "community", color: "#22c55e" },
+    { title: "Workshop: Spray Can Techniques", date: 20, month: 3, year: 2026, time: "11:00 AM — 1:00 PM", calendar: "work", color: "#3b82f6" },
+    { title: "Gallery Opening Night", date: 24, month: 3, year: 2026, time: "7:00 PM — 10:00 PM", calendar: "community", color: "#22c55e" },
+    { title: "Commission Deadline — Urban Kitchen", date: 30, month: 3, year: 2026, time: "All Day", calendar: "work", color: "#3b82f6" },
+    { title: "Dentist Appointment", date: 14, month: 3, year: 2026, time: "9:30 AM", calendar: "personal", color: "#eab308" },
+    { title: "Rent Due", date: 1, month: 3, year: 2026, time: "All Day", calendar: "personal", color: "#eab308" },
+    { title: "Community Mural Meetup", date: 29, month: 3, year: 2026, time: "6:00 PM", calendar: "community", color: "#22c55e" },
   ];
 
+  const getEventsForDate = (day: number) => {
+    return events.filter((e) => e.date === day && e.month === currentMonth && e.year === currentYear && calendarFilters[e.calendar as keyof typeof calendarFilters]);
+  };
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+  const prevMonth = () => {
+    if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); }
+    else setCurrentMonth(currentMonth - 1);
+  };
+  const nextMonth = () => {
+    if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); }
+    else setCurrentMonth(currentMonth + 1);
+  };
+  const goToToday = () => { setCurrentMonth(today.getMonth()); setCurrentYear(today.getFullYear()); setSelectedDate(today.getDate()); };
+
+  // Mini calendar for sidebar
+  const prevMonthDays = new Date(currentYear, currentMonth, 0).getDate();
+  const miniCalDays: Array<{ day: number; currentMonth: boolean }> = [];
+  for (let i = firstDayOfMonth - 1; i >= 0; i--) miniCalDays.push({ day: prevMonthDays - i, currentMonth: false });
+  for (let i = 1; i <= daysInMonth; i++) miniCalDays.push({ day: i, currentMonth: true });
+  const remaining = 42 - miniCalDays.length;
+  for (let i = 1; i <= remaining; i++) miniCalDays.push({ day: i, currentMonth: false });
+
+  const isToday = (day: number) => day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
+
   return (
-    <GlassCard title="Upcoming Events" colors={colors} isDark={isDark}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {events.map((evt, i) => (
-          <ListRow
-            key={i}
-            icon={<Calendar size={18} />}
-            title={evt.title}
-            subtitle={evt.time}
-            rightText={evt.date}
-            colors={colors}
-            isDark={isDark}
-            accent
-          />
-        ))}
+    <div style={{ display: "flex", gap: "0", minHeight: "700px", borderRadius: "16px", overflow: "hidden", border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
+      {/* Left Sidebar */}
+      <div style={{
+        width: "240px", flexShrink: 0, padding: "20px",
+        background: isDark ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.5)",
+        borderRight: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+        display: "flex", flexDirection: "column", gap: "20px",
+      }}>
+        {/* Create Button */}
+        <button
+          onClick={() => setShowCreateModal(true)}
+          style={{
+            padding: "12px 0", borderRadius: "12px", background: colors.accent, color: "#000",
+            fontWeight: 700, fontSize: "14px", border: "none", cursor: "pointer", width: "100%",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+          }}
+        >
+          + Create
+        </button>
+
+        {/* Mini Calendar */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <button onClick={prevMonth} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer", padding: "4px" }}><ChevronLeft size={16} /></button>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: colors.text }}>{monthNames[currentMonth]} {currentYear}</span>
+            <button onClick={nextMonth} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer", padding: "4px" }}><ChevronRight size={16} /></button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", textAlign: "center" }}>
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+              <div key={i} style={{ fontSize: "10px", fontWeight: 600, color: colors.textSecondary, padding: "4px 0" }}>{d}</div>
+            ))}
+            {miniCalDays.map((d, i) => (
+              <button
+                key={i}
+                onClick={() => d.currentMonth && setSelectedDate(d.day)}
+                style={{
+                  fontSize: "11px", padding: "4px 0", border: "none", cursor: d.currentMonth ? "pointer" : "default",
+                  borderRadius: "50%", width: "28px", height: "28px", margin: "0 auto",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: d.currentMonth && isToday(d.day) ? colors.accent : d.currentMonth && selectedDate === d.day ? "rgba(234,179,8,0.2)" : "transparent",
+                  color: d.currentMonth && isToday(d.day) ? "#000" : d.currentMonth ? colors.text : "rgba(128,128,128,0.3)",
+                  fontWeight: isToday(d.day) ? 700 : 400,
+                }}
+              >
+                {d.day}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* My Calendars */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: colors.textSecondary, letterSpacing: "0.5px", textTransform: "uppercase" }}>My Calendars</span>
+            <span style={{ fontSize: "16px", color: colors.textSecondary, cursor: "pointer" }}>+</span>
+          </div>
+          {[
+            { key: "personal", label: "Personal", color: "#eab308", isDefault: true },
+            { key: "community", label: "Community Events", color: "#22c55e", isDefault: false },
+            { key: "work", label: "Work", color: "#3b82f6", isDefault: false },
+          ].map((cal) => (
+            <div
+              key={cal.key}
+              onClick={() => setCalendarFilters((prev) => ({ ...prev, [cal.key]: !prev[cal.key as keyof typeof prev] }))}
+              style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 0", cursor: "pointer" }}
+            >
+              <div style={{
+                width: "18px", height: "18px", borderRadius: "4px", border: `2px solid ${cal.color}`,
+                background: calendarFilters[cal.key as keyof typeof calendarFilters] ? cal.color : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {calendarFilters[cal.key as keyof typeof calendarFilters] && <CheckSquare size={12} color="#fff" />}
+              </div>
+              <span style={{ fontSize: "13px", color: colors.text, fontWeight: 500 }}>{cal.label}</span>
+              {cal.isDefault && (
+                <span style={{ fontSize: "9px", padding: "2px 6px", borderRadius: "4px", background: "rgba(234,179,8,0.2)", color: "#eab308", fontWeight: 700 }}>Default</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* View All Tasks */}
+        <button style={{
+          padding: "10px 0", borderRadius: "10px", width: "100%",
+          background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+          color: colors.text, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+        }}>
+          <CheckSquare size={14} /> View All Tasks
+        </button>
+
+        {/* Connect Google Calendar */}
+        <button style={{
+          padding: "10px 0", borderRadius: "10px", width: "100%",
+          background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+          color: colors.accent, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+        }}>
+          ⚡ Connect Google Calendar
+        </button>
       </div>
-    </GlassCard>
+
+      {/* Main Calendar Area */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* Top Bar */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px",
+          borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+          background: isDark ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.3)",
+          flexWrap: "wrap", gap: "10px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Calendar size={18} color={colors.accent} />
+            <button onClick={goToToday} style={{
+              padding: "6px 16px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+              color: colors.text, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+            }}>Today</button>
+            <button onClick={prevMonth} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer" }}><ChevronLeft size={18} /></button>
+            <button onClick={nextMonth} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer" }}><ChevronRight size={18} /></button>
+            <span style={{ fontSize: "18px", fontWeight: 700, color: colors.text }}>{monthNames[currentMonth]} {currentYear}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {(["month", "week", "day", "agenda"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                style={{
+                  padding: "6px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                  background: viewMode === mode ? colors.accent : isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                  color: viewMode === mode ? "#000" : colors.textSecondary,
+                  border: viewMode === mode ? "none" : `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  textTransform: "capitalize",
+                  display: "flex", alignItems: "center", gap: "4px",
+                }}
+              >
+                {mode === "month" && <Calendar size={12} />}
+                {mode === "agenda" && "≡"}
+                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+            <div style={{ width: "1px", height: "24px", background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", margin: "0 4px" }} />
+            <button style={{
+              padding: "6px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+              background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+              color: colors.textSecondary, display: "flex", alignItems: "center", gap: "4px",
+            }}>
+              <CheckSquare size={12} /> Task
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              style={{
+                padding: "6px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                background: colors.accent, border: "none", color: "#000",
+                display: "flex", alignItems: "center", gap: "4px",
+              }}
+            >
+              + Event
+            </button>
+          </div>
+        </div>
+
+        {/* Calendar Grid — Month View */}
+        {viewMode === "month" && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            {/* Day Headers */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}>
+              {dayNames.map((d) => (
+                <div key={d} style={{
+                  padding: "8px", textAlign: "center", fontSize: "11px", fontWeight: 700,
+                  color: colors.textSecondary, letterSpacing: "0.5px",
+                }}>{d}</div>
+              ))}
+            </div>
+            {/* Day Cells */}
+            <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridTemplateRows: `repeat(${Math.ceil((firstDayOfMonth + daysInMonth) / 7)}, 1fr)` }}>
+              {/* Empty cells before first day */}
+              {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                <div key={`empty-${i}`} style={{
+                  borderRight: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                  borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                  padding: "6px",
+                  background: isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
+                }}>
+                  <span style={{ fontSize: "12px", color: "rgba(128,128,128,0.3)" }}>{new Date(currentYear, currentMonth, 0).getDate() - firstDayOfMonth + i + 1}</span>
+                </div>
+              ))}
+              {/* Actual days */}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1;
+                const dayEvents = getEventsForDate(day);
+                const isTodayCell = isToday(day);
+                const isSelected = selectedDate === day;
+                return (
+                  <div
+                    key={day}
+                    onClick={() => setSelectedDate(day)}
+                    style={{
+                      borderRight: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                      borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                      padding: "6px", cursor: "pointer", minHeight: "90px",
+                      background: isSelected ? (isDark ? "rgba(234,179,8,0.05)" : "rgba(234,179,8,0.05)") : "transparent",
+                      transition: "background 0.15s",
+                    }}
+                  >
+                    <div style={{
+                      width: "28px", height: "28px", borderRadius: "50%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: isTodayCell ? colors.accent : "transparent",
+                      color: isTodayCell ? "#000" : colors.text,
+                      fontSize: "13px", fontWeight: isTodayCell ? 700 : 400,
+                      marginBottom: "4px",
+                    }}>
+                      {day}
+                    </div>
+                    {dayEvents.slice(0, 2).map((evt, ei) => (
+                      <div key={ei} style={{
+                        fontSize: "10px", padding: "2px 6px", borderRadius: "4px", marginBottom: "2px",
+                        background: `${evt.color}22`, color: evt.color, fontWeight: 600,
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        borderLeft: `2px solid ${evt.color}`,
+                      }}>
+                        {evt.title}
+                      </div>
+                    ))}
+                    {dayEvents.length > 2 && (
+                      <div style={{ fontSize: "9px", color: colors.textSecondary, paddingLeft: "6px" }}>+{dayEvents.length - 2} more</div>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Empty cells after last day */}
+              {Array.from({ length: (7 - ((firstDayOfMonth + daysInMonth) % 7)) % 7 }).map((_, i) => (
+                <div key={`end-${i}`} style={{
+                  borderRight: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                  borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                  padding: "6px",
+                  background: isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
+                }}>
+                  <span style={{ fontSize: "12px", color: "rgba(128,128,128,0.3)" }}>{i + 1}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Agenda View */}
+        {viewMode === "agenda" && (
+          <div style={{ flex: 1, padding: "20px", overflowY: "auto" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {events
+                .filter((e) => e.month === currentMonth && calendarFilters[e.calendar as keyof typeof calendarFilters])
+                .sort((a, b) => a.date - b.date)
+                .map((evt, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: "14px", padding: "14px 16px",
+                  borderRadius: "12px", background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+                  borderLeft: `3px solid ${evt.color}`,
+                }}>
+                  <div style={{
+                    width: "44px", height: "44px", borderRadius: "10px",
+                    background: `${evt.color}22`, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Calendar size={18} color={evt.color} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: colors.text }}>{evt.title}</div>
+                    <div style={{ fontSize: "12px", color: colors.textSecondary }}>{evt.time}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: colors.accent }}>{monthNames[evt.month].slice(0, 3)} {evt.date}, {evt.year}</div>
+                    <div style={{ fontSize: "10px", color: colors.textSecondary, textTransform: "capitalize" }}>{evt.calendar}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Week / Day placeholder */}
+        {(viewMode === "week" || viewMode === "day") && (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px" }}>
+            <div style={{ textAlign: "center" }}>
+              <Calendar size={48} color={colors.textSecondary} style={{ opacity: 0.3, marginBottom: "16px" }} />
+              <div style={{ fontSize: "16px", fontWeight: 600, color: colors.text, marginBottom: "6px" }}>{viewMode === "week" ? "Week" : "Day"} View</div>
+              <div style={{ fontSize: "13px", color: colors.textSecondary }}>Switch to Month or Agenda view for full event details</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Create Event Modal */}
+      {showCreateModal && (
+        <div
+          onClick={() => setShowCreateModal(false)}
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "420px", borderRadius: "16px", overflow: "hidden",
+              background: isDark ? "rgba(30,30,30,0.98)" : "#fff",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+              padding: "28px",
+            }}
+          >
+            <h3 style={{ margin: "0 0 20px 0", fontSize: "20px", fontWeight: 800, color: colors.text }}>Create Event</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Event Title</label>
+                <input
+                  type="text"
+                  placeholder="Enter event title..."
+                  style={{
+                    width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                    color: colors.text, outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Date</label>
+                  <input
+                    type="date"
+                    style={{
+                      width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                      color: colors.text, outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Time</label>
+                  <input
+                    type="time"
+                    style={{
+                      width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                      color: colors.text, outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Calendar</label>
+                <select style={{
+                  width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                  color: colors.text, outline: "none", boxSizing: "border-box",
+                }}>
+                  <option value="personal">Personal</option>
+                  <option value="community">Community Events</option>
+                  <option value="work">Work</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>Description</label>
+                <textarea
+                  placeholder="Add details..."
+                  rows={3}
+                  style={{
+                    width: "100%", padding: "10px 14px", borderRadius: "10px", fontSize: "14px",
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                    color: colors.text, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "10px", marginTop: "20px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{
+                  padding: "10px 24px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                  color: colors.text,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{
+                  padding: "10px 24px", borderRadius: "10px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                  background: colors.accent, border: "none", color: "#000",
+                }}
+              >
+                Save Event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2341,29 +3072,176 @@ function TabAbout({
   colors,
   isDark,
   isMobile,
+  onViewFullPortfolio,
+  isFollowing,
+  onFollow,
+  onMessage,
+  showMessageModal,
+  setShowMessageModal,
+  messageText,
+  setMessageText,
+  messageSent,
+  onSendMessage,
+  isOwner = true,
 }: {
   profile: StreetProfile;
   colors: any;
   isDark: boolean;
   isMobile: boolean;
+  onViewFullPortfolio?: () => void;
+  isFollowing?: boolean;
+  onFollow?: () => void;
+  onMessage?: () => void;
+  showMessageModal?: boolean;
+  setShowMessageModal?: (v: boolean) => void;
+  messageText?: string;
+  setMessageText?: (v: string) => void;
+  messageSent?: boolean;
+  onSendMessage?: () => void;
+  isOwner?: boolean;
 }) {
+  const navigate = useNavigate();
   const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const [showFullPortfolio, setShowFullPortfolio] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [editingPieceIdx, setEditingPieceIdx] = useState<number | null>(null);
+  const [uploadForm, setUploadForm] = useState({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" });
+  const [uploadPreviews, setUploadPreviews] = useState<string[]>([]);
+  const [uploadFileName, setUploadFileName] = useState("");
+  const [customBio, setCustomBio] = useState(profile?.bio || "");
+  const [editingBio, setEditingBio] = useState(false);
+  const [strengthOpen, setStrengthOpen] = useState(false);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+  const [lightboxIdx, setLightboxIdx] = useState(0);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [customSkills, setCustomSkills] = useState<string[]>(profile?.secondary_skills || ["Spray Paint", "Muralism", "Stencil Art", "Acrylic", "Mixed Media"]);
+  const [editingSkills, setEditingSkills] = useState(false);
+  const [newSkill, setNewSkill] = useState("");
+  const [customLocation, setCustomLocation] = useState(profile?.city || profile?.location_display || "Toronto, ON");
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [customLinks, setCustomLinks] = useState<Array<{ label: string; url: string }>>(
+    profile?.external_links?.map((l: any) => ({ label: l.label || l.platform || "Link", url: l.url })) || [
+      { label: "Portfolio", url: "https://francesca-art.com" },
+      { label: "Instagram", url: "https://instagram.com/shotsfromthe6ix" },
+    ]
+  );
+  const [editingLinks, setEditingLinks] = useState(false);
+  const [newLinkLabel, setNewLinkLabel] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [customAvailability, setCustomAvailability] = useState<string[]>(profile?.open_to || ["Commissions", "Collaborations", "Gallery Shows"]);
+  const [editingAvailability, setEditingAvailability] = useState(false);
+  const [newAvailability, setNewAvailability] = useState("");
+  const [socialLinks, setSocialLinks] = useState<Array<{ platform: string; url: string; color: string; connected: boolean }>>([
+    { platform: "Instagram", url: "", color: "#E4405F", connected: false },
+    { platform: "TikTok", url: "", color: "#000000", connected: false },
+    { platform: "YouTube", url: "", color: "#FF0000", connected: false },
+    { platform: "Twitter / X", url: "", color: "#1DA1F2", connected: false },
+    { platform: "LinkedIn", url: "", color: "#0A66C2", connected: false },
+    { platform: "Behance", url: "", color: "#1769FF", connected: false },
+  ]);
+  const [editingSocials, setEditingSocials] = useState(false);
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [connectStep, setConnectStep] = useState<"auth" | "paste" | "loading" | "success">("auth");
+  const [pastedProfileUrl, setPastedProfileUrl] = useState("");
+
+  const platformLoginUrls: Record<string, string> = {
+    "Instagram": "https://www.instagram.com/accounts/login/",
+    "TikTok": "https://www.tiktok.com/login",
+    "YouTube": "https://accounts.google.com/signin",
+    "Twitter / X": "https://x.com/i/flow/login",
+    "LinkedIn": "https://www.linkedin.com/login",
+    "Behance": "https://www.behance.net/login",
+  };
+  const [softwareTools, setSoftwareTools] = useState<Array<{ name: string; icon: string; level: string }>>([
+    { name: "Adobe Photoshop", icon: "Ps", level: "Expert" },
+    { name: "Adobe Illustrator", icon: "Ai", level: "Expert" },
+    { name: "Adobe InDesign", icon: "Id", level: "Advanced" },
+    { name: "Adobe After Effects", icon: "Ae", level: "Intermediate" },
+    { name: "Adobe Lightroom", icon: "Lr", level: "Expert" },
+    { name: "Procreate", icon: "Pr", level: "Advanced" },
+  ]);
+  const [editingSoftware, setEditingSoftware] = useState(false);
+  const [newToolName, setNewToolName] = useState("");
+  const [newToolLevel, setNewToolLevel] = useState("Intermediate");
+  const softwareIconColors: Record<string, string> = {
+    "Ps": "#31A8FF", "Ai": "#FF9A00", "Id": "#FF3366", "Ae": "#9999FF",
+    "Lr": "#31A8FF", "Pr": "#000000", "Xd": "#FF61F6", "An": "#FF5733",
+    "Dw": "#47C83E", "Au": "#9999FF", "Pp": "#9999FF", "Br": "#47C83E",
+    "Fi": "#A259FF", "Sk": "#FDAD00", "Bl": "#E87D0D",
+  };
+  const getToolIcon = (name: string): string => {
+    const map: Record<string, string> = {
+      "Adobe Photoshop": "Ps", "Adobe Illustrator": "Ai", "Adobe InDesign": "Id",
+      "Adobe After Effects": "Ae", "Adobe Lightroom": "Lr", "Adobe Premiere Pro": "Pp",
+      "Adobe XD": "Xd", "Adobe Animate": "An", "Adobe Dreamweaver": "Dw",
+      "Adobe Audition": "Au", "Adobe Bridge": "Br",
+      "Procreate": "Pr", "Figma": "Fi", "Sketch": "Sk", "Blender": "Bl",
+      "Cinema 4D": "C4", "DaVinci Resolve": "Dv", "Final Cut Pro": "FC",
+      "Logic Pro": "LP", "Canva": "Cn", "Capture One": "C1",
+    };
+    return map[name] || name.substring(0, 2).toUpperCase();
+  };
   const [lovedProjects, setLovedProjects] = useState<Set<number>>(new Set());
-  const [projectComments, setProjectComments] = useState<Record<number, Array<{ name: string; avatar: string; text: string; time: string }>>>({
+  type CommentType = { name: string; avatar: string; text: string; time: string; likes: number; liked: boolean; replies: CommentType[]; };
+  const [projectComments, setProjectComments] = useState<Record<number, CommentType[]>>({
     0: [
-      { name: "Maya Chen", avatar: "https://picsum.photos/seed/user-maya/100/100", text: "This mural is incredible. The layering technique gives it so much depth!", time: "2 days ago" },
-      { name: "Derin Falana", avatar: "https://picsum.photos/seed/user-derin/100/100", text: "Walked past this last week — photos don't do it justice. The scale is massive.", time: "5 days ago" },
+      { name: "Maya Chen", avatar: "https://picsum.photos/seed/user-maya/100/100", text: "This mural is incredible. The layering technique gives it so much depth!", time: "2 days ago", likes: 12, liked: false, replies: [
+        { name: "Ghost", avatar: "", text: "Thank you Maya! The depth came from about 15 layers of spray paint with stencil work in between.", time: "1 day ago", likes: 3, liked: false, replies: [] },
+      ] },
+      { name: "Derin Falana", avatar: "https://picsum.photos/seed/user-derin/100/100", text: "Walked past this last week — photos don't do it justice. The scale is massive.", time: "5 days ago", likes: 8, liked: false, replies: [] },
     ],
     2: [
-      { name: "Suki Park", avatar: "https://picsum.photos/seed/user-suki/100/100", text: "The found object work in this series is next level. Love the transit tokens embedded in resin.", time: "1 week ago" },
+      { name: "Suki Park", avatar: "https://picsum.photos/seed/user-suki/100/100", text: "The found object work in this series is next level. Love the transit tokens embedded in resin.", time: "1 week ago", likes: 15, liked: false, replies: [] },
     ],
     5: [
-      { name: "Carlos Rivera", avatar: "https://picsum.photos/seed/user-carlos/100/100", text: "Was at Nuit Blanche for this — the UV reveal was absolutely magical. Best piece of the night.", time: "3 weeks ago" },
-      { name: "Asha Williams", avatar: "https://picsum.photos/seed/user-asha/100/100", text: "How long did the UV paint take to apply? This must have been so meticulous.", time: "2 weeks ago" },
-      { name: "Ghost", avatar: "", text: "Thanks Asha! About 3 weeks of daytime work — painting something you can't see until nightfall is wild.", time: "2 weeks ago" },
+      { name: "Carlos Rivera", avatar: "https://picsum.photos/seed/user-carlos/100/100", text: "Was at Nuit Blanche for this — the UV reveal was absolutely magical. Best piece of the night.", time: "3 weeks ago", likes: 24, liked: false, replies: [] },
+      { name: "Asha Williams", avatar: "https://picsum.photos/seed/user-asha/100/100", text: "How long did the UV paint take to apply? This must have been so meticulous.", time: "2 weeks ago", likes: 5, liked: false, replies: [
+        { name: "Ghost", avatar: "", text: "Thanks Asha! About 3 weeks of daytime work — painting something you can't see until nightfall is wild.", time: "2 weeks ago", likes: 9, liked: false, replies: [] },
+      ] },
     ],
   });
   const [commentInput, setCommentInput] = useState("");
+  const [replyingTo, setReplyingTo] = useState<{ projectIdx: number; commentIdx: number } | null>(null);
+  const [replyInput, setReplyInput] = useState("");
+
+  const toggleCommentLike = (projectIdx: number, commentIdx: number, replyIdx?: number) => {
+    setProjectComments((prev) => {
+      const updated = { ...prev };
+      const comments = [...(updated[projectIdx] || [])];
+      if (replyIdx !== undefined) {
+        const comment = { ...comments[commentIdx] };
+        const replies = [...comment.replies];
+        const reply = { ...replies[replyIdx] };
+        reply.liked = !reply.liked;
+        reply.likes += reply.liked ? 1 : -1;
+        replies[replyIdx] = reply;
+        comment.replies = replies;
+        comments[commentIdx] = comment;
+      } else {
+        const comment = { ...comments[commentIdx] };
+        comment.liked = !comment.liked;
+        comment.likes += comment.liked ? 1 : -1;
+        comments[commentIdx] = comment;
+      }
+      updated[projectIdx] = comments;
+      return updated;
+    });
+  };
+
+  const addReply = (projectIdx: number, commentIdx: number) => {
+    if (!replyInput.trim()) return;
+    setProjectComments((prev) => {
+      const updated = { ...prev };
+      const comments = [...(updated[projectIdx] || [])];
+      const comment = { ...comments[commentIdx] };
+      comment.replies = [...comment.replies, { name: "You", avatar: "", text: replyInput.trim(), time: "Just now", likes: 0, liked: false, replies: [] }];
+      comments[commentIdx] = comment;
+      updated[projectIdx] = comments;
+      return updated;
+    });
+    setReplyInput("");
+    setReplyingTo(null);
+  };
 
   const toggleLove = (idx: number) => {
     setLovedProjects((prev) => {
@@ -2377,18 +3255,19 @@ function TabAbout({
     if (!commentInput.trim()) return;
     setProjectComments((prev) => ({
       ...prev,
-      [idx]: [...(prev[idx] || []), { name: "You", avatar: "", text: commentInput.trim(), time: "Just now" }],
+      [idx]: [...(prev[idx] || []), { name: "You", avatar: "", text: commentInput.trim(), time: "Just now", likes: 0, liked: false, replies: [] }],
     }));
     setCommentInput("");
   };
 
-  const portfolioWorks = profile.portfolio_items && profile.portfolio_items.length > 0
+  const defaultPortfolio = profile.portfolio_items && profile.portfolio_items.length > 0
     ? profile.portfolio_items
     : [
         {
           title: "Voices of the Underground",
           image_url: "https://picsum.photos/seed/port-voices/1200/800",
           thumbnail_url: "https://picsum.photos/seed/port-voices/600/400",
+          images: ["https://picsum.photos/seed/port-voices/1200/800", "https://picsum.photos/seed/port-voices-2/1200/800", "https://picsum.photos/seed/port-voices-3/1200/800"],
           category: "Mural",
           year: "2026",
           tools: ["Spray Paint", "Acrylic", "Stencils"],
@@ -2400,6 +3279,7 @@ function TabAbout({
           title: "Concrete Canvas — Dundas & Ossington",
           image_url: "https://picsum.photos/seed/port-concrete/1200/800",
           thumbnail_url: "https://picsum.photos/seed/port-concrete/600/400",
+          images: ["https://picsum.photos/seed/port-concrete/1200/800", "https://picsum.photos/seed/port-concrete-2/1200/800"],
           category: "Installation",
           year: "2025",
           tools: ["Wheat Paste", "Photography", "Mixed Media"],
@@ -2411,6 +3291,7 @@ function TabAbout({
           title: "Chromatic Rebellion Series",
           image_url: "https://picsum.photos/seed/port-chromatic/1200/800",
           thumbnail_url: "https://picsum.photos/seed/port-chromatic/600/400",
+          images: ["https://picsum.photos/seed/port-chromatic/1200/800", "https://picsum.photos/seed/port-chromatic-2/1200/800", "https://picsum.photos/seed/port-chromatic-3/1200/800", "https://picsum.photos/seed/port-chromatic-4/1200/800"],
           category: "Mixed Media",
           year: "2025",
           tools: ["Acrylic", "Resin", "Found Objects"],
@@ -2453,6 +3334,72 @@ function TabAbout({
         },
       ];
 
+  const [portfolioWorks, setPortfolioWorks] = useState<any[]>(defaultPortfolio);
+
+  const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadPreviews((prev) => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+    setUploadFileName(`${files.length} file${files.length > 1 ? "s" : ""} selected`);
+  };
+
+  const removeUploadImage = (idx: number) => {
+    setUploadPreviews((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSavePiece = () => {
+    if (!uploadForm.title.trim()) return;
+    const imgs = uploadPreviews.length > 0 ? uploadPreviews : [`https://picsum.photos/seed/${Date.now()}/1200/800`];
+    const newPiece = {
+      title: uploadForm.title,
+      image_url: imgs[0],
+      thumbnail_url: imgs[0],
+      images: imgs,
+      category: uploadForm.category,
+      year: uploadForm.year,
+      tools: uploadForm.tools ? uploadForm.tools.split(",").map((t: string) => t.trim()) : [],
+      description: uploadForm.description,
+      views: 0,
+      appreciations: 0,
+    };
+    if (editingPieceIdx !== null) {
+      setPortfolioWorks((prev) => prev.map((p, i) => (i === editingPieceIdx ? { ...p, ...newPiece, views: p.views, appreciations: p.appreciations } : p)));
+    } else {
+      setPortfolioWorks((prev) => [newPiece, ...prev]);
+    }
+    setShowUploadModal(false);
+    setEditingPieceIdx(null);
+    setUploadForm({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" });
+    setUploadPreviews([]);
+    setUploadFileName("");
+  };
+
+  const handleEditPiece = (idx: number) => {
+    const p = portfolioWorks[idx];
+    setEditingPieceIdx(idx);
+    setUploadForm({
+      title: p.title || "",
+      category: p.category || "",
+      year: p.year || new Date().getFullYear().toString(),
+      description: p.description || "",
+      tools: Array.isArray(p.tools) ? p.tools.join(", ") : "",
+    });
+    const existingImages = p.images && p.images.length > 0 ? p.images : (p.image_url ? [p.image_url] : []);
+    setUploadPreviews(existingImages);
+    setUploadFileName("");
+    setShowUploadModal(true);
+  };
+
+  const handleDeletePiece = (idx: number) => {
+    setPortfolioWorks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   return (
     <div
       style={{
@@ -2463,8 +3410,86 @@ function TabAbout({
     >
       {/* Left Column */}
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-        {profile.bio && (
-          <GlassCard title="About" colors={colors} isDark={isDark}>
+        <GlassCard colors={colors} isDark={isDark}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 12px 0" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: colors.text, margin: 0 }}>About</h3>
+            {isOwner && !editingBio && (
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  onClick={() => setEditingBio(true)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "4px",
+                    padding: "5px 12px", borderRadius: "7px",
+                    background: "transparent", color: colors.textSecondary,
+                    border: `1px solid ${colors.border}`,
+                    fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+                >
+                  <Pencil size={11} /> Edit
+                </button>
+                {customBio && (
+                  <button
+                    onClick={() => setCustomBio("")}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "4px",
+                      padding: "5px 12px", borderRadius: "7px",
+                      background: "transparent", color: colors.textSecondary,
+                      border: `1px solid ${colors.border}`,
+                      fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+                  >
+                    <X size={11} /> Delete
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          {editingBio ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <textarea
+                autoFocus
+                value={customBio}
+                onChange={(e) => setCustomBio(e.target.value)}
+                placeholder="Write about yourself, your art, your mission..."
+                rows={5}
+                style={{
+                  width: "100%", padding: "12px", borderRadius: "10px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "15px", fontFamily: "inherit", lineHeight: 1.7,
+                  resize: "vertical", outline: "none", boxSizing: "border-box",
+                }}
+              />
+              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => { setCustomBio(profile?.bio || ""); setEditingBio(false); }}
+                  style={{
+                    padding: "6px 14px", borderRadius: "8px",
+                    background: "transparent", border: `1px solid ${colors.border}`,
+                    color: colors.textSecondary, fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => setEditingBio(false)}
+                  style={{
+                    padding: "6px 14px", borderRadius: "8px",
+                    background: colors.accent, border: "none",
+                    color: "#000", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : customBio ? (
             <p
               style={{
                 fontSize: "15px",
@@ -2474,10 +3499,26 @@ function TabAbout({
                 whiteSpace: "pre-wrap",
               }}
             >
-              {profile.bio}
+              {customBio}
             </p>
-          </GlassCard>
-        )}
+          ) : isOwner ? (
+            <button
+              onClick={() => setEditingBio(true)}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+                width: "100%", padding: "20px", borderRadius: "10px",
+                border: `2px dashed ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"}`,
+                background: "transparent", color: colors.textSecondary,
+                fontSize: "13px", fontWeight: 500, cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"; e.currentTarget.style.color = colors.textSecondary; }}
+            >
+              <Plus size={14} /> Add a description about yourself
+            </button>
+          ) : null}
+        </GlassCard>
 
         {profile.secondary_skills && profile.secondary_skills.length > 0 && (
           <GlassCard title="Skills & Expertise" colors={colors} isDark={isDark}>
@@ -2502,8 +3543,29 @@ function TabAbout({
           </GlassCard>
         )}
 
-        {/* Portfolio Section — Behance-style */}
-        <GlassCard title="Portfolio" colors={colors} isDark={isDark}>
+        {/* Portfolio Section — Hero Showcase or Full View */}
+        <GlassCard colors={colors} isDark={isDark}>
+          {/* Header row: title + add button inline */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 16px 0" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: colors.text, margin: 0 }}>Portfolio</h3>
+            {isOwner && (
+              <button
+                onClick={() => { setEditingPieceIdx(null); setUploadForm({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" }); setUploadPreviews([]); setUploadFileName(""); setShowUploadModal(true); }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "5px",
+                  padding: "6px 14px", borderRadius: "8px",
+                  background: "transparent", color: colors.textSecondary,
+                  border: `1px solid ${colors.border}`,
+                  fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+              >
+                <Plus size={13} /> Add Work
+              </button>
+            )}
+          </div>
           <div
             style={{
               display: "grid",
@@ -2511,10 +3573,9 @@ function TabAbout({
               gap: "16px",
             }}
           >
-            {portfolioWorks.map((item: any, i: number) => (
+            {(showFullPortfolio ? portfolioWorks : portfolioWorks.slice(0, 3)).map((item: any, i: number) => (
               <div
                 key={i}
-                onClick={() => setSelectedProject(i)}
                 style={{
                   borderRadius: "14px",
                   overflow: "hidden",
@@ -2522,13 +3583,55 @@ function TabAbout({
                   background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                   transition: "all 0.3s",
                   cursor: "pointer",
+                  position: "relative",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)"; const btns = e.currentTarget.querySelector('.portfolio-actions') as HTMLElement; if (btns) btns.style.opacity = "1"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; const btns = e.currentTarget.querySelector('.portfolio-actions') as HTMLElement; if (btns) btns.style.opacity = "0"; }}
               >
-                <div style={{ position: "relative", width: "100%", paddingTop: "66%", overflow: "hidden" }}>
+                {/* Edit/Delete overlay — owner only */}
+                {isOwner && (
+                  <div className="portfolio-actions" style={{
+                    position: "absolute", top: "8px", right: "8px", zIndex: 5,
+                    display: "flex", gap: "4px", opacity: 0, transition: "opacity 0.2s",
+                  }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEditPiece(i); }}
+                      title="Edit"
+                      style={{
+                        width: "28px", height: "28px", borderRadius: "7px",
+                        background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        color: "#fff", cursor: "pointer", display: "flex",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <Wrench size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeletePiece(i); }}
+                      title="Delete"
+                      style={{
+                        width: "28px", height: "28px", borderRadius: "7px",
+                        background: "rgba(220,38,38,0.75)", backdropFilter: "blur(4px)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        color: "#fff", cursor: "pointer", display: "flex",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+                <div onClick={() => setSelectedProject(i)} style={{ position: "relative", width: "100%", paddingTop: "66%", overflow: "hidden" }}>
+                  {/* Single cover image only */}
                   <img
-                    src={item.thumbnail_url || item.image_url}
+                    src={(() => {
+                      if (item.images && item.images.length > 0) {
+                        const ci = item.coverIndex != null ? item.coverIndex : 0;
+                        return item.images[ci] || item.images[0];
+                      }
+                      return item.thumbnail_url || item.image_url;
+                    })()}
                     alt={item.title || "Portfolio item"}
                     style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
                     onError={(e) => {
@@ -2538,8 +3641,20 @@ function TabAbout({
                       if (p) { p.style.display = "flex"; p.style.alignItems = "center"; p.style.justifyContent = "center"; p.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"; p.innerHTML += '<div style="font-size:48px">🖼️</div>'; }
                     }}
                   />
+                  {/* Image count badge */}
+                  {item.images && item.images.length > 1 && (
+                    <div style={{
+                      position: "absolute", bottom: "8px", right: "8px",
+                      background: "rgba(0,0,0,0.7)", color: "#fff",
+                      padding: "3px 8px", borderRadius: "6px",
+                      fontSize: "11px", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px",
+                      backdropFilter: "blur(4px)",
+                    }}>
+                      <Layers size={11} /> {item.images.length}
+                    </div>
+                  )}
                 </div>
-                <div style={{ padding: "12px 14px" }}>
+                <div onClick={() => setSelectedProject(i)} style={{ padding: "12px 14px" }}>
                   <div style={{ fontSize: "14px", fontWeight: 600, color: colors.text, marginBottom: "4px" }}>
                     {item.title || "Untitled"}
                   </div>
@@ -2548,11 +3663,338 @@ function TabAbout({
                       {item.category}{item.category && item.year ? " · " : ""}{item.year}
                     </div>
                   )}
+                  {item.description && (
+                    <div style={{
+                      fontSize: "11px", color: colors.textSecondary, marginTop: "4px",
+                      display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const,
+                      overflow: "hidden", lineHeight: 1.4, opacity: 0.7,
+                    }}>
+                      {item.description}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
+
+            {/* Dashed "Add" card — owner only, shown at end of visible grid */}
+            {isOwner && (
+              <div
+                onClick={() => { setEditingPieceIdx(null); setUploadForm({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" }); setUploadPreviews([]); setUploadFileName(""); setShowUploadModal(true); }}
+                style={{
+                  borderRadius: "14px",
+                  border: `2px dashed ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"}`,
+                  background: "transparent",
+                  display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center",
+                  gap: "8px", cursor: "pointer",
+                  minHeight: "200px",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"; e.currentTarget.style.background = "transparent"; }}
+              >
+                <div style={{
+                  width: "40px", height: "40px", borderRadius: "50%",
+                  border: `2px solid ${isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <Plus size={20} color={colors.textSecondary} />
+                </div>
+                <span style={{ fontSize: "12px", color: colors.textSecondary, fontWeight: 500 }}>Add Work</span>
+              </div>
+            )}
           </div>
+
+          {/* View Full Portfolio button — opens full portfolio overlay */}
+          {portfolioWorks.length > 3 && !showFullPortfolio && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "18px" }}>
+              <button
+                onClick={() => setShowFullPortfolio(true)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  padding: "8px 20px",
+                  borderRadius: "20px", border: "none",
+                  background: "#eab308", color: "#fff",
+                  fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+              >
+                <Image size={14} /> View Full Portfolio
+              </button>
+            </div>
+          )}
         </GlassCard>
+
+        {/* Upload / Edit Portfolio Piece Modal */}
+        {showUploadModal && (
+          <div
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 10001,
+            }}
+            onClick={() => { setShowUploadModal(false); setEditingPieceIdx(null); }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: isDark ? "rgba(25,25,35,0.98)" : "#fff",
+                borderRadius: "16px", padding: "28px",
+                width: "90%", maxWidth: "520px", maxHeight: "90vh", overflowY: "auto",
+                border: `1px solid ${colors.border}`,
+                boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: colors.text }}>
+                  {editingPieceIdx !== null ? "Edit Portfolio Piece" : "Add Portfolio Piece"}
+                </h3>
+                <button onClick={() => { setShowUploadModal(false); setEditingPieceIdx(null); }} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer" }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Image Upload — Multiple */}
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>Project Images</label>
+                  {uploadPreviews.length > 0 && (
+                    <span style={{ fontSize: "11px", color: colors.textSecondary }}>{uploadPreviews.length} image{uploadPreviews.length !== 1 ? "s" : ""}</span>
+                  )}
+                </div>
+                {/* Thumbnails grid */}
+                {uploadPreviews.length > 0 && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "8px", marginBottom: "10px" }}>
+                    {uploadPreviews.map((img, idx) => (
+                      <div key={idx} style={{ position: "relative", borderRadius: "8px", overflow: "hidden", aspectRatio: "1", border: idx === 0 ? `2px solid ${colors.accent}` : `1px solid ${colors.border}` }}>
+                        <img src={img} alt={`Image ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        {idx === 0 && (
+                          <div style={{
+                            position: "absolute", bottom: "4px", left: "4px",
+                            fontSize: "9px", fontWeight: 700, color: "#000",
+                            background: colors.accent, padding: "2px 6px", borderRadius: "4px",
+                          }}>Cover</div>
+                        )}
+                        <button
+                          onClick={() => removeUploadImage(idx)}
+                          style={{
+                            position: "absolute", top: "4px", right: "4px",
+                            width: "20px", height: "20px", borderRadius: "50%",
+                            background: "rgba(220,38,38,0.9)", border: "none",
+                            color: "#fff", cursor: "pointer", display: "flex",
+                            alignItems: "center", justifyContent: "center", padding: 0,
+                          }}
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Add more images button */}
+                <label style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  gap: "6px", padding: uploadPreviews.length > 0 ? "16px" : "32px", borderRadius: "10px", cursor: "pointer",
+                  border: `2px dashed ${colors.border}`,
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  transition: "all 0.2s",
+                }}>
+                  <Upload size={uploadPreviews.length > 0 ? 18 : 24} color={colors.textSecondary} />
+                  <span style={{ fontSize: "13px", color: colors.textSecondary }}>
+                    {uploadPreviews.length > 0 ? "Add more images" : "Click to upload images"}
+                  </span>
+                  <span style={{ fontSize: "11px", color: colors.textSecondary, opacity: 0.6 }}>JPG, PNG, WebP — select multiple files</span>
+                  <input type="file" accept="image/*" multiple onChange={handleUploadImage} style={{ display: "none" }} />
+                </label>
+              </div>
+
+              {/* Title */}
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: colors.text, marginBottom: "4px", display: "block" }}>Title *</label>
+                <input
+                  value={uploadForm.title}
+                  onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
+                  placeholder="Name of the piece"
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: "8px",
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${colors.border}`, color: colors.text,
+                    fontSize: "14px", outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {/* Category + Year row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: 600, color: colors.text, marginBottom: "4px", display: "block" }}>Category</label>
+                  <input
+                    value={uploadForm.category}
+                    onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}
+                    placeholder="e.g. Mural, Print"
+                    style={{
+                      width: "100%", padding: "10px 12px", borderRadius: "8px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${colors.border}`, color: colors.text,
+                      fontSize: "14px", outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", fontWeight: 600, color: colors.text, marginBottom: "4px", display: "block" }}>Year</label>
+                  <input
+                    value={uploadForm.year}
+                    onChange={(e) => setUploadForm({ ...uploadForm, year: e.target.value })}
+                    placeholder="2026"
+                    style={{
+                      width: "100%", padding: "10px 12px", borderRadius: "8px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${colors.border}`, color: colors.text,
+                      fontSize: "14px", outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Tools */}
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: colors.text, marginBottom: "4px", display: "block" }}>Tools / Medium</label>
+                <input
+                  value={uploadForm.tools}
+                  onChange={(e) => setUploadForm({ ...uploadForm, tools: e.target.value })}
+                  placeholder="Spray Paint, Acrylic, Stencils (comma-separated)"
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: "8px",
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${colors.border}`, color: colors.text,
+                    fontSize: "14px", outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: "20px" }}>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: colors.text, marginBottom: "4px", display: "block" }}>Description</label>
+                <textarea
+                  value={uploadForm.description}
+                  onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
+                  placeholder="Tell the story behind this piece..."
+                  rows={4}
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: "8px",
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${colors.border}`, color: colors.text,
+                    fontSize: "14px", fontFamily: "inherit", resize: "vertical",
+                    outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {/* Save Button */}
+              <button
+                onClick={handleSavePiece}
+                disabled={!uploadForm.title.trim()}
+                style={{
+                  width: "100%", padding: "12px", borderRadius: "12px",
+                  border: "none", cursor: uploadForm.title.trim() ? "pointer" : "not-allowed",
+                  background: uploadForm.title.trim() ? colors.accent : "rgba(255,255,255,0.1)",
+                  color: uploadForm.title.trim() ? "#000" : "rgba(255,255,255,0.3)",
+                  fontWeight: 700, fontSize: "14px",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                }}
+              >
+                {editingPieceIdx !== null ? "Save Changes" : "Add to Portfolio"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Full Portfolio Overlay */}
+        {showFullPortfolio && (
+          <div
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.92)", zIndex: 9998,
+              overflowY: "auto", backdropFilter: "blur(8px)",
+            }}
+          >
+            <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "40px 24px 60px" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "28px" }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "24px", fontWeight: 800, color: "#fff" }}>
+                    Full Portfolio
+                  </h2>
+                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", marginTop: "4px" }}>
+                    {portfolioWorks.length} pieces by {profile.display_name || profile.username}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowFullPortfolio(false)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "8px 16px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.15)",
+                    background: "rgba(255,255,255,0.06)", color: "#fff",
+                    fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  <X size={16} /> Close
+                </button>
+              </div>
+              {/* Grid */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "20px",
+              }}>
+                {portfolioWorks.map((item: any, i: number) => (
+                  <div
+                    key={i}
+                    onClick={() => { setSelectedProject(i); setShowFullPortfolio(false); }}
+                    style={{
+                      borderRadius: "14px", overflow: "hidden", cursor: "pointer",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "rgba(255,255,255,0.04)",
+                      transition: "all 0.3s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.4)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
+                  >
+                    <div style={{ position: "relative", width: "100%", paddingTop: "66%", overflow: "hidden" }}>
+                      <img
+                        src={item.thumbnail_url || item.image_url}
+                        alt={item.title || "Portfolio item"}
+                        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <div style={{ padding: "14px 16px" }}>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color: "#fff", marginBottom: "4px" }}>
+                        {item.title || "Untitled"}
+                      </div>
+                      {(item.category || item.year) && (
+                        <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>
+                          {item.category}{item.category && item.year ? " · " : ""}{item.year}
+                        </div>
+                      )}
+                      {item.description && (
+                        <div style={{
+                          fontSize: "12px", color: "rgba(255,255,255,0.4)", marginTop: "6px", lineHeight: 1.4,
+                          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const,
+                          overflow: "hidden",
+                        }}>
+                          {item.description}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Behance-style Project Detail Modal */}
         {selectedProject !== null && portfolioWorks[selectedProject] && (() => {
@@ -2613,14 +4055,98 @@ function TabAbout({
                   </div>
                 </div>
 
-                {/* Hero Image — Full Width */}
-                <div style={{ borderRadius: "16px", overflow: "hidden", marginBottom: "32px", boxShadow: "0 16px 48px rgba(0,0,0,0.4)" }}>
+                {/* Hero Image — Full Width — Click to open lightbox */}
+                <div
+                  onClick={() => {
+                    const imgs = project.images && project.images.length > 0 ? project.images as string[] : [project.image_url];
+                    const ci = project.coverIndex != null ? project.coverIndex : 0;
+                    setLightboxImages(imgs);
+                    setLightboxIdx(ci);
+                    setLightboxImg(imgs[ci] || imgs[0]);
+                  }}
+                  style={{ borderRadius: "16px", overflow: "hidden", marginBottom: "32px", boxShadow: "0 16px 48px rgba(0,0,0,0.4)", cursor: "pointer" }}
+                >
                   <img
                     src={project.image_url}
                     alt={project.title}
                     style={{ width: "100%", display: "block" }}
                   />
                 </div>
+
+                {/* All Project Images Gallery */}
+                {project.images && project.images.length > 1 && (
+                  <div style={{ marginBottom: "32px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                      <h3 style={{ fontSize: "14px", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "1px", margin: 0 }}>
+                        All Images ({project.images.length})
+                      </h3>
+                    </div>
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                      gap: "8px",
+                    }}>
+                      {(project.images as string[]).map((img: string, imgIdx: number) => {
+                        const isHero = img === project.image_url || img === project.thumbnail_url || (imgIdx === 0 && project.image_url === project.images[0]);
+                        return (
+                          <div
+                            key={imgIdx}
+                            onClick={() => {
+                              // Enlarge on click — open in lightbox with navigation
+                              setLightboxImages(project.images as string[]);
+                              setLightboxIdx(imgIdx);
+                              setLightboxImg(img);
+                            }}
+                            style={{
+                              position: "relative", borderRadius: "10px", overflow: "hidden",
+                              cursor: "pointer", border: isHero ? "2px solid #eab308" : "1px solid rgba(255,255,255,0.1)",
+                              transition: "all 0.2s",
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.03)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+                          >
+                            <img
+                              src={img}
+                              alt={`${project.title} — image ${imgIdx + 1}`}
+                              style={{ width: "100%", height: "140px", objectFit: "cover", display: "block" }}
+                            />
+                            {isHero && (
+                              <div style={{
+                                position: "absolute", top: "6px", left: "6px",
+                                padding: "2px 8px", borderRadius: "6px",
+                                background: "#eab308", color: "#000",
+                                fontSize: "10px", fontWeight: 700,
+                              }}>
+                                COVER
+                              </div>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Set this image as the hero/cover
+                                setPortfolioWorks((prev) => prev.map((p, i) => i === selectedProject ? { ...p, image_url: img, thumbnail_url: img, coverIndex: imgIdx } : p));
+                              }}
+                              title="Set as cover image"
+                              style={{
+                                position: "absolute", bottom: "6px", right: "6px",
+                                padding: "3px 8px", borderRadius: "6px",
+                                background: isHero ? "rgba(234,179,8,0.3)" : "rgba(0,0,0,0.6)",
+                                border: "none", color: isHero ? "#eab308" : "rgba(255,255,255,0.7)",
+                                fontSize: "10px", fontWeight: 600, cursor: "pointer",
+                                opacity: isHero ? 1 : 0.8,
+                                transition: "all 0.2s",
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.opacity = isHero ? "1" : "0.8"; }}
+                            >
+                              {isHero ? "Cover" : "Set Cover"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Project Info */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "24px" }}>
@@ -2731,12 +4257,21 @@ function TabAbout({
                       {profile.primary_roles?.join(", ") || "Creative"} · {profile.location_display || profile.city}
                     </div>
                   </div>
-                  <button style={{
-                    padding: "8px 20px", borderRadius: "8px",
-                    background: colors.accent, color: "#000", fontWeight: 700,
-                    fontSize: "13px", border: "none", cursor: "pointer",
-                  }}>
-                    Follow
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onFollow?.(); }}
+                    style={{
+                      padding: "8px 20px", borderRadius: "8px",
+                      background: isFollowing ? "transparent" : colors.accent,
+                      color: isFollowing ? colors.accent : "#000",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      border: isFollowing ? `2px solid ${colors.accent}` : "none",
+                      cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: "6px",
+                      transition: "all 0.25s ease",
+                    }}
+                  >
+                    {isFollowing ? <><UserCheck size={14} /> Following</> : "Follow"}
                   </button>
                 </div>
 
@@ -2797,29 +4332,144 @@ function TabAbout({
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     {(projectComments[selectedProject] || []).map((comment, ci) => (
                       <div key={ci} style={{
-                        display: "flex", gap: "12px",
                         padding: "16px", borderRadius: "14px",
                         background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
                       }}>
-                        <div style={{
-                          width: "36px", height: "36px", borderRadius: "50%",
-                          background: "rgba(255,255,255,0.1)", flexShrink: 0,
-                          overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>
-                          {comment.avatar ? (
-                            <img src={comment.avatar} alt={comment.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          ) : (
-                            <User size={18} color="rgba(255,255,255,0.5)" />
-                          )}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#fff" }}>{comment.name}</span>
-                            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>{comment.time}</span>
+                        <div style={{ display: "flex", gap: "12px" }}>
+                          <div style={{
+                            width: "36px", height: "36px", borderRadius: "50%",
+                            background: "rgba(255,255,255,0.1)", flexShrink: 0,
+                            overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>
+                            {comment.avatar ? (
+                              <img src={comment.avatar} alt={comment.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              <User size={18} color="rgba(255,255,255,0.5)" />
+                            )}
                           </div>
-                          <p style={{ fontSize: "14px", lineHeight: 1.6, color: "rgba(255,255,255,0.75)", margin: 0 }}>
-                            {comment.text}
-                          </p>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                              <span style={{ fontSize: "14px", fontWeight: 700, color: "#fff" }}>{comment.name}</span>
+                              <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>{comment.time}</span>
+                            </div>
+                            <p style={{ fontSize: "14px", lineHeight: 1.6, color: "rgba(255,255,255,0.75)", margin: 0 }}>
+                              {comment.text}
+                            </p>
+                            {/* Like + Reply buttons */}
+                            <div style={{ display: "flex", gap: "16px", marginTop: "8px", alignItems: "center" }}>
+                              <button
+                                onClick={() => toggleCommentLike(selectedProject, ci)}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: "4px",
+                                  background: "none", border: "none", cursor: "pointer",
+                                  color: comment.liked ? "#ef4444" : "rgba(255,255,255,0.4)",
+                                  fontSize: "12px", fontWeight: 600, padding: 0,
+                                  transition: "color 0.2s",
+                                }}
+                              >
+                                <Heart size={14} fill={comment.liked ? "#ef4444" : "none"} /> {comment.likes > 0 ? comment.likes : ""}
+                              </button>
+                              <button
+                                onClick={() => setReplyingTo(replyingTo?.projectIdx === selectedProject && replyingTo?.commentIdx === ci ? null : { projectIdx: selectedProject, commentIdx: ci })}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: "4px",
+                                  background: "none", border: "none", cursor: "pointer",
+                                  color: "rgba(255,255,255,0.4)", fontSize: "12px", fontWeight: 600, padding: 0,
+                                }}
+                              >
+                                <MessageSquare size={13} /> Reply
+                              </button>
+                            </div>
+
+                            {/* Replies */}
+                            {comment.replies && comment.replies.length > 0 && (
+                              <div style={{ marginTop: "12px", paddingLeft: "12px", borderLeft: "2px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: "10px" }}>
+                                {comment.replies.map((reply, ri) => (
+                                  <div key={ri} style={{ display: "flex", gap: "10px" }}>
+                                    <div style={{
+                                      width: "28px", height: "28px", borderRadius: "50%",
+                                      background: "rgba(255,255,255,0.1)", flexShrink: 0,
+                                      overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                                    }}>
+                                      {reply.avatar ? (
+                                        <img src={reply.avatar} alt={reply.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                      ) : (
+                                        <User size={14} color="rgba(255,255,255,0.5)" />
+                                      )}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{reply.name}</span>
+                                        <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.35)" }}>{reply.time}</span>
+                                      </div>
+                                      <p style={{ fontSize: "13px", lineHeight: 1.5, color: "rgba(255,255,255,0.7)", margin: 0 }}>
+                                        {reply.text}
+                                      </p>
+                                      <button
+                                        onClick={() => toggleCommentLike(selectedProject, ci, ri)}
+                                        style={{
+                                          display: "flex", alignItems: "center", gap: "4px", marginTop: "4px",
+                                          background: "none", border: "none", cursor: "pointer",
+                                          color: reply.liked ? "#ef4444" : "rgba(255,255,255,0.35)",
+                                          fontSize: "11px", fontWeight: 600, padding: 0,
+                                        }}
+                                      >
+                                        <Heart size={12} fill={reply.liked ? "#ef4444" : "none"} /> {reply.likes > 0 ? reply.likes : ""}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Reply input */}
+                            {replyingTo?.projectIdx === selectedProject && replyingTo?.commentIdx === ci && (
+                              <div style={{ display: "flex", gap: "8px", marginTop: "10px", alignItems: "flex-start" }}>
+                                <div style={{
+                                  width: "28px", height: "28px", borderRadius: "50%",
+                                  background: colors.accent, flexShrink: 0,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: "11px", fontWeight: 700, color: "#000",
+                                }}>Y</div>
+                                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+                                  <input
+                                    autoFocus
+                                    value={replyInput}
+                                    onChange={(e) => setReplyInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addReply(selectedProject, ci); } }}
+                                    placeholder={`Reply to ${comment.name}...`}
+                                    style={{
+                                      width: "100%", padding: "8px 12px", borderRadius: "8px",
+                                      background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+                                      color: "#fff", fontSize: "13px", outline: "none",
+                                      boxSizing: "border-box",
+                                    }}
+                                  />
+                                  <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
+                                    <button
+                                      onClick={() => { setReplyingTo(null); setReplyInput(""); }}
+                                      style={{
+                                        padding: "5px 12px", borderRadius: "6px",
+                                        background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
+                                        color: "rgba(255,255,255,0.5)", fontSize: "12px", cursor: "pointer",
+                                      }}
+                                    >Cancel</button>
+                                    <button
+                                      onClick={() => addReply(selectedProject, ci)}
+                                      disabled={!replyInput.trim()}
+                                      style={{
+                                        padding: "5px 12px", borderRadius: "6px",
+                                        background: replyInput.trim() ? colors.accent : "rgba(255,255,255,0.06)",
+                                        border: "none",
+                                        color: replyInput.trim() ? "#000" : "rgba(255,255,255,0.3)",
+                                        fontSize: "12px", fontWeight: 700, cursor: replyInput.trim() ? "pointer" : "default",
+                                      }}
+                                    >Reply</button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -2834,6 +4484,150 @@ function TabAbout({
             </div>
           );
         })()}
+
+        {/* Full-screen image lightbox with prev/next navigation */}
+        {lightboxImg && (
+          <div
+            onClick={() => { setLightboxImg(null); setLightboxImages([]); }}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.95)", zIndex: 10002,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "zoom-out",
+            }}
+          >
+            {/* Close */}
+            <button
+              onClick={() => { setLightboxImg(null); setLightboxImages([]); }}
+              style={{
+                position: "absolute", top: "20px", right: "20px",
+                width: "40px", height: "40px", borderRadius: "50%",
+                background: "rgba(255,255,255,0.1)", border: "none",
+                color: "#fff", cursor: "pointer", display: "flex",
+                alignItems: "center", justifyContent: "center", zIndex: 10003,
+              }}
+            >
+              <X size={20} />
+            </button>
+            {/* Counter */}
+            {lightboxImages.length > 1 && (
+              <div style={{
+                position: "absolute", top: "24px", left: "50%", transform: "translateX(-50%)",
+                color: "rgba(255,255,255,0.6)", fontSize: "14px", fontWeight: 600, zIndex: 10003,
+              }}>
+                {lightboxIdx + 1} / {lightboxImages.length}
+              </div>
+            )}
+            {/* Previous */}
+            {lightboxImages.length > 1 && lightboxIdx > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); const ni = lightboxIdx - 1; setLightboxIdx(ni); setLightboxImg(lightboxImages[ni]); }}
+                style={{
+                  position: "absolute", left: "20px", top: "50%", transform: "translateY(-50%)",
+                  width: "48px", height: "48px", borderRadius: "50%",
+                  background: "rgba(255,255,255,0.1)", border: "none",
+                  color: "#fff", cursor: "pointer", display: "flex",
+                  alignItems: "center", justifyContent: "center", zIndex: 10003,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+              >
+                <ChevronLeft size={24} />
+              </button>
+            )}
+            {/* Next */}
+            {lightboxImages.length > 1 && lightboxIdx < lightboxImages.length - 1 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); const ni = lightboxIdx + 1; setLightboxIdx(ni); setLightboxImg(lightboxImages[ni]); }}
+                style={{
+                  position: "absolute", right: "20px", top: "50%", transform: "translateY(-50%)",
+                  width: "48px", height: "48px", borderRadius: "50%",
+                  background: "rgba(255,255,255,0.1)", border: "none",
+                  color: "#fff", cursor: "pointer", display: "flex",
+                  alignItems: "center", justifyContent: "center", zIndex: 10003,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+              >
+                <ChevronRight size={24} />
+              </button>
+            )}
+            <img
+              src={lightboxImg}
+              alt="Enlarged view"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "85vw", maxHeight: "85vh",
+                objectFit: "contain", borderRadius: "8px",
+                cursor: "default",
+              }}
+            />
+          </div>
+        )}
+
+        {/* Services — below Portfolio */}
+        <GlassCard title="Services" colors={colors} isDark={isDark}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {[
+              { id: "mural-commission", name: "Mural Commission", price: "From $2,500", available: true },
+              { id: "live-painting", name: "Live Painting", price: "From $1,000", available: true },
+              { id: "art-direction", name: "Art Direction", price: "Custom quote", available: true },
+              { id: "workshop-teaching", name: "Workshop / Teaching", price: "From $500", available: false },
+            ].map((svc, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: colors.text }}>{svc.name}</span>
+                    <span
+                      style={{
+                        fontSize: "9px",
+                        padding: "1px 6px",
+                        borderRadius: "100px",
+                        background: svc.available ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                        color: svc.available ? "#22c55e" : "#ef4444",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {svc.available ? "Available" : "Unavailable"}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: colors.accent }}>{svc.price}</span>
+                </div>
+                {svc.available && (
+                  <button
+                    onClick={() => navigate(`/creatives/${profile.username}/book?service=${svc.id}`)}
+                    style={{
+                      padding: "5px 14px",
+                      borderRadius: "8px",
+                      background: colors.accent,
+                      color: "#000",
+                      fontWeight: 700,
+                      fontSize: "11px",
+                      border: "none",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Book Now
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </GlassCard>
       </div>
 
       {/* Right Column */}
@@ -2841,21 +4635,28 @@ function TabAbout({
         <GlassCard title="Connect" colors={colors} isDark={isDark}>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <button
+              onClick={onFollow}
               style={{
                 padding: "12px 24px",
                 borderRadius: "12px",
-                background: colors.accent,
-                color: "#000",
+                background: isFollowing ? "transparent" : colors.accent,
+                color: isFollowing ? colors.accent : "#000",
                 fontWeight: 700,
                 fontSize: "14px",
-                border: "none",
+                border: isFollowing ? `2px solid ${colors.accent}` : "none",
                 cursor: "pointer",
                 width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                transition: "all 0.25s ease",
               }}
             >
-              Follow
+              {isFollowing ? <><UserCheck size={16} /> Following</> : "Follow"}
             </button>
             <button
+              onClick={onMessage}
               style={{
                 padding: "12px 24px",
                 borderRadius: "12px",
@@ -2870,7 +4671,10 @@ function TabAbout({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "8px",
+                transition: "all 0.2s ease",
               }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"; }}
             >
               <Mail size={16} />
               Message
@@ -2878,108 +4682,610 @@ function TabAbout({
           </div>
         </GlassCard>
 
-        {profile.open_to && profile.open_to.length > 0 && (
-          <GlassCard title="Open To" colors={colors} isDark={isDark}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {profile.open_to.map((item) => (
-                <div
-                  key={item}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "14px",
-                    color: colors.text,
-                  }}
-                >
-                  <Briefcase size={14} color={colors.accent} />
-                  {item}
+        {/* Message Modal */}
+        {showMessageModal && setShowMessageModal && setMessageText && (
+          <div
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 10000,
+            }}
+            onClick={() => { setShowMessageModal(false); setMessageText(""); }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: isDark ? "rgba(30,30,40,0.98)" : "#fff",
+                borderRadius: "16px", padding: "28px",
+                width: "90%", maxWidth: "480px",
+                border: `1px solid ${colors.border}`,
+                boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+              }}
+            >
+              {messageSent ? (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <CheckCheck size={40} color="#22c55e" style={{ marginBottom: "12px" }} />
+                  <h3 style={{ color: colors.text, margin: "0 0 8px 0", fontSize: "18px" }}>Message Sent!</h3>
+                  <p style={{ color: colors.textSecondary, fontSize: "14px", margin: 0 }}>
+                    {profile.display_name || profile.username} will be notified.
+                  </p>
                 </div>
-              ))}
-            </div>
-          </GlassCard>
-        )}
-
-        {(profile.website || (profile.external_links && profile.external_links.length > 0)) && (
-          <GlassCard title="Links" colors={colors} isDark={isDark}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {profile.website && (
-                <a
-                  href={profile.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "14px",
-                    color: colors.accent,
-                    textDecoration: "none",
-                  }}
-                >
-                  <Globe size={14} />
-                  {profile.website.replace(/^https?:\/\//, "")}
-                  <ExternalLink size={12} style={{ opacity: 0.5 }} />
-                </a>
+              ) : (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                    <h3 style={{ color: colors.text, margin: 0, fontSize: "18px" }}>
+                      Message {profile.display_name || profile.username}
+                    </h3>
+                    <button
+                      onClick={() => { setShowMessageModal(false); setMessageText(""); }}
+                      style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer", padding: "4px" }}
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <textarea
+                    value={messageText || ""}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    placeholder={`Write a message to ${profile.display_name || profile.username}...`}
+                    rows={5}
+                    style={{
+                      width: "100%", padding: "14px", borderRadius: "10px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${colors.border}`, color: colors.text,
+                      fontSize: "14px", fontFamily: "inherit", resize: "vertical",
+                      outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                  <button
+                    onClick={onSendMessage}
+                    disabled={!(messageText || "").trim()}
+                    style={{
+                      marginTop: "16px", width: "100%", padding: "12px",
+                      borderRadius: "12px", border: "none", cursor: (messageText || "").trim() ? "pointer" : "not-allowed",
+                      background: (messageText || "").trim() ? colors.accent : "rgba(255,255,255,0.1)",
+                      color: (messageText || "").trim() ? "#000" : "rgba(255,255,255,0.3)",
+                      fontWeight: 700, fontSize: "14px",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <Send size={16} />
+                    Send Message
+                  </button>
+                </>
               )}
-              {profile.external_links?.map((link: any, i: number) => (
-                <a
-                  key={i}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "14px",
-                    color: colors.accent,
-                    textDecoration: "none",
-                  }}
-                >
-                  <ExternalLink size={14} />
-                  {link.label || link.url?.replace(/^https?:\/\//, "")}
-                </a>
-              ))}
-            </div>
-          </GlassCard>
-        )}
-
-        <GlassCard title="Profile Strength" colors={colors} isDark={isDark}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: "14px",
-                color: colors.textSecondary,
-              }}
-            >
-              <span>Completeness</span>
-              <span style={{ fontWeight: 700, color: colors.accent }}>
-                {profile.completeness_score}%
-              </span>
-            </div>
-            <div
-              style={{
-                height: "6px",
-                borderRadius: "100px",
-                background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${profile.completeness_score}%`,
-                  height: "100%",
-                  borderRadius: "100px",
-                  background: `linear-gradient(90deg, ${colors.accent}, #ff8800)`,
-                  transition: "width 0.5s ease",
-                }}
-              />
             </div>
           </div>
+        )}
+
+        {(() => {
+          const checklist = [
+            { label: "Add a profile photo", done: !!(profile.avatar_url), icon: <Camera size={14} /> },
+            { label: "Write your bio", done: !!(customBio && customBio.trim()), icon: <FileText size={14} /> },
+            { label: "Add your profession", done: !!(profile.primary_roles && profile.primary_roles.length > 0), icon: <Briefcase size={14} /> },
+            { label: "Upload portfolio work", done: portfolioWorks.length > 0, icon: <Image size={14} /> },
+            { label: "Add skills & expertise", done: !!(profile.secondary_skills && profile.secondary_skills.length > 0), icon: <Award size={14} /> },
+            { label: "Set your location", done: !!(profile.city || profile.location_display), icon: <MapPin size={14} /> },
+            { label: "Add social links", done: !!(profile.website || (profile.external_links && profile.external_links.length > 0)), icon: <LucideLink size={14} /> },
+            { label: "List a service", done: true, icon: <DollarSign size={14} /> },
+            { label: "Add availability status", done: !!(profile.open_to && profile.open_to.length > 0), icon: <CheckCircle2 size={14} /> },
+            { label: "Upload a banner image", done: !!(profile.cover_url), icon: <Image size={14} /> },
+          ];
+          const doneCount = checklist.filter((c) => c.done).length;
+          const pct = Math.round((doneCount / checklist.length) * 100);
+          return (
+            <>
+              {/* Compact Profile Strength bar — click to expand */}
+              <GlassCard colors={colors} isDark={isDark}>
+                <div
+                  onClick={() => setStrengthOpen(!strengthOpen)}
+                  style={{ cursor: "pointer", display: "flex", flexDirection: "column", gap: "8px" }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <h3 style={{ fontSize: "14px", fontWeight: 700, color: colors.text, margin: 0 }}>Profile Strength</h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "16px", fontWeight: 800, color: pct === 100 ? "#22c55e" : colors.accent }}>{pct}%</span>
+                      <ChevronDown size={14} style={{
+                        color: colors.textSecondary,
+                        transform: strengthOpen ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.2s",
+                      }} />
+                    </div>
+                  </div>
+                  <div style={{ height: "5px", borderRadius: "100px", background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+                    <div style={{
+                      width: `${pct}%`, height: "100%", borderRadius: "100px",
+                      background: pct === 100 ? "linear-gradient(90deg, #22c55e, #16a34a)" : `linear-gradient(90deg, ${colors.accent}, #ff8800)`,
+                      transition: "width 0.5s ease",
+                    }} />
+                  </div>
+                  <div style={{ fontSize: "11px", color: colors.textSecondary, opacity: 0.7 }}>
+                    {doneCount}/{checklist.length} completed{pct === 100 ? " — Your profile is complete!" : ""}
+                  </div>
+                </div>
+
+                {/* Expandable checklist */}
+                {strengthOpen && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginTop: "10px", borderTop: `1px solid ${colors.border}`, paddingTop: "10px" }}>
+                    {checklist.map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex", alignItems: "center", gap: "8px",
+                          padding: "6px 8px", borderRadius: "6px",
+                          background: item.done ? (isDark ? "rgba(34,197,94,0.06)" : "rgba(34,197,94,0.04)") : "transparent",
+                        }}
+                      >
+                        <div style={{
+                          width: "18px", height: "18px", borderRadius: "50%",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: item.done ? "rgba(34,197,94,0.15)" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"),
+                          color: item.done ? "#22c55e" : colors.textSecondary,
+                          flexShrink: 0,
+                        }}>
+                          {item.done ? <Check size={10} /> : item.icon}
+                        </div>
+                        <span style={{
+                          fontSize: "11px", fontWeight: 500,
+                          color: item.done ? (isDark ? "rgba(34,197,94,0.7)" : "#16a34a") : colors.text,
+                          textDecoration: item.done ? "line-through" : "none",
+                          opacity: item.done ? 0.6 : 1,
+                        }}>
+                          {item.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </GlassCard>
+            </>
+          );
+        })()}
+
+        {/* Software & Tools — compact sidebar version */}
+        <GlassCard colors={colors} isDark={isDark}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: 700, color: colors.text, margin: 0 }}>Software & Tools</h3>
+            {isOwner && (
+              <button
+                onClick={() => setEditingSoftware(!editingSoftware)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "3px",
+                  padding: "3px 8px", borderRadius: "6px",
+                  background: "transparent", color: editingSoftware ? colors.accent : colors.textSecondary,
+                  border: `1px solid ${editingSoftware ? colors.accent : colors.border}`,
+                  fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                <Pencil size={9} /> {editingSoftware ? "Done" : "Edit"}
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {softwareTools.map((tool, idx) => {
+              const iconCode = getToolIcon(tool.name);
+              const iconColor = softwareIconColors[iconCode] || colors.accent;
+              return (
+                <div key={idx} style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  padding: "5px 10px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                  border: `1px solid ${colors.border}`,
+                  fontSize: "12px", fontWeight: 600, color: colors.text,
+                  position: "relative",
+                }}>
+                  <span style={{
+                    width: "20px", height: "20px", borderRadius: "4px",
+                    background: `${iconColor}18`, border: `1px solid ${iconColor}40`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "9px", fontWeight: 800, color: iconColor,
+                    fontFamily: "monospace", flexShrink: 0,
+                  }}>
+                    {iconCode}
+                  </span>
+                  {tool.name}
+                  {editingSoftware && (
+                    <button
+                      onClick={() => setSoftwareTools((prev) => prev.filter((_, i) => i !== idx))}
+                      style={{
+                        width: "14px", height: "14px", borderRadius: "50%",
+                        background: "rgba(220,38,38,0.8)", border: "none",
+                        color: "#fff", cursor: "pointer", display: "flex",
+                        alignItems: "center", justifyContent: "center",
+                        position: "absolute", top: "-4px", right: "-4px",
+                        fontSize: "8px", padding: 0,
+                      }}
+                    >
+                      <X size={8} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* Add tool input — compact */}
+          {(editingSoftware || softwareTools.length === 0) && isOwner && (
+            <div style={{
+              display: "flex", gap: "6px", marginTop: "8px",
+            }}>
+              <input
+                value={newToolName}
+                onChange={(e) => setNewToolName(e.target.value)}
+                placeholder="e.g. Photoshop"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newToolName.trim()) {
+                    setSoftwareTools((prev) => [...prev, { name: newToolName.trim(), icon: getToolIcon(newToolName.trim()), level: "Expert" }]);
+                    setNewToolName("");
+                  }
+                }}
+                style={{
+                  flex: 1, padding: "6px 8px", borderRadius: "6px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "12px", outline: "none", boxSizing: "border-box",
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (!newToolName.trim()) return;
+                  setSoftwareTools((prev) => [...prev, { name: newToolName.trim(), icon: getToolIcon(newToolName.trim()), level: "Expert" }]);
+                  setNewToolName("");
+                }}
+                disabled={!newToolName.trim()}
+                style={{
+                  padding: "6px 10px", borderRadius: "6px", border: "none",
+                  background: newToolName.trim() ? colors.accent : "rgba(255,255,255,0.06)",
+                  color: newToolName.trim() ? "#000" : "rgba(255,255,255,0.3)",
+                  fontWeight: 700, fontSize: "11px", cursor: newToolName.trim() ? "pointer" : "not-allowed",
+                  flexShrink: 0,
+                }}
+              >
+                Add
+              </button>
+            </div>
+          )}
         </GlassCard>
+
+        {/* Skills & Expertise — editable */}
+        <GlassCard colors={colors} isDark={isDark}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: 700, color: colors.text, margin: 0 }}>Skills & Expertise</h3>
+            {isOwner && (
+              <button
+                onClick={() => setEditingSkills(!editingSkills)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "3px",
+                  padding: "3px 8px", borderRadius: "6px",
+                  background: "transparent", color: editingSkills ? colors.accent : colors.textSecondary,
+                  border: `1px solid ${editingSkills ? colors.accent : colors.border}`,
+                  fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                <Pencil size={9} /> {editingSkills ? "Done" : "Edit"}
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {customSkills.map((skill, idx) => (
+              <span key={idx} style={{
+                fontSize: "12px", padding: "5px 12px", borderRadius: "100px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                color: colors.textSecondary, fontWeight: 500,
+                border: `1px solid ${colors.border}`,
+                position: "relative", display: "inline-flex", alignItems: "center",
+              }}>
+                {skill}
+                {editingSkills && (
+                  <button
+                    onClick={() => setCustomSkills((prev) => prev.filter((_, i) => i !== idx))}
+                    style={{
+                      width: "14px", height: "14px", borderRadius: "50%",
+                      background: "rgba(220,38,38,0.8)", border: "none",
+                      color: "#fff", cursor: "pointer", display: "inline-flex",
+                      alignItems: "center", justifyContent: "center",
+                      marginLeft: "6px", padding: 0,
+                    }}
+                  >
+                    <X size={8} />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+          {(editingSkills || customSkills.length === 0) && isOwner && (
+            <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+              <input
+                value={newSkill}
+                onChange={(e) => setNewSkill(e.target.value)}
+                placeholder="e.g. Typography"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newSkill.trim()) {
+                    setCustomSkills((prev) => [...prev, newSkill.trim()]);
+                    setNewSkill("");
+                  }
+                }}
+                style={{
+                  flex: 1, padding: "6px 8px", borderRadius: "6px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "12px", outline: "none", boxSizing: "border-box",
+                }}
+              />
+              <button
+                onClick={() => { if (newSkill.trim()) { setCustomSkills((prev) => [...prev, newSkill.trim()]); setNewSkill(""); } }}
+                disabled={!newSkill.trim()}
+                style={{
+                  padding: "6px 10px", borderRadius: "6px", border: "none",
+                  background: newSkill.trim() ? colors.accent : "rgba(255,255,255,0.06)",
+                  color: newSkill.trim() ? "#000" : "rgba(255,255,255,0.3)",
+                  fontWeight: 700, fontSize: "11px", cursor: newSkill.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                Add
+              </button>
+            </div>
+          )}
+        </GlassCard>
+
+        {/* Social Media — OAuth connect */}
+        <GlassCard colors={colors} isDark={isDark}>
+          <h3 style={{ fontSize: "14px", fontWeight: 700, color: colors.text, margin: "0 0 10px 0" }}>Social Media</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {socialLinks.map((s, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "8px 10px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  border: s.connected ? `1px solid ${s.color}22` : "1px solid transparent",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    width: "24px", height: "24px", borderRadius: "6px",
+                    background: s.color, display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0,
+                  }}>
+                    <Share2 size={11} color="#fff" />
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: colors.text }}>{s.platform}</span>
+                    {s.connected && s.url && (
+                      <a
+                        href={s.url.startsWith("http") ? s.url : `https://${s.url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ fontSize: "10px", color: colors.accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", textDecoration: "none" }}
+                      >
+                        {s.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+                      </a>
+                    )}
+                  </div>
+                </div>
+                {s.connected ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                    <span style={{
+                      fontSize: "10px", padding: "2px 8px", borderRadius: "100px",
+                      background: "rgba(34,197,94,0.12)", color: "#22c55e", fontWeight: 600,
+                    }}>
+                      Connected
+                    </span>
+                    {isOwner && (
+                      <button
+                        onClick={() => setSocialLinks((prev) => prev.map((sl, idx) => idx === i ? { ...sl, connected: false, url: "" } : sl))}
+                        style={{
+                          width: "18px", height: "18px", borderRadius: "50%",
+                          background: "rgba(220,38,38,0.15)", border: "none",
+                          color: "#ef4444", cursor: "pointer", display: "flex",
+                          alignItems: "center", justifyContent: "center", padding: 0,
+                        }}
+                        title="Disconnect"
+                      >
+                        <X size={10} />
+                      </button>
+                    )}
+                  </div>
+                ) : isOwner ? (
+                  <button
+                    onClick={() => { setConnectingPlatform(s.platform); setConnectStep("auth"); }}
+                    style={{
+                      fontSize: "10px", padding: "4px 12px", borderRadius: "100px",
+                      background: s.color, color: "#fff", border: "none",
+                      fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.85"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+                  >
+                    Connect
+                  </button>
+                ) : (
+                  <span style={{
+                    fontSize: "10px", padding: "2px 8px", borderRadius: "100px",
+                    background: "rgba(255,255,255,0.06)", color: colors.textSecondary, fontWeight: 600,
+                  }}>
+                    Not linked
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+
+        {/* OAuth Connect Modal */}
+        {connectingPlatform && (() => {
+          const platform = socialLinks.find((s) => s.platform === connectingPlatform);
+          if (!platform) return null;
+          const pColor = platform.color;
+          return (
+            <div
+              style={{
+                position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                zIndex: 10001,
+              }}
+              onClick={() => { setConnectingPlatform(null); setConnectStep("auth"); }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: isDark ? "rgba(25,25,35,0.98)" : "#fff",
+                  borderRadius: "16px", padding: "28px", width: "90%", maxWidth: "400px",
+                  border: `1px solid ${colors.border}`, boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+                  textAlign: "center",
+                }}
+              >
+                {connectStep === "auth" && (
+                  <>
+                    <div style={{
+                      width: "56px", height: "56px", borderRadius: "14px",
+                      background: pColor, display: "flex", alignItems: "center", justifyContent: "center",
+                      margin: "0 auto 16px",
+                    }}>
+                      <Share2 size={24} color="#fff" />
+                    </div>
+                    <h3 style={{ fontSize: "18px", fontWeight: 700, color: colors.text, margin: "0 0 6px" }}>
+                      Connect {connectingPlatform}
+                    </h3>
+                    <p style={{ fontSize: "13px", color: colors.textSecondary, margin: "0 0 16px", lineHeight: 1.5 }}>
+                      Sign in to {connectingPlatform} in the popup window, then paste your profile URL below.
+                    </p>
+                    <button
+                      onClick={() => {
+                        const url = platformLoginUrls[connectingPlatform!] || "#";
+                        window.open(url, `${connectingPlatform}_login`, "width=500,height=700,left=200,top=100");
+                        setConnectStep("paste");
+                      }}
+                      style={{
+                        width: "100%", padding: "12px", borderRadius: "12px", border: "none",
+                        background: pColor, color: "#fff", fontWeight: 700, fontSize: "14px",
+                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <LogIn size={16} /> Sign in with {connectingPlatform}
+                    </button>
+                    <button
+                      onClick={() => { setPastedProfileUrl(""); setConnectStep("paste"); }}
+                      style={{
+                        width: "100%", padding: "10px", borderRadius: "10px",
+                        background: "transparent", border: `1px solid ${colors.border}`,
+                        color: colors.textSecondary, fontWeight: 600, fontSize: "13px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      I already have my profile URL
+                    </button>
+                    <div style={{ marginTop: "12px", fontSize: "11px", color: colors.textSecondary, opacity: 0.6 }}>
+                      We only access your public profile information
+                    </div>
+                  </>
+                )}
+                {connectStep === "paste" && (
+                  <>
+                    <div style={{
+                      width: "56px", height: "56px", borderRadius: "14px",
+                      background: pColor, display: "flex", alignItems: "center", justifyContent: "center",
+                      margin: "0 auto 16px",
+                    }}>
+                      <Share2 size={24} color="#fff" />
+                    </div>
+                    <h3 style={{ fontSize: "18px", fontWeight: 700, color: colors.text, margin: "0 0 6px" }}>
+                      Paste your {connectingPlatform} profile URL
+                    </h3>
+                    <p style={{ fontSize: "12px", color: colors.textSecondary, margin: "0 0 16px", lineHeight: 1.4 }}>
+                      Copy your profile link from {connectingPlatform} and paste it below.
+                    </p>
+                    <input
+                      autoFocus
+                      value={pastedProfileUrl}
+                      onChange={(e) => setPastedProfileUrl(e.target.value)}
+                      placeholder={`https://${connectingPlatform!.toLowerCase().replace(/ \/ /g, "").replace(/ /g, "")}.com/yourprofile`}
+                      style={{
+                        width: "100%", padding: "12px 14px", borderRadius: "10px",
+                        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        border: `1px solid ${pastedProfileUrl.trim() ? pColor : colors.border}`,
+                        color: colors.text, fontSize: "14px", outline: "none",
+                        boxSizing: "border-box", marginBottom: "14px",
+                        transition: "border-color 0.2s",
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        if (pastedProfileUrl.trim()) {
+                          setConnectStep("loading");
+                          setTimeout(() => setConnectStep("success"), 1500);
+                        }
+                      }}
+                      disabled={!pastedProfileUrl.trim()}
+                      style={{
+                        width: "100%", padding: "12px", borderRadius: "12px", border: "none",
+                        background: pastedProfileUrl.trim() ? pColor : "rgba(255,255,255,0.1)",
+                        color: pastedProfileUrl.trim() ? "#fff" : "rgba(255,255,255,0.3)",
+                        fontWeight: 700, fontSize: "14px",
+                        cursor: pastedProfileUrl.trim() ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      Connect Account
+                    </button>
+                  </>
+                )}
+                {connectStep === "loading" && (
+                  <>
+                    <div style={{
+                      width: "56px", height: "56px", borderRadius: "14px",
+                      background: pColor, display: "flex", alignItems: "center", justifyContent: "center",
+                      margin: "0 auto 16px", animation: "pulse 1.5s ease-in-out infinite",
+                    }}>
+                      <Share2 size={24} color="#fff" />
+                    </div>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: colors.text, margin: "0 0 8px" }}>
+                      Connecting to {connectingPlatform}...
+                    </h3>
+                    <p style={{ fontSize: "13px", color: colors.textSecondary }}>Verifying your account</p>
+                  </>
+                )}
+                {connectStep === "success" && (
+                  <>
+                    <div style={{
+                      width: "56px", height: "56px", borderRadius: "50%",
+                      background: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center",
+                      margin: "0 auto 16px",
+                    }}>
+                      <CheckCircle2 size={32} color="#22c55e" />
+                    </div>
+                    <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#22c55e", margin: "0 0 6px" }}>
+                      Connected!
+                    </h3>
+                    <p style={{ fontSize: "13px", color: colors.textSecondary, margin: "0 0 20px" }}>
+                      Your {connectingPlatform} account has been linked to your profile.
+                    </p>
+                    <button
+                      onClick={() => {
+                        const finalUrl = pastedProfileUrl.trim() || `https://${connectingPlatform!.toLowerCase().replace(/ \/ /g, "").replace(/ /g, "")}.com/${profile.username || "street_user"}`;
+                        setSocialLinks((prev) => prev.map((sl) => sl.platform === connectingPlatform ? { ...sl, connected: true, url: finalUrl } : sl));
+                        setConnectingPlatform(null);
+                        setConnectStep("auth");
+                        setPastedProfileUrl("");
+                      }}
+                      style={{
+                        width: "100%", padding: "12px", borderRadius: "12px", border: "none",
+                        background: colors.accent, color: "#000", fontWeight: 700, fontSize: "14px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Done
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -3211,6 +5517,14 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
   const [selectedSavedImage, setSelectedSavedImage] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [savedFavorites, setSavedFavorites] = useState<Set<string>>(new Set(["saved-1", "saved-2", "saved-3", "saved-4", "saved-5"]));
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set(["own-1"]));
+  const [collectionFilter, setCollectionFilter] = useState<string>("all");
+  const [artworkOrder, setArtworkOrder] = useState<string[]>(["own-1","own-2","own-3","own-4","own-5","own-6"]);
+  const [reorderMode, setReorderMode] = useState(false);
+  const [inquiryArt, setInquiryArt] = useState<any | null>(null);
+  const [inquiryForm, setInquiryForm] = useState({ name: "", email: "", message: "", offerAmount: "" });
+  const [inquirySent, setInquirySent] = useState(false);
+  const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
 
   const toggleSavedFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -3298,8 +5612,15 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Voices of the Underground",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-voices/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-voices/600/400", label: "Main View" },
+        { url: "https://picsum.photos/seed/own-voices-close/600/400", label: "Close-Up Detail" },
+        { url: "https://picsum.photos/seed/own-voices-context/600/400", label: "In-Situ — Dundas West Underpass" },
+        { url: "https://picsum.photos/seed/own-voices-angle/600/400", label: "Side Angle" },
+      ],
       medium: "Spray Paint",
       style: "Street Art",
+      collection: "Urban Voices",
       description: "A large-scale mural exploring the stories of subway musicians and buskers who form the invisible soundtrack of the city. Each face is rendered in hyper-saturated color, their instruments dissolving into the surrounding architecture — a tribute to artists who perform without stages.",
       year: "2025",
       dimensions: "12ft × 8ft",
@@ -3317,8 +5638,14 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Concrete Canvas — Dundas & Ossington",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-concrete/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-concrete/600/400", label: "Main View" },
+        { url: "https://picsum.photos/seed/own-concrete-wide/600/400", label: "Full Wall — Street Context" },
+        { url: "https://picsum.photos/seed/own-concrete-detail/600/400", label: "Wheat Paste Layering Detail" },
+      ],
       medium: "Acrylic & Wheat Paste",
       style: "Muralism",
+      collection: "Urban Voices",
       description: "Commissioned by the Ossington BIA, this piece transforms a blank concrete wall into a living narrative of the neighborhood's evolution — from its immigrant roots to its current creative renaissance. Layers of wheat-pasted archival photographs blend with hand-painted contemporary portraits.",
       year: "2025",
       dimensions: "20ft × 10ft",
@@ -3336,8 +5663,15 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Chromatic Rebellion",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-chromatic/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-chromatic/600/400", label: "Main View" },
+        { url: "https://picsum.photos/seed/own-chromatic-texture/600/400", label: "Texture Close-Up" },
+        { url: "https://picsum.photos/seed/own-chromatic-studio/600/400", label: "Studio Installation" },
+        { url: "https://picsum.photos/seed/own-chromatic-process/600/400", label: "Process Shot" },
+      ],
       medium: "Mixed Media",
       style: "Abstract",
+      collection: "Studio Experiments",
       description: "An explosive abstract piece that challenges the sterile minimalism dominating gallery spaces. Built up through dozens of layers — dripped acrylics, torn newsprint, spray enamel, and coffee stains — it represents the beautiful chaos of the creative process itself.",
       year: "2024",
       dimensions: "48\" × 36\" (canvas)",
@@ -3355,8 +5689,14 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "City Pulse — Queen West Series",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-pulse/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-pulse/600/400", label: "Main Print" },
+        { url: "https://picsum.photos/seed/own-pulse-framed/600/400", label: "Framed — Gallery Display" },
+        { url: "https://picsum.photos/seed/own-pulse-detail/600/400", label: "Print Detail — Ink Layers" },
+      ],
       medium: "Digital Print",
       style: "Contemporary",
+      collection: "City Pulse Series",
       description: "Part of a limited edition series capturing the energy of Queen West at different times of day. This piece layers long-exposure street photography with hand-drawn illustrations, printed on archival cotton rag paper. Edition of 25.",
       year: "2025",
       dimensions: "24\" × 18\"",
@@ -3374,8 +5714,15 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Roots & Routes",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-roots/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-roots/600/400", label: "Main View" },
+        { url: "https://picsum.photos/seed/own-roots-close/600/400", label: "Face Detail — Central Figure" },
+        { url: "https://picsum.photos/seed/own-roots-environment/600/400", label: "In-Situ — Kensington Market" },
+        { url: "https://picsum.photos/seed/own-roots-night/600/400", label: "Night Lighting" },
+      ],
       medium: "Spray Paint & Acrylic",
       style: "Figurative",
+      collection: "Urban Voices",
       description: "A deeply personal piece exploring the artist's journey between cultures. Tree roots morph into subway maps, while branches become flight paths — connecting the places that shaped the artist's identity. The central figure stands at the crossroads, grounded but reaching upward.",
       year: "2024",
       dimensions: "15ft × 9ft",
@@ -3393,8 +5740,16 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       title: "Neon Ghosts — Kensington Nights",
       artist_name: ownerName,
       image_url: "https://picsum.photos/seed/own-neon/600/400",
+      gallery_images: [
+        { url: "https://picsum.photos/seed/own-neon/600/400", label: "Daytime View — UV Paint" },
+        { url: "https://picsum.photos/seed/own-neon-glow/600/400", label: "Night Activation — UV Glow" },
+        { url: "https://picsum.photos/seed/own-neon-proj/600/400", label: "Projection Mapping Detail" },
+        { url: "https://picsum.photos/seed/own-neon-walk/600/400", label: "Visitor Walking Through" },
+        { url: "https://picsum.photos/seed/own-neon-above/600/400", label: "Aerial View — Full Corridor" },
+      ],
       medium: "UV Paint & Projection",
       style: "Installation",
+      collection: "City Pulse Series",
       description: "An immersive night installation that transforms an alleyway into a glowing portal. UV-reactive paint on the walls activates under blacklight, while a projection maps animated spirits onto the architecture. Visitors walk through the piece, becoming part of the artwork themselves.",
       year: "2025",
       dimensions: "Site-Specific (30ft corridor)",
@@ -3409,6 +5764,49 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
     },
   ];
 
+  // Derive collections from artworks
+  const collections = useMemo(() => {
+    const collMap = new Map<string, number>();
+    artworks.forEach(a => {
+      if (a.collection) collMap.set(a.collection, (collMap.get(a.collection) || 0) + 1);
+    });
+    return Array.from(collMap.entries()).map(([name, count]) => ({ name, count }));
+  }, []);
+
+  // Sort artworks: pinned first, then by custom order
+  const sortedArtworks = useMemo(() => {
+    let filtered = collectionFilter === "all" ? [...artworks] : artworks.filter(a => a.collection === collectionFilter);
+    filtered.sort((a, b) => {
+      const aPin = pinnedIds.has(a.id) ? 0 : 1;
+      const bPin = pinnedIds.has(b.id) ? 0 : 1;
+      if (aPin !== bPin) return aPin - bPin;
+      return artworkOrder.indexOf(a.id) - artworkOrder.indexOf(b.id);
+    });
+    return filtered;
+  }, [collectionFilter, pinnedIds, artworkOrder]);
+
+  const togglePin = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const moveArtwork = (id: string, direction: "up" | "down", e: React.MouseEvent) => {
+    e.stopPropagation();
+    setArtworkOrder(prev => {
+      const idx = prev.indexOf(id);
+      if (idx < 0) return prev;
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next;
+    });
+  };
+
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setFavorites((prev) => {
@@ -3420,29 +5818,85 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
 
   return (
     <div>
+      {/* ── Collection Filter & Reorder Controls ── */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginBottom: "20px",
+      }}>
+        {/* Collection filter pills */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", flex: 1 }}>
+          <FolderOpen size={16} color={colors.textSecondary} />
+          <button
+            onClick={() => setCollectionFilter("all")}
+            style={{
+              padding: "5px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+              fontSize: "12px", fontWeight: 600,
+              background: collectionFilter === "all" ? "#eab308" : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"),
+              color: collectionFilter === "all" ? "#000" : colors.textSecondary,
+              transition: "all 0.2s",
+            }}
+          >
+            All ({artworks.length})
+          </button>
+          {collections.map(c => (
+            <button
+              key={c.name}
+              onClick={() => setCollectionFilter(collectionFilter === c.name ? "all" : c.name)}
+              style={{
+                padding: "5px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+                fontSize: "12px", fontWeight: 600,
+                background: collectionFilter === c.name ? "#eab308" : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"),
+                color: collectionFilter === c.name ? "#000" : colors.textSecondary,
+                transition: "all 0.2s",
+              }}
+            >
+              {c.name} ({c.count})
+            </button>
+          ))}
+        </div>
+        {/* Reorder toggle */}
+        <button
+          onClick={() => setReorderMode(!reorderMode)}
+          style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            padding: "6px 14px", borderRadius: "8px", border: "none", cursor: "pointer",
+            fontSize: "12px", fontWeight: 600,
+            background: reorderMode ? "rgba(234,179,8,0.15)" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+            color: reorderMode ? "#eab308" : colors.textSecondary,
+            transition: "all 0.2s",
+          }}
+        >
+          <GripVertical size={14} /> {reorderMode ? "Done Reordering" : "Reorder"}
+        </button>
+      </div>
+
       {/* Gallery Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "20px" }}>
-        {artworks.map((art, i) => {
+        {sortedArtworks.map((art) => {
           const isFav = favorites.has(art.id);
+          const isPinned = pinnedIds.has(art.id);
+          const originalIndex = artworks.findIndex(a => a.id === art.id);
           return (
             <div
               key={art.id}
-              onClick={() => setSelectedImage(i)}
+              onClick={() => !reorderMode && setSelectedImage(originalIndex)}
               style={{
                 borderRadius: "16px",
                 overflow: "hidden",
                 background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)",
-                border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-                cursor: "pointer",
+                border: isPinned
+                  ? "2px solid rgba(234,179,8,0.5)"
+                  : `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                cursor: reorderMode ? "default" : "pointer",
                 transition: "all 0.3s",
+                position: "relative",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.3)"; }}
+              onMouseEnter={(e) => { if (!reorderMode) { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.3)"; } }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
             >
               {/* Image with badges */}
               <div style={{ position: "relative", width: "100%", paddingTop: "66%", overflow: "hidden" }}>
                 <img
-                  src={art.image_url || art.thumbnail_url}
+                  src={art.image_url || (art as any).thumbnail_url}
                   alt={art.title}
                   style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
                   onError={(e) => {
@@ -3452,6 +5906,19 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                     if (p) { p.style.display = "flex"; p.style.alignItems = "center"; p.style.justifyContent = "center"; p.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"; p.innerHTML += '<div style="font-size:48px">🖼️</div>'; }
                   }}
                 />
+                {/* Pinned badge */}
+                {isPinned && (
+                  <div style={{
+                    position: "absolute", top: "12px", left: art.is_for_sale || art.is_sold ? "auto" : "12px",
+                    right: art.is_for_sale || art.is_sold ? "56px" : "auto",
+                    ...(art.is_for_sale || art.is_sold ? { top: "12px", left: "auto" } : {}),
+                    background: "rgba(234,179,8,0.9)", color: "#000", fontSize: "10px", fontWeight: 700,
+                    padding: "3px 8px", borderRadius: "5px", letterSpacing: "0.5px",
+                    display: "flex", alignItems: "center", gap: "3px", zIndex: 2,
+                  }}>
+                    <Pin size={10} /> PINNED
+                  </div>
+                )}
                 {/* FOR SALE badge */}
                 {art.is_for_sale && !art.is_sold && (
                   <div style={{
@@ -3485,6 +5952,48 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                 >
                   <Heart size={16} fill={isFav ? "#000" : "none"} color={isFav ? "#000" : "#fff"} />
                 </button>
+                {/* Reorder controls overlay */}
+                {reorderMode && (
+                  <div style={{
+                    position: "absolute", bottom: "10px", right: "10px",
+                    display: "flex", gap: "6px", zIndex: 3,
+                  }}>
+                    <button
+                      onClick={(e) => togglePin(art.id, e)}
+                      title={isPinned ? "Unpin" : "Pin to top"}
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "8px",
+                        background: isPinned ? "rgba(234,179,8,0.9)" : "rgba(0,0,0,0.6)",
+                        border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <Pin size={14} color={isPinned ? "#000" : "#fff"} />
+                    </button>
+                    <button
+                      onClick={(e) => moveArtwork(art.id, "up", e)}
+                      title="Move up"
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "8px",
+                        background: "rgba(0,0,0,0.6)", border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <ArrowUp size={14} color="#fff" />
+                    </button>
+                    <button
+                      onClick={(e) => moveArtwork(art.id, "down", e)}
+                      title="Move down"
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "8px",
+                        background: "rgba(0,0,0,0.6)", border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <ArrowDown size={14} color="#fff" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Card info */}
@@ -3494,20 +6003,67 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                   <div style={{ fontSize: "15px", fontWeight: 700, color: colors.text, flex: 1 }}>
                     {art.title}
                   </div>
-                  {art.is_for_sale && art.price && (
+                  {art.is_for_sale && !art.is_sold && art.price && (
                     <div style={{ fontSize: "15px", fontWeight: 700, color: "#eab308", marginLeft: "12px", whiteSpace: "nowrap" }}>
                       ${art.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+                  {art.is_sold && art.price && (
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "rgba(239,68,68,0.8)", marginLeft: "12px", whiteSpace: "nowrap" }}>
+                      Sold for ${art.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </div>
                   )}
                 </div>
 
                 {/* Artist */}
-                <div style={{ fontSize: "13px", color: colors.textSecondary, marginBottom: "10px" }}>
+                <div style={{ fontSize: "13px", color: colors.textSecondary, marginBottom: "6px" }}>
                   by {art.artist_name}
                 </div>
 
+                {/* Description snippet */}
+                <div style={{
+                  fontSize: "12px", color: isDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.55)",
+                  marginBottom: "10px", lineHeight: "1.5",
+                  display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const,
+                  overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {art.description}
+                </div>
+
+                {/* Inquire button for pieces that are for sale */}
+                {art.is_for_sale && !art.is_sold && (
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: "10px" }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInquiryArt(art);
+                    }}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "6px",
+                      padding: "6px 16px",
+                      borderRadius: "8px", border: "none",
+                      background: "#eab308", color: "#fff",
+                      fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+                  >
+                    <Mail size={13} /> Inquire
+                  </button>
+                  </div>
+                )}
+
                 {/* Tags */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "12px" }}>
+                  {art.collection && (
+                    <span style={{
+                      fontSize: "11px", padding: "3px 10px", borderRadius: "6px",
+                      background: "rgba(234,179,8,0.15)", color: "#eab308", fontWeight: 600,
+                    }}>
+                      {art.collection}
+                    </span>
+                  )}
                   {art.medium && (
                     <span style={{
                       fontSize: "11px", padding: "3px 10px", borderRadius: "6px",
@@ -3537,7 +6093,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                     <Heart size={13} /> {art.favorite_count || 0}
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <MessageCircle size={13} /> {art.comment_count || art.comments || 0}
+                    <MessageCircle size={13} /> {art.comment_count || (art as any).comments || 0}
                   </span>
                 </div>
               </div>
@@ -3840,9 +6396,10 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
       {selectedImage !== null && artworks[selectedImage] && (() => {
         const art = artworks[selectedImage];
         const isFav = favorites.has(art.id);
+        const photos = art.gallery_images || [{ url: art.image_url, label: "Main View" }];
         return (
           <div
-            onClick={() => setSelectedImage(null)}
+            onClick={() => { setSelectedImage(null); setDetailPhotoIndex(0); }}
             style={{
               position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
               background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "flex-start", justifyContent: "center",
@@ -3851,7 +6408,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
           >
             {/* Close button */}
             <button
-              onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
+              onClick={(e) => { e.stopPropagation(); setSelectedImage(null); setDetailPhotoIndex(0); }}
               style={{
                 position: "fixed", top: "20px", right: "20px",
                 background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
@@ -3864,7 +6421,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
             {/* Nav arrows */}
             {selectedImage > 0 && (
               <button
-                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage - 1); }}
+                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage - 1); setDetailPhotoIndex(0); }}
                 style={{
                   position: "fixed", left: "20px", top: "50%", transform: "translateY(-50%)",
                   background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
@@ -3877,7 +6434,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
             )}
             {selectedImage < artworks.length - 1 && (
               <button
-                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage + 1); }}
+                onClick={(e) => { e.stopPropagation(); setSelectedImage(selectedImage + 1); setDetailPhotoIndex(0); }}
                 style={{
                   position: "fixed", right: "20px", top: "50%", transform: "translateY(-50%)",
                   background: "rgba(255,255,255,0.1)", border: "none", color: "#fff",
@@ -3897,13 +6454,48 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                 background: "rgba(20,20,20,0.98)", border: "1px solid rgba(255,255,255,0.08)",
               }}
             >
-              {/* Hero Image */}
+              {/* Hero Image with multi-photo nav */}
               <div style={{ width: "100%", position: "relative" }}>
                 <img
-                  src={art.image_url}
-                  alt={art.title}
+                  src={photos[detailPhotoIndex]?.url || art.image_url}
+                  alt={`${art.title} — ${photos[detailPhotoIndex]?.label || "View"}`}
                   style={{ width: "100%", maxHeight: "60vh", objectFit: "cover", display: "block" }}
                 />
+                {/* Photo label */}
+                <div style={{
+                  position: "absolute", bottom: "16px", left: "16px",
+                  background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: "12px", fontWeight: 500,
+                  padding: "5px 12px", borderRadius: "8px", backdropFilter: "blur(8px)",
+                }}>
+                  {photos[detailPhotoIndex]?.label} · {detailPhotoIndex + 1}/{photos.length}
+                </div>
+                {/* Photo nav arrows */}
+                {photos.length > 1 && detailPhotoIndex > 0 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDetailPhotoIndex(detailPhotoIndex - 1); }}
+                    style={{
+                      position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)",
+                      background: "rgba(0,0,0,0.5)", border: "none", color: "#fff",
+                      width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                )}
+                {photos.length > 1 && detailPhotoIndex < photos.length - 1 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDetailPhotoIndex(detailPhotoIndex + 1); }}
+                    style={{
+                      position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
+                      background: "rgba(0,0,0,0.5)", border: "none", color: "#fff",
+                      width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                )}
                 {/* Badges on image */}
                 {art.is_for_sale && !art.is_sold && (
                   <div style={{
@@ -3920,10 +6512,34 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                     background: "#ef4444", color: "#fff", fontSize: "12px", fontWeight: 700,
                     padding: "5px 12px", borderRadius: "8px",
                   }}>
-                    SOLD
+                    SOLD — ${art.price?.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                   </div>
                 )}
               </div>
+
+              {/* Thumbnail strip for multi-photo */}
+              {photos.length > 1 && (
+                <div style={{
+                  display: "flex", gap: "8px", padding: "12px 16px",
+                  overflowX: "auto", background: "rgba(0,0,0,0.4)",
+                }}>
+                  {photos.map((photo: any, pi: number) => (
+                    <button
+                      key={pi}
+                      onClick={() => setDetailPhotoIndex(pi)}
+                      style={{
+                        width: "72px", height: "48px", borderRadius: "6px", overflow: "hidden",
+                        border: pi === detailPhotoIndex ? "2px solid #eab308" : "2px solid transparent",
+                        cursor: "pointer", flexShrink: 0, padding: 0, background: "none",
+                        opacity: pi === detailPhotoIndex ? 1 : 0.6,
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      <img src={photo.url} alt={photo.label} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Project Info */}
               <div style={{ padding: "32px 36px" }}>
@@ -3951,6 +6567,47 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
                   by {art.artist_name}
                 </div>
 
+                {/* Price + Inquire row for detail view */}
+                {art.is_for_sale && !art.is_sold && art.price && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "16px", marginBottom: "20px",
+                    padding: "16px 20px", borderRadius: "12px",
+                    background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)",
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", marginBottom: "2px" }}>Asking Price</div>
+                      <div style={{ fontSize: "24px", fontWeight: 800, color: "#eab308" }}>
+                        ${art.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setSelectedImage(null); setDetailPhotoIndex(0); setInquiryArt(art); }}
+                      style={{
+                        padding: "10px 24px", borderRadius: "10px", border: "none",
+                        background: "#eab308", color: "#000", fontSize: "14px", fontWeight: 700,
+                        cursor: "pointer", display: "flex", alignItems: "center", gap: "8px",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+                    >
+                      <Mail size={16} /> Inquire
+                    </button>
+                  </div>
+                )}
+                {art.is_sold && art.price && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px",
+                    padding: "14px 20px", borderRadius: "12px",
+                    background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+                  }}>
+                    <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", marginRight: "4px" }}>Sold for</div>
+                    <div style={{ fontSize: "20px", fontWeight: 700, color: "#ef4444" }}>
+                      ${art.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", fontSize: "13px", color: "rgba(255,255,255,0.5)", marginBottom: "24px" }}>
                   {art.year && <span>📅 {art.year}</span>}
                   {art.dimensions && <span>📐 {art.dimensions}</span>}
@@ -3973,6 +6630,14 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
 
                 {/* Medium & Style tags */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "24px" }}>
+                  {art.collection && (
+                    <span style={{
+                      fontSize: "12px", padding: "5px 14px", borderRadius: "8px",
+                      background: "rgba(234,179,8,0.15)", color: "#eab308", fontWeight: 600,
+                    }}>
+                      {art.collection}
+                    </span>
+                  )}
                   {art.medium && (
                     <span style={{
                       fontSize: "12px", padding: "5px 14px", borderRadius: "8px",
@@ -4036,6 +6701,140 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
           </div>
         );
       })()}
+
+      {/* ── Inquiry / Make an Offer Modal ── */}
+      {inquiryArt && (
+        <div
+          onClick={() => { setInquiryArt(null); setInquirySent(false); setInquiryForm({ name: "", email: "", message: "", offerAmount: "" }); }}
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 10002, padding: "20px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "520px", width: "100%", borderRadius: "16px", overflow: "hidden",
+              background: isDark ? "rgba(30,30,30,0.98)" : "#fff",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: "20px 24px", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: colors.text }}>
+                  {inquirySent ? "Inquiry Sent!" : "Inquire About This Piece"}
+                </h3>
+                <div style={{ fontSize: "13px", color: colors.textSecondary, marginTop: "4px" }}>
+                  {inquiryArt.title}
+                </div>
+              </div>
+              <button
+                onClick={() => { setInquiryArt(null); setInquirySent(false); setInquiryForm({ name: "", email: "", message: "", offerAmount: "" }); }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: colors.textSecondary }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "24px" }}>
+              {inquirySent ? (
+                <div style={{ textAlign: "center", padding: "20px 0" }}>
+                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>✅</div>
+                  <p style={{ fontSize: "15px", color: colors.text, fontWeight: 600, marginBottom: "8px" }}>
+                    Your inquiry has been sent to {inquiryArt.artist_name}!
+                  </p>
+                  <p style={{ fontSize: "13px", color: colors.textSecondary, margin: 0 }}>
+                    They'll get back to you via email. Check your inbox for updates.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Piece summary */}
+                  <div style={{
+                    display: "flex", gap: "14px", marginBottom: "20px", padding: "14px",
+                    borderRadius: "10px", background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                  }}>
+                    <img src={inquiryArt.image_url} alt="" style={{ width: "80px", height: "56px", borderRadius: "8px", objectFit: "cover" }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: colors.text }}>{inquiryArt.title}</div>
+                      <div style={{ fontSize: "12px", color: colors.textSecondary }}>by {inquiryArt.artist_name}</div>
+                      {inquiryArt.price && (
+                        <div style={{ fontSize: "14px", fontWeight: 700, color: "#eab308", marginTop: "4px" }}>
+                          ${inquiryArt.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Form fields */}
+                  {[
+                    { key: "name", label: "Your Name", placeholder: "Full name", type: "text" },
+                    { key: "email", label: "Email", placeholder: "your@email.com", type: "email" },
+                    { key: "offerAmount", label: "Your Offer (optional)", placeholder: "e.g. $2,000", type: "text" },
+                  ].map(({ key, label, placeholder, type }) => (
+                    <div key={key} style={{ marginBottom: "14px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>
+                        {label}
+                      </label>
+                      <input
+                        type={type}
+                        value={(inquiryForm as any)[key]}
+                        onChange={(e) => setInquiryForm(prev => ({ ...prev, [key]: e.target.value }))}
+                        placeholder={placeholder}
+                        style={{
+                          width: "100%", padding: "10px 14px", borderRadius: "8px",
+                          background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                          border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                          color: colors.text, fontSize: "14px", outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  ))}
+                  <div style={{ marginBottom: "20px" }}>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: colors.textSecondary, display: "block", marginBottom: "6px" }}>
+                      Message
+                    </label>
+                    <textarea
+                      value={inquiryForm.message}
+                      onChange={(e) => setInquiryForm(prev => ({ ...prev, message: e.target.value }))}
+                      placeholder="I'm interested in this piece. I'd love to know more about..."
+                      rows={4}
+                      style={{
+                        width: "100%", padding: "10px 14px", borderRadius: "8px", resize: "vertical",
+                        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                        color: colors.text, fontSize: "14px", outline: "none", fontFamily: "inherit",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => setInquirySent(true)}
+                    disabled={!inquiryForm.name || !inquiryForm.email || !inquiryForm.message}
+                    style={{
+                      width: "100%", padding: "12px 0", borderRadius: "10px", border: "none",
+                      background: (!inquiryForm.name || !inquiryForm.email || !inquiryForm.message) ? "rgba(234,179,8,0.3)" : "#eab308",
+                      color: (!inquiryForm.name || !inquiryForm.email || !inquiryForm.message) ? "rgba(0,0,0,0.4)" : "#000",
+                      fontSize: "14px", fontWeight: 700, cursor: (!inquiryForm.name || !inquiryForm.email || !inquiryForm.message) ? "not-allowed" : "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <Send size={16} /> Send Inquiry
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5247,7 +8046,7 @@ function TabAcademy({
   const navSections = [
     { title: "Learn", items: [
       { id: "courses" as AcademySection, label: "Courses", icon: <BookOpen size={16} />, color: "#FFD600" },
-      { id: "paths" as AcademySection, label: "Learning Paths", icon: <Layers size={16} />, color: "#8B5CF6" },
+      { id: "paths" as AcademySection, label: "Programs", icon: <Layers size={16} />, color: "#8B5CF6" },
       { id: "live" as AcademySection, label: "Live Sessions", icon: <Camera size={16} />, color: "#10B981", badge: "LIVE" },
     ]},
     { title: "Activities", items: [
@@ -5592,7 +8391,7 @@ function TabAcademy({
         {/* ── LEARNING PATHS ── */}
         {activeSection === "paths" && (
           <div>
-            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Learning Paths</h2>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: 800, color: colors.text }}>Programs</h2>
             <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: colors.textSecondary }}>Structured tracks that organize courses into clear outcomes.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "18px" }}>
               {learningPaths.map((path) => (
@@ -6107,23 +8906,78 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
   );
 }
 function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
-  const [settings, setSettings] = useState<Record<string, boolean>>({
+  const STORAGE_KEY = "sv_profile_settings";
+  const defaults: Record<string, boolean> = {
+    // Profile Visibility
     "Public Profile": profile.is_public !== false,
     "Show in Directory": true,
     "Show Activity": true,
+    "Show Portfolio on About": true,
+    // Notifications
     "New Followers": true,
     "Messages": true,
     "Job Inquiries": true,
     "Community Updates": false,
+    "Calendar Reminders": true,
+    "Task Deadlines": true,
+    "Academy Progress": true,
+    "Gallery Interactions": true,
+    // Privacy
     "Show Email": false,
     "Allow Direct Messages": true,
     "Show Online Status": false,
+    "Allow Profile Embedding": false,
+    // Messages & Communication
+    "Read Receipts": true,
+    "Message Previews": true,
+    "Auto-Reply When Busy": false,
+    // Calendar
+    "Show Calendar Publicly": false,
+    "Allow Booking Requests": true,
+    "Weekly Digest": true,
+    "Sync Google Calendar": false,
+    // Street Gallery
+    "Gallery Visible": true,
+    "Allow Inquiries": true,
+    "Show Sold Prices": true,
+    "Enable Favorites": true,
+    "Watermark Images": false,
+    // Jobs
+    "Open to Opportunities": true,
+    "Show on Job Board": true,
+    "Job Expiry Reminders": true,
+    "Auto-Save Applications": true,
+    // Social Media
+    "Cross-Post Updates": false,
+    "Show Social Links": true,
+    "Auto-Share Gallery": false,
+    // Academy
+    "Show Certifications": true,
+    "Learning Reminders": true,
+    "Share Progress": false,
+    // Documents & Storage
+    "Auto-Organize Files": true,
+    "Storage Alerts": true,
+    "Document Versioning": true,
+    // News & Activity
+    "Show News Feed": true,
+    "Activity Log": true,
+    "Trending Alerts": false,
+  };
+  const [settings, setSettings] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) return { ...defaults, ...JSON.parse(stored) };
+    } catch {}
+    return defaults;
   });
   const [savedToast, setSavedToast] = useState(false);
+  const [settingsSearch, setSettingsSearch] = useState("");
 
   const toggleSetting = (label: string) => {
     setSettings((prev) => {
       const next = { ...prev, [label]: !prev[label] };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 2000);
       return next;
@@ -6133,32 +8987,129 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
   const sections = [
     {
       title: "Profile Visibility",
+      icon: <User size={16} />,
       items: [
         { label: "Public Profile", desc: "Allow anyone to view your profile" },
         { label: "Show in Directory", desc: "Appear in the Street Profile directory" },
         { label: "Show Activity", desc: "Display recent activity on your profile" },
+        { label: "Show Portfolio on About", desc: "Show portfolio showcase on your About tab" },
       ],
     },
     {
       title: "Notifications",
+      icon: <Bell size={16} />,
       items: [
         { label: "New Followers", desc: "Get notified when someone follows you" },
         { label: "Messages", desc: "Receive notifications for new messages" },
         { label: "Job Inquiries", desc: "Get notified about new job offers" },
         { label: "Community Updates", desc: "Receive Street Voices community news" },
+        { label: "Calendar Reminders", desc: "Get reminders for upcoming events and bookings" },
+        { label: "Task Deadlines", desc: "Alerts when tasks are approaching their due date" },
+        { label: "Academy Progress", desc: "Updates on course progress and new content" },
+        { label: "Gallery Interactions", desc: "Likes, inquiries, and comments on your artwork" },
       ],
     },
     {
-      title: "Privacy",
+      title: "Privacy & Security",
+      icon: <Eye size={16} />,
       items: [
         { label: "Show Email", desc: "Display contact email on profile" },
         { label: "Allow Direct Messages", desc: "Let anyone send you messages" },
         { label: "Show Online Status", desc: "Display when you are online" },
+        { label: "Allow Profile Embedding", desc: "Allow your profile to be embedded on external sites" },
+      ],
+    },
+    {
+      title: "Messages & Communication",
+      icon: <MessageSquare size={16} />,
+      items: [
+        { label: "Read Receipts", desc: "Show when you've read messages" },
+        { label: "Message Previews", desc: "Show message previews in notifications" },
+        { label: "Auto-Reply When Busy", desc: "Automatically reply when your status is busy" },
+      ],
+    },
+    {
+      title: "Calendar & Bookings",
+      icon: <Calendar size={16} />,
+      items: [
+        { label: "Show Calendar Publicly", desc: "Let visitors see your availability" },
+        { label: "Allow Booking Requests", desc: "Enable others to request bookings with you" },
+        { label: "Weekly Digest", desc: "Receive a weekly summary of upcoming events" },
+        { label: "Sync Google Calendar", desc: "Sync events with your Google Calendar" },
+      ],
+    },
+    {
+      title: "Street Gallery",
+      icon: <Image size={16} />,
+      items: [
+        { label: "Gallery Visible", desc: "Make your gallery visible to visitors" },
+        { label: "Allow Inquiries", desc: "Let buyers inquire about your pieces" },
+        { label: "Show Sold Prices", desc: "Display prices of sold artwork for credibility" },
+        { label: "Enable Favorites", desc: "Allow visitors to favorite your artwork" },
+        { label: "Watermark Images", desc: "Add a watermark to gallery images for protection" },
+      ],
+    },
+    {
+      title: "Jobs & Opportunities",
+      icon: <Briefcase size={16} />,
+      items: [
+        { label: "Open to Opportunities", desc: "Signal to employers that you're available" },
+        { label: "Show on Job Board", desc: "Appear in job board recommendations" },
+        { label: "Job Expiry Reminders", desc: "Get reminded before saved jobs expire" },
+        { label: "Auto-Save Applications", desc: "Automatically save draft applications" },
+      ],
+    },
+    {
+      title: "Social Media",
+      icon: <Share2 size={16} />,
+      items: [
+        { label: "Cross-Post Updates", desc: "Share profile updates to connected platforms" },
+        { label: "Show Social Links", desc: "Display social media links on your profile" },
+        { label: "Auto-Share Gallery", desc: "Automatically share new gallery pieces to social" },
+      ],
+    },
+    {
+      title: "Academy & Learning",
+      icon: <BookOpen size={16} />,
+      items: [
+        { label: "Show Certifications", desc: "Display earned certifications on your profile" },
+        { label: "Learning Reminders", desc: "Get reminders to continue your courses" },
+        { label: "Share Progress", desc: "Show course progress publicly" },
+      ],
+    },
+    {
+      title: "Documents & Storage",
+      icon: <FileText size={16} />,
+      items: [
+        { label: "Auto-Organize Files", desc: "Automatically categorize uploaded documents" },
+        { label: "Storage Alerts", desc: "Get notified when storage is running low" },
+        { label: "Document Versioning", desc: "Keep version history of uploaded documents" },
+      ],
+    },
+    {
+      title: "News & Activity",
+      icon: <TrendingUp size={16} />,
+      items: [
+        { label: "Show News Feed", desc: "Display news and updates on your profile" },
+        { label: "Activity Log", desc: "Track and display your platform activity" },
+        { label: "Trending Alerts", desc: "Get notified about trending content in your niche" },
       ],
     },
   ];
 
   const isEnabled = (label: string) => settings[label] ?? false;
+
+  // Filter sections by search
+  const filteredSections = settingsSearch.trim()
+    ? sections.map((s) => ({
+        ...s,
+        items: s.items.filter(
+          (item) =>
+            item.label.toLowerCase().includes(settingsSearch.toLowerCase()) ||
+            item.desc.toLowerCase().includes(settingsSearch.toLowerCase())
+        ),
+      })).filter((s) => s.items.length > 0)
+    : sections;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -6174,9 +9125,57 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
           <CheckCircle2 size={16} /> Settings saved
         </div>
       )}
-      {sections.map((section, si) => (
-        <GlassCard key={si} title={section.title} colors={colors} isDark={isDark}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+
+      {/* Search bar */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "10px",
+        padding: "10px 16px", borderRadius: "12px",
+        background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+        border: `1px solid ${colors.border}`,
+      }}>
+        <Search size={16} color={colors.textSecondary} />
+        <input
+          type="text"
+          placeholder="Search settings..."
+          value={settingsSearch}
+          onChange={(e) => setSettingsSearch(e.target.value)}
+          style={{
+            flex: 1, background: "transparent", border: "none", outline: "none",
+            color: colors.text, fontSize: "14px",
+          }}
+        />
+        {settingsSearch && (
+          <button
+            onClick={() => setSettingsSearch("")}
+            style={{ background: "none", border: "none", cursor: "pointer", color: colors.textSecondary, padding: "2px" }}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      {filteredSections.length === 0 && (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: colors.textSecondary }}>
+          <Search size={32} style={{ opacity: 0.3, marginBottom: "12px" }} />
+          <div style={{ fontSize: "14px", fontWeight: 600 }}>No settings match "{settingsSearch}"</div>
+        </div>
+      )}
+
+      {filteredSections.map((section, si) => (
+        <GlassCard key={si} colors={colors} isDark={isDark}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "8px",
+              background: "rgba(234,179,8,0.12)", display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#eab308",
+            }}>
+              {section.icon}
+            </div>
+            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>
+              {section.title}
+            </h3>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             {section.items.map((item, ii) => (
               <div
                 key={ii}
@@ -6184,11 +9183,11 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "10px 0",
+                  padding: "12px 0",
                   borderBottom: ii < section.items.length - 1 ? `1px solid ${colors.border}` : "none",
                 }}
               >
-                <div>
+                <div style={{ flex: 1, marginRight: "16px" }}>
                   <div style={{ fontSize: "14px", fontWeight: 600, color: colors.text }}>{item.label}</div>
                   <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "2px" }}>{item.desc}</div>
                 </div>
@@ -6216,7 +9215,7 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
                       width: "20px",
                       height: "20px",
                       borderRadius: "50%",
-                      background: item.enabled ? "#000" : isDark ? "#666" : "#fff",
+                      background: isEnabled(item.label) ? "#000" : isDark ? "#666" : "#fff",
                       transition: "left 0.2s",
                       boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
                     }}
@@ -6227,6 +9226,42 @@ function TabSettings({ profile, colors, isDark }: { profile: StreetProfile; colo
           </div>
         </GlassCard>
       ))}
+
+      {/* Link to General Settings */}
+      <GlassCard colors={colors} isDark={isDark}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+          <div style={{
+            width: "32px", height: "32px", borderRadius: "8px",
+            background: "rgba(234,179,8,0.12)", display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#eab308",
+          }}>
+            <Settings size={16} />
+          </div>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>
+            General Settings
+          </h3>
+        </div>
+        <div style={{ fontSize: "13px", color: colors.textSecondary, marginBottom: "14px" }}>
+          Manage your account, chat preferences, speech, data, and more from the general settings panel.
+        </div>
+        <button
+          onClick={() => {
+            const event = new CustomEvent("open-librechat-settings");
+            window.dispatchEvent(event);
+          }}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            padding: "8px 18px", borderRadius: "10px", border: "none",
+            background: "#eab308", color: "#fff",
+            fontSize: "13px", fontWeight: 700, cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+        >
+          <Settings size={14} /> Open General Settings
+        </button>
+      </GlassCard>
     </div>
   );
 }

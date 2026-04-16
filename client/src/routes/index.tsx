@@ -36,6 +36,7 @@ const GroupsPage = lazy(() => import('~/components/streetbot/groups/GroupsPage')
 const GroupDetailPage = lazy(() => import('~/components/streetbot/groups/GroupDetailPage'));
 const NewsPage = lazy(() => import('~/components/streetbot/news/NewsPage'));
 const NewsEditorPage = lazy(() => import('~/components/streetbot/news/editor/EditorPage'));
+const NewsDashboardPage = lazy(() => import('~/components/streetbot/news/dashboard'));
 const DirectoryPage = lazy(() => import('~/components/streetbot/directory/DirectoryPage'));
 const ServiceDetailPage = lazy(() => import('~/components/streetbot/directory/ServiceDetailPage'));
 const JobsPage = lazy(() => import('~/components/streetbot/jobs/JobsPage'));
@@ -44,6 +45,9 @@ const EmployerDashboardPage = lazy(() => import('~/components/streetbot/jobs/Emp
 const CalendarPage = lazy(() => import('~/components/streetbot/calendar/CalendarPage'));
 const MessagesPage = lazy(() => import('~/components/streetbot/messages/MessagesPage'));
 const DocumentsPage = lazy(() => import('~/components/streetbot/documents/DocumentsPage'));
+const CaseManagementPage = lazy(
+  () => import('~/components/streetbot/case-management/CaseManagementPage'),
+);
 const AcademyPage = lazy(() => import('~/components/streetbot/academy/AcademyPage'));
 const AcademyCoursesPage = lazy(() => import('~/components/streetbot/academy/AcademyCoursesPage'));
 const AcademyCourseDetailPage = lazy(
@@ -268,6 +272,7 @@ export const router = createBrowserRouter(
             { path: 'creatives/:username/book', element: guardedSbPage('profile', BookingPage) },
             { path: 'groups', element: guardedSbPage('groups', GroupsPage) },
             { path: 'groups/:groupId', element: guardedSbPage('groups', GroupDetailPage) },
+            { path: 'news/dashboard', element: guardedSbPage('news', NewsDashboardPage) },
             { path: 'news/editor', element: guardedSbPage('news', NewsEditorPage) },
             { path: 'news/editor/:id', element: guardedSbPage('news', NewsEditorPage) },
             { path: 'news', element: guardedSbPage('news', NewsPage) },
@@ -311,6 +316,11 @@ export const router = createBrowserRouter(
                   { path: 'gallery/*', element: guardedSbPage('gallery', GalleryPage) },
                   { path: 'calendar', element: guardedSbPage('calendar', CalendarPage) },
                   { path: 'calendar/*', element: guardedSbPage('calendar', CalendarPage) },
+                  { path: 'case-management', element: guardedSbPage('case-management', CaseManagementPage) },
+                  {
+                    path: 'case-management/*',
+                    element: guardedSbPage('case-management', CaseManagementPage),
+                  },
                   { path: 'messages', element: guardedSbPage('messages', MessagesPage) },
                   { path: 'messages/*', element: guardedSbPage('messages', MessagesPage) },
                   { path: 'documents', element: guardedSbPage('documents', DocumentsPage) },

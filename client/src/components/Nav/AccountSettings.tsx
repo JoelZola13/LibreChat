@@ -1,4 +1,4 @@
-import { useState, memo, useRef } from 'react';
+import { useState, memo, useRef, useEffect } from 'react';
 import * as Select from '@ariakit/react/select';
 import { FileText, LogOut } from 'lucide-react';
 import { LinkIcon, GearIcon, DropdownMenuSeparator, Avatar } from '@librechat/client';
@@ -18,6 +18,13 @@ function AccountSettings() {
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const accountSettingsButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Listen for custom event from Street Profile settings to open general settings
+  useEffect(() => {
+    const handler = () => setShowSettings(true);
+    window.addEventListener("open-librechat-settings", handler);
+    return () => window.removeEventListener("open-librechat-settings", handler);
+  }, []);
 
   return (
     <Select.SelectProvider>

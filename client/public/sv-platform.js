@@ -23,7 +23,7 @@
   }
 
   var BASE = 'http://localhost:18790/shared/';
-  var VERSIONS = { 'unified-nav.js': 84, 'mission-control.js': 5, 'marketplace.js': 1 };
+  var VERSIONS = { 'unified-nav.js': 85, 'mission-control.js': 5, 'marketplace.js': 1 };
   var scripts = ['unified-nav.js', 'mission-control.js', 'marketplace.js'];
 
   scripts.forEach(function (name) {

@@ -282,18 +282,27 @@ export default function BookingPage() {
       });
   }, [username]);
 
+  const goBackToProfile = () => {
+    // Use browser back if we came from the profile, otherwise go to settings
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate(`/settings`);
+    }
+  };
+
   const goBack = () => {
     if (bookingConfirmed) {
-      navigate(`/creatives/${username}`);
+      goBackToProfile();
       return;
     }
     switch (step) {
       case "service":
-        navigate(`/creatives/${username}`);
+        goBackToProfile();
         break;
       case "datetime":
         if (initialServiceId) {
-          navigate(`/creatives/${username}`);
+          goBackToProfile();
         } else {
           setStep("service");
         }
@@ -432,7 +441,7 @@ export default function BookingPage() {
             </div>
             <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
               <button
-                onClick={() => navigate(`/creatives/${username}`)}
+                onClick={() => goBackToProfile()}
                 style={{
                   padding: "12px 28px",
                   borderRadius: "12px",

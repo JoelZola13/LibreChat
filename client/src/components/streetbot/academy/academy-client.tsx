@@ -263,9 +263,9 @@ export default function AcademyClient() {
   }, [activeEnrollments.length, user, userId]);
 
   const hasEnrollment = activeEnrollments.length > 0;
-  const dashboardPaddingLeft = isDesktop && hasEnrollment ? dashboardBasePaddingLeft : pagePaddingX;
-  const showDesktopAcademySidebar = isDashboardRoute && isDesktop && hasEnrollment;
-  const showOverlayAcademySidebar = isDashboardRoute && !isDesktop && hasEnrollment;
+  const dashboardPaddingLeft = isDesktop && isDashboardRoute ? dashboardBasePaddingLeft : pagePaddingX;
+  const showDesktopAcademySidebar = isDashboardRoute && isDesktop;
+  const showOverlayAcademySidebar = isDashboardRoute && !isDesktop;
 
   const enrollmentByCourseId = useMemo(
     () => Object.fromEntries(activeEnrollments.map((enrollment) => [enrollment.course_id, enrollment])),
@@ -473,7 +473,7 @@ export default function AcademyClient() {
 
   const navLinks = [
     { href: `${academyBasePath}`, label: "Home", icon: Compass },
-    { href: `${academyBasePath}/paths`, label: "Learning Paths", icon: Target },
+    { href: `${academyBasePath}/paths`, label: "Programs", icon: Target },
     { href: `${academyBasePath}/courses`, label: "Courses", icon: BookOpen },
     ...(hasEnrollment
       ? [
@@ -481,6 +481,30 @@ export default function AcademyClient() {
           { href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award },
         ]
       : []),
+  ];
+
+  const workshopFlyers = [
+    {
+      src: "/assets/academy-flyers/media-training-banner-apr2026.png",
+      alt: "Street Voices Academy media training workshops banner",
+      title: "Workshop Banner",
+      subtitle: "Media Training Workshops, April 8 to May 27, 2026",
+      wide: true,
+    },
+    {
+      src: "/assets/academy-flyers/media-training-front-apr2026.png",
+      alt: "Street Voices Academy media training workshops flyer front",
+      title: "Flyer Front",
+      subtitle: "Program overview and workshop topics",
+      wide: false,
+    },
+    {
+      src: "/assets/academy-flyers/media-training-back-apr2026.png",
+      alt: "Street Voices Academy media training workshops flyer back",
+      title: "Flyer Back",
+      subtitle: "Program details, schedule, and location",
+      wide: false,
+    },
   ];
 
   const backgroundOrbs = (
@@ -735,7 +759,7 @@ export default function AcademyClient() {
                     Enroll to unlock your dashboard
                   </h1>
                   <p className="mx-auto mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
-                    Start with a learning path or a course first, then your dashboard will open here.
+                    Start with a program or a course first, then your dashboard will open here.
                   </p>
                   <a
                     href={`${academyBasePath}/paths`}
@@ -794,7 +818,7 @@ export default function AcademyClient() {
                           className="mt-4 inline-flex items-center gap-2 text-sm font-semibold"
                           style={{ color: colors.accent }}
                         >
-                          {continueCourse ? "Continue Learning" : "Choose a Learning Path"}
+                          {continueCourse ? "Continue Learning" : "Choose a Program"}
                           <ArrowRight className="h-4 w-4" />
                         </a>
                       </div>
@@ -887,7 +911,7 @@ export default function AcademyClient() {
                       Current path
                     </p>
                     <h2 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
-                      {selectedDashboardPath?.path.title ?? "Your learning path"}
+                      {selectedDashboardPath?.path.title ?? "Your program"}
                     </h2>
                     <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
                       {selectedDashboardPath?.path.description ??
@@ -928,7 +952,7 @@ export default function AcademyClient() {
 
                       {selectedDashboardPathCourses.length === 0 && (
                         <div className="rounded-[22px] border p-5 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
-                          Your enrolled classes will appear here as part of your learning path.
+                          Your enrolled classes will appear here as part of your program.
                         </div>
                       )}
                     </div>
@@ -1001,7 +1025,7 @@ export default function AcademyClient() {
                     </p>
 
                     <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
-                      <span>{selectedDashboardPath?.path.title ?? "Learning path"}</span>
+                      <span>{selectedDashboardPath?.path.title ?? "Program"}</span>
                       <span>{selectedDashboardCourse?.duration || "Self-paced"}</span>
                       <span>{selectedDashboardSessions.length} live sessions</span>
                       <span>{selectedDashboardCourse?.instructor_name || selectedDashboardCourse?.instructor || "Street Voices Academy"}</span>
@@ -1248,7 +1272,7 @@ export default function AcademyClient() {
               </span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-400 md:text-xl">
-              Join practical learning paths and courses designed to help you build real skills without getting lost.
+              Join practical programs and courses designed to help you build real skills without getting lost.
             </p>
             <div className="mt-8">
               <a
@@ -1259,6 +1283,119 @@ export default function AcademyClient() {
                 Start Now
                 <ArrowRight className="h-5 w-5" />
               </a>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      <section
+        className="relative"
+        style={{
+          zIndex: 1,
+          paddingLeft: pagePaddingX,
+          paddingRight: pagePaddingX,
+          paddingBottom: "120px",
+        }}
+      >
+        <div className="mx-auto" style={{ maxWidth: `${contentMaxWidth}px` }}>
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="rounded-[32px] border p-6 md:p-8"
+            style={{
+              background: colors.cardBg,
+              borderColor: colors.border,
+              backdropFilter: "blur(24px)",
+              WebkitBackdropFilter: "blur(24px)",
+              boxShadow: colors.glassShadow,
+            }}
+          >
+            <div className="max-w-3xl">
+              <div
+                className="inline-flex items-center rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em]"
+                style={{
+                  background: "rgba(255, 214, 0, 0.12)",
+                  color: colors.accent,
+                  border: "1px solid rgba(255, 214, 0, 0.24)",
+                }}
+              >
+                Program Features
+              </div>
+              <h2 className="mt-5 text-3xl font-bold md:text-5xl" style={{ color: colors.text }}>
+                Program Features
+              </h2>
+              <p className="mt-4 max-w-2xl text-base md:text-lg" style={{ color: colors.textSecondary }}>
+                Explore the latest Street Voices Academy program flyers, workshop highlights, and media training materials.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-6">
+              {workshopFlyers
+                .filter((item) => item.wide)
+                .map((flyer) => (
+                  <a
+                    key={flyer.src}
+                    href={flyer.src}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group block overflow-hidden rounded-[28px] border transition-transform duration-300 hover:-translate-y-1"
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBgStrong,
+                      boxShadow: colors.glassShadow,
+                    }}
+                  >
+                    <div className="relative overflow-hidden">
+                      <img
+                        src={flyer.src}
+                        alt={flyer.alt}
+                        className="h-auto w-full transition-transform duration-500 group-hover:scale-[1.02]"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="flex justify-end p-5">
+                      <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: colors.accent }}>
+                        Open full image
+                        <ArrowRight className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </a>
+                ))}
+
+              <div className="grid gap-6 md:grid-cols-2">
+                {workshopFlyers
+                  .filter((item) => !item.wide)
+                  .map((flyer) => (
+                    <a
+                      key={flyer.src}
+                      href={flyer.src}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group block overflow-hidden rounded-[28px] border transition-transform duration-300 hover:-translate-y-1"
+                      style={{
+                        borderColor: colors.border,
+                        background: colors.cardBgStrong,
+                        boxShadow: colors.glassShadow,
+                      }}
+                    >
+                      <div className="relative overflow-hidden">
+                        <img
+                          src={flyer.src}
+                          alt={flyer.alt}
+                          className="aspect-[4/5] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="flex justify-end p-5">
+                        <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: colors.accent }}>
+                          Open full image
+                          <ArrowRight className="h-4 w-4" />
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+              </div>
             </div>
           </motion.div>
         </div>

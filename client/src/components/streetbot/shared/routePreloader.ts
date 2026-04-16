@@ -16,6 +16,7 @@ const routeChunks: Array<() => Promise<unknown>> = [
   () => import('~/components/streetbot/profile/ProfilePage'),
   () => import('~/components/streetbot/groups/GroupsPage'),
   () => import('~/components/streetbot/calendar/CalendarPage'),
+  () => import('~/components/streetbot/case-management/CaseManagementPage'),
   () => import('~/components/streetbot/messages/MessagesPage'),
   () => import('~/components/streetbot/forum/ForumPage'),
   () => import('~/components/streetbot/gallery/GalleryPage'),

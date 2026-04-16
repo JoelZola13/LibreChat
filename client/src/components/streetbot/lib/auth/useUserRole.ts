@@ -30,6 +30,7 @@ const ROLE_PAGES: Record<UserRole, Set<string>> = {
     'jobs',
     'learning',
     'calendar',
+    'case-management',
     'social-media',
     'tasks',
     'documents',

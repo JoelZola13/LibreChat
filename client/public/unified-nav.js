@@ -520,6 +520,7 @@
         { id: 'sv-sb-jobs', label: 'Job Board', icon: '/images/sidebar-icons/job-briefcase.svg', path: SB_BASE + '/jobs' },
         { id: 'sv-sb-academy', label: 'Academy', icon: '/images/sidebar-icons/lms-cap.svg', path: SB_BASE + '/academy' },
         { id: 'sv-sb-calendar', label: 'Calendar', icon: '/images/sidebar-icons/calendar-square.svg', path: SB_BASE + '/calendar' },
+        { id: 'sv-sb-case-management', label: 'Case Management', icon: '/images/sidebar-icons/case-management-suitcase.svg', path: SB_BASE + '/case-management' },
         { id: 'sv-sb-social', label: 'Social Media', icon: '/images/sidebar-icons/social-media.svg', path: SB_BASE + '/social-media' },
         { id: 'sv-sb-tasks', label: 'Tasks', icon: '/images/sidebar-icons/tasks-clipboard.svg', path: SB_BASE + '/tasks' },
         { id: 'sv-sb-documents', label: 'Documents', icon: '/images/sidebar-icons/documents.svg', path: SB_BASE + '/documents' },
@@ -697,6 +698,7 @@
       { id: 'sv-sa-jobs', label: 'Job Board', icon: '/images/sidebar-icons/job-briefcase.svg', path: '/jobs' },
       { id: 'sv-sa-academy', label: 'Academy', icon: '/images/sidebar-icons/lms-cap.svg', path: '/academy' },
       { id: 'sv-sa-calendar', label: 'Calendar', icon: '/images/sidebar-icons/calendar-square.svg', path: '/calendar' },
+      { id: 'sv-sa-case-management', label: 'Case Management', icon: '/images/sidebar-icons/case-management-suitcase.svg', path: '/case-management' },
       { id: 'sv-sa-social', label: 'Social Media', icon: '/images/sidebar-icons/social-media.svg', path: '/social-media' },
       { id: 'sv-sa-tasks', label: 'Tasks', icon: '/images/sidebar-icons/tasks-clipboard.svg', path: '/tasks' },
       { id: 'sv-sa-documents', label: 'Documents', icon: '/images/sidebar-icons/documents.svg', path: '/documents' },
@@ -944,72 +946,6 @@
 
   // Street Profile CTA is now built into ProfilePage.tsx — no JS injection needed
 
-  // ── Inject "Street Profile" into user account dropdown ──
-  // Poll for account dropdown and inject Street Profile link
-  (function() {
-    var SP_ID = 'sv-street-profile-menuitem';
-    setInterval(function() {
-      try {
-        var popover = document.querySelector('.account-settings-popover');
-        if (!popover) return;
-        if (popover.querySelector('#' + SP_ID)) return;
-
-        var items = popover.querySelectorAll('.select-item');
-        var settingsItem = null;
-        for (var i = 0; i < items.length; i++) {
-          if (items[i].textContent.trim().indexOf('Settings') !== -1) {
-            settingsItem = items[i];
-            break;
-          }
-        }
-        if (!settingsItem) return;
-
-        // Clone the Settings item and modify it
-        var spItem = settingsItem.cloneNode(true);
-        spItem.id = SP_ID;
-
-        // Clear cloned content and rebuild
-        spItem.innerHTML = '';
-
-        // Create icon using a temp div to parse SVG safely
-        var iconWrap = document.createElement('div');
-        iconWrap.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-md"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>';
-        spItem.appendChild(iconWrap.firstChild);
-
-        var label = document.createElement('span');
-        label.textContent = 'Street Profile';
-        spItem.appendChild(label);
-
-        // Make it a clickable link to user's own street profile
-        spItem.style.cursor = 'pointer';
-        spItem.onclick = function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          // Get the user's email from the popover header
-          var emailEl = popover.querySelector('[role="note"]');
-          var email = emailEl ? emailEl.textContent.trim() : '';
-          if (email && email.indexOf('@') !== -1) {
-            fetch('/social/api/street-profile/lookup?email=' + encodeURIComponent(email))
-              .then(function(r) { return r.ok ? r.json() : null; })
-              .then(function(data) {
-                if (data && data.found && data.username) {
-                  window.location.href = '/social/street-profile/' + data.username;
-                } else {
-                  window.location.href = '/social/signup';
-                }
-              })
-              .catch(function() {
-                window.location.href = '/social/signup';
-              });
-          } else {
-            window.location.href = '/social/signup';
-          }
-        };
-
-        settingsItem.parentNode.insertBefore(spItem, settingsItem);
-      } catch(e) {
-        // silent
-      }
-    }, 300);
-  })();
+  // ── "Street Profile" dropdown item removed ──
+  // Avatar click now navigates directly to Street Profile (handled by sp-dropdown.js)
 })();

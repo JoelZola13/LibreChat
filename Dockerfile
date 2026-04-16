@@ -42,7 +42,7 @@ RUN \
 COPY --chown=node:node . .
 
 RUN \
-    # React client build with configurable memory
+    # React client build with configurable memory (bust: 20260401b)
     NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" npm run frontend; \
     npm prune --production; \
     npm cache clean --force

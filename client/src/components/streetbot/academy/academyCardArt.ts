@@ -374,7 +374,7 @@ export function getLearningPathCardArt(path: PathLike): CardVisual {
   return {
     src: getPhotoForKind(kind, searchText),
     fallbackSrc,
-    eyebrow: path.level || "Learning Path",
+    eyebrow: path.level || "Program",
     accent: path.color || palettes[kind].accent,
   };
 }

@@ -1,5 +1,7 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+
+const SubmitArtPage = lazy(() => import("./SubmitArtPage"));
 import {
   Filter,
   Search,
@@ -2545,6 +2547,7 @@ export default function GalleryPage() {
 
   // Check if we're on an artwork detail page
   const artworkMatch = location.pathname.match(/\/gallery\/artwork\/(.+)/);
+  const isUploadPage = location.pathname === "/gallery/upload";
 
   // Artworks state
   const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -2829,6 +2832,15 @@ export default function GalleryPage() {
           navigate('/gallery');
         }}
       />
+    );
+  }
+
+  // Render full-page upload if on /gallery/upload
+  if (isUploadPage) {
+    return (
+      <Suspense fallback={<div style={{ padding: 40, textAlign: "center" }}>Loading...</div>}>
+        <SubmitArtPage />
+      </Suspense>
     );
   }
 
@@ -3760,6 +3772,7 @@ export default function GalleryPage() {
           favoriteIds={favoriteIds}
         />
       )}
+
     </div>
   );
 }
