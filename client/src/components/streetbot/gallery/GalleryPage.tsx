@@ -2801,6 +2801,11 @@ export default function GalleryPage() {
     return <ArtworkDetailView artworkId={artworkMatch[1]} onBack={() => navigate('/gallery')} onSelectTag={(tag) => { setSelectedTags([tag]); navigate('/gallery'); }} />;
   }
 
+  // Upload page sub-route (already declared earlier in the function)
+  if (isUploadPage) {
+    return <UploadArtView onBack={() => navigate('/gallery')} />;
+  }
+
   // Saved collections page sub-route
   const isSavedPage = location.pathname === '/gallery/saved';
   if (isSavedPage) {
