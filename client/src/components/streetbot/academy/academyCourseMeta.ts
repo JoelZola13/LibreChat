@@ -49,6 +49,10 @@ export function getCourseStartDateFromTags(tags?: string[] | null) {
   return getTaggedLines(tags, 'start_date:')[0] ?? null;
 }
 
+export function getCourseStartMonthFromTags(tags?: string[] | null) {
+  return getTaggedLines(tags, 'start_month:')[0] ?? null;
+}
+
 export function getCourseMeetingDaysFromTags(tags?: string[] | null) {
   return getTaggedLines(tags, 'meeting_day:');
 }
@@ -146,7 +150,7 @@ export function getCourseCohortMeta(courseId?: string | null): AcademyCourseCoho
   const weeks = weekOptions[seed % weekOptions.length];
 
   return {
-    name: 'Fall Cohort',
+    name: '2026 Cohort',
     startLabel: 'September 14th, 2026',
     enrollmentDeadlineLabel: 'Aug 30th, 2026',
     weeks,

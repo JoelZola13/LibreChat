@@ -54,6 +54,20 @@ type ScheduleItem = {
 };
 
 const COURSE_WEEKDAY_OPTIONS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
+const COURSE_MONTH_OPTIONS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
 
 function getInstructorTab(pathname: string): InstructorTab {
   if (pathname.endsWith("/certificate-generator")) return "certificate-generator";
@@ -93,6 +107,7 @@ export default function AcademyInstructorPage() {
   const [genOutcomes, setGenOutcomes] = useState("");
   const [genDelivery, setGenDelivery] = useState("Online and In person");
   const [genStartDate, setGenStartDate] = useState("");
+  const [genStartMonth, setGenStartMonth] = useState("");
   const [genMeetingDays, setGenMeetingDays] = useState<string[]>([]);
   const [genScheduleNotes, setGenScheduleNotes] = useState("");
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
@@ -193,6 +208,7 @@ export default function AcademyInstructorPage() {
     setGenOutcomes("");
     setGenDelivery("Online and In person");
     setGenStartDate("");
+    setGenStartMonth("");
     setGenMeetingDays([]);
     setGenScheduleNotes("");
   }, []);
@@ -209,6 +225,7 @@ export default function AcademyInstructorPage() {
       const outcomeTags = splitTextareaLines(genOutcomes).map((item) => `outcome:${item}`);
       const deliveryTags = genDelivery.trim() ? [`delivery:${genDelivery.trim()}`] : [];
       const startDateTags = genStartDate.trim() ? [`start_date:${genStartDate.trim()}`] : [];
+      const startMonthTags = genStartMonth.trim() ? [`start_month:${genStartMonth.trim()}`] : [];
       const meetingDayTags = genMeetingDays.map((day) => `meeting_day:${day}`);
       const scheduleNoteTags = normalizeScheduleNotes(genScheduleNotes)
         ? [`schedule_notes:${normalizeScheduleNotes(genScheduleNotes)}`]
@@ -232,6 +249,7 @@ export default function AcademyInstructorPage() {
           "ai-generated",
           ...deliveryTags,
           ...startDateTags,
+          ...startMonthTags,
           ...meetingDayTags,
           ...scheduleNoteTags,
           ...requirementTags,
@@ -280,6 +298,7 @@ export default function AcademyInstructorPage() {
     setGenOutcomes(tagSections.outcomes.join("\n"));
     setGenDelivery(tagSections.delivery);
     setGenStartDate(tagSections.startDate);
+    setGenStartMonth(tagSections.startMonth);
     setGenMeetingDays(tagSections.meetingDays);
     setGenScheduleNotes(tagSections.scheduleNotes);
 
@@ -1016,7 +1035,7 @@ export default function AcademyInstructorPage() {
             </select>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-[0.9fr,1.1fr]">
+          <div className="grid gap-4 md:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
                 Start Date
@@ -1027,6 +1046,19 @@ export default function AcademyInstructorPage() {
                 onChange={(e) => setGenStartDate(e.target.value)}
                 style={inputStyle(colors, isDark)}
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                Start Month
+              </label>
+              <select value={genStartMonth} onChange={(e) => setGenStartMonth(e.target.value)} style={inputStyle(colors, isDark)}>
+                <option value="">Select a month</option>
+                {COURSE_MONTH_OPTIONS.map((month) => (
+                  <option key={month} value={month}>
+                    {month}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium" style={{ color: colors.textSecondary }}>
@@ -1990,6 +2022,7 @@ function parseCourseTags(tags?: string[] | null) {
     outcomes: findByPrefix("outcome:"),
     delivery: findByPrefix("delivery:")[0] || "Online and In person",
     startDate: findByPrefix("start_date:")[0] || "",
+    startMonth: findByPrefix("start_month:")[0] || "",
     meetingDays: findByPrefix("meeting_day:"),
     scheduleNotes: findByPrefix("schedule_notes:")[0] || "",
   };
@@ -2017,6 +2050,7 @@ function isManagedCourseTag(tag: string) {
     "requirement:",
     "outcome:",
     "start_date:",
+    "start_month:",
     "meeting_day:",
     "schedule_notes:",
   ].some((prefix) => normalized.startsWith(prefix));

@@ -172,14 +172,14 @@ export default function AcademySavedPage() {
               return (
                 <article
                   key={summary.path.slug}
-                  className="rounded-[26px] border p-6"
+                  className="group rounded-[26px] border p-6 transition-transform duration-300 hover:-translate-y-2"
                   style={{ borderColor: colors.border, background: colors.cardBgStrong }}
                 >
                   <div className="relative mb-5 overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border }}>
                     <img
                       src={visual.src}
                       alt={summary.path.title}
-                      className="h-[210px] w-full object-cover"
+                      className="h-[210px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       onError={(event) => {
                         if (event.currentTarget.dataset.fallbackApplied === "true") {
                           return;
@@ -271,14 +271,14 @@ export default function AcademySavedPage() {
               return (
                 <article
                   key={course.id}
-                  className="rounded-[26px] border p-6"
+                  className="group rounded-[26px] border p-6 transition-transform duration-300 hover:-translate-y-2"
                   style={{ borderColor: colors.border, background: colors.cardBgStrong }}
                 >
                   <div className="relative mb-5 overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border }}>
                     <img
                       src={visual.src}
                       alt={course.title}
-                      className="h-[210px] w-full object-cover"
+                      className="h-[210px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       onError={(event) => {
                         if (event.currentTarget.dataset.fallbackApplied === "true") {
                           return;

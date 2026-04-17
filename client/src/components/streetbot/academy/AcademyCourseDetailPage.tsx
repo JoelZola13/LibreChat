@@ -13,6 +13,7 @@ import {
   getCourseMeetingDaysFromTags,
   getCourseScheduleNotesFromTags,
   getCourseStartDateFromTags,
+  getCourseStartMonthFromTags,
 } from "./academyCourseMeta";
 
 type Course = {
@@ -172,6 +173,7 @@ export default function AcademyCourseDetailPage() {
       : [];
   }, [course, courseDuration, deliveryMode, modules]);
   const courseStartDate = useMemo(() => getCourseStartDateFromTags(course?.tags), [course?.tags]);
+  const courseStartMonth = useMemo(() => getCourseStartMonthFromTags(course?.tags), [course?.tags]);
   const courseMeetingDays = useMemo(() => getCourseMeetingDaysFromTags(course?.tags), [course?.tags]);
   const courseScheduleNotes = useMemo(() => getCourseScheduleNotesFromTags(course?.tags), [course?.tags]);
   const formattedCourseStartDate = useMemo(() => {
@@ -190,7 +192,7 @@ export default function AcademyCourseDetailPage() {
       day: "numeric",
     });
   }, [courseStartDate]);
-  const hasScheduleMeta = Boolean(formattedCourseStartDate || courseMeetingDays.length > 0 || courseScheduleNotes);
+  const hasScheduleMeta = Boolean(courseStartMonth || formattedCourseStartDate || courseMeetingDays.length > 0 || courseScheduleNotes);
 
   async function handleUnenroll() {
     if (!enrollment?.id) {
@@ -342,6 +344,17 @@ export default function AcademyCourseDetailPage() {
               <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Course Schedule</h2>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
+              {courseStartMonth && (
+                <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+                  <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                    Start Month
+                  </p>
+                  <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
+                    {courseStartMonth}
+                  </p>
+                </div>
+              )}
+
               {formattedCourseStartDate && (
                 <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
                   <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
@@ -462,7 +475,7 @@ export default function AcademyCourseDetailPage() {
               className="mt-5 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
               style={{ background: "#8B5CF6", color: "#fff", border: "none" }}
             >
-              {enrollment ? "Open Dashboard" : "Join Fall Cohort"}
+              {enrollment ? "Open Dashboard" : "Join 2026 Cohort"}
               <ChevronRight className="h-4 w-4" />
             </a>
           </div>

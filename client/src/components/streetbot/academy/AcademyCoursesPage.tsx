@@ -221,14 +221,14 @@ export default function AcademyCoursesPage() {
               return (
                 <article
                   key={course.id}
-                  className="rounded-[26px] border p-6"
+                  className="group rounded-[26px] border p-6 transition-transform duration-300 hover:-translate-y-2"
                   style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}
                 >
                   <div className="relative mb-5 overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border }}>
                     <img
                       src={visual.src}
                       alt={course.title}
-                      className="h-[220px] w-full object-cover"
+                      className="h-[220px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       onError={(event) => {
                         if (event.currentTarget.dataset.fallbackApplied === "true") {
                           return;
