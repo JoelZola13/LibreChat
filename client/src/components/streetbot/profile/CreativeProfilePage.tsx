@@ -262,6 +262,8 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [editingName, setEditingName] = useState(false);
   const [customName, setCustomName] = useState(profile?.display_name || "");
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [customUsername, setCustomUsername] = useState(profile?.username || "street_user");
   const [editingRoles, setEditingRoles] = useState(false);
   const [customRoles, setCustomRoles] = useState<string[]>(profile?.primary_roles || []);
   const [newRoleInput, setNewRoleInput] = useState("");
@@ -988,16 +990,78 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                   </div>
                 </div>
 
-                {/* Username */}
-                <p
-                  style={{
-                    fontSize: "16px",
-                    color: colors.textSecondary,
-                    marginBottom: "12px",
-                  }}
-                >
-                  @{profile.username}
-                </p>
+                {/* Username — editable */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  {editingUsername ? (
+                    <>
+                      <span style={{ fontSize: "16px", color: colors.textSecondary }}>@</span>
+                      <input
+                        autoFocus
+                        value={customUsername}
+                        onChange={(e) => setCustomUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 30))}
+                        onKeyDown={(e) => { if (e.key === "Enter") setEditingUsername(false); if (e.key === "Escape") { setCustomUsername(profile?.username || "street_user"); setEditingUsername(false); } }}
+                        placeholder="username"
+                        style={{
+                          fontSize: "16px",
+                          padding: "4px 10px",
+                          borderRadius: "6px",
+                          background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                          border: `1px solid ${colors.border}`,
+                          color: colors.textSecondary,
+                          outline: "none",
+                          minWidth: "120px",
+                        }}
+                      />
+                      <button
+                        onClick={() => setEditingUsername(false)}
+                        style={{
+                          padding: "4px 10px", borderRadius: "6px",
+                          background: colors.accent, border: "none",
+                          color: "#000", fontSize: "11px", fontWeight: 700, cursor: "pointer",
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => { setCustomUsername(profile?.username || "street_user"); setEditingUsername(false); }}
+                        style={{
+                          padding: "4px 10px", borderRadius: "6px",
+                          background: "transparent", border: `1px solid ${colors.border}`,
+                          color: colors.textSecondary, fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p
+                        style={{
+                          fontSize: "16px",
+                          color: colors.textSecondary,
+                          margin: 0,
+                        }}
+                      >
+                        @{customUsername}
+                      </p>
+                      <button
+                        onClick={() => setEditingUsername(true)}
+                        title="Edit username"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: "4px",
+                          padding: "3px 8px", borderRadius: "6px",
+                          background: "transparent", border: `1px solid ${colors.border}`,
+                          color: colors.textSecondary, fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                          transition: "all 0.2s",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+                      >
+                        <Pencil size={10} /> Edit
+                      </button>
+                    </>
+                  )}
+                </div>
 
                 {/* Tagline */}
                 {profile.tagline && (
@@ -3108,6 +3172,15 @@ function TabAbout({
   const [uploadForm, setUploadForm] = useState({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" });
   const [uploadPreviews, setUploadPreviews] = useState<string[]>([]);
   const [uploadFileName, setUploadFileName] = useState("");
+  // Drafts — autosaved portfolio piece in-progress
+  const DRAFTS_KEY = "sv_portfolio_drafts";
+  const CURRENT_DRAFT_KEY = "sv_portfolio_current_draft";
+  const [drafts, setDrafts] = useState<Array<{ id: string; form: any; previews: string[]; coverIdx: number; updatedAt: number }>>(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFTS_KEY) || "[]"); } catch { return []; }
+  });
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  const [showDraftsPanel, setShowDraftsPanel] = useState(false);
   const [customBio, setCustomBio] = useState(profile?.bio || "");
   const [editingBio, setEditingBio] = useState(false);
   const [strengthOpen, setStrengthOpen] = useState(false);
@@ -3400,6 +3473,76 @@ function TabAbout({
     setPortfolioWorks((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Persist drafts to localStorage whenever they change
+  useEffect(() => {
+    try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); } catch {}
+  }, [drafts]);
+
+  // Autosave the current upload form as a draft (debounced) when the modal is open
+  useEffect(() => {
+    if (!showUploadModal) return;
+    if (editingPieceIdx !== null) return; // Only autosave NEW pieces, not edits
+    // Don't save totally empty drafts
+    const hasContent =
+      uploadForm.title.trim() ||
+      uploadForm.description.trim() ||
+      uploadForm.category.trim() ||
+      uploadForm.tools.trim() ||
+      uploadPreviews.length > 0;
+    if (!hasContent) return;
+    const timer = setTimeout(() => {
+      const id = currentDraftId || `draft-${Date.now()}`;
+      if (!currentDraftId) setCurrentDraftId(id);
+      setDrafts((prev) => {
+        const others = prev.filter((d) => d.id !== id);
+        return [
+          { id, form: { ...uploadForm }, previews: [...uploadPreviews], coverIdx: 0, updatedAt: Date.now() },
+          ...others,
+        ];
+      });
+      setDraftSavedAt(Date.now());
+    }, 1000); // debounce 1s
+    return () => clearTimeout(timer);
+  }, [uploadForm, uploadPreviews, showUploadModal, editingPieceIdx, currentDraftId]);
+
+  const openNewPieceModal = () => {
+    setEditingPieceIdx(null);
+    setUploadForm({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" });
+    setUploadPreviews([]);
+    setUploadFileName("");
+    setCurrentDraftId(null);
+    setDraftSavedAt(null);
+    setShowUploadModal(true);
+  };
+
+  const handleResumeDraft = (draftId: string) => {
+    const d = drafts.find((x) => x.id === draftId);
+    if (!d) return;
+    setEditingPieceIdx(null);
+    setUploadForm({ ...d.form });
+    setUploadPreviews([...d.previews]);
+    setUploadFileName("");
+    setCurrentDraftId(d.id);
+    setDraftSavedAt(d.updatedAt);
+    setShowDraftsPanel(false);
+    setShowUploadModal(true);
+  };
+
+  const handleDeleteDraft = (draftId: string) => {
+    setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+    if (currentDraftId === draftId) setCurrentDraftId(null);
+  };
+
+  // Wrap handleSavePiece to clear current draft after publishing
+  const handleSavePieceWithDraftClear = () => {
+    handleSavePiece();
+    if (currentDraftId) {
+      setDrafts((prev) => prev.filter((d) => d.id !== currentDraftId));
+      setCurrentDraftId(null);
+      setDraftSavedAt(null);
+    }
+  };
+
   return (
     <div
       style={{
@@ -3545,25 +3688,45 @@ function TabAbout({
 
         {/* Portfolio Section — Hero Showcase or Full View */}
         <GlassCard colors={colors} isDark={isDark}>
-          {/* Header row: title + add button inline */}
+          {/* Header row: title + add/drafts buttons inline */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 16px 0" }}>
             <h3 style={{ fontSize: "16px", fontWeight: 700, color: colors.text, margin: 0 }}>Portfolio</h3>
             {isOwner && (
-              <button
-                onClick={() => { setEditingPieceIdx(null); setUploadForm({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" }); setUploadPreviews([]); setUploadFileName(""); setShowUploadModal(true); }}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: "5px",
-                  padding: "6px 14px", borderRadius: "8px",
-                  background: "transparent", color: colors.textSecondary,
-                  border: `1px solid ${colors.border}`,
-                  fontSize: "12px", fontWeight: 600, cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
-              >
-                <Plus size={13} /> Add Work
-              </button>
+              <div style={{ display: "flex", gap: "6px" }}>
+                {drafts.length > 0 && (
+                  <button
+                    onClick={() => setShowDraftsPanel(true)}
+                    title="View saved drafts"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "5px",
+                      padding: "6px 12px", borderRadius: "8px",
+                      background: "transparent", color: colors.textSecondary,
+                      border: `1px solid ${colors.border}`,
+                      fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+                  >
+                    <FileText size={13} /> Drafts ({drafts.length})
+                  </button>
+                )}
+                <button
+                  onClick={openNewPieceModal}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "5px",
+                    padding: "6px 14px", borderRadius: "8px",
+                    background: "transparent", color: colors.textSecondary,
+                    border: `1px solid ${colors.border}`,
+                    fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+                >
+                  <Plus size={13} /> Add Work
+                </button>
+              </div>
             )}
           </div>
           <div
@@ -3679,7 +3842,7 @@ function TabAbout({
             {/* Dashed "Add" card — owner only, shown at end of visible grid */}
             {isOwner && (
               <div
-                onClick={() => { setEditingPieceIdx(null); setUploadForm({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" }); setUploadPreviews([]); setUploadFileName(""); setShowUploadModal(true); }}
+                onClick={openNewPieceModal}
                 style={{
                   borderRadius: "14px",
                   border: `2px dashed ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"}`,
@@ -3727,6 +3890,125 @@ function TabAbout({
           )}
         </GlassCard>
 
+        {/* Drafts Panel Modal */}
+        {showDraftsPanel && (
+          <div
+            onClick={() => setShowDraftsPanel(false)}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 10000,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: isDark ? "rgba(20,20,30,0.98)" : "#fff",
+                borderRadius: "16px", padding: "28px",
+                width: "90%", maxWidth: "560px", maxHeight: "85vh", overflowY: "auto",
+                border: `1px solid ${colors.border}`,
+                boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: colors.text }}>
+                    Saved Drafts
+                  </h3>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: colors.textSecondary }}>
+                    Your in-progress work is saved automatically
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDraftsPanel(false)}
+                  style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {drafts.length === 0 ? (
+                <div style={{
+                  padding: "40px 20px", textAlign: "center",
+                  border: `2px dashed ${colors.border}`, borderRadius: "12px",
+                }}>
+                  <FileText size={32} color={colors.textSecondary} style={{ opacity: 0.4 }} />
+                  <p style={{ marginTop: "12px", fontSize: "13px", color: colors.textSecondary }}>
+                    No drafts yet. Start adding a piece and your progress will be saved here.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {drafts.sort((a, b) => b.updatedAt - a.updatedAt).map((d) => (
+                    <div
+                      key={d.id}
+                      style={{
+                        display: "flex", gap: "12px", padding: "12px",
+                        borderRadius: "10px", border: `1px solid ${colors.border}`,
+                        background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                    >
+                      {/* Thumbnail */}
+                      <div style={{
+                        width: "70px", height: "70px", borderRadius: "8px", overflow: "hidden", flexShrink: 0,
+                        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {d.previews && d.previews.length > 0 ? (
+                          <img src={d.previews[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : (
+                          <Image size={22} color={colors.textSecondary} />
+                        )}
+                      </div>
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: colors.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {d.form?.title?.trim() || "Untitled draft"}
+                        </div>
+                        <div style={{ fontSize: "11px", color: colors.textSecondary, marginTop: "3px" }}>
+                          {d.previews?.length || 0} image{(d.previews?.length || 0) !== 1 ? "s" : ""}
+                          {d.form?.category ? ` · ${d.form.category}` : ""}
+                        </div>
+                        <div style={{ fontSize: "11px", color: colors.textSecondary, opacity: 0.7, marginTop: "2px" }}>
+                          Last edited {new Date(d.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })} at {new Date(d.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                      </div>
+                      {/* Actions */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleResumeDraft(d.id)}
+                          style={{
+                            padding: "5px 12px", borderRadius: "6px",
+                            background: colors.accent, border: "none",
+                            color: "#000", fontSize: "11px", fontWeight: 700, cursor: "pointer",
+                          }}
+                        >
+                          Resume
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDraft(d.id)}
+                          title="Delete draft"
+                          style={{
+                            padding: "5px 12px", borderRadius: "6px",
+                            background: "transparent", border: `1px solid ${colors.border}`,
+                            color: colors.textSecondary, fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Upload / Edit Portfolio Piece Modal */}
         {showUploadModal && (
           <div
@@ -3749,10 +4031,18 @@ function TabAbout({
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: colors.text }}>
-                  {editingPieceIdx !== null ? "Edit Portfolio Piece" : "Add Portfolio Piece"}
-                </h3>
-                <button onClick={() => { setShowUploadModal(false); setEditingPieceIdx(null); }} style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: colors.text }}>
+                    {editingPieceIdx !== null ? "Edit Portfolio Piece" : "Add Portfolio Piece"}
+                  </h3>
+                  {editingPieceIdx === null && draftSavedAt && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px", marginTop: "4px", fontSize: "11px", color: "#10b981" }}>
+                      <CheckCircle2 size={11} />
+                      <span>Draft saved {new Date(draftSavedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => { setShowUploadModal(false); setEditingPieceIdx(null); }} title="Close (your draft is auto-saved)" style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer" }}>
                   <X size={20} />
                 </button>
               </div>
@@ -3895,7 +4185,7 @@ function TabAbout({
 
               {/* Save Button */}
               <button
-                onClick={handleSavePiece}
+                onClick={handleSavePieceWithDraftClear}
                 disabled={!uploadForm.title.trim()}
                 style={{
                   width: "100%", padding: "12px", borderRadius: "12px",
@@ -8697,48 +8987,67 @@ function TabAcademy({
 function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [notifications, setNotifications] = useState([
     {
       id: 1, title: "Welcome to Street Voices", body: "Your universal notification center is ready.",
+      details: "Your Street Profile is set up and connected to all your tools — Messages, Tasks, Calendar, Jobs, and the Gallery. You'll receive notifications here whenever something needs your attention. You can filter by source, mark items read, and adjust which notification types you want to receive in Settings.",
       source: "SYSTEM", icon: <Send size={20} />, iconColor: "#ef4444", iconBg: "rgba(239,68,68,0.15)",
       time: "just now", link: "/", read: false,
     },
     {
       id: 2, title: "New message", body: "You have unread messages waiting for you.",
+      details: "You have 3 unread conversations. Maya Chen sent you a message about a potential collaboration on a community mural project in Kensington Market. Derin Falana is following up on the gallery showing for next month. The Urban Kitchen team also reached out with feedback on the proposal you sent.",
       source: "MESSAGES", icon: <MessageCircle size={20} />, iconColor: "#22c55e", iconBg: "rgba(34,197,94,0.15)",
       time: "just now", link: "/messages", read: false,
     },
     {
       id: 3, title: "New follower", body: "Maya Chen started following you.",
+      details: "Maya Chen, a curator at the Art Gallery of Ontario's First Thursday program, just followed your profile. She has previously curated shows for emerging street artists in Toronto and may be interested in your portfolio. You may want to message her to introduce yourself.",
       source: "SOCIAL", icon: <Users size={20} />, iconColor: "#3b82f6", iconBg: "rgba(59,130,246,0.15)",
       time: "2 hours ago", link: "/profile", read: false,
     },
     {
       id: 4, title: "Job application viewed", body: "Black Voices Media Collective viewed your application for Youth Media Producer.",
+      details: "Your application for the Youth Media Producer position at Black Voices Media Collective was viewed by the hiring team 3 times in the past 2 hours. The role involves leading creative direction for youth-focused media content and offers $65k–$80k. The team typically responds to shortlisted applicants within 1 week. Make sure your portfolio is polished and that any work samples linked from your application are accessible.",
       source: "JOBS", icon: <Briefcase size={20} />, iconColor: "#f59e0b", iconBg: "rgba(245,158,11,0.15)",
       time: "5 hours ago", link: "/jobs", read: false,
     },
     {
       id: 5, title: "Commission deadline approaching", body: "Your mural commission for The Urban Kitchen is due in 7 days.",
+      details: "The 30-foot exterior mural commission for The Urban Kitchen at 245 Queen St W is scheduled for completion by next Wednesday. The client has confirmed the final color palette and has approved the mock-up. Materials should already be on-site. Final payment of $4,500 is due upon completion. Don't forget to schedule the installation photoshoot for your portfolio.",
       source: "TASKS", icon: <Clock size={20} />, iconColor: "#ef4444", iconBg: "rgba(239,68,68,0.15)",
       time: "1 day ago", link: "/tasks", read: true,
     },
     {
       id: 6, title: "Gallery artwork liked", body: "Diego Alvarez loved your piece 'Chromatic Rebellion'.",
+      details: "Diego Alvarez, a fellow street artist with 12k followers, loved your piece 'Chromatic Rebellion'. This brings the total appreciations on this work to 156. Diego has previously shared your work on his Instagram, which led to a noticeable spike in profile views. Consider following him back if you haven't already.",
       source: "GALLERY", icon: <Heart size={20} />, iconColor: "#ec4899", iconBg: "rgba(236,72,153,0.15)",
       time: "1 day ago", link: "/gallery", read: true,
     },
     {
       id: 7, title: "Event reminder", body: "Street Art Festival — Panel Discussion starts tomorrow at 1:00 PM.",
+      details: "The Street Art Festival Panel Discussion is happening tomorrow at 1:00 PM at the Drake Hotel (1150 Queen St W). You're confirmed as a panelist alongside 3 other Toronto-based artists. The session will be live-streamed and recorded. Suggested topics include the future of public art, navigating commissions, and building a sustainable practice. Arrive by 12:30 PM for sound check.",
       source: "CALENDAR", icon: <Calendar size={20} />, iconColor: "#8b5cf6", iconBg: "rgba(139,92,246,0.15)",
       time: "2 days ago", link: "/calendar", read: true,
     },
     {
       id: 8, title: "New comment on portfolio", body: "Suki Park commented on 'Voices of the Underground': Amazing depth in this piece!",
+      details: "Suki Park left a full comment on your portfolio piece 'Voices of the Underground': \"Amazing depth in this piece! The way you layered the portraits with the architectural elements really captures something special about Toronto's underground music scene. I'd love to chat about possibly featuring this work in an upcoming print zine I'm putting together.\" You can reply directly from your portfolio page.",
       source: "SOCIAL", icon: <MessageSquare size={20} />, iconColor: "#06b6d4", iconBg: "rgba(6,182,212,0.15)",
       time: "3 days ago", link: "/portfolio", read: true,
     },
   ]);
+
+  const toggleExpand = (id: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    // Auto-mark as read when expanded
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+  };
 
   const markRead = (id: number) => {
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
@@ -8844,62 +9153,124 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
             </div>
           </GlassCard>
         ) : (
-          filtered.map((notif) => (
-            <div
-              key={notif.id}
-              style={{
-                display: "flex", alignItems: "center", gap: "16px", padding: "18px 20px",
-                borderRadius: "14px",
-                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.8)",
-                border: `1px solid ${notif.read ? (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)") : `${colors.accent}44`}`,
-                transition: "all 0.2s",
-              }}
-            >
-              {/* Icon */}
-              <div style={{
-                width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0,
-                background: notif.iconBg, display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {(() => { const el = notif.icon; return <span style={{ color: notif.iconColor }}>{el}</span>; })()}
-              </div>
-
-              {/* Content */}
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{notif.title}</span>
-                  <span style={{
-                    fontSize: "10px", padding: "3px 10px", borderRadius: "6px", fontWeight: 700,
-                    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-                    color: colors.textSecondary, letterSpacing: "0.5px",
+          filtered.map((notif) => {
+            const isExpanded = expanded.has(notif.id);
+            return (
+              <div
+                key={notif.id}
+                onClick={() => toggleExpand(notif.id)}
+                style={{
+                  display: "flex", flexDirection: "column", padding: "18px 20px",
+                  borderRadius: "14px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.8)",
+                  border: `1px solid ${notif.read ? (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)") : `${colors.accent}44`}`,
+                  transition: "all 0.2s",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent + "88"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = notif.read ? (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)") : `${colors.accent}44`; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                  {/* Icon */}
+                  <div style={{
+                    width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0,
+                    background: notif.iconBg, display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    {notif.source}
-                  </span>
-                  {!notif.read && (
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: colors.accent }} />
-                  )}
-                </div>
-                <p style={{ margin: 0, fontSize: "14px", color: colors.textSecondary, lineHeight: 1.4 }}>{notif.body}</p>
-                <div style={{ fontSize: "12px", color: "rgba(128,128,128,0.6)", marginTop: "6px" }}>
-                  {notif.time} · opens {notif.link}
-                </div>
-              </div>
+                    {(() => { const el = notif.icon; return <span style={{ color: notif.iconColor }}>{el}</span>; })()}
+                  </div>
 
-              {/* Mark Read */}
-              {!notif.read && (
-                <button
-                  onClick={() => markRead(notif.id)}
-                  style={{
-                    padding: "8px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
-                    background: "transparent", border: `1px solid ${colors.accent}`,
-                    color: colors.accent, display: "flex", alignItems: "center", gap: "6px",
-                    whiteSpace: "nowrap", flexShrink: 0,
-                  }}
-                >
-                  <CheckCircle2 size={14} /> Mark read
-                </button>
-              )}
-            </div>
-          ))
+                  {/* Content */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: colors.text }}>{notif.title}</span>
+                      <span style={{
+                        fontSize: "10px", padding: "3px 10px", borderRadius: "6px", fontWeight: 700,
+                        background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                        color: colors.textSecondary, letterSpacing: "0.5px",
+                      }}>
+                        {notif.source}
+                      </span>
+                      {!notif.read && (
+                        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: colors.accent }} />
+                      )}
+                    </div>
+                    <p style={{
+                      margin: 0, fontSize: "14px", color: colors.textSecondary, lineHeight: 1.4,
+                      ...(isExpanded ? {} : { display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+                    }}>{notif.body}</p>
+                    <div style={{ fontSize: "12px", color: "rgba(128,128,128,0.6)", marginTop: "6px" }}>
+                      {notif.time} · opens {notif.link}
+                    </div>
+                  </div>
+
+                  {/* Right side: Expand chevron + Mark Read */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                    {!notif.read && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); markRead(notif.id); }}
+                        style={{
+                          padding: "8px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                          background: "transparent", border: `1px solid ${colors.accent}`,
+                          color: colors.accent, display: "flex", alignItems: "center", gap: "6px",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <CheckCircle2 size={14} /> Mark read
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleExpand(notif.id); }}
+                      title={isExpanded ? "Collapse" : "Expand"}
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "8px",
+                        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                        color: colors.textSecondary, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        transition: "transform 0.2s",
+                        transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                      }}
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded details panel */}
+                {isExpanded && (
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      paddingTop: "16px",
+                      paddingLeft: "64px",
+                      borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p style={{
+                      margin: 0, fontSize: "14px", color: colors.text, lineHeight: 1.6,
+                      whiteSpace: "pre-wrap",
+                    }}>
+                      {notif.details || notif.body}
+                    </p>
+                    {notif.link && notif.link !== "/" && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); window.location.href = notif.link; }}
+                        style={{
+                          marginTop: "14px",
+                          padding: "8px 18px", borderRadius: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                          background: colors.accent, border: "none", color: "#000",
+                          display: "inline-flex", alignItems: "center", gap: "6px",
+                        }}
+                      >
+                        Open {notif.link} →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>
