@@ -1312,18 +1312,8 @@ export default function AcademyClient() {
             }}
           >
             <div className="max-w-3xl">
-              <div
-                className="inline-flex items-center rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em]"
-                style={{
-                  background: "rgba(255, 214, 0, 0.12)",
-                  color: colors.accent,
-                  border: "1px solid rgba(255, 214, 0, 0.24)",
-                }}
-              >
-                Program Features
-              </div>
-              <h2 className="mt-5 text-3xl font-bold md:text-5xl" style={{ color: colors.text }}>
-                Program Features
+              <h2 className="text-3xl font-bold md:text-5xl" style={{ color: colors.text }}>
+                Featured Programs
               </h2>
               <p className="mt-4 max-w-2xl text-base md:text-lg" style={{ color: colors.textSecondary }}>
                 Explore the latest Street Voices Academy program flyers, workshop highlights, and media training materials.
