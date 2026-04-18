@@ -6,6 +6,8 @@ import { getCourseCardArt, getLearningPathCardArt } from "./academyCardArt";
 import {
   academyGoalOptions,
   getAcademyGoalOption,
+  getLearningPathDisplayCourseCount,
+  getLearningPathDisplayCourseTitles,
   getLearningPathDurationLabel,
   resolveLearningPathCourses,
 } from "./academyLearningPaths";
@@ -159,6 +161,7 @@ export default function AcademyPathsPage() {
 
   const recommendedPath = recommendedPaths[0] ?? null;
   const recommendedPathVisual = recommendedPath ? getLearningPathCardArt(recommendedPath.path) : null;
+  const recommendedPathHasLinkedCourses = (recommendedPath?.includedCourses.length ?? 0) > 0;
 
   const recommendedCourses = useMemo(() => {
     if (!selectedGoalOption) {
@@ -188,6 +191,14 @@ export default function AcademyPathsPage() {
       })
       .slice(0, 4);
   }, [recommendedPath, recommendedPaths, selectedGoalOption]);
+
+  const recommendedCourseTitles = useMemo(() => {
+    if (!recommendedPath) {
+      return [];
+    }
+
+    return getLearningPathDisplayCourseTitles(recommendedPath.path, courses).slice(0, 4);
+  }, [courses, recommendedPath]);
 
   const tabStyle = (active: boolean) => ({
     padding: "10px 18px",
@@ -348,7 +359,7 @@ export default function AcademyPathsPage() {
             <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
               <span className="inline-flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
-                {recommendedPath?.includedCourses.length ?? 0} courses
+                {recommendedPath ? getLearningPathDisplayCourseCount(recommendedPath.path, courses) : 0} courses
               </span>
               <span className="inline-flex items-center gap-2">
                 <Clock className="h-4 w-4" />
@@ -379,7 +390,8 @@ export default function AcademyPathsPage() {
                 Recommended Courses
               </p>
               <div className="space-y-2">
-                {recommendedCourses.map((course) => {
+                {recommendedCourses.length > 0
+                  ? recommendedCourses.map((course) => {
                   const visual = getCourseCardArt(course);
                   return (
                   <div
@@ -420,7 +432,28 @@ export default function AcademyPathsPage() {
                     </div>
                   </div>
                   );
-                })}
+                    })
+                  : recommendedCourseTitles.map((title, index) => (
+                  <div
+                    key={title}
+                    className="rounded-2xl border px-4 py-3"
+                    style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                          {title}
+                        </p>
+                        <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
+                          Included in {recommendedPath?.path.title ?? "this program"}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold" style={{ color: colors.accent }}>
+                        Step {index + 1}
+                      </span>
+                    </div>
+                  </div>
+                    ))}
               </div>
             </div>
 
@@ -433,11 +466,17 @@ export default function AcademyPathsPage() {
                 Learn More
               </a>
               <a
-                href={recommendedPath ? `${basePath}/paths/${recommendedPath.path.slug}/enroll` : `${basePath}/paths`}
+                href={
+                  recommendedPath
+                    ? recommendedPathHasLinkedCourses
+                      ? `${basePath}/paths/${recommendedPath.path.slug}/enroll`
+                      : `${basePath}/paths/${recommendedPath.path.slug}`
+                    : `${basePath}/paths`
+                }
                 className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
                 style={{ background: colors.accent, color: "#000" }}
               >
-                Enroll Now
+                {recommendedPathHasLinkedCourses ? "Enroll Now" : "View Program"}
                 <ArrowRight className="h-4 w-4" />
               </a>
             </div>
@@ -531,7 +570,7 @@ export default function AcademyPathsPage() {
                   <div className="mt-4 flex flex-wrap gap-3 text-xs" style={{ color: colors.textMuted }}>
                     <span>{summary.path.level}</span>
                     <span>{getLearningPathDurationLabel(summary.path, courses)}</span>
-                    <span>{summary.includedCourses.length} courses</span>
+                    <span>{getLearningPathDisplayCourseCount(summary.path, courses)} courses</span>
                   </div>
 
                   <div className="mt-5">
@@ -539,13 +578,13 @@ export default function AcademyPathsPage() {
                       Included courses
                     </p>
                     <div className="space-y-2">
-                      {summary.includedCourses.slice(0, 3).map((course) => (
+                      {getLearningPathDisplayCourseTitles(summary.path, courses).slice(0, 3).map((courseTitle, index) => (
                         <div
-                          key={course.id}
+                          key={`${summary.path.slug}-${courseTitle}-${index}`}
                           className="rounded-2xl border px-4 py-3 text-sm"
                           style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.text }}
                         >
-                          {course.title}
+                          {courseTitle}
                         </div>
                       ))}
                     </div>
@@ -575,11 +614,19 @@ export default function AcademyPathsPage() {
                       Learn More
                     </a>
                     <a
-                      href={`${basePath}/paths/${summary.path.slug}/enroll`}
+                      href={
+                        summary.includedCourses.length > 0
+                          ? `${basePath}/paths/${summary.path.slug}/enroll`
+                          : `${basePath}/paths/${summary.path.slug}`
+                      }
                       className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                       style={{ background: summary.path.color, color: "#fff" }}
                     >
-                      {summary.enrolledCourses > 0 ? "Continue" : "Enroll Now"}
+                      {summary.enrolledCourses > 0
+                        ? "Continue"
+                        : summary.includedCourses.length > 0
+                          ? "Enroll Now"
+                          : "View Program"}
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   </div>

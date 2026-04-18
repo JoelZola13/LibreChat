@@ -17,6 +17,7 @@ export type AcademyLearningPath = {
   outcomes: string[];
   preferredCategories: string[];
   courseIds?: string[];
+  courseTitles?: string[];
   createdBy?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -34,6 +35,45 @@ export type AcademyGoalOption = {
 };
 
 export const academyLearningPaths: AcademyLearningPath[] = [
+  {
+    slug: "street-voices-media-training",
+    title: "Street Voices Media Training",
+    description: "A focused media program covering podcasting, photo journalism, videography, and networking for emerging storytellers.",
+    courses: 4,
+    hours: 32,
+    level: "Beginner to Intermediate",
+    deliveryMode: "In person and live stream",
+    color: "#A855F7",
+    icon: Mic,
+    requirements: [
+      "No previous media experience required",
+      "Ready to practice storytelling, collaboration, and hands-on workshop work",
+      "Able to join in-person or live support sessions",
+    ],
+    whatYoullLearn: [
+      "How to communicate stories across podcasting, photo, and video formats",
+      "How to build confidence with practical media tools and collaboration",
+      "How to network and present creative work professionally",
+    ],
+    milestones: [
+      "Practice audio storytelling and podcast basics",
+      "Learn photo journalism and visual storytelling foundations",
+      "Build videography confidence through guided projects",
+      "Strengthen networking and presenting skills",
+    ],
+    outcomes: [
+      "Media storytelling confidence",
+      "Hands-on creative communication skills",
+      "Better networking and presentation skills",
+    ],
+    preferredCategories: ["media", "storytelling", "creative", "podcast", "video", "photo"],
+    courseTitles: [
+      "Effective Networking",
+      "Videography Basics",
+      "Photo Journalism",
+      "Introduction to Podcasting",
+    ],
+  },
   {
     slug: "job-ready",
     title: "Job Ready",
@@ -136,6 +176,15 @@ export const academyLearningPaths: AcademyLearningPath[] = [
 ];
 
 export const academyGoalOptions: AcademyGoalOption[] = [
+  {
+    id: "media-training",
+    title: "Media Training",
+    description: "Explore podcasting, photo journalism, videography, and networking in one guided program.",
+    icon: Mic,
+    color: "#A855F7",
+    recommendedPathSlugs: ["street-voices-media-training"],
+    preferredCourseKeywords: ["media", "podcast", "photo", "video", "storytelling", "networking"],
+  },
   {
     id: "job-search",
     title: "Get Job Ready",
@@ -284,6 +333,32 @@ export function resolveLearningPathCourses<
   );
 
   return uniqueMatches.slice(0, path.courses);
+}
+
+export function getLearningPathDisplayCourseTitles<
+  T extends { id: string; title: string; category?: string | null; description?: string | null }
+>(path: AcademyLearningPath, courses: T[]) {
+  const resolvedTitles = resolveLearningPathCourses(path, courses).map((course) => course.title);
+  if (resolvedTitles.length > 0) {
+    return resolvedTitles;
+  }
+
+  if (Array.isArray(path.courseTitles) && path.courseTitles.length > 0) {
+    return path.courseTitles;
+  }
+
+  return [];
+}
+
+export function getLearningPathDisplayCourseCount<
+  T extends { id: string; title: string; category?: string | null; description?: string | null }
+>(path: AcademyLearningPath, courses: T[]) {
+  const displayTitles = getLearningPathDisplayCourseTitles(path, courses);
+  if (displayTitles.length > 0) {
+    return displayTitles.length;
+  }
+
+  return Math.max(path.courses, 0);
 }
 
 export function getLearningPathCourseMap<

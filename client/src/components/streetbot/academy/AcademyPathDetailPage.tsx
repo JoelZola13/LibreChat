@@ -4,6 +4,8 @@ import { useLocation, useParams } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
 import {
   getAcademyLearningPathFromCollection,
+  getLearningPathDisplayCourseCount,
+  getLearningPathDisplayCourseTitles,
   getLearningPathDurationLabel,
   resolveLearningPathCourses,
 } from "./academyLearningPaths";
@@ -126,7 +128,7 @@ export default function AcademyPathDetailPage() {
       return [];
     }
 
-    const sampleCourses = pathCourses.slice(0, 3).map((course) => course.title).join(", ");
+    const sampleCourses = getLearningPathDisplayCourseTitles(path, courses).slice(0, 3).join(", ");
 
     return [
       `${path.title} is designed as a guided program, not just a list of classes. It gives learners a clear order to follow, a manageable pace, and a focused outcome at the end of the plan.`,
@@ -135,6 +137,18 @@ export default function AcademyPathDetailPage() {
         : `This plan is built for ${path.level.toLowerCase()} learners and can be joined ${path.deliveryMode.toLowerCase()}.`,
     ];
   }, [path, pathCourses]);
+
+  const nextStepLabel = useMemo(() => {
+    if (nextCourse?.title) {
+      return nextCourse.title;
+    }
+
+    if (!path) {
+      return "Choose a course";
+    }
+
+    return getLearningPathDisplayCourseTitles(path, courses)[0] ?? "Choose a course";
+  }, [courses, nextCourse, path]);
 
   if (!path && learningPathsLoading) {
     return (
@@ -194,7 +208,7 @@ export default function AcademyPathDetailPage() {
               <div className="mt-4 space-y-3 text-sm" style={{ color: colors.textSecondary }}>
                 <div className="flex items-center justify-between gap-3">
                   <span>Included courses</span>
-                  <strong style={{ color: colors.text }}>{pathCourses.length}</strong>
+                  <strong style={{ color: colors.text }}>{getLearningPathDisplayCourseCount(path, courses)}</strong>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span>Progress</span>
@@ -202,19 +216,30 @@ export default function AcademyPathDetailPage() {
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span>Next step</span>
-                  <strong style={{ color: colors.text }}>{nextCourse?.title ?? "Choose a course"}</strong>
+                  <strong style={{ color: colors.text }}>{nextStepLabel}</strong>
                 </div>
               </div>
 
               <div className="mt-6 flex flex-wrap gap-3">
-                <a
-                  href={`${basePath}/paths/${path.slug}/enroll`}
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
-                  style={{ background: path.color, color: "#fff" }}
-                >
-                  Enroll Now
-                  <ArrowRight className="h-4 w-4" />
-                </a>
+                {pathCourses.length > 0 ? (
+                  <a
+                    href={`${basePath}/paths/${path.slug}/enroll`}
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+                    style={{ background: path.color, color: "#fff" }}
+                  >
+                    Enroll Now
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                ) : (
+                  <a
+                    href={`${basePath}/paths`}
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+                    style={{ background: path.color, color: "#fff" }}
+                  >
+                    Back to Programs
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                )}
                 <a
                   href={nextCourse ? `${basePath}/courses/${nextCourse.id}` : `${basePath}/courses`}
                   className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
@@ -275,7 +300,8 @@ export default function AcademyPathDetailPage() {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {pathCourses.map((course, index) => {
+            {pathCourses.length > 0
+              ? pathCourses.map((course, index) => {
               const enrollment = activeEnrollments.find((entry) => entry.course_id === course.id);
               return (
                 <article
@@ -312,13 +338,25 @@ export default function AcademyPathDetailPage() {
                   </div>
                 </article>
               );
-            })}
-
-            {!loading && pathCourses.length === 0 && (
-              <div className="rounded-[24px] border p-6 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
-                No courses are connected to this path yet.
-              </div>
-            )}
+                })
+              : getLearningPathDisplayCourseTitles(path, courses).map((courseTitle, index) => (
+                <article
+                  key={`${path.slug}-${courseTitle}-${index}`}
+                  className="rounded-[24px] border p-5"
+                  style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                >
+                  <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>Course {index + 1}</p>
+                  <h3 className="mt-2 text-lg font-semibold" style={{ color: colors.text }}>{courseTitle}</h3>
+                  <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+                    This course is part of the {path.title} program lineup and will appear here as a full course card once it is added to the Academy catalog.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs" style={{ color: colors.textMuted }}>
+                    <span>{path.level}</span>
+                    <span>{path.deliveryMode}</span>
+                    <span>Program course</span>
+                  </div>
+                </article>
+                ))}
           </div>
         </section>
       </div>

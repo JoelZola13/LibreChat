@@ -3,7 +3,12 @@ import { ArrowLeft, ArrowRight, Heart, HeartOff } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
 import { getCourseCardArt, getLearningPathCardArt } from "./academyCardArt";
-import { getLearningPathDurationLabel, resolveLearningPathCourses } from "./academyLearningPaths";
+import {
+  getLearningPathDisplayCourseCount,
+  getLearningPathDisplayCourseTitles,
+  getLearningPathDurationLabel,
+  resolveLearningPathCourses,
+} from "./academyLearningPaths";
 import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyUserId } from "./useAcademyUserId";
 import { useAcademySavedItems } from "./useAcademySavedItems";
@@ -224,7 +229,19 @@ export default function AcademySavedPage() {
                   <div className="mt-4 flex flex-wrap gap-3 text-xs" style={{ color: colors.textMuted }}>
                     <span>{summary.path.level}</span>
                     <span>{getLearningPathDurationLabel(summary.path, courses)}</span>
+                    <span>{getLearningPathDisplayCourseCount(summary.path, courses)} courses</span>
                     <span>{summary.progress}% complete</span>
+                  </div>
+                  <div className="mt-5 space-y-2">
+                    {getLearningPathDisplayCourseTitles(summary.path, courses).slice(0, 3).map((courseTitle, index) => (
+                      <div
+                        key={`${summary.path.slug}-${courseTitle}-${index}`}
+                        className="rounded-2xl border px-4 py-3 text-sm"
+                        style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                      >
+                        {courseTitle}
+                      </div>
+                    ))}
                   </div>
                   <div className="mt-6 flex flex-wrap gap-3">
                     <a
@@ -235,11 +252,15 @@ export default function AcademySavedPage() {
                       Learn More
                     </a>
                     <a
-                      href={`${basePath}/paths/${summary.path.slug}/enroll`}
+                      href={
+                        summary.includedCourses.length > 0
+                          ? `${basePath}/paths/${summary.path.slug}/enroll`
+                          : `${basePath}/paths/${summary.path.slug}`
+                      }
                       className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                       style={{ background: summary.path.color, color: "#fff" }}
                     >
-                      Enroll Now
+                      {summary.includedCourses.length > 0 ? "Enroll Now" : "View Program"}
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   </div>
