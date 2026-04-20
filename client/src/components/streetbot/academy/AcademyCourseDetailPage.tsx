@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, CheckCircle2, ChevronRight, Clock3, Layers3, Mail, MapPin, Phone, Users, Video } from "lucide-react";
 import { useLocation, useParams } from "react-router-dom";
+import { findAcademyStreetProfileByInstructorName } from "../profile/academyStreetProfiles";
 import { sbFetch } from "../shared/sbFetch";
 import { useAcademyUserId } from "./useAcademyUserId";
 import {
@@ -60,6 +61,16 @@ type Enrollment = {
 
 export default function AcademyCourseDetailPage() {
   const reviewFormSrc = "https://airtable.com/embed/appBQoHCfq4nfspKj/pagqRRLsxVpfnq7or/form";
+  const sampleCourseFlyers = [
+    {
+      src: "/assets/academy-flyers/course-flyer-front-apr2026.png",
+      alt: "Street Voices Academy sample course flyer front",
+    },
+    {
+      src: "/assets/academy-flyers/course-flyer-back-apr2026.png",
+      alt: "Street Voices Academy sample course flyer back",
+    },
+  ];
   const { courseId } = useParams();
   const location = useLocation();
   const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
@@ -193,6 +204,12 @@ export default function AcademyCourseDetailPage() {
     });
   }, [courseStartDate]);
   const hasScheduleMeta = Boolean(courseStartMonth || formattedCourseStartDate || courseMeetingDays.length > 0 || courseScheduleNotes);
+  const instructorName = course?.instructor_name || course?.instructor || null;
+  const instructorProfile = useMemo(
+    () => findAcademyStreetProfileByInstructorName(instructorName),
+    [instructorName],
+  );
+  const instructorProfileHref = instructorProfile ? `/creatives/${instructorProfile.username}` : null;
 
   async function handleUnenroll() {
     if (!enrollment?.id) {
@@ -278,9 +295,25 @@ export default function AcademyCourseDetailPage() {
                 <span className="inline-flex items-center gap-2"><BookOpen className="h-4 w-4" />{modules.reduce((sum, module) => sum + module.lessons.length, 0) || course.lesson_count || 0} lessons</span>
                 <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4" />{courseDuration}</span>
                 <span className="inline-flex items-center gap-2"><Video className="h-4 w-4" />{deliveryMode}</span>
-                {(course.instructor_name || course.instructor) && (
-                  <span className="inline-flex items-center gap-2"><Users className="h-4 w-4" />{course.instructor_name || course.instructor}</span>
-                )}
+                {instructorName &&
+                  (instructorProfileHref ? (
+                    <a
+                      href={instructorProfileHref}
+                      className="group inline-flex items-center gap-2 rounded-full border px-3 py-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                      style={{
+                        color: colors.textSecondary,
+                        borderColor: colors.border,
+                        background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.55)",
+                      }}
+                    >
+                      <Users className="h-4 w-4 transition-colors duration-200 group-hover:text-[#FFD600]" />
+                      <span className="underline decoration-transparent underline-offset-4 transition-all duration-200 group-hover:text-[#FFD600] group-hover:decoration-current">
+                        {instructorName}
+                      </span>
+                    </a>
+                  ) : (
+                    <span className="inline-flex items-center gap-2"><Users className="h-4 w-4" />{instructorName}</span>
+                  ))}
               </div>
             </div>
 
@@ -453,6 +486,48 @@ export default function AcademyCourseDetailPage() {
               </a>
             </div>
           )}
+        </section>
+
+        <section className="mt-8 rounded-[28px] border p-6 md:p-8" style={{ borderColor: colors.border, background: colors.cardBg }}>
+          <div className="max-w-3xl">
+            <h2 className="text-2xl font-semibold md:text-3xl" style={{ color: colors.text }}>
+              Flyers
+            </h2>
+            <p className="mt-3 text-sm md:text-base" style={{ color: colors.textSecondary }}>
+              Sample flyers connected to this course.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+            {sampleCourseFlyers.map((flyer) => (
+              <a
+                key={flyer.src}
+                href={flyer.src}
+                target="_blank"
+                rel="noreferrer"
+                className="group block overflow-hidden rounded-[28px] border transition-transform duration-300 hover:-translate-y-1"
+                style={{
+                  borderColor: colors.border,
+                  background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)",
+                }}
+              >
+                <div className="relative overflow-hidden">
+                  <img
+                    src={flyer.src}
+                    alt={flyer.alt}
+                    className="aspect-[4/5] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="flex justify-end p-5">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: colors.accent }}>
+                    Open full image
+                    <ChevronRight className="h-4 w-4" />
+                  </span>
+                </div>
+              </a>
+            ))}
+          </div>
         </section>
 
         <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>

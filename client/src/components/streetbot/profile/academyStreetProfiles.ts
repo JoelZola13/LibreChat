@@ -73,6 +73,20 @@ type StreetProfileHydrationInput = {
 const PROFILE_CREATED_AT = "2026-01-10T12:00:00.000Z";
 const PROFILE_UPDATED_AT = "2026-04-15T12:00:00.000Z";
 
+const GENERATED_ACADEMY_INSTRUCTOR_NAMES = [
+  "Angela White",
+  "Chris Anderson",
+  "Diana Ross",
+  "Kevin Martinez",
+  "Michelle Clark",
+  "Nicole Brown",
+  "QA Instructor Updated",
+  "Rebecca Taylor",
+  "Steven Harris",
+  "Thomas Jackson",
+  "William Davis",
+];
+
 const ACADEMY_STREET_PROFILES: StreetProfileRecord[] = [
   {
     id: "academy-profile-faith-macpherson",
@@ -345,8 +359,59 @@ const ACADEMY_STREET_PROFILES: StreetProfileRecord[] = [
   },
 ];
 
+function slugifyAcademyProfileName(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+const GENERATED_ACADEMY_INSTRUCTOR_PROFILES: StreetProfileRecord[] = GENERATED_ACADEMY_INSTRUCTOR_NAMES.map((name, index) => {
+  const slug = slugifyAcademyProfileName(name);
+
+  return {
+    id: `academy-profile-${slug}`,
+    user_id: `academy-instructor-${slug}`,
+    username: slug,
+    display_name: name,
+    primary_roles: ["Instructor", "Facilitator"],
+    secondary_skills: ["Workshop Facilitation", "Community Learning", "Street Voices Academy"],
+    bio: `${name} teaches through Street Voices Academy and supports learners with practical, community-rooted instruction.`,
+    tagline: "Supporting Street Voices Academy learners through practical teaching and facilitation.",
+    avatar_url: null,
+    cover_url: null,
+    city: "Toronto",
+    country: "Canada",
+    location_display: "Toronto, Canada",
+    portfolio_items: [],
+    external_links: [],
+    website: null,
+    availability_status: "open",
+    open_to: ["Teaching", "Mentorship", "Workshops"],
+    contact_email: null,
+    contact_preference: "form",
+    is_public: true,
+    is_featured: false,
+    is_verified: true,
+    followers_count: 40 + index * 3,
+    following_count: 16 + index,
+    saves_count: 9 + index,
+    profile_views: 180 + index * 17,
+    completeness_score: 84,
+    created_at: PROFILE_CREATED_AT,
+    updated_at: PROFILE_UPDATED_AT,
+    academy_role: "instructor",
+    academy_instructor_name: name,
+  };
+});
+
+function getAllAcademyStreetProfiles() {
+  return [...ACADEMY_STREET_PROFILES, ...GENERATED_ACADEMY_INSTRUCTOR_PROFILES];
+}
+
 export function getAcademyStreetProfiles(): StreetProfileRecord[] {
-  return ACADEMY_STREET_PROFILES;
+  return getAllAcademyStreetProfiles();
 }
 
 export function findAcademyStreetProfileByUsername(username?: string | null): StreetProfileRecord | null {
@@ -355,7 +420,7 @@ export function findAcademyStreetProfileByUsername(username?: string | null): St
     return null;
   }
 
-  return ACADEMY_STREET_PROFILES.find((profile) => profile.username.toLowerCase() === normalized) ?? null;
+  return getAllAcademyStreetProfiles().find((profile) => profile.username.toLowerCase() === normalized) ?? null;
 }
 
 export function findAcademyStreetProfileByUserId(userId?: string | null): StreetProfileRecord | null {
@@ -364,7 +429,22 @@ export function findAcademyStreetProfileByUserId(userId?: string | null): Street
     return null;
   }
 
-  return ACADEMY_STREET_PROFILES.find((profile) => profile.user_id === normalized) ?? null;
+  return getAllAcademyStreetProfiles().find((profile) => profile.user_id === normalized) ?? null;
+}
+
+export function findAcademyStreetProfileByInstructorName(instructorName?: string | null): StreetProfileRecord | null {
+  const normalized = String(instructorName || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    getAllAcademyStreetProfiles().find((profile) => {
+      const displayName = profile.display_name.trim().toLowerCase();
+      const academyInstructorName = String(profile.academy_instructor_name || "").trim().toLowerCase();
+      return normalized === displayName || normalized === academyInstructorName;
+    }) ?? null
+  );
 }
 
 export function getAcademyRoleForProfile(profile?: {
