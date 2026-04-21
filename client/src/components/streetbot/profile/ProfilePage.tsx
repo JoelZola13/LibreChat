@@ -20,6 +20,8 @@ import {
   Users,
   Briefcase,
   Globe,
+  MessageSquare,
+  ArrowRight,
 } from "lucide-react";
 import { SB_API_BASE } from "~/components/streetbot/shared/apiConfig";
 import { useResponsive } from '../hooks/useResponsive';
@@ -166,6 +168,19 @@ export default function ProfilePage() {
     new Set(["roles", "city"])
   );
   const [stats, setStats] = useState({ total_profiles: 0, available_count: 0 });
+
+  // Create Profile modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createStep, setCreateStep] = useState(1);
+  const [createForm, setCreateForm] = useState({
+    display_name: "",
+    username: "",
+    role: "",
+    bio: "",
+    city: "",
+    avatar: "" as string,
+  });
+  const [createSubmitting, setCreateSubmitting] = useState(false);
 
   const [filters, setFilters] = useState<FilterState>({
     search: "",
@@ -369,9 +384,9 @@ export default function ProfilePage() {
             Find talent for your next project or discover inspiring work.
           </p>
 
-          {/* CTA Button — Gallery-style */}
-          <a
-            href="/social/signup"
+          {/* CTA Button — opens create profile modal */}
+          <button
+            onClick={() => { setShowCreateModal(true); setCreateStep(1); }}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -382,7 +397,6 @@ export default function ProfilePage() {
               color: "#000",
               fontSize: "0.9rem",
               fontWeight: "bold",
-              textDecoration: "none",
               textTransform: "uppercase",
               letterSpacing: "0.5px",
               marginBottom: "24px",
@@ -395,7 +409,7 @@ export default function ProfilePage() {
             onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(255, 214, 0, 0.4)"; }}
           >
             Create Your Street Profile
-          </a>
+          </button>
 
           {/* Search Bar — Full width, below CTA */}
           <div style={{ maxWidth: "900px", margin: "0 auto", width: "100%", padding: "0 16px" }}>
@@ -911,8 +925,8 @@ export default function ProfilePage() {
                   No profiles found
                 </h3>
                 <p style={{ color: colors.textSecondary, marginBottom: "16px" }}>Try adjusting your filters or search terms</p>
-                <a
-                  href="/social/signup"
+                <button
+                  onClick={() => { setShowCreateModal(true); setCreateStep(1); }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -923,7 +937,6 @@ export default function ProfilePage() {
                     color: "#000",
                     fontWeight: "bold",
                     fontSize: "14px",
-                    textDecoration: "none",
                     border: "none",
                     cursor: "pointer",
                     transition: "all 0.2s",
@@ -932,7 +945,7 @@ export default function ProfilePage() {
                   onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
                 >
                   Be the first — Create Your Street Profile
-                </a>
+                </button>
               </div>
             ) : isGridView ? (
               // Grid View
@@ -972,12 +985,16 @@ export default function ProfilePage() {
                       e.currentTarget.style.boxShadow = isDark
                         ? "0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(139, 92, 246, 0.15)"
                         : "0 20px 40px rgba(31, 38, 135, 0.2)";
+                      const overlay = e.currentTarget.querySelector<HTMLDivElement>(".sv-hover-overlay");
+                      if (overlay) { overlay.style.opacity = "1"; overlay.style.transform = "translateY(0)"; }
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.borderColor = colors.border;
                       e.currentTarget.style.transform = "translateY(0)";
                       e.currentTarget.style.background = colors.cardBg;
                       e.currentTarget.style.boxShadow = colors.glassShadow;
+                      const overlay = e.currentTarget.querySelector<HTMLDivElement>(".sv-hover-overlay");
+                      if (overlay) { overlay.style.opacity = "0"; overlay.style.transform = "translateY(12px)"; }
                     }}
                   >
                     {/* Top Half: Image */}
@@ -1186,6 +1203,88 @@ export default function ProfilePage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Hover Overlay — quick action CTAs */}
+                    <div
+                      className="sv-hover-overlay"
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        padding: "16px",
+                        background: isDark
+                          ? "linear-gradient(to top, rgba(10,10,20,0.96) 0%, rgba(10,10,20,0.9) 70%, rgba(10,10,20,0) 100%)"
+                          : "linear-gradient(to top, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 70%, rgba(255,255,255,0) 100%)",
+                        backdropFilter: "blur(12px)",
+                        WebkitBackdropFilter: "blur(12px)",
+                        borderBottomLeftRadius: "24px",
+                        borderBottomRightRadius: "24px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                        opacity: 0,
+                        transform: "translateY(12px)",
+                        transition: "opacity 0.25s ease-out, transform 0.25s ease-out",
+                        pointerEvents: "auto",
+                      }}
+                    >
+                      {/* CTA Buttons */}
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/messages?to=${encodeURIComponent(profile.username || "")}`);
+                          }}
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            padding: "10px 14px",
+                            borderRadius: "10px",
+                            border: `1px solid ${colors.border}`,
+                            background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                            color: colors.text,
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"; }}
+                        >
+                          <MessageSquare size={14} /> Message
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/creatives/${profile.username}`);
+                          }}
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            padding: "10px 14px",
+                            borderRadius: "10px",
+                            border: "none",
+                            background: "#eab308",
+                            color: "#000",
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#facc15"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "#eab308"; }}
+                        >
+                          View Profile <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
                 })}
@@ -1375,6 +1474,312 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Create Street Profile Modal */}
+      {showCreateModal && (
+        <div
+          onClick={() => setShowCreateModal(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 10001,
+            background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: isDark ? "rgba(20,20,30,0.98)" : "#fff",
+              borderRadius: "20px",
+              padding: "32px",
+              width: "100%", maxWidth: "540px", maxHeight: "90vh", overflowY: "auto",
+              border: `1px solid ${colors.border}`,
+              boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+              <div>
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  padding: "4px 10px", borderRadius: "100px",
+                  background: "rgba(255,215,0,0.15)", color: "#FFD700",
+                  fontSize: "11px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase",
+                  marginBottom: "10px",
+                }}>
+                  <Sparkles size={12} /> Step {createStep} of 3
+                </div>
+                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: colors.text }}>
+                  {createStep === 1 ? "Create your Street Profile" : createStep === 2 ? "Tell us about you" : "Almost done!"}
+                </h2>
+                <p style={{ margin: "6px 0 0 0", fontSize: "13px", color: colors.textSecondary }}>
+                  {createStep === 1
+                    ? "Your public identity on Street Voices."
+                    : createStep === 2
+                    ? "Add a few details so people can find you."
+                    : "Add a photo and a short bio — you can change all of this later."}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{ background: "none", border: "none", color: colors.textSecondary, cursor: "pointer", padding: "4px" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Progress dots */}
+            <div style={{ display: "flex", gap: "6px", margin: "18px 0 22px" }}>
+              {[1, 2, 3].map((s) => (
+                <div key={s} style={{
+                  flex: 1, height: "4px", borderRadius: "100px",
+                  background: s <= createStep ? "#FFD700" : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"),
+                  transition: "background 0.2s",
+                }} />
+              ))}
+            </div>
+
+            {/* Step 1: Display name + username */}
+            {createStep === 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 700, color: colors.text, marginBottom: "6px", display: "block" }}>
+                    Display name *
+                  </label>
+                  <input
+                    autoFocus
+                    value={createForm.display_name}
+                    onChange={(e) => setCreateForm({ ...createForm, display_name: e.target.value, username: createForm.username || e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20) })}
+                    placeholder="e.g. Jane Doe or Ghost"
+                    style={{
+                      width: "100%", padding: "12px 14px", borderRadius: "10px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${colors.border}`, color: colors.text,
+                      fontSize: "14px", outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 700, color: colors.text, marginBottom: "6px", display: "block" }}>
+                    Username *
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "0 14px" }}>
+                    <span style={{ color: colors.textSecondary, fontSize: "14px" }}>@</span>
+                    <input
+                      value={createForm.username}
+                      onChange={(e) => setCreateForm({ ...createForm, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 30) })}
+                      placeholder="your_handle"
+                      style={{
+                        width: "100%", padding: "12px 0",
+                        background: "transparent", border: "none", color: colors.text,
+                        fontSize: "14px", outline: "none",
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: "11px", color: colors.textSecondary, marginTop: "6px" }}>
+                    This is your profile URL: /creatives/{createForm.username || "your_handle"}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Role + City */}
+            {createStep === 2 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 700, color: colors.text, marginBottom: "6px", display: "block" }}>
+                    What do you do? *
+                  </label>
+                  <input
+                    autoFocus
+                    value={createForm.role}
+                    onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                    placeholder="e.g. Photographer, Muralist, Music Producer"
+                    style={{
+                      width: "100%", padding: "12px 14px", borderRadius: "10px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${colors.border}`, color: colors.text,
+                      fontSize: "14px", outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
+                    {["Photographer", "Visual Artist", "Muralist", "Music Producer", "Designer", "Videographer", "Writer", "Filmmaker"].map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setCreateForm({ ...createForm, role: r })}
+                        style={{
+                          fontSize: "12px", padding: "5px 12px", borderRadius: "100px",
+                          background: createForm.role === r ? "#FFD700" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+                          color: createForm.role === r ? "#000" : colors.textSecondary,
+                          border: `1px solid ${createForm.role === r ? "#FFD700" : colors.border}`,
+                          cursor: "pointer", fontWeight: 600,
+                        }}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 700, color: colors.text, marginBottom: "6px", display: "block" }}>
+                    Location
+                  </label>
+                  <input
+                    value={createForm.city}
+                    onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })}
+                    placeholder="e.g. Toronto, Canada"
+                    style={{
+                      width: "100%", padding: "12px 14px", borderRadius: "10px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${colors.border}`, color: colors.text,
+                      fontSize: "14px", outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Avatar + Bio */}
+            {createStep === 3 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 700, color: colors.text, marginBottom: "8px", display: "block" }}>
+                    Profile photo
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <div style={{
+                      width: "72px", height: "72px", borderRadius: "50%", overflow: "hidden",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `2px dashed ${colors.border}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0,
+                    }}>
+                      {createForm.avatar ? (
+                        <img src={createForm.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <Users size={26} color={colors.textSecondary} />
+                      )}
+                    </div>
+                    <label style={{
+                      display: "inline-flex", alignItems: "center", gap: "6px",
+                      padding: "8px 14px", borderRadius: "10px", cursor: "pointer",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${colors.border}`,
+                      color: colors.text, fontSize: "13px", fontWeight: 600,
+                    }}>
+                      <input
+                        type="file" accept="image/*" style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onloadend = () => setCreateForm({ ...createForm, avatar: reader.result as string });
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                      Upload photo
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 700, color: colors.text, marginBottom: "6px", display: "block" }}>
+                    Short bio
+                  </label>
+                  <textarea
+                    value={createForm.bio}
+                    onChange={(e) => setCreateForm({ ...createForm, bio: e.target.value.slice(0, 280) })}
+                    placeholder="Tell people who you are and what you create..."
+                    rows={4}
+                    style={{
+                      width: "100%", padding: "12px 14px", borderRadius: "10px",
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${colors.border}`, color: colors.text,
+                      fontSize: "14px", fontFamily: "inherit", lineHeight: 1.5,
+                      resize: "vertical", outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ fontSize: "11px", color: colors.textSecondary, marginTop: "4px", textAlign: "right" }}>
+                    {createForm.bio.length}/280
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer Actions */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px", gap: "10px" }}>
+              {createStep > 1 ? (
+                <button
+                  onClick={() => setCreateStep(createStep - 1)}
+                  style={{
+                    padding: "10px 18px", borderRadius: "10px",
+                    background: "transparent", border: `1px solid ${colors.border}`,
+                    color: colors.text, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Back
+                </button>
+              ) : <div />}
+              {createStep < 3 ? (
+                <button
+                  onClick={() => setCreateStep(createStep + 1)}
+                  disabled={
+                    (createStep === 1 && (!createForm.display_name.trim() || !createForm.username.trim())) ||
+                    (createStep === 2 && !createForm.role.trim())
+                  }
+                  style={{
+                    padding: "10px 22px", borderRadius: "10px", border: "none",
+                    background:
+                      (createStep === 1 && (!createForm.display_name.trim() || !createForm.username.trim())) ||
+                      (createStep === 2 && !createForm.role.trim())
+                        ? (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")
+                        : "#FFD700",
+                    color:
+                      (createStep === 1 && (!createForm.display_name.trim() || !createForm.username.trim())) ||
+                      (createStep === 2 && !createForm.role.trim())
+                        ? colors.textSecondary
+                        : "#000",
+                    fontSize: "13px", fontWeight: 700,
+                    cursor:
+                      (createStep === 1 && (!createForm.display_name.trim() || !createForm.username.trim())) ||
+                      (createStep === 2 && !createForm.role.trim())
+                        ? "not-allowed"
+                        : "pointer",
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                  }}
+                >
+                  Next <ArrowRight size={14} />
+                </button>
+              ) : (
+                <button
+                  disabled={createSubmitting}
+                  onClick={() => {
+                    setCreateSubmitting(true);
+                    try {
+                      // Save draft to localStorage so the Street Profile page can pick it up
+                      localStorage.setItem("sv_new_profile_draft", JSON.stringify({
+                        ...createForm,
+                        created_at: new Date().toISOString(),
+                      }));
+                    } catch {}
+                    setTimeout(() => {
+                      setCreateSubmitting(false);
+                      setShowCreateModal(false);
+                      navigate("/settings");
+                    }, 600);
+                  }}
+                  style={{
+                    padding: "10px 22px", borderRadius: "10px", border: "none",
+                    background: "#FFD700", color: "#000",
+                    fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                  }}
+                >
+                  {createSubmitting ? "Creating..." : (<>Create Profile <Sparkles size={14} /></>)}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

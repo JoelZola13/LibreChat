@@ -8985,6 +8985,49 @@ function TabAcademy({
 }
 
 function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Map notification link to in-app navigation
+  const openLink = (link: string) => {
+    if (!link) return;
+    // Direct profile route — navigate to that creative's profile page
+    if (link.startsWith("/creatives/")) {
+      navigate(link);
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+      return;
+    }
+    // Top-level routes that exist as standalone pages
+    if (link === "/gallery") { navigate("/gallery"); return; }
+    if (link === "/directory") { navigate("/directory"); return; }
+    // Map link → tab id within current profile
+    const tabMap: Record<string, string> = {
+      "/messages": "messages",
+      "/tasks": "tasks",
+      "/calendar": "calendar",
+      "/jobs": "jobs",
+      "/portfolio": "about",
+      "/profile": "about",
+      "/street-gallery": "street-gallery",
+    };
+    const tabId = tabMap[link];
+    if (tabId) {
+      const params = new URLSearchParams(location.search);
+      if (tabId === "about") {
+        params.delete("tab");
+      } else {
+        params.set("tab", tabId);
+      }
+      const nextSearch = params.toString();
+      navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : "" }, { replace: false });
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+      return;
+    }
+    if (link === "/" || link === "") { navigate("/directory"); return; }
+    // Fallback for any other path
+    navigate(link);
+  };
+
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -8993,49 +9036,49 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
       id: 1, title: "Welcome to Street Voices", body: "Your universal notification center is ready.",
       details: "Your Street Profile is set up and connected to all your tools — Messages, Tasks, Calendar, Jobs, and the Gallery. You'll receive notifications here whenever something needs your attention. You can filter by source, mark items read, and adjust which notification types you want to receive in Settings.",
       source: "SYSTEM", icon: <Send size={20} />, iconColor: "#ef4444", iconBg: "rgba(239,68,68,0.15)",
-      time: "just now", link: "/", read: false,
+      time: "just now", link: "", linkLabel: "", read: false,
     },
     {
       id: 2, title: "New message", body: "You have unread messages waiting for you.",
       details: "You have 3 unread conversations. Maya Chen sent you a message about a potential collaboration on a community mural project in Kensington Market. Derin Falana is following up on the gallery showing for next month. The Urban Kitchen team also reached out with feedback on the proposal you sent.",
       source: "MESSAGES", icon: <MessageCircle size={20} />, iconColor: "#22c55e", iconBg: "rgba(34,197,94,0.15)",
-      time: "just now", link: "/messages", read: false,
+      time: "just now", link: "/messages", linkLabel: "Open Messages", read: false,
     },
     {
       id: 3, title: "New follower", body: "Maya Chen started following you.",
       details: "Maya Chen, a curator at the Art Gallery of Ontario's First Thursday program, just followed your profile. She has previously curated shows for emerging street artists in Toronto and may be interested in your portfolio. You may want to message her to introduce yourself.",
       source: "SOCIAL", icon: <Users size={20} />, iconColor: "#3b82f6", iconBg: "rgba(59,130,246,0.15)",
-      time: "2 hours ago", link: "/profile", read: false,
+      time: "2 hours ago", link: "/creatives/maya_chen", linkLabel: "View Maya's profile", read: false,
     },
     {
       id: 4, title: "Job application viewed", body: "Black Voices Media Collective viewed your application for Youth Media Producer.",
       details: "Your application for the Youth Media Producer position at Black Voices Media Collective was viewed by the hiring team 3 times in the past 2 hours. The role involves leading creative direction for youth-focused media content and offers $65k–$80k. The team typically responds to shortlisted applicants within 1 week. Make sure your portfolio is polished and that any work samples linked from your application are accessible.",
       source: "JOBS", icon: <Briefcase size={20} />, iconColor: "#f59e0b", iconBg: "rgba(245,158,11,0.15)",
-      time: "5 hours ago", link: "/jobs", read: false,
+      time: "5 hours ago", link: "/jobs", linkLabel: "View Jobs", read: false,
     },
     {
       id: 5, title: "Commission deadline approaching", body: "Your mural commission for The Urban Kitchen is due in 7 days.",
       details: "The 30-foot exterior mural commission for The Urban Kitchen at 245 Queen St W is scheduled for completion by next Wednesday. The client has confirmed the final color palette and has approved the mock-up. Materials should already be on-site. Final payment of $4,500 is due upon completion. Don't forget to schedule the installation photoshoot for your portfolio.",
       source: "TASKS", icon: <Clock size={20} />, iconColor: "#ef4444", iconBg: "rgba(239,68,68,0.15)",
-      time: "1 day ago", link: "/tasks", read: true,
+      time: "1 day ago", link: "/tasks", linkLabel: "View task", read: true,
     },
     {
-      id: 6, title: "Gallery artwork liked", body: "Diego Alvarez loved your piece 'Chromatic Rebellion'.",
-      details: "Diego Alvarez, a fellow street artist with 12k followers, loved your piece 'Chromatic Rebellion'. This brings the total appreciations on this work to 156. Diego has previously shared your work on his Instagram, which led to a noticeable spike in profile views. Consider following him back if you haven't already.",
+      id: 6, title: "Gallery artwork liked", body: "Ghost loved your piece 'Chromatic Rebellion'.",
+      details: "Ghost, a fellow street artist with 12k followers, loved your piece 'Chromatic Rebellion'. This brings the total appreciations on this work to 156. Ghost has previously shared your work on Instagram, which led to a noticeable spike in profile views. Consider following him back if you haven't already.",
       source: "GALLERY", icon: <Heart size={20} />, iconColor: "#ec4899", iconBg: "rgba(236,72,153,0.15)",
-      time: "1 day ago", link: "/gallery", read: true,
+      time: "1 day ago", link: "/creatives/graffiti_ghost", linkLabel: "View Ghost's profile", read: true,
     },
     {
       id: 7, title: "Event reminder", body: "Street Art Festival — Panel Discussion starts tomorrow at 1:00 PM.",
       details: "The Street Art Festival Panel Discussion is happening tomorrow at 1:00 PM at the Drake Hotel (1150 Queen St W). You're confirmed as a panelist alongside 3 other Toronto-based artists. The session will be live-streamed and recorded. Suggested topics include the future of public art, navigating commissions, and building a sustainable practice. Arrive by 12:30 PM for sound check.",
       source: "CALENDAR", icon: <Calendar size={20} />, iconColor: "#8b5cf6", iconBg: "rgba(139,92,246,0.15)",
-      time: "2 days ago", link: "/calendar", read: true,
+      time: "2 days ago", link: "/calendar", linkLabel: "Open Calendar", read: true,
     },
     {
       id: 8, title: "New comment on portfolio", body: "Suki Park commented on 'Voices of the Underground': Amazing depth in this piece!",
       details: "Suki Park left a full comment on your portfolio piece 'Voices of the Underground': \"Amazing depth in this piece! The way you layered the portraits with the architectural elements really captures something special about Toronto's underground music scene. I'd love to chat about possibly featuring this work in an upcoming print zine I'm putting together.\" You can reply directly from your portfolio page.",
       source: "SOCIAL", icon: <MessageSquare size={20} />, iconColor: "#06b6d4", iconBg: "rgba(6,182,212,0.15)",
-      time: "3 days ago", link: "/portfolio", read: true,
+      time: "3 days ago", link: "/creatives/neon_dreams", linkLabel: "View Suki's profile", read: true,
     },
   ]);
 
@@ -9199,7 +9242,7 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
                       ...(isExpanded ? {} : { display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
                     }}>{notif.body}</p>
                     <div style={{ fontSize: "12px", color: "rgba(128,128,128,0.6)", marginTop: "6px" }}>
-                      {notif.time} · opens {notif.link}
+                      {notif.time}{notif.link ? ` · ${(notif as any).linkLabel || `opens ${notif.link}`}` : ""}
                     </div>
                   </div>
 
@@ -9255,7 +9298,7 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
                     </p>
                     {notif.link && notif.link !== "/" && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); window.location.href = notif.link; }}
+                        onClick={(e) => { e.stopPropagation(); openLink(notif.link); }}
                         style={{
                           marginTop: "14px",
                           padding: "8px 18px", borderRadius: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
@@ -9263,7 +9306,7 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
                           display: "inline-flex", alignItems: "center", gap: "6px",
                         }}
                       >
-                        Open {notif.link} →
+                        {(notif as any).linkLabel || `Open ${notif.link}`} →
                       </button>
                     )}
                   </div>
