@@ -2614,27 +2614,270 @@ function TabMessages({ profile, colors, isDark }: { profile: StreetProfile; colo
 }
 
 function TabTasks({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
-  const tasks = [
-    { title: "Update portfolio with latest mural project", status: "In Progress", due: "Apr 10" },
-    { title: "Review collaboration proposal from @street_collective", status: "Pending", due: "Apr 12" },
-    { title: "Submit artwork for gallery exhibition", status: "Completed", due: "Apr 3" },
-  ];
+  type Task = { id: string; title: string; status: "Pending" | "In Progress" | "Completed"; due: string };
+  const STORAGE_KEY = "sv_profile_tasks";
+
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return [
+      { id: "t1", title: "Update portfolio with latest mural project", status: "In Progress", due: "Apr 10" },
+      { id: "t2", title: "Review collaboration proposal from @street_collective", status: "Pending", due: "Apr 12" },
+      { id: "t3", title: "Submit artwork for gallery exhibition", status: "Completed", due: "Apr 3" },
+    ];
+  });
+
+  const persist = (next: Task[]) => {
+    setTasks(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  };
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [newTask, setNewTask] = useState({ title: "", status: "Pending" as Task["status"], due: "" });
+  const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
+
+  const addTask = () => {
+    if (!newTask.title.trim()) return;
+    const t: Task = {
+      id: `t${Date.now()}`,
+      title: newTask.title.trim(),
+      status: newTask.status,
+      due: newTask.due.trim() || "No due date",
+    };
+    persist([t, ...tasks]);
+    setNewTask({ title: "", status: "Pending", due: "" });
+    setShowAdd(false);
+  };
+
+  const deleteTask = (id: string) => persist(tasks.filter((t) => t.id !== id));
+
+  const cycleStatus = (id: string) => {
+    const order: Task["status"][] = ["Pending", "In Progress", "Completed"];
+    persist(tasks.map((t) => t.id === id ? { ...t, status: order[(order.indexOf(t.status) + 1) % order.length] } : t));
+  };
+
+  const setStatus = (id: string, status: Task["status"]) => {
+    persist(tasks.map((t) => t.id === id ? { ...t, status } : t));
+  };
+
+  const statusColor = (s: Task["status"]) => {
+    if (s === "Completed") return { bg: "rgba(34,197,94,0.15)", fg: "#22c55e" };
+    if (s === "In Progress") return { bg: "rgba(59,130,246,0.15)", fg: "#3b82f6" };
+    return { bg: "rgba(234,179,8,0.15)", fg: "#eab308" };
+  };
+
+  const visibleTasks = tasks.filter((t) => {
+    if (filter === "active") return t.status !== "Completed";
+    if (filter === "completed") return t.status === "Completed";
+    return true;
+  });
+
+  const openCount = tasks.filter((t) => t.status !== "Completed").length;
 
   return (
-    <GlassCard title="Active Tasks" colors={colors} isDark={isDark}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {tasks.map((task, i) => (
-          <ListRow
-            key={i}
-            icon={<CheckSquare size={18} />}
-            title={task.title}
-            subtitle={`Status: ${task.status}`}
-            rightText={`Due: ${task.due}`}
-            colors={colors}
-            isDark={isDark}
-            accent={task.status === "Completed"}
+    <GlassCard colors={colors} isDark={isDark}>
+      {/* Header: title + filters + add */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>Tasks</h3>
+          <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "2px" }}>
+            {openCount} open · {tasks.length - openCount} done
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          {(["all", "active", "completed"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              style={{
+                padding: "6px 14px", borderRadius: "100px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                background: filter === f ? colors.accent : "transparent",
+                color: filter === f ? "#000" : colors.textSecondary,
+                border: filter === f ? "none" : `1px solid ${colors.border}`,
+                textTransform: "capitalize",
+              }}
+            >
+              {f}
+            </button>
+          ))}
+          <button
+            onClick={() => setShowAdd(!showAdd)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "8px 14px", borderRadius: "8px", border: "none",
+              background: colors.accent, color: "#000",
+              fontSize: "12px", fontWeight: 700, cursor: "pointer",
+              marginLeft: "4px",
+            }}
+          >
+            <Plus size={14} /> Add Task
+          </button>
+        </div>
+      </div>
+
+      {/* Add task form */}
+      {showAdd && (
+        <div style={{
+          padding: "14px", borderRadius: "12px", marginBottom: "14px",
+          background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+          border: `1px solid ${colors.border}`,
+          display: "flex", flexDirection: "column", gap: "10px",
+        }}>
+          <input
+            autoFocus
+            value={newTask.title}
+            onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+            onKeyDown={(e) => { if (e.key === "Enter") addTask(); if (e.key === "Escape") setShowAdd(false); }}
+            placeholder="What needs to be done?"
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+              border: `1px solid ${colors.border}`, color: colors.text,
+              fontSize: "14px", outline: "none", boxSizing: "border-box",
+            }}
           />
-        ))}
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <select
+              value={newTask.status}
+              onChange={(e) => setNewTask({ ...newTask, status: e.target.value as Task["status"] })}
+              style={{
+                padding: "8px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "13px", outline: "none", cursor: "pointer",
+              }}
+            >
+              <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+            </select>
+            <input
+              value={newTask.due}
+              onChange={(e) => setNewTask({ ...newTask, due: e.target.value })}
+              placeholder="Due date (e.g. Apr 25)"
+              style={{
+                flex: 1, minWidth: "120px", padding: "8px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "13px", outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <button
+              onClick={addTask}
+              disabled={!newTask.title.trim()}
+              style={{
+                padding: "8px 16px", borderRadius: "8px", border: "none",
+                background: newTask.title.trim() ? colors.accent : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"),
+                color: newTask.title.trim() ? "#000" : colors.textSecondary,
+                fontSize: "13px", fontWeight: 700,
+                cursor: newTask.title.trim() ? "pointer" : "not-allowed",
+              }}
+            >
+              Add
+            </button>
+            <button
+              onClick={() => { setShowAdd(false); setNewTask({ title: "", status: "Pending", due: "" }); }}
+              style={{
+                padding: "8px 14px", borderRadius: "8px",
+                background: "transparent", border: `1px solid ${colors.border}`,
+                color: colors.textSecondary, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Task list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {visibleTasks.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "32px 16px", color: colors.textSecondary, fontSize: "13px" }}>
+            <CheckSquare size={32} style={{ opacity: 0.3, marginBottom: "8px" }} />
+            <div>
+              {filter === "completed" ? "No completed tasks yet." : filter === "active" ? "All caught up! No active tasks." : "No tasks. Click 'Add Task' to get started."}
+            </div>
+          </div>
+        ) : visibleTasks.map((task) => {
+          const sc = statusColor(task.status);
+          const done = task.status === "Completed";
+          return (
+            <div
+              key={task.id}
+              style={{
+                display: "flex", alignItems: "center", gap: "12px",
+                padding: "14px 16px", borderRadius: "12px",
+                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.8)",
+                border: `1px solid ${colors.border}`,
+                transition: "all 0.2s",
+              }}
+            >
+              {/* Checkbox — click to cycle status */}
+              <button
+                onClick={() => cycleStatus(task.id)}
+                title="Click to change status"
+                style={{
+                  width: "40px", height: "40px", borderRadius: "10px",
+                  background: sc.bg, border: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <CheckSquare size={18} color={sc.fg} />
+              </button>
+
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: "14px", fontWeight: 600, color: colors.text,
+                  textDecoration: done ? "line-through" : "none",
+                  opacity: done ? 0.6 : 1,
+                }}>
+                  {task.title}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px", flexWrap: "wrap" }}>
+                  <select
+                    value={task.status}
+                    onChange={(e) => setStatus(task.id, e.target.value as Task["status"])}
+                    style={{
+                      fontSize: "11px", fontWeight: 700, padding: "3px 22px 3px 8px", borderRadius: "6px",
+                      background: sc.bg, color: sc.fg, border: `1px solid ${sc.fg}33`,
+                      outline: "none", cursor: "pointer",
+                      appearance: "none", WebkitAppearance: "none", MozAppearance: "none",
+                      backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(sc.fg)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
+                      backgroundRepeat: "no-repeat",
+                      backgroundPosition: "right 6px center",
+                    }}
+                  >
+                    <option value="Pending" style={{ background: isDark ? "#1a1a2e" : "#fff", color: colors.text }}>Pending</option>
+                    <option value="In Progress" style={{ background: isDark ? "#1a1a2e" : "#fff", color: colors.text }}>In Progress</option>
+                    <option value="Completed" style={{ background: isDark ? "#1a1a2e" : "#fff", color: colors.text }}>Completed</option>
+                  </select>
+                  <span style={{ fontSize: "12px", color: colors.textSecondary }}>Due: {task.due}</span>
+                </div>
+              </div>
+
+              {/* Delete */}
+              <button
+                onClick={() => deleteTask(task.id)}
+                title="Delete task"
+                style={{
+                  width: "32px", height: "32px", borderRadius: "8px",
+                  background: "transparent", border: `1px solid ${colors.border}`,
+                  color: colors.textSecondary, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </GlassCard>
   );
@@ -3105,28 +3348,2181 @@ function TabCalendar({ profile, colors, isDark }: { profile: StreetProfile; colo
 }
 
 function TabDocuments({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
-  const docs = [
-    { name: "Artist Statement 2026.pdf", size: "245 KB", date: "Mar 28" },
-    { name: "Commission Contract Template.docx", size: "89 KB", date: "Mar 15" },
-    { name: "Portfolio Deck — Q1 2026.pdf", size: "4.2 MB", date: "Feb 20" },
-    { name: "Insurance Certificate.pdf", size: "1.1 MB", date: "Jan 5" },
-  ];
+  type Doc = { id: string; name: string; size: string; date: string; dataUrl?: string };
+  const STORAGE_KEY = "sv_profile_documents";
+
+  const formatSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
+  const formatDate = (d = new Date()) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const [docs, setDocs] = useState<Doc[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return [
+      { id: "d1", name: "Artist Statement 2026.pdf", size: "245 KB", date: "Mar 28" },
+      { id: "d2", name: "Commission Contract Template.docx", size: "89 KB", date: "Mar 15" },
+      { id: "d3", name: "Portfolio Deck — Q1 2026.pdf", size: "4.2 MB", date: "Feb 20" },
+      { id: "d4", name: "Insurance Certificate.pdf", size: "1.1 MB", date: "Jan 5" },
+    ];
+  });
+
+  const persist = (next: Doc[]) => {
+    setDocs(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploading(true);
+    const readers = files.map((file) => new Promise<Doc>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve({
+        id: `d${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: file.name,
+        size: formatSize(file.size),
+        date: formatDate(),
+        dataUrl: reader.result as string,
+      });
+      reader.readAsDataURL(file);
+    }));
+    Promise.all(readers).then((newDocs) => {
+      persist([...newDocs, ...docs]);
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    });
+  };
+
+  const deleteDoc = (id: string) => persist(docs.filter((d) => d.id !== id));
+
+  const downloadDoc = (doc: Doc) => {
+    if (!doc.dataUrl) return;
+    const a = document.createElement("a");
+    a.href = doc.dataUrl;
+    a.download = doc.name;
+    a.click();
+  };
+
+  const getFileIconColor = (name: string) => {
+    const ext = name.split(".").pop()?.toLowerCase() || "";
+    if (["pdf"].includes(ext)) return { bg: "rgba(239,68,68,0.15)", fg: "#ef4444" };
+    if (["doc", "docx"].includes(ext)) return { bg: "rgba(59,130,246,0.15)", fg: "#3b82f6" };
+    if (["xls", "xlsx", "csv"].includes(ext)) return { bg: "rgba(34,197,94,0.15)", fg: "#22c55e" };
+    if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) return { bg: "rgba(236,72,153,0.15)", fg: "#ec4899" };
+    return { bg: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", fg: colors.textSecondary };
+  };
 
   return (
-    <GlassCard title="Documents" colors={colors} isDark={isDark}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {docs.map((doc, i) => (
-          <ListRow
-            key={i}
-            icon={<FileText size={18} />}
-            title={doc.name}
-            subtitle={doc.size}
-            rightText={doc.date}
-            colors={colors}
-            isDark={isDark}
-          />
-        ))}
+    <GlassCard colors={colors} isDark={isDark}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>Documents</h3>
+          <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "2px" }}>
+            {docs.length} file{docs.length !== 1 ? "s" : ""}
+          </div>
+        </div>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            padding: "8px 16px", borderRadius: "10px", border: "none",
+            background: colors.accent, color: "#000",
+            fontSize: "13px", fontWeight: 700, cursor: uploading ? "wait" : "pointer",
+            opacity: uploading ? 0.6 : 1,
+          }}
+        >
+          <Upload size={14} /> {uploading ? "Uploading..." : "Upload"}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: "none" }}
+          onChange={handleUpload}
+        />
       </div>
+
+      {/* Document list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {docs.length === 0 ? (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              textAlign: "center", padding: "40px 16px",
+              color: colors.textSecondary, fontSize: "13px",
+              borderRadius: "12px",
+              border: `2px dashed ${colors.border}`,
+              cursor: "pointer",
+            }}
+          >
+            <Upload size={32} style={{ opacity: 0.3, marginBottom: "8px" }} />
+            <div style={{ fontWeight: 600, color: colors.text, marginBottom: "4px" }}>No documents yet</div>
+            <div>Click to upload — PDFs, Word docs, images, any file type</div>
+          </div>
+        ) : docs.map((doc) => {
+          const ic = getFileIconColor(doc.name);
+          return (
+            <div
+              key={doc.id}
+              style={{
+                display: "flex", alignItems: "center", gap: "12px",
+                padding: "12px 14px", borderRadius: "12px",
+                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.8)",
+                border: `1px solid ${colors.border}`,
+                transition: "all 0.2s",
+              }}
+            >
+              {/* Icon */}
+              <div style={{
+                width: "40px", height: "40px", borderRadius: "10px",
+                background: ic.bg, display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}>
+                <FileText size={18} color={ic.fg} />
+              </div>
+
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: "14px", fontWeight: 600, color: colors.text,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {doc.name}
+                </div>
+                <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "2px" }}>
+                  {doc.size} · {doc.date}
+                </div>
+              </div>
+
+              {/* Download */}
+              {doc.dataUrl && (
+                <button
+                  onClick={() => downloadDoc(doc)}
+                  title="Download"
+                  style={{
+                    width: "32px", height: "32px", borderRadius: "8px",
+                    background: "transparent", border: `1px solid ${colors.border}`,
+                    color: colors.textSecondary, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0, transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+                >
+                  <Download size={14} />
+                </button>
+              )}
+
+              {/* Delete */}
+              <button
+                onClick={() => deleteDoc(doc.id)}
+                title="Delete document"
+                style={{
+                  width: "32px", height: "32px", borderRadius: "8px",
+                  background: "transparent", border: `1px solid ${colors.border}`,
+                  color: colors.textSecondary, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </GlassCard>
+  );
+}
+
+// ============================================================================
+// Connect Card (right sidebar CTAs — Follow, Message, Share, Save, socials)
+// ============================================================================
+function ConnectCard({
+  profile, colors, isDark, isFollowing, onFollow, onMessage, socialLinks,
+}: {
+  profile: StreetProfile;
+  colors: any;
+  isDark: boolean;
+  isFollowing?: boolean;
+  onFollow?: () => void;
+  onMessage?: () => void;
+  socialLinks?: Array<{ platform: string; url?: string; connected?: boolean; color?: string }>;
+}) {
+  const SAVE_KEY = "sv_saved_profiles";
+  const [saved, setSaved] = useState<boolean>(() => {
+    try {
+      const list = JSON.parse(localStorage.getItem(SAVE_KEY) || "[]");
+      return Array.isArray(list) && list.includes(profile.username);
+    } catch { return false; }
+  });
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2200);
+  };
+
+  const toggleSave = () => {
+    try {
+      const list = JSON.parse(localStorage.getItem(SAVE_KEY) || "[]");
+      const arr = Array.isArray(list) ? list : [];
+      let next: string[];
+      if (arr.includes(profile.username)) {
+        next = arr.filter((u: string) => u !== profile.username);
+        setSaved(false);
+        showToast("Removed from saved profiles");
+      } else {
+        next = [...arr, profile.username];
+        setSaved(true);
+        showToast("Saved to your profiles");
+      }
+      localStorage.setItem(SAVE_KEY, JSON.stringify(next));
+    } catch {}
+  };
+
+  const profileUrl = `${window.location.origin}/creatives/${profile.username}`;
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(profileUrl);
+      showToast("Profile link copied!");
+    } catch {
+      // Fallback for non-secure contexts
+      const ta = document.createElement("textarea");
+      ta.value = profileUrl;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); showToast("Profile link copied!"); } catch {}
+      document.body.removeChild(ta);
+    }
+  };
+
+  // Build external links list from socialLinks (connected ones + website)
+  const externalLinks = (socialLinks || [])
+    .filter((s) => s.connected && s.url)
+    .slice(0, 6)
+    .map((s) => ({ label: s.platform, url: s.url!, color: s.color || "#666" }));
+  if ((profile as any).website) {
+    externalLinks.unshift({ label: "Website", url: (profile as any).website, color: "#6366f1" });
+  }
+
+  return (
+    <GlassCard title="Connect" colors={colors} isDark={isDark}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {/* Follow — primary CTA */}
+        <button
+          onClick={onFollow}
+          style={{
+            padding: "12px 24px", borderRadius: "12px",
+            background: isFollowing ? "transparent" : colors.accent,
+            color: isFollowing ? colors.accent : "#000",
+            fontWeight: 700, fontSize: "14px",
+            border: isFollowing ? `2px solid ${colors.accent}` : "none",
+            cursor: "pointer", width: "100%",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+            transition: "all 0.25s ease",
+          }}
+        >
+          {isFollowing ? <><UserCheck size={16} /> Following</> : <><Plus size={16} /> Follow</>}
+        </button>
+
+        {/* Secondary actions: Message + Save side-by-side */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+          <button
+            onClick={onMessage}
+            style={{
+              padding: "10px 12px", borderRadius: "10px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+              color: colors.text,
+              fontWeight: 600, fontSize: "13px",
+              border: `1px solid ${colors.border}`,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.text; }}
+          >
+            <Mail size={14} /> Message
+          </button>
+          <button
+            onClick={toggleSave}
+            style={{
+              padding: "10px 12px", borderRadius: "10px",
+              background: saved ? "rgba(234,179,8,0.15)" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+              color: saved ? colors.accent : colors.text,
+              fontWeight: 600, fontSize: "13px",
+              border: `1px solid ${saved ? colors.accent : colors.border}`,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+              transition: "all 0.2s",
+            }}
+          >
+            {saved ? <><BookmarkCheck size={14} /> Saved</> : <><Bookmark size={14} /> Save</>}
+          </button>
+        </div>
+
+        {/* Share Link — single copy action */}
+        <button
+          onClick={copyLink}
+          style={{
+            width: "100%", padding: "10px 12px", borderRadius: "10px",
+            background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+            color: colors.text,
+            fontWeight: 600, fontSize: "13px",
+            border: `1px solid ${colors.border}`,
+            cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.text; }}
+        >
+          <Share2 size={14} /> Share Link
+        </button>
+
+        {/* External Links — quick access to socials / website */}
+        {externalLinks.length > 0 && (
+          <div style={{ marginTop: "6px", paddingTop: "12px", borderTop: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
+              Elsewhere
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {externalLinks.map((link, i) => (
+                <a
+                  key={i}
+                  href={link.url.startsWith("http") ? link.url : `https://${link.url}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`Open ${link.label}`}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "5px",
+                    padding: "5px 10px", borderRadius: "100px",
+                    background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${colors.border}`,
+                    color: colors.text, textDecoration: "none",
+                    fontSize: "11px", fontWeight: 600,
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = link.color; e.currentTarget.style.color = link.color; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.text; }}
+                >
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: link.color, display: "inline-block" }} />
+                  {link.label}
+                  <ExternalLink size={9} style={{ opacity: 0.5 }} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)",
+          zIndex: 10005,
+          padding: "10px 18px", borderRadius: "10px",
+          background: "rgba(20,20,30,0.95)", color: "#fff",
+          border: `1px solid ${colors.accent}`,
+          fontSize: "13px", fontWeight: 600,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          display: "flex", alignItems: "center", gap: "8px",
+        }}>
+          <CheckCircle2 size={14} color={colors.accent} /> {toast}
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
+// ============================================================================
+// Residencies & Partnerships Section (used inside TabAbout)
+// ============================================================================
+type PressItem = { id: string; title: string; source: string; url: string; date: string };
+type Residency = {
+  id: string;
+  venue: string;
+  role: string;
+  location: string;
+  address?: string;
+  schedule: string;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+  duration?: string;
+  description: string;
+  long_description?: string;
+  image?: string;
+  gallery?: string[];
+  website?: string;
+  next_date?: string;
+  press?: PressItem[];
+  related_portfolio_titles?: string[];
+};
+
+function ResidenciesSection({ colors, isDark, isOwner, portfolioWorks = [] }: { colors: any; isDark: boolean; isOwner: boolean; portfolioWorks?: any[] }) {
+  const STORAGE_KEY = "sv_profile_residencies";
+
+  const [residencies, setResidencies] = useState<Residency[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return [
+      {
+        id: "r1",
+        venue: "Gallery 345",
+        role: "Artist in Residence",
+        location: "Toronto, ON",
+        address: "345 Sorauren Ave · Parkdale · Toronto, ON",
+        schedule: "",
+        start_date: "Jan 2026",
+        end_date: "Jul 2026",
+        is_current: true,
+        duration: "6 months",
+        description: "6-month residency producing a new body of work for the gallery's Summer showcase.",
+        long_description: "Gallery 345 selected me from 200+ applicants for their flagship 6-month residency program. Based in the gallery's east-end studio, I have dedicated workspace, a $3,500 materials budget, and weekly mentorship with curator Lena Marquez. The residency culminates in a solo show opening in July 2026 as part of the gallery's 'Emerging Voices' Summer program.\n\nCurrent body of work explores themes of urban renewal and displacement through mixed-media installations combining photography, screen-printed text, and found materials from Toronto's rapidly changing east-end neighbourhoods.",
+        image: "https://picsum.photos/seed/residency-gallery345/400/250",
+        gallery: [
+          "https://picsum.photos/seed/g345-a/800/600",
+          "https://picsum.photos/seed/g345-b/800/600",
+          "https://picsum.photos/seed/g345-c/800/600",
+        ],
+        website: "https://gallery345.com",
+        press: [
+          { id: "p1", title: "Gallery 345 Names 2026 Artist in Residence", source: "Akimbo", url: "https://akimbo.ca", date: "Dec 2025" },
+          { id: "p2", title: "Studio Visit: Behind the Walls of Gallery 345's Residency Program", source: "Canadian Art", url: "https://canadianart.ca", date: "Feb 2026" },
+        ],
+        related_portfolio_titles: ["Concrete Canvas — Dundas & Ossington", "Voices of the Underground"],
+      },
+      {
+        id: "r2",
+        venue: "The Drake Underground",
+        role: "Resident DJ",
+        location: "Toronto, ON",
+        address: "1150 Queen St W · Queen West · Toronto, ON",
+        schedule: "Every Friday · 10 PM – 2 AM",
+        start_date: "Sep 2025",
+        end_date: "",
+        is_current: true,
+        duration: "Ongoing · Weekly",
+        description: "Weekly residency curating Friday night sets — Afrobeats, dancehall, and underground house.",
+        long_description: "After a standout guest set in summer 2025, The Drake Underground invited me on as their weekly Friday resident. Each Friday I open the room from 10 PM and play through 2 AM, rotating in guest DJs for the 11 PM and midnight slots.\n\nThe residency is a creative playground — I've used the recurring slot to develop a signature sound that bridges Afrobeats, dancehall, and deep/underground house. Over the past 6 months the Friday nights have become one of the venue's most-attended weekly events, regularly selling out at capacity.",
+        image: "https://picsum.photos/seed/residency-drake/400/250",
+        gallery: [
+          "https://picsum.photos/seed/drake-a/800/600",
+          "https://picsum.photos/seed/drake-b/800/600",
+        ],
+        website: "https://thedrakehotel.ca",
+        next_date: "Next Friday · 10 PM",
+        press: [
+          { id: "p3", title: "The Drake Underground's Friday Residency is Toronto's Best-Kept Secret", source: "NOW Toronto", url: "https://nowtoronto.com", date: "Nov 2025" },
+        ],
+        related_portfolio_titles: [],
+      },
+      {
+        id: "r3",
+        venue: "Banff Centre for Arts",
+        role: "Visual Arts Fellow",
+        location: "Banff, AB",
+        address: "107 Tunnel Mountain Dr · Banff, AB",
+        schedule: "",
+        start_date: "Jun 2024",
+        end_date: "Aug 2024",
+        is_current: false,
+        duration: "8 weeks",
+        description: "8-week residency developing a mixed-media series on migration and belonging.",
+        long_description: "One of 12 visual artists selected for the Banff Centre's 2024 Summer Visual Arts Fellowship. Worked in the Thom Studios producing 'Chromatic Rebellion Series', a 14-piece mixed-media body of work exploring intergenerational memory and migration.\n\nCollaborated closely with visiting critic Dr. Amina Osei and fellow resident artists. Two works from the series were acquired by the Banff Centre's permanent collection and featured in the 2024 closing showcase.",
+        image: "https://picsum.photos/seed/residency-banff/400/250",
+        gallery: [
+          "https://picsum.photos/seed/banff-a/800/600",
+          "https://picsum.photos/seed/banff-b/800/600",
+          "https://picsum.photos/seed/banff-c/800/600",
+          "https://picsum.photos/seed/banff-d/800/600",
+        ],
+        website: "https://banffcentre.ca",
+        press: [
+          { id: "p4", title: "Banff Centre Announces 2024 Visual Arts Fellows", source: "Canadian Art", url: "https://canadianart.ca", date: "May 2024" },
+          { id: "p5", title: "Rockies Residency: Inside Banff's Summer Program", source: "Galleries West", url: "https://gallerieswest.ca", date: "Aug 2024" },
+        ],
+        related_portfolio_titles: ["Chromatic Rebellion Series"],
+      },
+    ];
+  });
+
+  const persist = (next: Residency[]) => {
+    setResidencies(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  };
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const emptyForm = {
+    venue: "", role: "", location: "", address: "", schedule: "",
+    start_date: "", end_date: "", is_current: true, duration: "", description: "",
+    long_description: "", image: "", website: "", next_date: "",
+    gallery: [] as string[],
+    press: [] as PressItem[],
+    related_portfolio_titles: [] as string[],
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [filter, setFilter] = useState<"all" | "current" | "past">("all");
+  const [newPress, setNewPress] = useState({ title: "", source: "", url: "", date: "" });
+  const [newRelatedTitle, setNewRelatedTitle] = useState("");
+
+  const saveResidency = () => {
+    if (!form.venue.trim() || !form.role.trim()) return;
+    if (editingId) {
+      persist(residencies.map((r) => r.id === editingId ? { ...r, ...form } : r));
+    } else {
+      const newR: Residency = {
+        id: `r${Date.now()}`,
+        ...form,
+        venue: form.venue.trim(),
+        role: form.role.trim(),
+        location: form.location.trim(),
+      };
+      persist([newR, ...residencies]);
+    }
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const startEdit = (r: Residency) => {
+    setEditingId(r.id);
+    setForm({
+      venue: r.venue, role: r.role, location: r.location,
+      address: r.address || "",
+      schedule: r.schedule, start_date: r.start_date, end_date: r.end_date,
+      is_current: r.is_current, duration: r.duration || "",
+      description: r.description,
+      long_description: r.long_description || "",
+      image: r.image || "", website: r.website || "",
+      next_date: r.next_date || "",
+      gallery: r.gallery || [],
+      press: r.press || [],
+      related_portfolio_titles: r.related_portfolio_titles || [],
+    });
+    setShowForm(true);
+  };
+
+  const addGalleryImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const readers = files.map((file) => new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    }));
+    Promise.all(readers).then((imgs) => {
+      setForm((f) => ({ ...f, gallery: [...f.gallery, ...imgs] }));
+    });
+  };
+
+  const removeGalleryImage = (idx: number) => {
+    setForm((f) => ({ ...f, gallery: f.gallery.filter((_, i) => i !== idx) }));
+  };
+
+  const addPressItem = () => {
+    if (!newPress.title.trim()) return;
+    const p: PressItem = {
+      id: `p${Date.now()}`,
+      title: newPress.title.trim(),
+      source: newPress.source.trim(),
+      url: newPress.url.trim(),
+      date: newPress.date.trim(),
+    };
+    setForm((f) => ({ ...f, press: [...f.press, p] }));
+    setNewPress({ title: "", source: "", url: "", date: "" });
+  };
+
+  const removePressItem = (id: string) => {
+    setForm((f) => ({ ...f, press: f.press.filter((p) => p.id !== id) }));
+  };
+
+  const addRelatedTitle = () => {
+    if (!newRelatedTitle.trim()) return;
+    setForm((f) => ({ ...f, related_portfolio_titles: [...f.related_portfolio_titles, newRelatedTitle.trim()] }));
+    setNewRelatedTitle("");
+  };
+
+  const removeRelatedTitle = (idx: number) => {
+    setForm((f) => ({ ...f, related_portfolio_titles: f.related_portfolio_titles.filter((_, i) => i !== idx) }));
+  };
+
+  // Open residency detail in a NEW browser tab with a rich standalone page
+  const openResidencyInNewTab = (r: Residency) => {
+    const escape = (s: string) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const relatedPortfolio = (r.related_portfolio_titles || [])
+      .map((t) => portfolioWorks.find((p: any) => p.title === t))
+      .filter(Boolean);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escape(r.venue)} — ${escape(r.role)}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a14;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+  .hero {
+    border-radius: 16px; overflow: hidden; margin-bottom: 24px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  }
+  .hero img { width: 100%; display: block; max-height: 480px; object-fit: cover; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .badge {
+    font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 100px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .badge-role { background: ${r.is_current ? 'rgba(234,179,8,0.15)' : 'rgba(139,92,246,0.15)'}; color: ${r.is_current ? '#eab308' : '#8b5cf6'}; }
+  .badge-active {
+    background: rgba(34,197,94,0.15); color: #22c55e;
+    font-size: 11px; padding: 3px 10px;
+  }
+  .badge-active::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: #22c55e; display: inline-block; margin-right: 4px;
+  }
+  h1 { font-size: 36px; font-weight: 800; line-height: 1.2; margin-bottom: 16px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 20px;
+    color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 24px;
+  }
+  .meta-item { display: inline-flex; align-items: center; gap: 6px; }
+  .schedule { color: #eab308; font-weight: 600; }
+  .info-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px; margin-bottom: 32px;
+  }
+  .info-card {
+    padding: 14px 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .info-card-label {
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.5);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .info-card-value {
+    font-size: 14px; font-weight: 600; color: #fff; line-height: 1.4;
+  }
+  .next-date {
+    padding: 14px 18px; border-radius: 12px;
+    background: rgba(234,179,8,0.1); border: 1px solid rgba(234,179,8,0.3);
+    display: flex; align-items: center; gap: 12px; margin-bottom: 32px;
+  }
+  .cross-link-banner {
+    padding: 14px 18px; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(139,92,246,0.12), rgba(234,179,8,0.08));
+    border: 1px solid rgba(139,92,246,0.25);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 16px;
+  }
+  .cross-link-text { font-size: 13px; color: rgba(255,255,255,0.85); }
+  .cross-link-text strong { color: #fff; }
+  .cross-link-btn {
+    padding: 8px 16px; border-radius: 8px;
+    background: rgba(255,255,255,0.1); color: #fff;
+    font-size: 12px; font-weight: 700;
+    text-decoration: none; white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.15);
+    transition: all 0.2s;
+  }
+  .cross-link-btn:hover { background: rgba(255,255,255,0.18); }
+  .next-date-label {
+    font-size: 11px; font-weight: 700; color: #eab308;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .next-date-value { font-size: 16px; font-weight: 700; }
+  .section { margin-bottom: 40px; }
+  .section-title {
+    font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.5);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px;
+  }
+  .description { font-size: 16px; line-height: 1.8; color: rgba(255,255,255,0.85); white-space: pre-wrap; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .gallery-item {
+    border-radius: 12px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    aspect-ratio: 4 / 3;
+  }
+  .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .related {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px;
+  }
+  .related-card {
+    border-radius: 12px; overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: transform 0.2s;
+  }
+  .related-card:hover { transform: translateY(-2px); }
+  .related-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+  .related-info { padding: 12px 14px; }
+  .related-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+  .related-meta { font-size: 12px; color: rgba(255,255,255,0.5); }
+  .press-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; border-radius: 10px; gap: 12px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: inherit; text-decoration: none; transition: background 0.2s;
+    margin-bottom: 8px;
+  }
+  .press-item:hover { background: rgba(255,255,255,0.08); }
+  .press-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+  .press-meta { font-size: 12px; color: rgba(255,255,255,0.5); }
+  .press-arrow { color: rgba(255,255,255,0.5); font-size: 18px; }
+  .cta-button {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 28px; border-radius: 12px;
+    background: #eab308; color: #000;
+    font-weight: 700; font-size: 15px;
+    text-decoration: none; transition: background 0.2s;
+  }
+  .cta-button:hover { background: #facc15; }
+  .top-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+  }
+  .back-btn {
+    background: rgba(255,255,255,0.08); border: none; color: #fff;
+    padding: 10px 18px; border-radius: 10px; cursor: pointer;
+    font-size: 14px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .back-btn:hover { background: rgba(255,255,255,0.14); }
+  .powered { text-align: center; font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 60px; }
+  .powered a { color: #eab308; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="top-bar">
+    <button class="back-btn" onclick="window.close()">← Close</button>
+  </div>
+
+  ${r.image ? `<div class="hero"><img src="${escape(r.image)}" alt="${escape(r.venue)}"></div>` : ""}
+
+  <div class="badges">
+    <span class="badge badge-role">${escape(r.role)}</span>
+    ${r.is_current ? '<span class="badge badge-active">Active</span>' : ''}
+  </div>
+
+  <h1>${escape(r.venue)}</h1>
+
+  <div class="meta">
+    ${r.location ? `<span class="meta-item">📍 ${escape(r.location)}</span>` : ""}
+    <span class="meta-item">📅 ${escape(r.start_date)}${r.is_current ? " – Present" : r.end_date ? ` – ${escape(r.end_date)}` : ""}</span>
+    ${r.schedule ? `<span class="meta-item schedule">🕒 ${escape(r.schedule)}</span>` : ""}
+  </div>
+
+  <div class="info-grid">
+    ${r.address ? `
+      <div class="info-card">
+        <div class="info-card-label">Based in</div>
+        <div class="info-card-value">${escape(r.address)}</div>
+      </div>
+    ` : ""}
+    ${r.duration ? `
+      <div class="info-card">
+        <div class="info-card-label">Duration</div>
+        <div class="info-card-value">${escape(r.duration)}</div>
+      </div>
+    ` : ""}
+    <div class="info-card">
+      <div class="info-card-label">Timeline</div>
+      <div class="info-card-value">${escape(r.start_date)}${r.is_current ? " – Present" : r.end_date ? ` – ${escape(r.end_date)}` : ""}</div>
+    </div>
+    ${r.website ? `
+      <div class="info-card">
+        <div class="info-card-label">Venue website</div>
+        <div class="info-card-value"><a href="${escape(r.website)}" target="_blank" rel="noopener noreferrer" style="color: #eab308; text-decoration: none;">${escape((r.website || '').replace(/^https?:\/\/(www\.)?/, ''))} ↗</a></div>
+      </div>
+    ` : ""}
+  </div>
+
+  ${r.is_current && r.next_date ? `
+    <div class="next-date">
+      <span style="font-size: 24px;">📆</span>
+      <div>
+        <div class="next-date-label">Next Date</div>
+        <div class="next-date-value">${escape(r.next_date)}</div>
+      </div>
+    </div>
+  ` : ""}
+
+  ${(r.long_description || r.description) ? `
+    <div class="section">
+      <div class="section-title">About this residency</div>
+      <p class="description">${escape(r.long_description || r.description)}</p>
+    </div>
+  ` : ""}
+
+  ${r.gallery && r.gallery.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Work from this residency</div>
+      <div class="gallery">
+        ${r.gallery.map((img) => `<div class="gallery-item"><img src="${escape(img)}" alt=""></div>`).join("")}
+      </div>
+    </div>
+  ` : ""}
+
+  ${relatedPortfolio.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Work from this residency — from the artist's portfolio</div>
+      <div class="cross-link-banner">
+        <div class="cross-link-text">
+          <strong>${relatedPortfolio.length} piece${relatedPortfolio.length !== 1 ? 's' : ''}</strong> from this residency are featured in the artist's portfolio on Street Voices.
+        </div>
+        <a class="cross-link-btn" href="${escape(window.location.origin)}/settings" target="_blank" rel="noopener noreferrer">
+          View full portfolio →
+        </a>
+      </div>
+      <div class="related">
+        ${relatedPortfolio.map((p: any) => `
+          <a class="related-card" href="${escape(window.location.origin)}/settings" target="_blank" rel="noopener noreferrer" style="display: block; color: inherit; text-decoration: none;">
+            ${(p.thumbnail_url || p.image_url) ? `<img src="${escape(p.thumbnail_url || p.image_url)}" alt="${escape(p.title)}">` : ""}
+            <div class="related-info">
+              <div class="related-title">${escape(p.title)}</div>
+              ${(p.category || p.year) ? `<div class="related-meta">${escape(p.category || "")}${p.category && p.year ? " · " : ""}${escape(p.year || "")}</div>` : ""}
+              ${p.description ? `<div style="font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 6px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${escape(p.description)}</div>` : ""}
+            </div>
+          </a>
+        `).join("")}
+      </div>
+    </div>
+  ` : ""}
+
+  ${r.press && r.press.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Press & coverage</div>
+      ${r.press.map((p) => `
+        <a class="press-item" href="${escape(p.url || '#')}" target="_blank" rel="noopener noreferrer">
+          <div>
+            <div class="press-title">${escape(p.title)}</div>
+            <div class="press-meta">${escape(p.source)}${p.source && p.date ? " · " : ""}${escape(p.date)}</div>
+          </div>
+          <span class="press-arrow">↗</span>
+        </a>
+      `).join("")}
+    </div>
+  ` : ""}
+
+  ${r.website ? `
+    <a class="cta-button" href="${escape(r.website)}" target="_blank" rel="noopener noreferrer">
+      🌐 Visit ${escape(r.venue)} →
+    </a>
+  ` : ""}
+
+  <div class="powered">
+    Powered by <a href="${escape(window.location.origin)}" target="_blank">Street Voices</a>
+  </div>
+</div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const newWin = window.open(url, "_blank");
+    if (newWin) {
+      // Revoke the blob URL after the new tab has loaded
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } else {
+      alert("Please allow pop-ups for this site to view residency details in a new tab.");
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const deleteResidency = (id: string) => persist(residencies.filter((r) => r.id !== id));
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setForm((f) => ({ ...f, image: reader.result as string }));
+    reader.readAsDataURL(file);
+  };
+
+  const roleColor = (role: string) => {
+    const r = role.toLowerCase();
+    if (r.includes("dj") || r.includes("music")) return { bg: "rgba(236,72,153,0.15)", fg: "#ec4899" };
+    if (r.includes("artist") || r.includes("visual") || r.includes("muralist")) return { bg: "rgba(139,92,246,0.15)", fg: "#8b5cf6" };
+    if (r.includes("photo")) return { bg: "rgba(59,130,246,0.15)", fg: "#3b82f6" };
+    if (r.includes("fellow") || r.includes("mentor") || r.includes("teach")) return { bg: "rgba(34,197,94,0.15)", fg: "#22c55e" };
+    return { bg: "rgba(234,179,8,0.15)", fg: "#eab308" };
+  };
+
+  const visible = residencies.filter((r) => {
+    if (filter === "current") return r.is_current;
+    if (filter === "past") return !r.is_current;
+    return true;
+  });
+
+  const currentCount = residencies.filter((r) => r.is_current).length;
+
+  return (
+    <GlassCard colors={colors} isDark={isDark}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>Residencies & Partnerships</h3>
+          <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "2px" }}>
+            {currentCount > 0 ? (
+              <><span style={{ color: "#22c55e", fontWeight: 700 }}>● </span>{currentCount} active · {residencies.length - currentCount} past</>
+            ) : (
+              `${residencies.length} total`
+            )}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+          {residencies.length > 0 && (
+            <>
+              {(["all", "current", "past"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  style={{
+                    padding: "5px 12px", borderRadius: "100px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                    background: filter === f ? colors.accent : "transparent",
+                    color: filter === f ? "#000" : colors.textSecondary,
+                    border: filter === f ? "none" : `1px solid ${colors.border}`,
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {f}
+                </button>
+              ))}
+            </>
+          )}
+          {isOwner && (
+            <button
+              onClick={() => { setEditingId(null); setForm(emptyForm); setShowForm(!showForm); }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "5px",
+                padding: "6px 12px", borderRadius: "8px", border: "none",
+                background: colors.accent, color: "#000",
+                fontSize: "11px", fontWeight: 700, cursor: "pointer",
+                marginLeft: "4px",
+              }}
+            >
+              <Plus size={12} /> Add
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Form */}
+      {showForm && isOwner && (
+        <div style={{
+          padding: "16px", borderRadius: "12px", marginBottom: "14px",
+          background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+          border: `1px solid ${colors.border}`,
+          display: "flex", flexDirection: "column", gap: "10px",
+        }}>
+          {/* Image upload */}
+          <label style={{
+            display: "flex", alignItems: "center", gap: "10px",
+            padding: "10px", borderRadius: "10px",
+            background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)",
+            border: `1px dashed ${colors.border}`, cursor: "pointer",
+          }}>
+            <div style={{
+              width: "56px", height: "56px", borderRadius: "8px", overflow: "hidden",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              {form.image ? (
+                <img src={form.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <Camera size={20} color={colors.textSecondary} />
+              )}
+            </div>
+            <div style={{ fontSize: "12px", color: colors.textSecondary }}>
+              {form.image ? "Click to change venue photo" : "Upload venue/residency photo"}
+            </div>
+            <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
+          </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <input
+              autoFocus
+              value={form.venue}
+              onChange={(e) => setForm({ ...form, venue: e.target.value })}
+              placeholder="Venue / Organization *"
+              style={{
+                padding: "10px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "13px", outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <input
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              placeholder="Role (e.g. Resident DJ, Artist in Residence) *"
+              style={{
+                padding: "10px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "13px", outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <input
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              placeholder="City (e.g. Toronto, ON)"
+              style={{
+                padding: "10px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "13px", outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <input
+              value={form.duration}
+              onChange={(e) => setForm({ ...form, duration: e.target.value })}
+              placeholder="Duration (e.g. 6 months, 8 weeks)"
+              style={{
+                padding: "10px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "13px", outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <input
+            value={form.address}
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+            placeholder="Full address (e.g. 345 Sorauren Ave · Parkdale · Toronto, ON) — shown on detail page"
+            style={{
+              padding: "10px 12px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+              border: `1px solid ${colors.border}`, color: colors.text,
+              fontSize: "13px", outline: "none", boxSizing: "border-box",
+            }}
+          />
+
+          <input
+            value={form.schedule}
+            onChange={(e) => setForm({ ...form, schedule: e.target.value })}
+            placeholder="Schedule (e.g. Every Friday · 10 PM – 2 AM) — optional"
+            style={{
+              padding: "10px 12px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+              border: `1px solid ${colors.border}`, color: colors.text,
+              fontSize: "13px", outline: "none", boxSizing: "border-box",
+            }}
+          />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "8px", alignItems: "center" }}>
+            <input
+              value={form.start_date}
+              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              placeholder="Start (e.g. Jan 2026)"
+              style={{
+                padding: "10px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "13px", outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <input
+              value={form.end_date}
+              onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+              placeholder={form.is_current ? "Ongoing (leave empty)" : "End (e.g. Aug 2024)"}
+              disabled={form.is_current}
+              style={{
+                padding: "10px 12px", borderRadius: "8px",
+                background: form.is_current ? (isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)") : (isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)"),
+                border: `1px solid ${colors.border}`, color: form.is_current ? colors.textSecondary : colors.text,
+                fontSize: "13px", outline: "none", boxSizing: "border-box",
+                opacity: form.is_current ? 0.6 : 1,
+              }}
+            />
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: colors.text, cursor: "pointer", whiteSpace: "nowrap" }}>
+              <input
+                type="checkbox"
+                checked={form.is_current}
+                onChange={(e) => setForm({ ...form, is_current: e.target.checked, end_date: e.target.checked ? "" : form.end_date })}
+                style={{ accentColor: colors.accent, cursor: "pointer" }}
+              />
+              Ongoing
+            </label>
+          </div>
+
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value.slice(0, 400) })}
+            placeholder="Describe the residency — what you do, access/perks, highlights..."
+            rows={3}
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+              border: `1px solid ${colors.border}`, color: colors.text,
+              fontSize: "13px", fontFamily: "inherit", lineHeight: 1.5,
+              resize: "vertical", outline: "none", boxSizing: "border-box",
+            }}
+          />
+
+          <textarea
+            value={form.long_description}
+            onChange={(e) => setForm({ ...form, long_description: e.target.value.slice(0, 2000) })}
+            placeholder="Longer description — context, collaborators, outcomes, what came out of it (shown on the detail page)"
+            rows={4}
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+              border: `1px solid ${colors.border}`, color: colors.text,
+              fontSize: "13px", fontFamily: "inherit", lineHeight: 1.5,
+              resize: "vertical", outline: "none", boxSizing: "border-box",
+            }}
+          />
+
+          {/* Website + Next date */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <input
+              value={form.website}
+              onChange={(e) => setForm({ ...form, website: e.target.value })}
+              placeholder="Institution website (optional)"
+              style={{
+                padding: "10px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "13px", outline: "none", boxSizing: "border-box",
+              }}
+            />
+            {form.is_current && form.schedule && (
+              <input
+                value={form.next_date}
+                onChange={(e) => setForm({ ...form, next_date: e.target.value })}
+                placeholder="Next date (e.g. Next Friday · 10 PM)"
+                style={{
+                  padding: "10px 12px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "13px", outline: "none", boxSizing: "border-box",
+                }}
+              />
+            )}
+          </div>
+
+          {/* Work gallery uploads */}
+          <div>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+              Work from this residency ({form.gallery.length} image{form.gallery.length !== 1 ? "s" : ""})
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "6px" }}>
+              {form.gallery.map((img, idx) => (
+                <div key={idx} style={{
+                  position: "relative", width: "64px", height: "64px", borderRadius: "8px", overflow: "hidden",
+                  border: `1px solid ${colors.border}`,
+                }}>
+                  <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <button
+                    onClick={() => removeGalleryImage(idx)}
+                    style={{
+                      position: "absolute", top: "3px", right: "3px",
+                      width: "18px", height: "18px", borderRadius: "50%",
+                      background: "rgba(0,0,0,0.7)", border: "none", color: "#fff",
+                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+                    }}
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+              <label style={{
+                width: "64px", height: "64px", borderRadius: "8px",
+                border: `2px dashed ${colors.border}`, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: colors.textSecondary,
+              }}>
+                <Plus size={18} />
+                <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={addGalleryImage} />
+              </label>
+            </div>
+          </div>
+
+          {/* Related portfolio titles */}
+          <div>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+              Related portfolio pieces
+            </div>
+            {form.related_portfolio_titles.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "6px" }}>
+                {form.related_portfolio_titles.map((t, idx) => (
+                  <span key={idx} style={{
+                    display: "inline-flex", alignItems: "center", gap: "4px",
+                    fontSize: "11px", padding: "4px 10px", borderRadius: "100px",
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${colors.border}`, color: colors.text,
+                  }}>
+                    {t}
+                    <button
+                      onClick={() => removeRelatedTitle(idx)}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: colors.textSecondary, display: "flex" }}
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "6px" }}>
+              <select
+                value={newRelatedTitle}
+                onChange={(e) => setNewRelatedTitle(e.target.value)}
+                style={{
+                  flex: 1, padding: "8px 12px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "12px", outline: "none", cursor: "pointer",
+                }}
+              >
+                <option value="">Choose a portfolio piece...</option>
+                {portfolioWorks
+                  .filter((p: any) => !form.related_portfolio_titles.includes(p.title))
+                  .map((p: any, i: number) => (
+                    <option key={i} value={p.title}>{p.title}</option>
+                  ))}
+              </select>
+              <button
+                onClick={addRelatedTitle}
+                disabled={!newRelatedTitle.trim()}
+                style={{
+                  padding: "8px 14px", borderRadius: "8px", border: "none",
+                  background: newRelatedTitle.trim() ? colors.accent : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"),
+                  color: newRelatedTitle.trim() ? "#000" : colors.textSecondary,
+                  fontSize: "12px", fontWeight: 700, cursor: newRelatedTitle.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                Link
+              </button>
+            </div>
+          </div>
+
+          {/* Press coverage */}
+          <div>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+              Press & coverage
+            </div>
+            {form.press.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "8px" }}>
+                {form.press.map((p) => (
+                  <div key={p.id} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
+                    padding: "8px 12px", borderRadius: "8px",
+                    background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                    border: `1px solid ${colors.border}`,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: colors.text }}>{p.title}</div>
+                      <div style={{ fontSize: "11px", color: colors.textSecondary }}>
+                        {p.source}{p.source && p.date ? " · " : ""}{p.date}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removePressItem(p.id)}
+                      style={{
+                        width: "22px", height: "22px", borderRadius: "6px",
+                        background: "transparent", border: `1px solid ${colors.border}`,
+                        color: colors.textSecondary, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "6px" }}>
+              <input
+                value={newPress.title}
+                onChange={(e) => setNewPress({ ...newPress, title: e.target.value })}
+                placeholder="Article title"
+                style={{
+                  padding: "8px 12px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "12px", outline: "none", boxSizing: "border-box",
+                }}
+              />
+              <input
+                value={newPress.source}
+                onChange={(e) => setNewPress({ ...newPress, source: e.target.value })}
+                placeholder="Source (e.g. NOW Toronto)"
+                style={{
+                  padding: "8px 12px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "12px", outline: "none", boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr auto", gap: "6px" }}>
+              <input
+                value={newPress.url}
+                onChange={(e) => setNewPress({ ...newPress, url: e.target.value })}
+                placeholder="URL"
+                style={{
+                  padding: "8px 12px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "12px", outline: "none", boxSizing: "border-box",
+                }}
+              />
+              <input
+                value={newPress.date}
+                onChange={(e) => setNewPress({ ...newPress, date: e.target.value })}
+                placeholder="Date"
+                style={{
+                  padding: "8px 12px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "12px", outline: "none", boxSizing: "border-box",
+                }}
+              />
+              <button
+                onClick={addPressItem}
+                disabled={!newPress.title.trim()}
+                style={{
+                  padding: "8px 14px", borderRadius: "8px", border: "none",
+                  background: newPress.title.trim() ? colors.accent : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"),
+                  color: newPress.title.trim() ? "#000" : colors.textSecondary,
+                  fontSize: "12px", fontWeight: 700, cursor: newPress.title.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}
+              style={{
+                padding: "8px 16px", borderRadius: "8px",
+                background: "transparent", border: `1px solid ${colors.border}`,
+                color: colors.textSecondary, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveResidency}
+              disabled={!form.venue.trim() || !form.role.trim()}
+              style={{
+                padding: "8px 16px", borderRadius: "8px", border: "none",
+                background: (form.venue.trim() && form.role.trim()) ? colors.accent : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"),
+                color: (form.venue.trim() && form.role.trim()) ? "#000" : colors.textSecondary,
+                fontSize: "13px", fontWeight: 700,
+                cursor: (form.venue.trim() && form.role.trim()) ? "pointer" : "not-allowed",
+              }}
+            >
+              {editingId ? "Save Changes" : "Add Residency"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Residency list */}
+      {visible.length === 0 ? (
+        <div style={{
+          textAlign: "center", padding: "32px 16px",
+          color: colors.textSecondary, fontSize: "13px",
+          borderRadius: "12px",
+          border: `2px dashed ${colors.border}`,
+        }}>
+          <Home size={28} style={{ opacity: 0.3, marginBottom: "8px" }} />
+          <div style={{ fontWeight: 600, color: colors.text, marginBottom: "4px" }}>
+            {filter === "current" ? "No active residencies" : filter === "past" ? "No past residencies" : "No residencies yet"}
+          </div>
+          <div>{isOwner ? "Showcase where you're in residence — clubs, galleries, programs, partnerships." : "This artist hasn't added residencies yet."}</div>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
+          {visible.map((r) => {
+            const rc = roleColor(r.role);
+            return (
+              <div
+                key={r.id}
+                onClick={() => openResidencyInNewTab(r)}
+                style={{
+                  display: "flex", gap: "14px",
+                  padding: "14px", borderRadius: "14px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.7)",
+                  border: `1px solid ${r.is_current ? `${rc.fg}55` : colors.border}`,
+                  transition: "all 0.2s",
+                  position: "relative",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = isDark ? "0 8px 24px rgba(0,0,0,0.3)" : "0 8px 24px rgba(0,0,0,0.1)"; e.currentTarget.style.borderColor = rc.fg; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = r.is_current ? `${rc.fg}55` : colors.border; }}
+              >
+                {/* Image */}
+                <div style={{
+                  width: "80px", height: "80px", borderRadius: "10px", overflow: "hidden",
+                  background: rc.bg,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  {r.image ? (
+                    <img src={r.image} alt={r.venue} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <Home size={28} color={rc.fg} />
+                  )}
+                </div>
+
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "4px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: "14px", fontWeight: 700, color: colors.text }}>{r.venue}</span>
+                        {r.is_current && (
+                          <span style={{
+                            fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "100px",
+                            background: "rgba(34,197,94,0.15)", color: "#22c55e",
+                            display: "inline-flex", alignItems: "center", gap: "3px",
+                          }}>
+                            <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+                            Active
+                          </span>
+                        )}
+                        <ExternalLink size={11} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px", flexWrap: "wrap" }}>
+                        <span style={{
+                          fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "6px",
+                          background: rc.bg, color: rc.fg,
+                        }}>
+                          {r.role}
+                        </span>
+                        {r.location && (
+                          <span style={{ fontSize: "12px", color: colors.textSecondary, display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                            <MapPin size={11} /> {r.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isOwner && (
+                      <div style={{ display: "flex", gap: "4px", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startEdit(r); }}
+                          title="Edit"
+                          style={{
+                            width: "26px", height: "26px", borderRadius: "6px",
+                            background: "transparent", border: `1px solid ${colors.border}`,
+                            color: colors.textSecondary, cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}
+                        >
+                          <Pencil size={10} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteResidency(r.id); }}
+                          title="Delete"
+                          style={{
+                            width: "26px", height: "26px", borderRadius: "6px",
+                            background: "transparent", border: `1px solid ${colors.border}`,
+                            color: colors.textSecondary, cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Schedule or date range */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px", flexWrap: "wrap" }}>
+                    {r.schedule && (
+                      <span style={{ fontSize: "12px", color: "#eab308", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <Clock size={11} /> {r.schedule}
+                      </span>
+                    )}
+                    <span style={{ fontSize: "12px", color: colors.textSecondary, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <Calendar size={11} /> {r.start_date}{r.is_current ? " – Present" : r.end_date ? ` – ${r.end_date}` : ""}
+                    </span>
+                  </div>
+
+                  {/* Description */}
+                  {r.description && (
+                    <p style={{ margin: "6px 0 0 0", fontSize: "12px", lineHeight: 1.5, color: colors.textSecondary }}>
+                      {r.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Residency Detail Modal */}
+      {selectedId !== null && (() => {
+        const r = residencies.find((x) => x.id === selectedId);
+        if (!r) return null;
+        const rc = roleColor(r.role);
+        const relatedPortfolio = (r.related_portfolio_titles || []).map((t) => portfolioWorks.find((p) => p.title === t)).filter(Boolean);
+        return (
+          <div
+            onClick={() => setSelectedId(null)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 10001,
+              background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "960px", margin: "40px auto", padding: "0 20px 60px",
+              }}
+            >
+              {/* Top nav */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 0", position: "sticky", top: 0, zIndex: 10 }}>
+                <button
+                  onClick={() => setSelectedId(null)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    padding: "10px 20px", borderRadius: "10px",
+                    background: "rgba(255,255,255,0.1)", border: "none",
+                    color: "#fff", cursor: "pointer", fontSize: "14px", fontWeight: 500,
+                  }}
+                >
+                  <ArrowLeft size={16} /> Back
+                </button>
+                {isOwner && (
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                      onClick={() => { startEdit(r); setSelectedId(null); }}
+                      style={{
+                        padding: "8px 16px", borderRadius: "10px",
+                        background: "rgba(255,255,255,0.1)", border: "none",
+                        color: "#fff", cursor: "pointer", fontSize: "13px", fontWeight: 600,
+                        display: "flex", alignItems: "center", gap: "6px",
+                      }}
+                    >
+                      <Pencil size={13} /> Edit
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Hero image */}
+              {r.image && (
+                <div style={{ borderRadius: "16px", overflow: "hidden", marginBottom: "24px", boxShadow: "0 16px 48px rgba(0,0,0,0.4)" }}>
+                  <img src={r.image} alt={r.venue} style={{ width: "100%", display: "block", maxHeight: "480px", objectFit: "cover" }} />
+                </div>
+              )}
+
+              {/* Header */}
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", flexWrap: "wrap" }}>
+                  <span style={{
+                    fontSize: "12px", fontWeight: 700, padding: "4px 12px", borderRadius: "100px",
+                    background: rc.bg, color: rc.fg,
+                  }}>
+                    {r.role}
+                  </span>
+                  {r.is_current && (
+                    <span style={{
+                      fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "100px",
+                      background: "rgba(34,197,94,0.15)", color: "#22c55e",
+                      display: "inline-flex", alignItems: "center", gap: "4px",
+                    }}>
+                      <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+                      Active
+                    </span>
+                  )}
+                </div>
+                <h1 style={{ margin: 0, fontSize: "32px", fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{r.venue}</h1>
+                <div style={{ display: "flex", gap: "16px", marginTop: "12px", flexWrap: "wrap", color: "rgba(255,255,255,0.6)", fontSize: "13px" }}>
+                  {r.location && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                      <MapPin size={13} /> {r.location}
+                    </span>
+                  )}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                    <Calendar size={13} /> {r.start_date}{r.is_current ? " – Present" : r.end_date ? ` – ${r.end_date}` : ""}
+                  </span>
+                  {r.schedule && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: "#eab308", fontWeight: 600 }}>
+                      <Clock size={13} /> {r.schedule}
+                    </span>
+                  )}
+                </div>
+
+                {/* Next date banner for recurring */}
+                {r.is_current && r.next_date && (
+                  <div style={{
+                    marginTop: "14px", padding: "12px 16px", borderRadius: "12px",
+                    background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.3)",
+                    display: "flex", alignItems: "center", gap: "10px",
+                  }}>
+                    <Calendar size={16} color="#eab308" />
+                    <div>
+                      <div style={{ fontSize: "11px", fontWeight: 700, color: "#eab308", textTransform: "uppercase", letterSpacing: "0.5px" }}>Next Date</div>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff" }}>{r.next_date}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Long description */}
+              {(r.long_description || r.description) && (
+                <div style={{ marginBottom: "32px" }}>
+                  <h3 style={{ fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 12px 0" }}>About this residency</h3>
+                  <p style={{ fontSize: "15px", lineHeight: 1.7, color: "rgba(255,255,255,0.85)", margin: 0, whiteSpace: "pre-wrap" }}>
+                    {r.long_description || r.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Gallery */}
+              {r.gallery && r.gallery.length > 0 && (
+                <div style={{ marginBottom: "32px" }}>
+                  <h3 style={{ fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 12px 0" }}>
+                    Work from this residency
+                  </h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "10px" }}>
+                    {r.gallery.map((img, i) => (
+                      <div key={i} style={{
+                        borderRadius: "12px", overflow: "hidden",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        aspectRatio: "4 / 3",
+                      }}>
+                        <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Related portfolio pieces */}
+              {relatedPortfolio.length > 0 && (
+                <div style={{ marginBottom: "32px" }}>
+                  <h3 style={{ fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 12px 0" }}>
+                    Related portfolio pieces
+                  </h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "12px" }}>
+                    {relatedPortfolio.map((p: any, i: number) => (
+                      <div key={i} style={{
+                        borderRadius: "12px", overflow: "hidden",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }}>
+                        {(p.thumbnail_url || p.image_url) && (
+                          <div style={{ aspectRatio: "4 / 3", overflow: "hidden" }}>
+                            <img src={p.thumbnail_url || p.image_url} alt={p.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          </div>
+                        )}
+                        <div style={{ padding: "10px 12px" }}>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff", marginBottom: "3px" }}>{p.title}</div>
+                          {(p.category || p.year) && (
+                            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
+                              {p.category}{p.category && p.year ? " · " : ""}{p.year}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Press & coverage */}
+              {r.press && r.press.length > 0 && (
+                <div style={{ marginBottom: "32px" }}>
+                  <h3 style={{ fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 12px 0" }}>
+                    Press & coverage
+                  </h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {r.press.map((p) => (
+                      <a
+                        key={p.id}
+                        href={p.url || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px",
+                          padding: "12px 14px", borderRadius: "10px",
+                          background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                          textDecoration: "none", transition: "all 0.2s",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff", marginBottom: "3px" }}>
+                            {p.title}
+                          </div>
+                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
+                            {p.source}{p.source && p.date ? " · " : ""}{p.date}
+                          </div>
+                        </div>
+                        <ExternalLink size={15} color="rgba(255,255,255,0.5)" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Visit institution */}
+              {r.website && (
+                <a
+                  href={r.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "8px",
+                    padding: "12px 24px", borderRadius: "12px",
+                    background: "#eab308", color: "#000",
+                    fontWeight: 700, fontSize: "14px",
+                    textDecoration: "none", transition: "all 0.2s",
+                  }}
+                >
+                  <Globe size={15} /> Visit {r.venue} →
+                </a>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+    </GlassCard>
+  );
+}
+
+// ============================================================================
+// Testimonials Section (used inside TabAbout)
+// ============================================================================
+type Testimonial = {
+  id: string;
+  client_name: string;
+  client_role: string;
+  avatar?: string;
+  text: string;
+  rating: number;
+  date: string;
+};
+
+function TestimonialsSection({ colors, isDark, isOwner }: { colors: any; isDark: boolean; isOwner: boolean }) {
+  const STORAGE_KEY = "sv_profile_testimonials";
+
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return [
+      {
+        id: "t1",
+        client_name: "Maya Chen",
+        client_role: "Curator · AGO First Thursday",
+        avatar: "https://picsum.photos/seed/testimonial-maya/100/100",
+        text: "Working with them on our Spring commission was a dream. They translated our brief into a stunning piece that exceeded expectations — delivered on time, on budget, and with incredible attention to detail.",
+        rating: 5,
+        date: "Mar 2026",
+      },
+      {
+        id: "t2",
+        client_name: "Derin Falana",
+        client_role: "Owner · The Urban Kitchen",
+        avatar: "https://picsum.photos/seed/testimonial-derin/100/100",
+        text: "The mural transformed our space. Customers stop and take photos every single day — it's become part of our identity. Professional, creative, and deeply collaborative throughout the whole process.",
+        rating: 5,
+        date: "Feb 2026",
+      },
+      {
+        id: "t3",
+        client_name: "Suki Park",
+        client_role: "Creative Director · Neon Dreams",
+        avatar: "https://picsum.photos/seed/testimonial-suki/100/100",
+        text: "One of the most talented artists I've worked with. Their vision elevated our entire campaign. Communication was clear and they delivered iterations quickly without compromising on quality.",
+        rating: 5,
+        date: "Jan 2026",
+      },
+    ];
+  });
+
+  const persist = (next: Testimonial[]) => {
+    setTestimonials(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  };
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const emptyForm = { client_name: "", client_role: "", text: "", rating: 5, avatar: "" };
+  const [form, setForm] = useState<{ client_name: string; client_role: string; text: string; rating: number; avatar: string }>(emptyForm);
+  const [currentIdx, setCurrentIdx] = useState(0);
+
+  const saveTestimonial = () => {
+    if (!form.client_name.trim() || !form.text.trim()) return;
+    const now = new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    if (editingId) {
+      persist(testimonials.map((t) => t.id === editingId ? { ...t, ...form } : t));
+    } else {
+      const newT: Testimonial = {
+        id: `t${Date.now()}`,
+        client_name: form.client_name.trim(),
+        client_role: form.client_role.trim(),
+        text: form.text.trim(),
+        rating: form.rating,
+        avatar: form.avatar || undefined,
+        date: now,
+      };
+      persist([newT, ...testimonials]);
+    }
+    setShowAdd(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const startEdit = (t: Testimonial) => {
+    setEditingId(t.id);
+    setForm({
+      client_name: t.client_name,
+      client_role: t.client_role,
+      text: t.text,
+      rating: t.rating,
+      avatar: t.avatar || "",
+    });
+    setShowAdd(true);
+  };
+
+  const deleteTestimonial = (id: string) => {
+    const filtered = testimonials.filter((t) => t.id !== id);
+    persist(filtered);
+    if (currentIdx >= filtered.length) setCurrentIdx(Math.max(0, filtered.length - 1));
+  };
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setForm((f) => ({ ...f, avatar: reader.result as string }));
+    reader.readAsDataURL(file);
+  };
+
+  const avgRating = testimonials.length > 0
+    ? (testimonials.reduce((sum, t) => sum + t.rating, 0) / testimonials.length).toFixed(1)
+    : "—";
+
+  const current = testimonials[currentIdx];
+
+  const renderStars = (rating: number, size = 14, interactive = false, onChange?: (n: number) => void) => (
+    <div style={{ display: "inline-flex", gap: "2px" }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          size={size}
+          fill={n <= rating ? "#eab308" : "none"}
+          color="#eab308"
+          style={{ cursor: interactive ? "pointer" : "default" }}
+          onClick={interactive && onChange ? () => onChange(n) : undefined}
+        />
+      ))}
+    </div>
+  );
+
+  return (
+    <GlassCard colors={colors} isDark={isDark}>
+      {/* Header with rating summary + actions */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: colors.text }}>Client Testimonials</h3>
+          {testimonials.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+              {renderStars(Math.round(Number(avgRating)), 14)}
+              <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>{avgRating}</span>
+              <span style={{ fontSize: "12px", color: colors.textSecondary }}>
+                · {testimonials.length} review{testimonials.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+        </div>
+        {isOwner && (
+          <button
+            onClick={() => { setEditingId(null); setForm(emptyForm); setShowAdd(!showAdd); }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "8px 14px", borderRadius: "10px", border: "none",
+              background: colors.accent, color: "#000",
+              fontSize: "12px", fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            <Plus size={14} /> Add Testimonial
+          </button>
+        )}
+      </div>
+
+      {/* Add / Edit form */}
+      {showAdd && isOwner && (
+        <div style={{
+          padding: "16px", borderRadius: "12px", marginBottom: "16px",
+          background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+          border: `1px solid ${colors.border}`,
+          display: "flex", flexDirection: "column", gap: "10px",
+        }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            {/* Avatar */}
+            <label style={{
+              width: "48px", height: "48px", borderRadius: "50%", overflow: "hidden",
+              background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+              border: `2px dashed ${colors.border}`, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              {form.avatar ? (
+                <img src={form.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <User size={20} color={colors.textSecondary} />
+              )}
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarUpload} />
+            </label>
+            <input
+              autoFocus
+              value={form.client_name}
+              onChange={(e) => setForm({ ...form, client_name: e.target.value })}
+              placeholder="Client name *"
+              style={{
+                flex: 1, padding: "10px 12px", borderRadius: "8px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+                border: `1px solid ${colors.border}`, color: colors.text,
+                fontSize: "14px", outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <input
+            value={form.client_role}
+            onChange={(e) => setForm({ ...form, client_role: e.target.value })}
+            placeholder="Role / Company (e.g. Owner · The Urban Kitchen)"
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+              border: `1px solid ${colors.border}`, color: colors.text,
+              fontSize: "13px", outline: "none", boxSizing: "border-box",
+            }}
+          />
+          <textarea
+            value={form.text}
+            onChange={(e) => setForm({ ...form, text: e.target.value.slice(0, 500) })}
+            placeholder="What did they say about working with you?"
+            rows={3}
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: "8px",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)",
+              border: `1px solid ${colors.border}`, color: colors.text,
+              fontSize: "13px", fontFamily: "inherit", lineHeight: 1.5,
+              resize: "vertical", outline: "none", boxSizing: "border-box",
+            }}
+          />
+          <div style={{ fontSize: "11px", color: colors.textSecondary, textAlign: "right" }}>{form.text.length}/500</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "12px", color: colors.textSecondary, fontWeight: 600 }}>Rating:</span>
+            {renderStars(form.rating, 18, true, (n) => setForm({ ...form, rating: n }))}
+          </div>
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => { setShowAdd(false); setEditingId(null); setForm(emptyForm); }}
+              style={{
+                padding: "8px 16px", borderRadius: "8px",
+                background: "transparent", border: `1px solid ${colors.border}`,
+                color: colors.textSecondary, fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveTestimonial}
+              disabled={!form.client_name.trim() || !form.text.trim()}
+              style={{
+                padding: "8px 16px", borderRadius: "8px", border: "none",
+                background: (form.client_name.trim() && form.text.trim()) ? colors.accent : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"),
+                color: (form.client_name.trim() && form.text.trim()) ? "#000" : colors.textSecondary,
+                fontSize: "13px", fontWeight: 700,
+                cursor: (form.client_name.trim() && form.text.trim()) ? "pointer" : "not-allowed",
+              }}
+            >
+              {editingId ? "Save Changes" : "Add Testimonial"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Testimonials carousel */}
+      {testimonials.length === 0 ? (
+        <div style={{
+          textAlign: "center", padding: "32px 16px",
+          color: colors.textSecondary, fontSize: "13px",
+          borderRadius: "12px",
+          border: `2px dashed ${colors.border}`,
+        }}>
+          <Star size={28} style={{ opacity: 0.3, marginBottom: "8px" }} />
+          <div style={{ fontWeight: 600, color: colors.text, marginBottom: "4px" }}>No testimonials yet</div>
+          <div>{isOwner ? "Add reviews from happy clients to build credibility." : "This artist hasn't added testimonials yet."}</div>
+        </div>
+      ) : current && (
+        <div style={{
+          padding: "18px", borderRadius: "14px",
+          background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.6)",
+          border: `1px solid ${colors.border}`,
+          position: "relative",
+        }}>
+          {/* Large quote mark */}
+          <div style={{
+            position: "absolute", top: "10px", right: "14px",
+            fontSize: "48px", lineHeight: 1, color: colors.accent,
+            opacity: 0.25, fontFamily: "serif", fontWeight: 900,
+          }}>
+            "
+          </div>
+
+          {/* Rating */}
+          <div style={{ marginBottom: "10px" }}>
+            {renderStars(current.rating, 15)}
+          </div>
+
+          {/* Quote text */}
+          <p style={{
+            margin: "0 0 14px 0", fontSize: "14px", lineHeight: 1.6, color: colors.text,
+            fontStyle: "italic",
+          }}>
+            "{current.text}"
+          </p>
+
+          {/* Client info */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "40px", height: "40px", borderRadius: "50%", overflow: "hidden",
+              background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              {current.avatar ? (
+                <img src={current.avatar} alt={current.client_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <User size={18} color={colors.textSecondary} />
+              )}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: colors.text }}>{current.client_name}</div>
+              {current.client_role && (
+                <div style={{ fontSize: "11px", color: colors.textSecondary }}>{current.client_role}</div>
+              )}
+            </div>
+            <div style={{ fontSize: "11px", color: colors.textSecondary }}>{current.date}</div>
+
+            {isOwner && (
+              <div style={{ display: "flex", gap: "4px", marginLeft: "4px" }}>
+                <button
+                  onClick={() => startEdit(current)}
+                  title="Edit"
+                  style={{
+                    width: "28px", height: "28px", borderRadius: "6px",
+                    background: "transparent", border: `1px solid ${colors.border}`,
+                    color: colors.textSecondary, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  <Pencil size={11} />
+                </button>
+                <button
+                  onClick={() => deleteTestimonial(current.id)}
+                  title="Delete"
+                  style={{
+                    width: "28px", height: "28px", borderRadius: "6px",
+                    background: "transparent", border: `1px solid ${colors.border}`,
+                    color: colors.textSecondary, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textSecondary; }}
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Navigation dots & arrows */}
+          {testimonials.length > 1 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${colors.border}` }}>
+              <button
+                onClick={() => setCurrentIdx((i) => (i === 0 ? testimonials.length - 1 : i - 1))}
+                style={{
+                  width: "28px", height: "28px", borderRadius: "50%",
+                  background: "transparent", border: `1px solid ${colors.border}`,
+                  color: colors.textSecondary, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <div style={{ display: "flex", gap: "5px" }}>
+                {testimonials.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentIdx(i)}
+                    style={{
+                      width: i === currentIdx ? "20px" : "6px", height: "6px",
+                      borderRadius: "3px", border: "none",
+                      background: i === currentIdx ? colors.accent : colors.border,
+                      cursor: "pointer", transition: "all 0.2s",
+                    }}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={() => setCurrentIdx((i) => (i === testimonials.length - 1 ? 0 : i + 1))}
+                style={{
+                  width: "28px", height: "28px", borderRadius: "50%",
+                  background: "transparent", border: `1px solid ${colors.border}`,
+                  color: colors.textSecondary, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </GlassCard>
   );
 }
@@ -3165,6 +5561,7 @@ function TabAbout({
   isOwner?: boolean;
 }) {
   const navigate = useNavigate();
+  const resolvedAvatarUrl = getStreetProfileAvatarUrl(profile);
   const [selectedProject, setSelectedProject] = useState<number | null>(null);
   const [showFullPortfolio, setShowFullPortfolio] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -3663,28 +6060,7 @@ function TabAbout({
           ) : null}
         </GlassCard>
 
-        {profile.secondary_skills && profile.secondary_skills.length > 0 && (
-          <GlassCard title="Skills & Expertise" colors={colors} isDark={isDark}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {profile.secondary_skills.map((skill) => (
-                <span
-                  key={skill}
-                  style={{
-                    fontSize: "13px",
-                    padding: "6px 14px",
-                    borderRadius: "100px",
-                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                    color: colors.textSecondary,
-                    fontWeight: 500,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                >
-                  {skill}
-                </span>
-              ))}
-            </div>
-          </GlassCard>
-        )}
+        {/* Skills & Expertise moved to right column under Profile Strength */}
 
         {/* Portfolio Section — Hero Showcase or Full View */}
         <GlassCard colors={colors} isDark={isDark}>
@@ -4857,120 +7233,21 @@ function TabAbout({
           </div>
         )}
 
-        {/* Services — below Portfolio */}
-        <GlassCard title="Services" colors={colors} isDark={isDark}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {[
-              { id: "mural-commission", name: "Mural Commission", price: "From $2,500", available: true },
-              { id: "live-painting", name: "Live Painting", price: "From $1,000", available: true },
-              { id: "art-direction", name: "Art Direction", price: "Custom quote", available: true },
-              { id: "workshop-teaching", name: "Workshop / Teaching", price: "From $500", available: false },
-            ].map((svc, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "10px 12px",
-                  borderRadius: "10px",
-                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                  border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: colors.text }}>{svc.name}</span>
-                    <span
-                      style={{
-                        fontSize: "9px",
-                        padding: "1px 6px",
-                        borderRadius: "100px",
-                        background: svc.available ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-                        color: svc.available ? "#22c55e" : "#ef4444",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {svc.available ? "Available" : "Unavailable"}
-                    </span>
-                  </div>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: colors.accent }}>{svc.price}</span>
-                </div>
-                {svc.available && (
-                  <button
-                    onClick={() => navigate(`/creatives/${profile.username}/book?service=${svc.id}`)}
-                    style={{
-                      padding: "5px 14px",
-                      borderRadius: "8px",
-                      background: colors.accent,
-                      color: "#000",
-                      fontWeight: 700,
-                      fontSize: "11px",
-                      border: "none",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Book Now
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </GlassCard>
+        {/* Residencies & Partnerships — below Portfolio */}
+        <ResidenciesSection colors={colors} isDark={isDark} isOwner={isOwner} portfolioWorks={portfolioWorks} />
       </div>
 
       {/* Right Column */}
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-        <GlassCard title="Connect" colors={colors} isDark={isDark}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <button
-              onClick={onFollow}
-              style={{
-                padding: "12px 24px",
-                borderRadius: "12px",
-                background: isFollowing ? "transparent" : colors.accent,
-                color: isFollowing ? colors.accent : "#000",
-                fontWeight: 700,
-                fontSize: "14px",
-                border: isFollowing ? `2px solid ${colors.accent}` : "none",
-                cursor: "pointer",
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                transition: "all 0.25s ease",
-              }}
-            >
-              {isFollowing ? <><UserCheck size={16} /> Following</> : "Follow"}
-            </button>
-            <button
-              onClick={onMessage}
-              style={{
-                padding: "12px 24px",
-                borderRadius: "12px",
-                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                color: colors.text,
-                fontWeight: 600,
-                fontSize: "14px",
-                border: `1px solid ${colors.border}`,
-                cursor: "pointer",
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"; }}
-            >
-              <Mail size={16} />
-              Message
-            </button>
-          </div>
-        </GlassCard>
+        <ConnectCard
+          profile={profile}
+          colors={colors}
+          isDark={isDark}
+          isFollowing={isFollowing}
+          onFollow={onFollow}
+          onMessage={onMessage}
+          socialLinks={socialLinks}
+        />
 
         {/* Message Modal */}
         {showMessageModal && setShowMessageModal && setMessageText && (
@@ -5133,6 +7410,87 @@ function TabAbout({
           );
         })()}
 
+        {/* Skills & Expertise — editable (directly under Profile Strength) */}
+        <GlassCard colors={colors} isDark={isDark}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: 700, color: colors.text, margin: 0 }}>Skills & Expertise</h3>
+            {isOwner && (
+              <button
+                onClick={() => setEditingSkills(!editingSkills)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "3px",
+                  padding: "3px 8px", borderRadius: "6px",
+                  background: "transparent", color: editingSkills ? colors.accent : colors.textSecondary,
+                  border: `1px solid ${editingSkills ? colors.accent : colors.border}`,
+                  fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                <Pencil size={9} /> {editingSkills ? "Done" : "Edit"}
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {customSkills.map((skill, idx) => (
+              <span key={idx} style={{
+                fontSize: "12px", padding: "5px 12px", borderRadius: "100px",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                color: colors.textSecondary, fontWeight: 500,
+                border: `1px solid ${colors.border}`,
+                position: "relative", display: "inline-flex", alignItems: "center",
+              }}>
+                {skill}
+                {editingSkills && (
+                  <button
+                    onClick={() => setCustomSkills((prev) => prev.filter((_, i) => i !== idx))}
+                    style={{
+                      width: "14px", height: "14px", borderRadius: "50%",
+                      background: "rgba(220,38,38,0.8)", border: "none",
+                      color: "#fff", cursor: "pointer", display: "inline-flex",
+                      alignItems: "center", justifyContent: "center",
+                      marginLeft: "6px", padding: 0,
+                    }}
+                  >
+                    <X size={8} />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+          {(editingSkills || customSkills.length === 0) && isOwner && (
+            <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+              <input
+                value={newSkill}
+                onChange={(e) => setNewSkill(e.target.value)}
+                placeholder="e.g. Typography"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newSkill.trim()) {
+                    setCustomSkills((prev) => [...prev, newSkill.trim()]);
+                    setNewSkill("");
+                  }
+                }}
+                style={{
+                  flex: 1, padding: "6px 8px", borderRadius: "6px",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: `1px solid ${colors.border}`, color: colors.text,
+                  fontSize: "12px", outline: "none", boxSizing: "border-box",
+                }}
+              />
+              <button
+                onClick={() => { if (newSkill.trim()) { setCustomSkills((prev) => [...prev, newSkill.trim()]); setNewSkill(""); } }}
+                disabled={!newSkill.trim()}
+                style={{
+                  padding: "6px 10px", borderRadius: "6px", border: "none",
+                  background: newSkill.trim() ? colors.accent : "rgba(255,255,255,0.06)",
+                  color: newSkill.trim() ? "#000" : "rgba(255,255,255,0.3)",
+                  fontWeight: 700, fontSize: "11px", cursor: newSkill.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                Add
+              </button>
+            </div>
+          )}
+        </GlassCard>
+
         {/* Software & Tools — compact sidebar version */}
         <GlassCard colors={colors} isDark={isDark}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
@@ -5237,86 +7595,7 @@ function TabAbout({
           )}
         </GlassCard>
 
-        {/* Skills & Expertise — editable */}
-        <GlassCard colors={colors} isDark={isDark}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: colors.text, margin: 0 }}>Skills & Expertise</h3>
-            {isOwner && (
-              <button
-                onClick={() => setEditingSkills(!editingSkills)}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: "3px",
-                  padding: "3px 8px", borderRadius: "6px",
-                  background: "transparent", color: editingSkills ? colors.accent : colors.textSecondary,
-                  border: `1px solid ${editingSkills ? colors.accent : colors.border}`,
-                  fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                <Pencil size={9} /> {editingSkills ? "Done" : "Edit"}
-              </button>
-            )}
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {customSkills.map((skill, idx) => (
-              <span key={idx} style={{
-                fontSize: "12px", padding: "5px 12px", borderRadius: "100px",
-                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                color: colors.textSecondary, fontWeight: 500,
-                border: `1px solid ${colors.border}`,
-                position: "relative", display: "inline-flex", alignItems: "center",
-              }}>
-                {skill}
-                {editingSkills && (
-                  <button
-                    onClick={() => setCustomSkills((prev) => prev.filter((_, i) => i !== idx))}
-                    style={{
-                      width: "14px", height: "14px", borderRadius: "50%",
-                      background: "rgba(220,38,38,0.8)", border: "none",
-                      color: "#fff", cursor: "pointer", display: "inline-flex",
-                      alignItems: "center", justifyContent: "center",
-                      marginLeft: "6px", padding: 0,
-                    }}
-                  >
-                    <X size={8} />
-                  </button>
-                )}
-              </span>
-            ))}
-          </div>
-          {(editingSkills || customSkills.length === 0) && isOwner && (
-            <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
-              <input
-                value={newSkill}
-                onChange={(e) => setNewSkill(e.target.value)}
-                placeholder="e.g. Typography"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newSkill.trim()) {
-                    setCustomSkills((prev) => [...prev, newSkill.trim()]);
-                    setNewSkill("");
-                  }
-                }}
-                style={{
-                  flex: 1, padding: "6px 8px", borderRadius: "6px",
-                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                  border: `1px solid ${colors.border}`, color: colors.text,
-                  fontSize: "12px", outline: "none", boxSizing: "border-box",
-                }}
-              />
-              <button
-                onClick={() => { if (newSkill.trim()) { setCustomSkills((prev) => [...prev, newSkill.trim()]); setNewSkill(""); } }}
-                disabled={!newSkill.trim()}
-                style={{
-                  padding: "6px 10px", borderRadius: "6px", border: "none",
-                  background: newSkill.trim() ? colors.accent : "rgba(255,255,255,0.06)",
-                  color: newSkill.trim() ? "#000" : "rgba(255,255,255,0.3)",
-                  fontWeight: 700, fontSize: "11px", cursor: newSkill.trim() ? "pointer" : "not-allowed",
-                }}
-              >
-                Add
-              </button>
-            </div>
-          )}
-        </GlassCard>
+        {/* Skills & Expertise moved above — now placed right under Profile Strength */}
 
         {/* Social Media — OAuth connect */}
         <GlassCard colors={colors} isDark={isDark}>
@@ -5404,6 +7683,60 @@ function TabAbout({
             ))}
           </div>
         </GlassCard>
+
+        {/* Services — right column, below Social Media */}
+        <GlassCard colors={colors} isDark={isDark}>
+          <h3 style={{ fontSize: "14px", fontWeight: 700, color: colors.text, margin: "0 0 10px 0" }}>Services</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {[
+              { id: "mural-commission", name: "Mural Commission", price: "From $2,500", available: true },
+              { id: "live-painting", name: "Live Painting", price: "From $1,000", available: true },
+              { id: "art-direction", name: "Art Direction", price: "Custom quote", available: true },
+              { id: "workshop-teaching", name: "Workshop / Teaching", price: "From $500", available: false },
+            ].map((svc, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "8px 10px", borderRadius: "8px",
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: colors.text }}>{svc.name}</span>
+                    <span style={{
+                      fontSize: "9px", padding: "1px 6px", borderRadius: "100px",
+                      background: svc.available ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                      color: svc.available ? "#22c55e" : "#ef4444",
+                      fontWeight: 600,
+                    }}>
+                      {svc.available ? "Available" : "Unavailable"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: colors.accent, marginTop: "2px" }}>{svc.price}</div>
+                </div>
+                {svc.available && (
+                  <button
+                    onClick={() => navigate(`/creatives/${profile.username}/book?service=${svc.id}`)}
+                    style={{
+                      padding: "4px 10px", borderRadius: "6px",
+                      background: colors.accent, color: "#000",
+                      fontWeight: 700, fontSize: "10px", border: "none",
+                      cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                    }}
+                  >
+                    Book
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+
+        {/* Client Testimonials — right column, below Services */}
+        <TestimonialsSection colors={colors} isDark={isDark} isOwner={isOwner} />
 
         {/* OAuth Connect Modal */}
         {connectingPlatform && (() => {
@@ -7130,6 +9463,7 @@ function TabStreetGallery({ profile, colors, isDark }: { profile: StreetProfile;
 }
 
 function TabJobs({ profile, colors, isDark }: { profile: StreetProfile; colors: any; isDark: boolean }) {
+  const location = useLocation();
   const [savedJobs, setSavedJobs] = useState<Set<string>>(new Set());
   const [jobFilter, setJobFilter] = useState<string>("ALL");
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
@@ -7167,6 +9501,20 @@ function TabJobs({ profile, colors, isDark }: { profile: StreetProfile; colors: 
       return next;
     });
   };
+
+  // Deep-link support: ?job=<id> or ?application=<id> opens that job's detail view
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const jobId = params.get("job") || params.get("application");
+    if (jobId) {
+      const target = jobs.find((j) => j.id === jobId);
+      if (target) {
+        setSelectedJob(target);
+        setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const jobs = [
     {
@@ -9000,6 +11348,8 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
     // Top-level routes that exist as standalone pages
     if (link === "/gallery") { navigate("/gallery"); return; }
     if (link === "/directory") { navigate("/directory"); return; }
+    // Split link into pathname + query string
+    const [pathPart, queryPart] = link.split("?");
     // Map link → tab id within current profile
     const tabMap: Record<string, string> = {
       "/messages": "messages",
@@ -9010,13 +11360,18 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
       "/profile": "about",
       "/street-gallery": "street-gallery",
     };
-    const tabId = tabMap[link];
+    const tabId = tabMap[pathPart];
     if (tabId) {
       const params = new URLSearchParams(location.search);
       if (tabId === "about") {
         params.delete("tab");
       } else {
         params.set("tab", tabId);
+      }
+      // Merge in any extra query params from the notification link
+      if (queryPart) {
+        const extra = new URLSearchParams(queryPart);
+        extra.forEach((v, k) => params.set(k, v));
       }
       const nextSearch = params.toString();
       navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : "" }, { replace: false });
@@ -9054,7 +11409,7 @@ function TabNotifications({ profile, colors, isDark }: { profile: StreetProfile;
       id: 4, title: "Job application viewed", body: "Black Voices Media Collective viewed your application for Youth Media Producer.",
       details: "Your application for the Youth Media Producer position at Black Voices Media Collective was viewed by the hiring team 3 times in the past 2 hours. The role involves leading creative direction for youth-focused media content and offers $65k–$80k. The team typically responds to shortlisted applicants within 1 week. Make sure your portfolio is polished and that any work samples linked from your application are accessible.",
       source: "JOBS", icon: <Briefcase size={20} />, iconColor: "#f59e0b", iconBg: "rgba(245,158,11,0.15)",
-      time: "5 hours ago", link: "/jobs", linkLabel: "View Jobs", read: false,
+      time: "5 hours ago", link: "/jobs?application=job-1", linkLabel: "View Application", read: false,
     },
     {
       id: 5, title: "Commission deadline approaching", body: "Your mural commission for The Urban Kitchen is due in 7 days.",
