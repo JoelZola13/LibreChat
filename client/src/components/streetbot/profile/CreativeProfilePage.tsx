@@ -6909,7 +6909,11 @@ function TabAbout({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 // Set this image as the hero/cover
-                                setPortfolioWorks((prev) => prev.map((p, i) => i === selectedProject ? { ...p, image_url: img, thumbnail_url: img, coverIndex: imgIdx } : p));
+                                setPortfolioWorks((prev) => {
+                                  const next = prev.map((p, i) => i === selectedProject ? { ...p, image_url: img, thumbnail_url: img, coverIndex: imgIdx } : p);
+                                  void persistPortfolio(next);
+                                  return next;
+                                });
                               }}
                               title="Set as cover image"
                               style={{
@@ -6926,6 +6930,47 @@ function TabAbout({
                             >
                               {isHero ? "Cover" : "Set Cover"}
                             </button>
+                            {isOwner && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (selectedProject === null) return;
+                                  if (!window.confirm("Remove this photo from the piece?")) return;
+                                  setPortfolioWorks((prev) => {
+                                    const next = prev.map((p, i) => {
+                                      if (i !== selectedProject) return p;
+                                      const remainingImages = (p.images as string[]).filter((_: string, ix: number) => ix !== imgIdx);
+                                      const wasCover = img === p.image_url || img === p.thumbnail_url;
+                                      const newCover = wasCover ? (remainingImages[0] || "") : p.image_url;
+                                      return {
+                                        ...p,
+                                        images: remainingImages,
+                                        image_url: newCover,
+                                        thumbnail_url: newCover,
+                                      };
+                                    });
+                                    void persistPortfolio(next);
+                                    return next;
+                                  });
+                                }}
+                                title="Remove this photo"
+                                style={{
+                                  position: "absolute", top: "6px", right: "6px",
+                                  width: "26px", height: "26px",
+                                  borderRadius: "50%",
+                                  background: "rgba(239, 68, 68, 0.85)",
+                                  border: "1px solid rgba(255,255,255,0.2)",
+                                  color: "#fff", cursor: "pointer",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  padding: 0,
+                                  backdropFilter: "blur(8px)",
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,1)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.85)"; }}
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
                           </div>
                         );
                       })}

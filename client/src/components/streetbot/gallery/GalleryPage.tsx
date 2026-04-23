@@ -133,6 +133,18 @@ const GalleryImage = ({ src, alt }: { src: string; alt: string }) => {
 };
 
 /** Inline ProfileBadge replacement: simple avatar + name span */
+/** Slugify an artist name into a URL-safe username (e.g. "Maria Reyes" → "maria_reyes"). */
+const artistNameToSlug = (name?: string | null): string | null => {
+  if (!name) return null;
+  const slug = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip diacritics
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return slug || null;
+};
+
 const InlineProfileBadge = ({
   userId,
   username,
@@ -738,11 +750,42 @@ function ArtworkDetailView({ artworkId, onBack, onSelectTag }: { artworkId: stri
                   avatarUrl={artistProfile.avatar_url || undefined}
                   isVerified={artistProfile.is_verified}
                 />
-              ) : (
-                <span style={{ color: colors.accent, fontWeight: 600 }}>
-                  {artwork.artist_name || 'Anonymous'}
-                </span>
-              )}
+              ) : (() => {
+                const name = artwork.artist_name || 'Anonymous';
+                const slug = artistNameToSlug(artwork.artist_name);
+                if (!slug) {
+                  return (
+                    <span style={{ color: colors.accent, fontWeight: 600 }}>
+                      {name}
+                    </span>
+                  );
+                }
+                return (
+                  <span
+                    role="link"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/creatives/${encodeURIComponent(slug)}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/creatives/${encodeURIComponent(slug)}`);
+                      }
+                    }}
+                    style={{
+                      color: colors.accent,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: 3,
+                    }}
+                  >
+                    {name}
+                  </span>
+                );
+              })()}
               {artwork.year_created && <span>· {artwork.year_created}</span>}
             </p>
 
@@ -1459,15 +1502,20 @@ function CollectionsView({ onBack, onSelectMedium }: { onBack: () => void; onSel
 function SavedCollectionsView({ onBack, onSelectMedium }: { onBack: () => void; onSelectMedium: (medium: string) => void }) {
   const { colors, glassCard } = useGlassStyles();
   const { user: authUser } = useAuthContext();
+  const navigate = useNavigate();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [allArtworks, setAllArtworks] = useState<Artwork[]>([]);
+  const [favoritedArtworkIds, setFavoritedArtworkIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch(`${GALLERY_API_URL}/artworks`)
       .then((r) => r.json())
       .then((artworks: Artwork[]) => {
+        const list = Array.isArray(artworks) ? artworks : [];
+        setAllArtworks(list);
         const mediumCounts: Record<string, number> = {};
-        artworks.forEach((a) => {
+        list.forEach((a) => {
           if (a.medium) mediumCounts[a.medium] = (mediumCounts[a.medium] || 0) + 1;
         });
         setCounts(mediumCounts);
@@ -1484,6 +1532,39 @@ function SavedCollectionsView({ onBack, onSelectMedium }: { onBack: () => void; 
       })
       .catch(() => {});
   }, [authUser?.id]);
+
+  // Load favorited artworks (heart toggles in the main gallery).
+  useEffect(() => {
+    const uid = getOrCreateUserId(authUser?.id);
+    if (!uid) return;
+    fetch(`${GALLERY_API_URL}/user/${encodeURIComponent(uid)}/artwork-favorites`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { artwork_id?: string }[] | any) => {
+        const ids = Array.isArray(rows)
+          ? rows.map((r) => r?.artwork_id).filter((v): v is string => !!v)
+          : [];
+        setFavoritedArtworkIds(new Set(ids));
+      })
+      .catch(() => {});
+  }, [authUser?.id]);
+
+  const unfavoriteArtwork = async (artworkId: string) => {
+    const uid = getOrCreateUserId(authUser?.id);
+    if (!uid) return;
+    try {
+      await fetch(
+        `${GALLERY_API_URL}/artworks/${encodeURIComponent(artworkId)}/favorites?user_id=${encodeURIComponent(uid)}`,
+        { method: "DELETE" },
+      );
+      setFavoritedArtworkIds((prev) => {
+        const next = new Set(prev);
+        next.delete(artworkId);
+        return next;
+      });
+    } catch {}
+  };
+
+  const favoritedArtworks = allArtworks.filter((a) => favoritedArtworkIds.has(a.id));
 
   const unsave = async (collectionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1531,13 +1612,120 @@ function SavedCollectionsView({ onBack, onSelectMedium }: { onBack: () => void; 
           <div>
             <h1 style={{ margin: 0, fontSize: "1.8rem", fontWeight: 800, color: "#FFD700" }}>
               <Heart size={24} style={{ marginRight: 8, verticalAlign: "middle" }} fill="#ff3c50" color="#ff3c50" />
-              Saved Collections
+              Saved
             </h1>
             <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: "0.9rem" }}>
-              Your bookmarked medium collections
+              Your favorited artworks and bookmarked collections
             </p>
           </div>
         </div>
+
+        {/* ── Favorited artworks ───────────────────────────────────── */}
+        <div style={{ marginBottom: 40 }}>
+          <h2 style={{ margin: "0 0 16px", fontSize: "1.1rem", fontWeight: 700, color: colors.text }}>
+            Favorited Artworks
+            {favoritedArtworks.length > 0 && (
+              <span style={{ marginLeft: 8, color: colors.textMuted, fontWeight: 500, fontSize: "0.9rem" }}>
+                ({favoritedArtworks.length})
+              </span>
+            )}
+          </h2>
+          {favoritedArtworks.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "48px 20px",
+                ...glassCard,
+              }}
+            >
+              <Heart size={36} color={colors.textMuted} style={{ marginBottom: 12 }} />
+              <p style={{ color: colors.text, fontWeight: 600, margin: "0 0 6px" }}>
+                No favorited artworks yet
+              </p>
+              <p style={{ color: colors.textMuted, fontSize: "0.88rem", margin: 0 }}>
+                Tap the heart on any artwork to save it here.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                gap: "16px",
+              }}
+            >
+              {favoritedArtworks.map((art) => (
+                <div
+                  key={art.id}
+                  onClick={() => navigate(`/gallery/artwork/${art.id}`)}
+                  style={{
+                    ...glassCard,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    position: "relative",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,60,80,0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "";
+                  }}
+                >
+                  <div style={{ aspectRatio: "4/3", overflow: "hidden", background: "#222" }}>
+                    <GalleryImage src={art.thumbnail_url || art.image_url} alt={art.title} />
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      unfavoriteArtwork(art.id);
+                    }}
+                    title="Remove from favorites"
+                    style={{
+                      position: "absolute",
+                      top: 10,
+                      right: 10,
+                      background: "rgba(0,0,0,0.55)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "50%",
+                      width: 32,
+                      height: 32,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    <Heart size={16} fill="#ff3c50" color="#ff3c50" />
+                  </button>
+                  <div style={{ padding: "12px 14px" }}>
+                    <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: colors.text }}>
+                      {art.title}
+                    </h4>
+                    {art.artist_name && (
+                      <p style={{ margin: "4px 0 0", fontSize: "0.8rem", color: colors.textMuted }}>
+                        by {art.artist_name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Saved collections ───────────────────────────────────── */}
+        <h2 style={{ margin: "0 0 16px", fontSize: "1.1rem", fontWeight: 700, color: colors.text }}>
+          Saved Collections
+          {savedCollections.length > 0 && (
+            <span style={{ marginLeft: 8, color: colors.textMuted, fontWeight: 500, fontSize: "0.9rem" }}>
+              ({savedCollections.length})
+            </span>
+          )}
+        </h2>
 
         {savedCollections.length === 0 ? (
           <div
@@ -3963,18 +4151,45 @@ export default function GalleryPage() {
                           isVerified={artistProfiles[art.artist_id].is_verified}
                         />
                       </div>
-                    ) : art.artist_name ? (
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "0.85rem",
-                          color: colors.textSecondary,
-                          marginBottom: "10px",
-                        }}
-                      >
-                        by {art.artist_name}
-                      </span>
-                    ) : null}
+                    ) : art.artist_name ? (() => {
+                      const slug = artistNameToSlug(art.artist_name);
+                      const baseStyle: React.CSSProperties = {
+                        display: "block",
+                        fontSize: "0.85rem",
+                        color: colors.textSecondary,
+                        marginBottom: "10px",
+                      };
+                      if (!slug) {
+                        return <span style={baseStyle}>by {art.artist_name}</span>;
+                      }
+                      return (
+                        <span style={baseStyle}>
+                          by{" "}
+                          <span
+                            role="link"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/creatives/${encodeURIComponent(slug)}`);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/creatives/${encodeURIComponent(slug)}`);
+                              }
+                            }}
+                            style={{
+                              color: colors.text,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {art.artist_name}
+                          </span>
+                        </span>
+                      );
+                    })() : null}
                     <div
                       style={{
                         display: "flex",
