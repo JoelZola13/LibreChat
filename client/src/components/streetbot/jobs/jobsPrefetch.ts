@@ -7,8 +7,9 @@
  */
 import { SB_API_BASE } from '~/components/streetbot/shared/apiConfig';
 import { readSessionCache, writeSessionCache } from '../shared/perfCache';
+import { enrichJobsSchedule } from './jobSchedule';
 
-const JOBS_CACHE_KEY = 'streetbot:jobs:listings:v1';
+const JOBS_CACHE_KEY = 'streetbot:jobs:listings:v2';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export type JobListing = {
@@ -31,7 +32,7 @@ export function prefetchJobs(): Promise<JobListing[]> {
 
   const cached = readSessionCache<JobListing[]>(JOBS_CACHE_KEY, CACHE_TTL_MS);
   if (cached && cached.length > 0) {
-    prefetchPromise = Promise.resolve(cached);
+    prefetchPromise = Promise.resolve(enrichJobsSchedule(cached));
     prefetchTimestamp = Date.now();
     return prefetchPromise;
   }
@@ -44,7 +45,7 @@ export function prefetchJobs(): Promise<JobListing[]> {
       return r.json();
     })
     .then((data) => {
-      const jobs = Array.isArray(data) ? (data as JobListing[]) : [];
+      const jobs = Array.isArray(data) ? enrichJobsSchedule(data as JobListing[]) : [];
       if (jobs.length > 0) {
         writeSessionCache(JOBS_CACHE_KEY, jobs);
       }
@@ -60,7 +61,7 @@ export function prefetchJobs(): Promise<JobListing[]> {
  */
 export function getPrefetchedJobsSync(): JobListing[] | null {
   const cached = readSessionCache<JobListing[]>(JOBS_CACHE_KEY, CACHE_TTL_MS);
-  if (cached && cached.length > 0) return cached;
+  if (cached && cached.length > 0) return enrichJobsSchedule(cached);
   return null;
 }
 

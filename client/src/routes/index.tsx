@@ -40,8 +40,13 @@ const NewsDashboardPage = lazy(() => import('~/components/streetbot/news/dashboa
 const DirectoryPage = lazy(() => import('~/components/streetbot/directory/DirectoryPage'));
 const ServiceDetailPage = lazy(() => import('~/components/streetbot/directory/ServiceDetailPage'));
 const JobsPage = lazy(() => import('~/components/streetbot/jobs/JobsPage'));
+const JobDetailPage = lazy(() => import('~/components/streetbot/jobs/JobDetailPage'));
 const MyApplicationsPage = lazy(() => import('~/components/streetbot/jobs/MyApplicationsPage'));
+const MyResumePage = lazy(() => import('~/components/streetbot/jobs/MyResumePage'));
 const EmployerDashboardPage = lazy(() => import('~/components/streetbot/jobs/EmployerDashboardPage'));
+const PostJobPage = lazy(() => import('~/components/streetbot/jobs/PostJobPage'));
+const ApplicantTrackingPage = lazy(() => import('~/components/streetbot/jobs/ApplicantTrackingPage'));
+const CandidateSearchPage = lazy(() => import('~/components/streetbot/jobs/CandidateSearchPage'));
 const CalendarPage = lazy(() => import('~/components/streetbot/calendar/CalendarPage'));
 const MessagesPage = lazy(() => import('~/components/streetbot/messages/MessagesPage'));
 const DocumentsPage = lazy(() => import('~/components/streetbot/documents/DocumentsPage'));
@@ -298,8 +303,14 @@ export const router = createBrowserRouter(
             { path: 'directory', element: guardedSbPage('directory', DirectoryPage) },
             { path: 'directory/*', element: guardedSbPage('directory', DirectoryPage) },
             { path: 'jobs', element: guardedSbPage('jobs', JobsPage) },
+            { path: 'jobs/post', element: guardedSbPage('jobs', PostJobPage) },
+            { path: 'jobs/post/:jobId', element: guardedSbPage('jobs', PostJobPage) },
             { path: 'jobs/my-applications', element: guardedSbPage('jobs', MyApplicationsPage) },
+            { path: 'jobs/resume', element: guardedSbPage('jobs', MyResumePage) },
             { path: 'jobs/employer', element: guardedSbPage('jobs', EmployerDashboardPage) },
+            { path: 'jobs/employer/applicants/:jobId', element: guardedSbPage('jobs', ApplicantTrackingPage) },
+            { path: 'jobs/employer/candidates', element: guardedSbPage('jobs', CandidateSearchPage) },
+            { path: 'jobs/:jobId', element: guardedSbPage('jobs', JobDetailPage) },
             { path: 'jobs/*', element: guardedSbPage('jobs', JobsPage) },
             // Notifications — always accessible (not a nav item)
             { path: 'notifications', element: sbPage(NotificationsPage) },
