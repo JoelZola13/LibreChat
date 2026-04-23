@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const SubmitArtPage = lazy(() => import("./SubmitArtPage"));
+const AuthPopupModal = lazy(() => import("../shared/AuthPopupModal"));
 import {
   Filter,
   Search,
@@ -151,7 +152,8 @@ const InlineProfileBadge = ({
     <span
       onClick={(e) => {
         e.stopPropagation();
-        navigate(`/gallery/artist/${userId}`);
+        if (username) navigate(`/creatives/${encodeURIComponent(username)}`);
+        else navigate(`/gallery/artist/${userId}`);
       }}
       style={{
         display: "inline-flex",
@@ -509,10 +511,16 @@ function ArtworkSlideshow({ artwork, glassCard }: { artwork: Artwork; glassCard:
 function ArtworkDetailView({ artworkId, onBack, onSelectTag }: { artworkId: string; onBack: () => void; onSelectTag?: (tag: string) => void }) {
   const { colors, glassCard, glassSurface } = useGlassStyles();
   const { user: authUser } = useAuthContext();
+  const navigate = useNavigate();
   const [artwork, setArtwork] = useState<Artwork | null>(null);
+  const [artistProfile, setArtistProfile] = useState<ArtistProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFav, setIsFav] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [savingPrice, setSavingPrice] = useState(false);
   const [comments, setComments] = useState<Array<{id: string; user_id: string; user_name: string; user_avatar: string; body: string; created_at: string; parent_id: string | null; edited?: boolean}>>([]);
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
@@ -576,6 +584,78 @@ function ArtworkDetailView({ artworkId, onBack, onSelectTag }: { artworkId: stri
       .catch(() => setError('Artwork not found'))
       .finally(() => setLoading(false));
   }, [artworkId]);
+
+  useEffect(() => {
+    const artistId = artwork?.artist_id;
+    if (!artistId) { setArtistProfile(null); return; }
+    let cancelled = false;
+    fetch(`${SB_API_BASE}/street-profiles/batch-lookup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_ids: [artistId] }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(profiles => {
+        if (cancelled) return;
+        setArtistProfile(profiles && profiles[artistId] ? profiles[artistId] : null);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [artwork?.artist_id]);
+
+  const handleSavePrice = async () => {
+    if (!artwork || !authUser?.id) return;
+    const trimmed = priceDraft.trim();
+    const parsed = trimmed === "" ? null : Number(trimmed);
+    if (parsed !== null && (Number.isNaN(parsed) || parsed < 0)) {
+      alert("Enter a valid price (0 or greater).");
+      return;
+    }
+    setSavingPrice(true);
+    try {
+      const body: Record<string, unknown> = { price: parsed };
+      if (parsed !== null && !artwork.is_for_sale) body.is_for_sale = true;
+      const resp = await fetch(
+        `${GALLERY_API_URL}/artworks/${encodeURIComponent(artwork.id)}?user_id=${encodeURIComponent(authUser.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `Update failed (${resp.status})`);
+      }
+      const updated = await resp.json();
+      setArtwork(updated);
+      setEditingPrice(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setSavingPrice(false);
+    }
+  };
+
+  const handleDeleteArtwork = async () => {
+    if (!artwork || !authUser?.id) return;
+    if (!window.confirm('Delete this artwork? This cannot be undone.')) return;
+    setDeleting(true);
+    try {
+      const resp = await fetch(
+        `${GALLERY_API_URL}/artworks/${encodeURIComponent(artwork.id)}?user_id=${encodeURIComponent(authUser.id)}`,
+        { method: 'DELETE' },
+      );
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `Delete failed (${resp.status})`);
+      }
+      navigate('/gallery');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete failed');
+      setDeleting(false);
+    }
+  };
 
   // Check if favorited
   useEffect(() => {
@@ -648,35 +728,116 @@ function ArtworkDetailView({ artworkId, onBack, onSelectTag }: { artworkId: stri
             <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: colors.text, margin: '0 0 8px' }}>
               {artwork.title}
             </h1>
-            <p style={{ fontSize: '0.95rem', color: colors.textMuted, margin: '0 0 20px' }}>
-              by <span style={{ color: colors.accent, fontWeight: 600 }}>{artwork.artist_name || 'Unknown Artist'}</span>
-              {artwork.year_created && <span> · {artwork.year_created}</span>}
+            <p style={{ fontSize: '0.95rem', color: colors.textMuted, margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span>by</span>
+              {artwork.artist_id && artistProfile ? (
+                <InlineProfileBadge
+                  userId={artwork.artist_id}
+                  username={artistProfile.username}
+                  displayName={artistProfile.display_name}
+                  avatarUrl={artistProfile.avatar_url || undefined}
+                  isVerified={artistProfile.is_verified}
+                />
+              ) : (
+                <span style={{ color: colors.accent, fontWeight: 600 }}>
+                  {artwork.artist_name || 'Anonymous'}
+                </span>
+              )}
+              {artwork.year_created && <span>· {artwork.year_created}</span>}
             </p>
 
             {/* Price */}
-            {artwork.is_for_sale && artwork.price != null && (
-              <div style={{
-                ...glassSurface, padding: '16px 20px', borderRadius: 12, marginBottom: 20,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
-                <div>
-                  <div style={{ fontSize: '0.65rem', color: colors.textMuted, textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Price</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFD600' }}>
-                    {new Intl.NumberFormat("en-CA", { style: "currency", currency: artwork.currency || "CAD" }).format(Number(artwork.price))}
+            {(() => {
+              const isOwner = !!(authUser?.id && artwork.artist_id && authUser.id === artwork.artist_id);
+              const showBlock = (artwork.is_for_sale && artwork.price != null) || isOwner;
+              if (!showBlock) return null;
+              return (
+                <div style={{
+                  ...glassSurface, padding: '16px 20px', borderRadius: 12, marginBottom: 20,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.65rem', color: colors.textMuted, textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Price</div>
+                    {editingPrice ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#FFD600' }}>$</span>
+                        <input
+                          autoFocus
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={priceDraft}
+                          onChange={(e) => setPriceDraft(e.target.value)}
+                          placeholder="Not for sale"
+                          style={{
+                            width: 120, padding: '6px 10px', borderRadius: 8,
+                            border: `1px solid ${colors.border}`, background: 'rgba(255,255,255,0.05)',
+                            color: colors.text, fontSize: '1.1rem', fontWeight: 700,
+                          }}
+                        />
+                        <button
+                          onClick={handleSavePrice}
+                          disabled={savingPrice}
+                          style={{
+                            padding: '6px 14px', borderRadius: 8, border: 'none', background: '#FFD600',
+                            color: '#000', fontWeight: 700, fontSize: '0.8rem',
+                            cursor: savingPrice ? 'not-allowed' : 'pointer', opacity: savingPrice ? 0.6 : 1,
+                          }}
+                        >
+                          {savingPrice ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => { setEditingPrice(false); setPriceDraft(''); }}
+                          disabled={savingPrice}
+                          style={{
+                            padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.border}`,
+                            background: 'transparent', color: colors.textMuted, fontSize: '0.8rem', cursor: 'pointer',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFD600' }}>
+                          {artwork.is_for_sale && artwork.price != null
+                            ? new Intl.NumberFormat("en-CA", { style: "currency", currency: artwork.currency || "CAD" }).format(Number(artwork.price))
+                            : <span style={{ fontSize: '0.95rem', color: colors.textMuted, fontWeight: 600 }}>Not for sale</span>}
+                        </div>
+                        {isOwner && (
+                          <button
+                            onClick={() => {
+                              setPriceDraft(artwork.price != null ? String(artwork.price) : '');
+                              setEditingPrice(true);
+                            }}
+                            title="Edit price"
+                            style={{
+                              padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.border}`,
+                              background: 'rgba(255,255,255,0.04)', color: colors.textMuted,
+                              fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >
+                            <PenTool size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Edit
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
+                  {!editingPrice && artwork.is_for_sale && artwork.price != null && (
+                    artwork.is_sold ? (
+                      <span style={{ padding: '8px 18px', borderRadius: 10, background: 'rgba(239,68,68,0.15)', color: '#ef4444', fontWeight: 700, fontSize: '0.8rem' }}>Sold</span>
+                    ) : (
+                      <button style={{
+                        padding: '10px 24px', borderRadius: 10, border: 'none',
+                        background: '#FFD600', color: '#000', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                      }}>
+                        Purchase
+                      </button>
+                    )
+                  )}
                 </div>
-                {artwork.is_sold ? (
-                  <span style={{ padding: '8px 18px', borderRadius: 10, background: 'rgba(239,68,68,0.15)', color: '#ef4444', fontWeight: 700, fontSize: '0.8rem' }}>Sold</span>
-                ) : (
-                  <button style={{
-                    padding: '10px 24px', borderRadius: 10, border: 'none',
-                    background: '#FFD600', color: '#000', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
-                  }}>
-                    Purchase
-                  </button>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             {/* Description */}
             {artwork.description && (
@@ -784,6 +945,16 @@ function ArtworkDetailView({ artworkId, onBack, onSelectTag }: { artworkId: stri
               }}>
                 <Copy size={16} /> <span id="share-link-btn">Share Link</span>
               </button>
+              {authUser?.id && artwork.artist_id && authUser.id === artwork.artist_id && (
+                <button onClick={handleDeleteArtwork} disabled={deleting} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 10,
+                  border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.1)',
+                  color: '#ef4444', cursor: deleting ? 'not-allowed' : 'pointer',
+                  fontSize: '0.82rem', fontWeight: 600, opacity: deleting ? 0.6 : 1,
+                }}>
+                  <X size={16} /> {deleting ? 'Deleting…' : 'Delete'}
+                </button>
+              )}
             </div>
 
             {/* Comments Section */}
@@ -1610,8 +1781,45 @@ const MEDIUM_STYLES: Record<string, string[]> = {
 
 function UploadArtView({ onBack }: { onBack: () => void }) {
   const { colors, glassCard, glassSurface } = useGlassStyles();
-  const { user: authUser } = useAuthContext();
+  const { user: authUser, isAuthenticated } = useAuthContext();
   const navigate = useNavigate();
+
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [profileCheck, setProfileCheck] = useState<"loading" | "missing" | "ok">("loading");
+
+  // Auto-open the login/register modal for anonymous visitors landing here.
+  useEffect(() => {
+    if (!isAuthenticated || !authUser?.id) {
+      setAuthModalOpen(true);
+    } else {
+      setAuthModalOpen(false);
+    }
+  }, [isAuthenticated, authUser?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authUser?.id) {
+      setProfileCheck("loading");
+      return;
+    }
+    let cancelled = false;
+    setProfileCheck("loading");
+    fetch(`${SB_API_BASE}/street-profiles/batch-lookup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_ids: [authUser.id] }),
+    })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((profiles) => {
+        if (cancelled) return;
+        setProfileCheck(profiles && profiles[authUser.id!] ? "ok" : "missing");
+      })
+      .catch(() => {
+        if (!cancelled) setProfileCheck("missing");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, authUser?.id]);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -1642,6 +1850,16 @@ function UploadArtView({ onBack }: { onBack: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated || !authUser?.id) {
+      setError("Please sign in to submit artwork.");
+      setAuthModalOpen(true);
+      return;
+    }
+    if (profileCheck !== "ok") {
+      setError("Create your Street Profile before submitting artwork.");
+      navigate("/profile");
+      return;
+    }
     if (!title.trim() || !imageFile) {
       setError("Title and image are required.");
       return;
@@ -1651,7 +1869,7 @@ function UploadArtView({ onBack }: { onBack: () => void }) {
     setError(null);
 
     try {
-      const userId = getOrCreateUserId(authUser?.id);
+      const userId = authUser.id;
       const formData = new FormData();
       formData.append("title", title.trim());
       formData.append("artist_id", userId);
@@ -1676,13 +1894,21 @@ function UploadArtView({ onBack }: { onBack: () => void }) {
         body: formData,
       });
 
+      const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.error || `Upload failed (${resp.status})`);
+        throw new Error((data && data.error) || `Upload failed (${resp.status})`);
       }
 
-      setSuccess(true);
-      setTimeout(() => navigate("/gallery"), 1500);
+      const newId = data && data.id;
+      console.log("[gallery] upload response:", { ok: resp.ok, status: resp.status, id: newId, data });
+      if (newId) {
+        const detailPath = `/gallery/artwork/${newId}`;
+        // Hard navigation — avoids any React Router / cached-component race.
+        window.location.assign(detailPath);
+      } else {
+        setSuccess(true);
+        setTimeout(() => window.location.assign("/gallery"), 1500);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
     } finally {
@@ -1712,6 +1938,78 @@ function UploadArtView({ onBack }: { onBack: () => void }) {
     textTransform: "uppercase",
     letterSpacing: "0.5px",
   };
+
+  const needsAuth = !isAuthenticated || !authUser?.id;
+  const needsProfile = !needsAuth && profileCheck === "missing";
+  if (needsAuth || needsProfile) {
+    return (
+      <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+        <GlassBackground />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 520, margin: "0 auto", padding: "80px 20px", textAlign: "center" }}>
+          <div style={{ ...glassCard, padding: "40px 32px", borderRadius: 20 }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>{needsAuth ? "\u{1F512}" : "\u{1F3A8}"}</div>
+            <h2 style={{ color: colors.text, fontSize: "1.5rem", fontWeight: 700, margin: "0 0 12px" }}>
+              {needsAuth ? "Sign in to submit art" : "Create your Street Profile first"}
+            </h2>
+            <p style={{ color: colors.textMuted, fontSize: "0.95rem", lineHeight: 1.6, margin: "0 0 28px" }}>
+              {needsAuth
+                ? "You need to be signed in to share your work on Street Gallery."
+                : "Street Gallery submissions are linked to your Street Profile so the community can find and follow your work."}
+            </p>
+            <button
+              onClick={() => (needsAuth ? setAuthModalOpen(true) : navigate("/profile"))}
+              style={{
+                background: "#FFD700",
+                color: "#000",
+                fontWeight: 700,
+                padding: "12px 28px",
+                borderRadius: 999,
+                border: "none",
+                cursor: "pointer",
+                fontSize: "1rem",
+                marginRight: 12,
+              }}
+            >
+              {needsAuth ? "Sign In / Create Account" : "Create Street Profile"}
+            </button>
+            <button
+              onClick={onBack}
+              style={{
+                background: "transparent",
+                color: colors.textMuted,
+                padding: "12px 20px",
+                borderRadius: 999,
+                border: `1px solid ${colors.border}`,
+                cursor: "pointer",
+                fontSize: "0.95rem",
+              }}
+            >
+              Back to Gallery
+            </button>
+          </div>
+        </div>
+        {authModalOpen && (
+          <Suspense fallback={null}>
+            <AuthPopupModal
+              isOpen={authModalOpen}
+              onClose={() => {
+                setAuthModalOpen(false);
+                if (needsAuth) navigate('/gallery');
+              }}
+              initialTab="login"
+            />
+          </Suspense>
+        )}
+      </div>
+    );
+  }
+  if (profileCheck === "loading") {
+    return (
+      <div style={{ background: colors.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: colors.textMuted }} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
@@ -2541,9 +2839,20 @@ export default function GalleryPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, colors, glassCard, glassSurface, glassTag, cardHoverHandlers, buttonHoverHandlers } = useGlassStyles();
-  const { user: authUser } = useAuthContext();
+  const { user: authUser, isAuthenticated } = useAuthContext();
   const [filterOpen, setFilterOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [galleryAuthOpen, setGalleryAuthOpen] = useState(false);
+
+  // Intercept Submit Art clicks for anonymous visitors — pop up auth modal
+  // instead of sending them to /gallery/upload where the gate also fires.
+  const handleSubmitArtClick = useCallback(() => {
+    if (!isAuthenticated || !authUser?.id) {
+      setGalleryAuthOpen(true);
+      return;
+    }
+    navigate("/gallery/upload");
+  }, [isAuthenticated, authUser?.id, navigate]);
 
   // Check if we're on an artwork detail page
   const artworkMatch = location.pathname.match(/\/gallery\/artwork\/(.+)/);
@@ -2910,7 +3219,7 @@ export default function GalleryPage() {
             }}
           >
             <button
-              onClick={() => navigate("/gallery/upload")}
+              onClick={handleSubmitArtClick}
               style={{
                 background: "#FFD700",
                 color: "#000",
@@ -3429,7 +3738,7 @@ export default function GalleryPage() {
               <p style={{ fontSize: "1.2rem", marginBottom: 16 }}>No artworks found</p>
               <p>Be the first to submit your art to the gallery!</p>
               <button
-                onClick={() => navigate("/gallery/upload")}
+                onClick={handleSubmitArtClick}
                 style={{
                   marginTop: 16,
                   padding: "10px 20px",
@@ -3778,6 +4087,15 @@ export default function GalleryPage() {
         />
       )}
 
+      {galleryAuthOpen && (
+        <Suspense fallback={null}>
+          <AuthPopupModal
+            isOpen={galleryAuthOpen}
+            onClose={() => setGalleryAuthOpen(false)}
+            initialTab="login"
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

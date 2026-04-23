@@ -685,19 +685,42 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                   : `linear-gradient(135deg, ${colors.accent} 0%, #7c3aed 50%, #2563eb 100%)`,
               }}
             >
-              {/* Banner Upload */}
-              {isOwnProfile && (
+              {/* Banner Upload — show to any signed-in user; upload always targets their own row via user.id */}
+              {!!user?.id && (
                 <>
                   <input
                     ref={bannerInputRef}
                     type="file"
                     accept="image/*"
                     style={{ display: "none" }}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
-                      if (file) {
-                        const url = URL.createObjectURL(file);
-                        setBannerUrl(url);
+                      if (!file) return;
+                      // Optimistic preview
+                      const tempUrl = URL.createObjectURL(file);
+                      setBannerUrl(tempUrl);
+                      // Persist to backend
+                      const uid = user?.id || (profile as any)?.user_id || (profile as any)?.id;
+                      if (!uid) return;
+                      try {
+                        const fd = new FormData();
+                        fd.append("image", file);
+                        const u = user as any;
+                        if (u?.name) fd.append("display_name", u.name);
+                        if (u?.email) fd.append("email", u.email);
+                        const resp = await fetch(
+                          `${SB_API_BASE}/street-profiles/banner?user_id=${encodeURIComponent(uid)}`,
+                          { method: "POST", body: fd },
+                        );
+                        if (!resp.ok) {
+                          const d = await resp.json().catch(() => ({}));
+                          alert(d.error || `Banner upload failed (${resp.status})`);
+                          return;
+                        }
+                        const data = await resp.json();
+                        if (data?.banner_url) setBannerUrl(data.banner_url);
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : "Banner upload failed");
                       }
                     }}
                   />
@@ -857,12 +880,47 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                   type="file"
                   accept="image/*"
                   style={{ display: "none" }}
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
+                    // Optimistic preview
                     const reader = new FileReader();
                     reader.onloadend = () => setCustomAvatar(reader.result as string);
                     reader.readAsDataURL(file);
+                    // Persist to backend. Prefer the logged-in user's id over
+                    // whatever the loaded profile page has (it can briefly be
+                    // a fallback/demo profile id while real data loads).
+                    const uid = user?.id || profile?.user_id || profile?.id;
+                    if (!uid) {
+                      alert("Please sign in again to update your profile photo.");
+                      setCustomAvatar(null);
+                      return;
+                    }
+                    try {
+                      const fd = new FormData();
+                      fd.append("image", file);
+                      const u = user as any;
+                      if (u?.name) fd.append("display_name", u.name);
+                      if (u?.email) fd.append("email", u.email);
+                      if (u?.username) fd.append("username", u.username);
+                      const resp = await fetch(
+                        `${SB_API_BASE}/street-profiles/avatar?user_id=${encodeURIComponent(uid)}`,
+                        { method: "POST", body: fd },
+                      );
+                      if (!resp.ok) {
+                        const d = await resp.json().catch(() => ({}));
+                        alert(d.error || `Avatar upload failed (${resp.status})`);
+                        setCustomAvatar(null);
+                        return;
+                      }
+                      const data = await resp.json();
+                      if (data?.avatar_url) {
+                        setCustomAvatar(data.avatar_url);
+                      }
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : "Avatar upload failed");
+                      setCustomAvatar(null);
+                    }
                   }}
                 />
               </div>
@@ -1400,6 +1458,7 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                 showMessageModal={showMessageModal} setShowMessageModal={setShowMessageModal}
                 messageText={messageText} setMessageText={setMessageText}
                 messageSent={messageSent} onSendMessage={handleSendMessage}
+                customAvatar={customAvatar} bannerUrl={bannerUrl}
               />
             )}
             {activeTab === "storage" && (
@@ -5543,6 +5602,8 @@ function TabAbout({
   messageSent,
   onSendMessage,
   isOwner = true,
+  customAvatar,
+  bannerUrl,
 }: {
   profile: StreetProfile;
   colors: any;
@@ -5559,6 +5620,8 @@ function TabAbout({
   messageSent?: boolean;
   onSendMessage?: () => void;
   isOwner?: boolean;
+  customAvatar?: string | null;
+  bannerUrl?: string | null;
 }) {
   const navigate = useNavigate();
   const resolvedAvatarUrl = getStreetProfileAvatarUrl(profile);
@@ -5804,15 +5867,69 @@ function TabAbout({
         },
       ];
 
-  const [portfolioWorks, setPortfolioWorks] = useState<any[]>(defaultPortfolio);
+  const serverPortfolio = Array.isArray((profile as any)?.portfolio_items)
+    ? (profile as any).portfolio_items
+    : null;
+  const [portfolioWorks, setPortfolioWorks] = useState<any[]>(
+    serverPortfolio && serverPortfolio.length > 0 ? serverPortfolio : defaultPortfolio,
+  );
+
+  // Re-sync local state when profile data loads/changes.
+  useEffect(() => {
+    if (serverPortfolio) {
+      setPortfolioWorks(
+        serverPortfolio.length > 0 ? serverPortfolio : defaultPortfolio,
+      );
+    }
+    // Only depend on the server source — defaults are stable within a render.
+  }, [JSON.stringify(serverPortfolio)]);
+
+  const persistPortfolio = async (next: any[]) => {
+    const uid = user?.id || (profile as any)?.user_id || (profile as any)?.id;
+    if (!uid) return;
+    try {
+      await fetch(`${SB_API_BASE}/street-profiles/portfolio?user_id=${encodeURIComponent(uid)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: next }),
+      });
+    } catch {
+      // Non-fatal: local state already updated; retry on next save.
+    }
+  };
+
+  const uploadPortfolioFileToServer = async (file: File): Promise<string | null> => {
+    const uid = user?.id || (profile as any)?.user_id || (profile as any)?.id;
+    if (!uid) return null;
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const resp = await fetch(
+        `${SB_API_BASE}/street-profiles/portfolio-image?user_id=${encodeURIComponent(uid)}`,
+        { method: "POST", body: fd },
+      );
+      if (!resp.ok) return null;
+      const data = await resp.json().catch(() => ({}));
+      return data?.url || null;
+    } catch {
+      return null;
+    }
+  };
 
   const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    Array.from(files).forEach((file) => {
+    Array.from(files).forEach(async (file) => {
+      // Optimistic preview with base64
       const reader = new FileReader();
       reader.onloadend = () => {
-        setUploadPreviews((prev) => [...prev, reader.result as string]);
+        const dataUrl = reader.result as string;
+        setUploadPreviews((prev) => [...prev, dataUrl]);
+        // Replace with persistent URL once uploaded
+        uploadPortfolioFileToServer(file).then((persistentUrl) => {
+          if (!persistentUrl) return;
+          setUploadPreviews((prev) => prev.map((u) => (u === dataUrl ? persistentUrl : u)));
+        });
       };
       reader.readAsDataURL(file);
     });
@@ -5838,11 +5955,11 @@ function TabAbout({
       views: 0,
       appreciations: 0,
     };
-    if (editingPieceIdx !== null) {
-      setPortfolioWorks((prev) => prev.map((p, i) => (i === editingPieceIdx ? { ...p, ...newPiece, views: p.views, appreciations: p.appreciations } : p)));
-    } else {
-      setPortfolioWorks((prev) => [newPiece, ...prev]);
-    }
+    const next = editingPieceIdx !== null
+      ? portfolioWorks.map((p, i) => (i === editingPieceIdx ? { ...p, ...newPiece, views: p.views, appreciations: p.appreciations } : p))
+      : [newPiece, ...portfolioWorks];
+    setPortfolioWorks(next);
+    void persistPortfolio(next);
     setShowUploadModal(false);
     setEditingPieceIdx(null);
     setUploadForm({ title: "", category: "", year: new Date().getFullYear().toString(), description: "", tools: "" });
@@ -5867,7 +5984,9 @@ function TabAbout({
   };
 
   const handleDeletePiece = (idx: number) => {
-    setPortfolioWorks((prev) => prev.filter((_, i) => i !== idx));
+    const next = portfolioWorks.filter((_, i) => i !== idx);
+    setPortfolioWorks(next);
+    void persistPortfolio(next);
   };
 
   // Persist drafts to localStorage whenever they change
@@ -7328,16 +7447,16 @@ function TabAbout({
 
         {(() => {
           const checklist = [
-            { label: "Add a profile photo", done: !!(profile.avatar_url), icon: <Camera size={14} /> },
+            { label: "Add a profile photo", done: !!(customAvatar || profile.avatar_url), icon: <Camera size={14} /> },
             { label: "Write your bio", done: !!(customBio && customBio.trim()), icon: <FileText size={14} /> },
             { label: "Add your profession", done: !!(profile.primary_roles && profile.primary_roles.length > 0), icon: <Briefcase size={14} /> },
             { label: "Upload portfolio work", done: portfolioWorks.length > 0, icon: <Image size={14} /> },
-            { label: "Add skills & expertise", done: !!(profile.secondary_skills && profile.secondary_skills.length > 0), icon: <Award size={14} /> },
+            { label: "Add skills & expertise", done: !!(customSkills && customSkills.length > 0) || !!(profile.secondary_skills && profile.secondary_skills.length > 0), icon: <Award size={14} /> },
             { label: "Set your location", done: !!(profile.city || profile.location_display), icon: <MapPin size={14} /> },
             { label: "Add social links", done: !!(profile.website || (profile.external_links && profile.external_links.length > 0)), icon: <LucideLink size={14} /> },
             { label: "List a service", done: true, icon: <DollarSign size={14} /> },
-            { label: "Add availability status", done: !!(profile.open_to && profile.open_to.length > 0), icon: <CheckCircle2 size={14} /> },
-            { label: "Upload a banner image", done: !!(profile.cover_url), icon: <Image size={14} /> },
+            { label: "Add availability status", done: !!(profile as any)?.availability_status, icon: <CheckCircle2 size={14} /> },
+            { label: "Upload a banner image", done: !!(bannerUrl || profile.cover_url || (profile as any)?.banner_url), icon: <Image size={14} /> },
           ];
           const doneCount = checklist.filter((c) => c.done).length;
           const pct = Math.round((doneCount / checklist.length) * 100);

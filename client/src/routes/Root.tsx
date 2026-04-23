@@ -188,7 +188,10 @@ export default function Root() {
       || pathname === '/news'
       || pathname.startsWith('/news/')
       || pathname === '/directory'
-      || pathname.startsWith('/directory/');
+      || pathname.startsWith('/directory/')
+      || pathname === '/gallery'
+      || pathname.startsWith('/gallery/')
+      || pathname.startsWith('/creatives/');
 
     if (!isPublicPage) {
       // Auth is still resolving (silentRefresh in flight) — show a minimal
