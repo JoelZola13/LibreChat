@@ -10,9 +10,11 @@ type FilterTab = "all" | ApplicationStatus | "withdrawn";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Send }> = {
   applied: { label: "Applied", color: "#3B82F6", icon: Send },
+  screening: { label: "Screening", color: "#8B5CF6", icon: Clock },
   under_review: { label: "Under Review", color: "#F59E0B", icon: Clock },
-  interview: { label: "Interview", color: "#8B5CF6", icon: Briefcase },
+  interview: { label: "Interview", color: "#06B6D4", icon: Briefcase },
   offered: { label: "Offered", color: "#10B981", icon: CheckCircle },
+  hired: { label: "Hired", color: "#22C55E", icon: CheckCircle },
   rejected: { label: "Rejected", color: "#EF4444", icon: XCircle },
   withdrawn: { label: "Withdrawn", color: "#6B7280", icon: AlertCircle },
 };
@@ -20,9 +22,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "All" },
   { key: "applied", label: "Applied" },
+  { key: "screening", label: "Screening" },
   { key: "under_review", label: "Under Review" },
   { key: "interview", label: "Interview" },
   { key: "offered", label: "Offered" },
+  { key: "hired", label: "Hired" },
   { key: "rejected", label: "Rejected" },
   { key: "withdrawn", label: "Withdrawn" },
 ];
