@@ -343,8 +343,44 @@ export default function BookingPage() {
         setStep("confirm");
         break;
       case "confirm":
-        setBookingConfirmed(true);
+        void submitBooking();
         break;
+    }
+  };
+
+  const submitBooking = async () => {
+    // Optimistically show the confirmation UI immediately; the email POST
+    // runs in the background and logs any failure silently.
+    setBookingConfirmed(true);
+    try {
+      const artistUsername = username || profile?.username;
+      if (!artistUsername) return;
+      const dateLabel = selectedDate
+        ? selectedDate.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "";
+      const serviceTypeLabel =
+        consultationTypes.find((c) => c.id === consultationType)?.label || "Consultation";
+      await fetch(`${SB_API_BASE}/bookings/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artist_username: artistUsername,
+          client_name: clientName,
+          client_email: clientEmail,
+          service_name: selectedService?.name || "Consultation",
+          service_type: serviceTypeLabel,
+          booking_date: dateLabel,
+          booking_time: selectedTime || "",
+        }),
+      });
+    } catch (err) {
+      // Non-fatal — the UI already shows confirmation; artist will follow up.
+      console.warn("booking email failed", err);
     }
   };
 

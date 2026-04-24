@@ -384,6 +384,17 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
     };
   }, [username, initialProfile]);
 
+  // Record a profile view on load (skipped server-side when the viewer is
+  // the profile owner). Fire-and-forget; the incremented count shows up on
+  // the next profile fetch.
+  useEffect(() => {
+    if (!username) return;
+    const viewerId = user?.id ? `?viewer_id=${encodeURIComponent(user.id)}` : "";
+    fetch(`${SB_API_BASE}/street-profiles/${encodeURIComponent(username)}/view${viewerId}`, {
+      method: "POST",
+    }).catch(() => {});
+  }, [username, user?.id]);
+
   // Check scroll state for tab arrows
   useEffect(() => {
     const el = tabScrollRef.current;
@@ -1459,6 +1470,7 @@ export default function CreativeProfilePage({ initialProfile }: { initialProfile
                 messageText={messageText} setMessageText={setMessageText}
                 messageSent={messageSent} onSendMessage={handleSendMessage}
                 customAvatar={customAvatar} bannerUrl={bannerUrl}
+                customRoles={customRoles} displayLocation={displayLocation}
               />
             )}
             {activeTab === "storage" && (
@@ -5604,6 +5616,8 @@ function TabAbout({
   isOwner = true,
   customAvatar,
   bannerUrl,
+  customRoles,
+  displayLocation,
 }: {
   profile: StreetProfile;
   colors: any;
@@ -5622,6 +5636,8 @@ function TabAbout({
   isOwner?: boolean;
   customAvatar?: string | null;
   bannerUrl?: string | null;
+  customRoles?: string[];
+  displayLocation?: string;
 }) {
   const navigate = useNavigate();
   const resolvedAvatarUrl = getStreetProfileAvatarUrl(profile);
@@ -7494,11 +7510,11 @@ function TabAbout({
           const checklist = [
             { label: "Add a profile photo", done: !!(customAvatar || profile.avatar_url), icon: <Camera size={14} /> },
             { label: "Write your bio", done: !!(customBio && customBio.trim()), icon: <FileText size={14} /> },
-            { label: "Add your profession", done: !!(profile.primary_roles && profile.primary_roles.length > 0), icon: <Briefcase size={14} /> },
+            { label: "Add your profession", done: !!((customRoles && customRoles.length > 0) || (profile.primary_roles && profile.primary_roles.length > 0)), icon: <Briefcase size={14} /> },
             { label: "Upload portfolio work", done: portfolioWorks.length > 0, icon: <Image size={14} /> },
             { label: "Add skills & expertise", done: !!(customSkills && customSkills.length > 0) || !!(profile.secondary_skills && profile.secondary_skills.length > 0), icon: <Award size={14} /> },
-            { label: "Set your location", done: !!(profile.city || profile.location_display), icon: <MapPin size={14} /> },
-            { label: "Add social links", done: !!(profile.website || (profile.external_links && profile.external_links.length > 0)), icon: <LucideLink size={14} /> },
+            { label: "Set your location", done: !!((displayLocation && displayLocation.trim()) || profile.city || profile.location_display), icon: <MapPin size={14} /> },
+            { label: "Add social links", done: !!(profile.website || (profile.external_links && profile.external_links.length > 0) || (socialLinks && socialLinks.some((s) => s.connected && s.url))), icon: <LucideLink size={14} /> },
             { label: "List a service", done: true, icon: <DollarSign size={14} /> },
             { label: "Add availability status", done: !!(profile as any)?.availability_status, icon: <CheckCircle2 size={14} /> },
             { label: "Upload a banner image", done: !!(bannerUrl || profile.cover_url || (profile as any)?.banner_url), icon: <Image size={14} /> },
