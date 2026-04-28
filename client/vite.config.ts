@@ -99,7 +99,7 @@ export default defineConfig(({ mode }) => {
     react(),
     nodePolyfills(),
     VitePWA({
-      injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
+      injectRegister: 'disabled',
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
       devOptions: {
         enabled: false, // disable service worker registration in development mode
@@ -187,7 +187,7 @@ export default defineConfig(({ mode }) => {
     target: 'es2020',
     sourcemap: process.env.NODE_ENV === 'development',
     outDir: './dist',
-    minify: 'terser',
+    minify: 'esbuild',
     rollupOptions: {
       preserveEntrySignatures: 'strict',
       output: {

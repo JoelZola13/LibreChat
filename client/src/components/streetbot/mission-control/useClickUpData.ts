@@ -3,7 +3,7 @@ import { paperclipFetch, relayFetch } from './config';
 import { useMissionControlData } from './useMissionControlData';
 import {
   buildHierarchy, buildAgentMap, filterIssues, groupByStatus,
-  issuesToTasks, paperclipLabelsToLabels,
+  issuesToTasks, paperclipLabelsToLabels, prependCustomAssigneeMarker,
 } from './paperclipAdapter';
 import type {
   PaperclipLabel, PaperclipGoal, FilterState, ViewMode,
@@ -36,7 +36,17 @@ interface ClickUpData {
   setShowCreateModal: (v: boolean) => void;
 
   // Actions
-  createTask: (payload: { title: string; description?: string; priority?: string; agentName?: string }) => Promise<void>;
+  createTask: (payload: {
+    title: string;
+    description?: string;
+    priority?: string;
+    status?: 'todo' | 'in_progress' | 'done';
+    agentName?: string;
+    agentId?: string;
+    assigneeUserId?: string;
+    customAssigneeName?: string;
+    parentId?: string;
+  }) => Promise<void>;
   refresh: () => void;
   loading: boolean;
 }
@@ -72,8 +82,8 @@ export function useClickUpData(): ClickUpData {
   // Derived: agent map for UserInfo
   const agentMap = useMemo(() => {
     if (!raw.agents.data) return {};
-    return buildAgentMap(raw.agents.data);
-  }, [raw.agents.data]);
+    return buildAgentMap(raw.agents.data, raw.issues.data || []);
+  }, [raw.agents.data, raw.issues.data]);
 
   // Derived: labels
   const labels = useMemo(() => paperclipLabelsToLabels(paperclipLabels), [paperclipLabels]);
@@ -111,8 +121,11 @@ export function useClickUpData(): ClickUpData {
     title: string;
     description?: string;
     priority?: string;
+    status?: 'todo' | 'in_progress' | 'done';
     agentName?: string;
     agentId?: string;
+    assigneeUserId?: string;
+    customAssigneeName?: string;
     parentId?: string;
   }) => {
     // Resolve agentId from agentName if needed
@@ -122,20 +135,42 @@ export function useClickUpData(): ClickUpData {
       if (agent) assigneeAgentId = agent.id;
     }
 
+    const requestedStatus = payload.status || 'todo';
+    if (requestedStatus === 'in_progress' && !assigneeAgentId && !payload.assigneeUserId) {
+      throw new Error('In Progress tasks need an assignee');
+    }
     const body: Record<string, unknown> = {
       title: payload.title,
-      description: payload.description || '',
+      description: payload.assigneeUserId
+        ? prependCustomAssigneeMarker(payload.description, payload.customAssigneeName)
+        : (payload.description || ''),
       priority: payload.priority || 'medium',
+      // Paperclip only accepts new issues in todo; move after create when needed.
       status: 'todo',
     };
     if (assigneeAgentId) body.assigneeAgentId = assigneeAgentId;
+    if (payload.assigneeUserId) body.assigneeUserId = payload.assigneeUserId;
     if (payload.parentId) body.parentId = payload.parentId;
 
-    await paperclipFetch('/issues', {
+    const createdIssue = await paperclipFetch<{ id: string }>('/issues', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+    if (requestedStatus !== 'todo') {
+      const patchBody: Record<string, unknown> = { status: requestedStatus };
+      if (requestedStatus === 'done') {
+        patchBody.completedAt = new Date().toISOString();
+      }
+
+      const res = await fetch(`/paperclip-internal/api/issues/${createdIssue.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchBody),
+      });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    }
 
     // Refresh data after creation
     raw.refresh();

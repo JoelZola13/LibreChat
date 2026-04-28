@@ -1,4 +1,5 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { dataService } from 'librechat-data-provider';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Circle, CheckCheck, Flag, User, Calendar, MessageSquare,
@@ -10,7 +11,12 @@ import { BoardView } from '../tasks/BoardView';
 import { CalendarView } from '../tasks/CalendarView';
 import { DEFAULT_STATUSES, DEFAULT_COLORS } from '../tasks/constants';
 import { useClickUpData } from './useClickUpData';
-import { issueToTask } from './paperclipAdapter';
+import {
+  extractIssueMetadata,
+  issueToTask,
+  replaceIssueDescriptionMetadata,
+  type TaskAttachment,
+} from './paperclipAdapter';
 import ClickUpSidebar from './ClickUpSidebar';
 import ClickUpToolbar from './ClickUpToolbar';
 import TaskDetailPanel from './TaskDetailPanel';
@@ -39,9 +45,9 @@ function parseView(pathname: string): ViewState {
 
 // ── Status config ──
 
-const STATUS_ORDER = ['in_progress', 'todo', 'done'];
+const STATUS_ORDER = ['todo', 'in_progress', 'done'];
 const STATUS_COLORS: Record<string, string> = {
-  in_progress: '#eab308', todo: '#6b7280', done: '#22c55e',
+  todo: '#ef4444', in_progress: '#eab308', done: '#22c55e',
 };
 const STATUS_LABELS: Record<string, string> = {
   in_progress: 'IN PROGRESS', todo: 'TO DO', done: 'COMPLETE',
@@ -76,15 +82,17 @@ function loadActiveFields(): string[] {
 
 // ── Status-grouped List View with configurable columns ──
 
-function ClickUpListView({ tasksByStatus, allTasks, agentMap, onTaskClick, onAddTask, activeFields, onAssign, onCreateSubtask }: {
+function ClickUpListView({ tasksByStatus, allTasks, rawIssues, agentMap, onTaskClick, onAddTask, activeFields, onAssign, onCreateSubtask, onRefresh }: {
   tasksByStatus: Record<string, Task[]>;
   allTasks: Task[];
+  rawIssues: PaperclipIssue[];
   agentMap: Record<string, { name: string; avatar: string; initials: string }>;
   onTaskClick: (task: Task) => void;
-  onAddTask: () => void;
+  onAddTask: (status: 'todo' | 'in_progress' | 'done') => void;
   activeFields: string[];
   onAssign: (taskId: string, agentId: string | null) => void;
   onCreateSubtask: (parentId: string, title: string) => Promise<void>;
+  onRefresh: () => void;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -93,6 +101,11 @@ function ClickUpListView({ tasksByStatus, allTasks, agentMap, onTaskClick, onAdd
   const [assigningTask, setAssigningTask] = useState<string | null>(null);
   const [addingSubtaskFor, setAddingSubtaskFor] = useState<string | null>(null);
   const [subtaskTitle, setSubtaskTitle] = useState('');
+  const [quickAction, setQuickAction] = useState<{ taskId: string; type: 'url' | 'files' | 'comment' } | null>(null);
+  const [quickActionValue, setQuickActionValue] = useState('');
+  const [quickActionSaving, setQuickActionSaving] = useState(false);
+  const [quickActionError, setQuickActionError] = useState<string | null>(null);
+  const quickActionFileInputRef = useRef<HTMLInputElement | null>(null);
   const [, forceUpdate] = useState(0); // trigger re-render after cell edits
 
   const toggleTaskExpand = useCallback((taskId: string) => {
@@ -114,6 +127,11 @@ function ClickUpListView({ tasksByStatus, allTasks, agentMap, onTaskClick, onAdd
     return allTasks.filter(t => t.parentTaskId === parentId);
   }, [allTasks]);
 
+  const rawIssueMap = useMemo(
+    () => new Map(rawIssues.map((issue) => [issue.id, issue])),
+    [rawIssues],
+  );
+
   // Build the agent list for the picker
   const agentList = useMemo(() =>
     Object.entries(agentMap).map(([id, info]) => ({ id, ...info })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -124,6 +142,184 @@ function ClickUpListView({ tasksByStatus, allTasks, agentMap, onTaskClick, onAdd
   const customFieldDefs = activeFields.map(id => ALL_FIELDS.find(f => f.id === id)).filter(Boolean);
   const extraCols = customFieldDefs.map(f => `${f!.defaultWidth || 100}px`).join(' ');
   const gridCols = `40px minmax(200px, 1fr) 100px 80px 60px ${extraCols} 36px`;
+
+  const closeQuickAction = useCallback(() => {
+    setQuickAction(null);
+    setQuickActionValue('');
+    setQuickActionSaving(false);
+    setQuickActionError(null);
+  }, []);
+
+  const openQuickAction = useCallback((
+    event: React.MouseEvent,
+    taskId: string,
+    type: 'url' | 'files' | 'comment',
+  ) => {
+    event.stopPropagation();
+    if (quickAction?.taskId === taskId && quickAction.type === type) {
+      closeQuickAction();
+      return;
+    }
+
+    const rawIssue = rawIssueMap.get(taskId);
+    const metadata = extractIssueMetadata(rawIssue?.description);
+    setQuickAction({ taskId, type });
+    setQuickActionValue(
+      type === 'url'
+        ? (metadata.url || '')
+        : type === 'files'
+          ? (metadata.files || '')
+          : '',
+    );
+    setQuickActionError(null);
+  }, [closeQuickAction, quickAction, rawIssueMap]);
+
+  const saveQuickAction = useCallback(async () => {
+    if (!quickAction) return;
+
+    const rawIssue = rawIssueMap.get(quickAction.taskId);
+    if (!rawIssue) {
+      setQuickActionError('Task not found');
+      return;
+    }
+
+    const trimmedValue = quickActionValue.trim();
+    if (quickAction.type === 'files') {
+      return;
+    }
+    if (quickAction.type === 'comment' && !trimmedValue) {
+      setQuickActionError('Write a comment first');
+      return;
+    }
+
+    setQuickActionSaving(true);
+    setQuickActionError(null);
+    try {
+      if (quickAction.type === 'comment') {
+        const response = await fetch(`/paperclip-internal/api/issues/${quickAction.taskId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: trimmedValue }),
+        });
+        if (!response.ok) {
+          const text = (await response.text()).trim();
+          throw new Error(text || `${response.status} ${response.statusText}`);
+        }
+      } else {
+        const metadata = extractIssueMetadata(rawIssue.description);
+        const nextDescription = replaceIssueDescriptionMetadata(rawIssue.description, {
+          ...metadata,
+          [quickAction.type]: quickActionValue,
+        });
+        const response = await fetch(`/paperclip-internal/api/issues/${quickAction.taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: nextDescription }),
+        });
+        if (!response.ok) {
+          const text = (await response.text()).trim();
+          throw new Error(text || `${response.status} ${response.statusText}`);
+        }
+      }
+
+      closeQuickAction();
+      onRefresh();
+    } catch (error: any) {
+      setQuickActionError(error?.message || 'Failed to save');
+    } finally {
+      setQuickActionSaving(false);
+    }
+  }, [closeQuickAction, onRefresh, quickAction, quickActionValue, rawIssueMap]);
+
+  const uploadQuickActionFile = useCallback(async (taskId: string, file: File) => {
+    const rawIssue = rawIssueMap.get(taskId);
+    if (!rawIssue) {
+      setQuickActionError('Task not found');
+      return;
+    }
+
+    const fileId = globalThis.crypto?.randomUUID?.() || `task-file-${Date.now()}`;
+    const formData = new FormData();
+    formData.append('endpoint', 'default');
+    formData.append('endpointType', '');
+    formData.append('file', file, encodeURIComponent(file.name));
+    formData.append('file_id', fileId);
+    formData.append('message_file', 'true');
+
+    setQuickActionSaving(true);
+    setQuickActionError(null);
+    try {
+      const uploaded = await dataService.uploadFile(formData);
+      const metadata = extractIssueMetadata(rawIssue.description);
+      const nextAttachments = [
+        ...(metadata.attachments || []),
+        {
+          file_id: uploaded.file_id,
+          filename: uploaded.filename,
+          filepath: uploaded.filepath,
+          user: uploaded.user,
+          source: uploaded.source || null,
+          type: uploaded.type || null,
+        } satisfies TaskAttachment,
+      ];
+      const nextDescription = replaceIssueDescriptionMetadata(rawIssue.description, {
+        ...metadata,
+        attachments: nextAttachments,
+      });
+
+      const response = await fetch(`/paperclip-internal/api/issues/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: nextDescription }),
+      });
+      if (!response.ok) {
+        const text = (await response.text()).trim();
+        throw new Error(text || `${response.status} ${response.statusText}`);
+      }
+
+      onRefresh();
+    } catch (error: any) {
+      setQuickActionError(error?.message || 'Failed to upload file');
+    } finally {
+      if (quickActionFileInputRef.current) {
+        quickActionFileInputRef.current.value = '';
+      }
+      setQuickActionSaving(false);
+    }
+  }, [onRefresh, rawIssueMap]);
+
+  const removeQuickActionAttachment = useCallback(async (taskId: string, attachmentId: string) => {
+    const rawIssue = rawIssueMap.get(taskId);
+    if (!rawIssue) {
+      setQuickActionError('Task not found');
+      return;
+    }
+
+    const metadata = extractIssueMetadata(rawIssue.description);
+    const nextDescription = replaceIssueDescriptionMetadata(rawIssue.description, {
+      ...metadata,
+      attachments: (metadata.attachments || []).filter((attachment) => attachment.file_id !== attachmentId),
+    });
+
+    setQuickActionSaving(true);
+    setQuickActionError(null);
+    try {
+      const response = await fetch(`/paperclip-internal/api/issues/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: nextDescription }),
+      });
+      if (!response.ok) {
+        const text = (await response.text()).trim();
+        throw new Error(text || `${response.status} ${response.statusText}`);
+      }
+      onRefresh();
+    } catch (error: any) {
+      setQuickActionError(error?.message || 'Failed to remove file');
+    } finally {
+      setQuickActionSaving(false);
+    }
+  }, [onRefresh, rawIssueMap]);
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '0' }}>
@@ -200,6 +396,8 @@ function ClickUpListView({ tasksByStatus, allTasks, agentMap, onTaskClick, onAdd
               const hasSubtasks = task.subtaskCount > 0;
               const isExpanded = expandedTasks.has(task.id);
               const subtasks = isExpanded ? getSubtasks(task.id) : [];
+              const taskMetadata = extractIssueMetadata(rawIssueMap.get(task.id)?.description);
+              const taskAttachments = taskMetadata.attachments || [];
 
               return (
                 <React.Fragment key={task.id}>
@@ -284,9 +482,9 @@ function ClickUpListView({ tasksByStatus, allTasks, agentMap, onTaskClick, onAdd
                             if (!isExpanded) toggleTaskExpand(task.id);
                             setAddingSubtaskFor(task.id);
                           }},
-                          { icon: <Link2 size={13} />, title: 'Copy link' },
-                          { icon: <Paperclip size={13} />, title: 'Attach' },
-                          { icon: <MessageSquare size={13} />, title: 'Comment' },
+                          { icon: <Link2 size={13} />, title: 'Add link', action: (e: React.MouseEvent) => openQuickAction(e, task.id, 'url') },
+                          { icon: <Paperclip size={13} />, title: 'Add file', action: (e: React.MouseEvent) => openQuickAction(e, task.id, 'files') },
+                          { icon: <MessageSquare size={13} />, title: 'Add comment', action: (e: React.MouseEvent) => openQuickAction(e, task.id, 'comment') },
                         ].map((btn, i) => (
                           <button
                             key={i}
@@ -395,6 +593,216 @@ function ClickUpListView({ tasksByStatus, allTasks, agentMap, onTaskClick, onAdd
                     {/* Spacer for add column */}
                     <div />
                   </div>
+
+                  {quickAction?.taskId === task.id && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        padding: '10px 16px 12px 56px',
+                        borderBottom: `1px solid ${C.border}`,
+                        background: C.rowHover,
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 520 }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: C.textMuted, textTransform: 'uppercase' }}>
+                          {quickAction.type === 'url' ? 'Add link' : quickAction.type === 'files' ? 'Add file' : 'Add comment'}
+                        </span>
+                        {quickAction.type === 'files' ? (
+                          <>
+                            <input
+                              ref={quickActionFileInputRef}
+                              type="file"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  void uploadQuickActionFile(task.id, file);
+                                }
+                              }}
+                              style={{ display: 'none' }}
+                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <button
+                                onClick={() => quickActionFileInputRef.current?.click()}
+                                disabled={quickActionSaving}
+                                style={{
+                                  border: `1px solid ${C.accent}`,
+                                  background: 'rgba(255,215,0,0.12)',
+                                  color: C.accent,
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  borderRadius: 6,
+                                  padding: '7px 10px',
+                                  cursor: quickActionSaving ? 'default' : 'pointer',
+                                  opacity: quickActionSaving ? 0.75 : 1,
+                                }}
+                              >
+                                {quickActionSaving ? 'Uploading...' : 'Upload From Device'}
+                              </button>
+                              <span style={{ fontSize: '0.72rem', color: C.textMuted }}>
+                                Choose a file from your laptop for this task.
+                              </span>
+                            </div>
+                            {taskAttachments.length > 0 && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {taskAttachments.map((attachment) => (
+                                  <div
+                                    key={attachment.file_id}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 10px',
+                                      borderRadius: 8,
+                                      border: `1px solid ${C.border}`,
+                                      background: C.surface,
+                                    }}
+                                  >
+                                    <a
+                                      href={`/api/files/download/${encodeURIComponent(attachment.user)}/${encodeURIComponent(attachment.file_id)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        flex: 1,
+                                        color: C.accent,
+                                        fontSize: '0.78rem',
+                                        textDecoration: 'none',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {attachment.filename}
+                                    </a>
+                                    <button
+                                      onClick={() => { void removeQuickActionAttachment(task.id, attachment.file_id); }}
+                                      disabled={quickActionSaving}
+                                      style={{
+                                        border: `1px solid ${C.border}`,
+                                        background: 'transparent',
+                                        color: C.textMuted,
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700,
+                                        borderRadius: 6,
+                                        padding: '7px 10px',
+                                        cursor: quickActionSaving ? 'default' : 'pointer',
+                                      }}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : quickAction.type === 'comment' ? (
+                          <textarea
+                            autoFocus
+                            value={quickActionValue}
+                            onChange={(e) => setQuickActionValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                e.preventDefault();
+                                void saveQuickAction();
+                              }
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                closeQuickAction();
+                              }
+                            }}
+                            placeholder="Write a comment..."
+                            rows={3}
+                            style={{
+                              width: '100%',
+                              minHeight: 84,
+                              borderRadius: 8,
+                              border: `1px solid ${C.border}`,
+                              background: C.surface,
+                              color: C.text,
+                              fontSize: '0.78rem',
+                              padding: '10px 12px',
+                              outline: 'none',
+                              resize: 'vertical',
+                              fontFamily: 'inherit',
+                            }}
+                          />
+                        ) : (
+                          <input
+                            autoFocus
+                            value={quickActionValue}
+                            onChange={(e) => setQuickActionValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void saveQuickAction();
+                              }
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                closeQuickAction();
+                              }
+                            }}
+                            placeholder="Paste a link for this task..."
+                            style={{
+                              width: '100%',
+                              minHeight: 38,
+                              borderRadius: 8,
+                              border: `1px solid ${C.border}`,
+                              background: C.surface,
+                              color: C.text,
+                              fontSize: '0.78rem',
+                              padding: '8px 10px',
+                              outline: 'none',
+                              fontFamily: 'inherit',
+                            }}
+                          />
+                        )}
+                        {quickActionError && (
+                          <span style={{ fontSize: '0.72rem', color: '#f87171' }}>{quickActionError}</span>
+                        )}
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          {quickAction.type !== 'files' && (
+                            <button
+                              onClick={() => { void saveQuickAction(); }}
+                              disabled={quickActionSaving}
+                              style={{
+                                border: `1px solid ${C.accent}`,
+                                background: 'rgba(255,215,0,0.12)',
+                                color: C.accent,
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                borderRadius: 6,
+                                padding: '7px 10px',
+                                cursor: quickActionSaving ? 'default' : 'pointer',
+                                opacity: quickActionSaving ? 0.75 : 1,
+                              }}
+                            >
+                              {quickActionSaving ? 'Saving...' : 'Save'}
+                            </button>
+                          )}
+                          <button
+                            onClick={closeQuickAction}
+                            disabled={quickActionSaving}
+                            style={{
+                              border: `1px solid ${C.border}`,
+                              background: 'transparent',
+                              color: C.textMuted,
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              borderRadius: 6,
+                              padding: '7px 10px',
+                              cursor: quickActionSaving ? 'default' : 'pointer',
+                            }}
+                          >
+                            {quickAction.type === 'files' ? 'Done' : 'Cancel'}
+                          </button>
+                          {quickAction.type === 'comment' && (
+                            <span style={{ fontSize: '0.68rem', color: C.textMuted }}>
+                              `Ctrl/Cmd + Enter` to send
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Subtask rows — indented under parent */}
                   {isExpanded && (
@@ -553,7 +961,7 @@ function ClickUpListView({ tasksByStatus, allTasks, agentMap, onTaskClick, onAdd
             {/* Add Task row */}
             {!isCollapsed && (
               <button
-                onClick={onAddTask}
+                onClick={() => onAddTask(statusId as 'todo' | 'in_progress' | 'done')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '6px 16px 6px 56px', width: '100%',
@@ -626,6 +1034,7 @@ export default function MissionControlPage() {
 
   // Active custom fields
   const [activeFields, setActiveFields] = useState<string[]>(loadActiveFields);
+  const [createTaskStatus, setCreateTaskStatus] = useState<'todo' | 'in_progress' | 'done'>('todo');
 
   // Listen for field changes from the FieldsPanel
   useEffect(() => {
@@ -678,7 +1087,8 @@ export default function MissionControlPage() {
     return data.raw.issues.data.map(i => issueToTask(i, data.raw.issues.data!));
   }, [data.raw.issues.data]);
 
-  const handleAddTask = useCallback(() => {
+  const handleAddTask = useCallback((status: 'todo' | 'in_progress' | 'done' = 'todo') => {
+    setCreateTaskStatus(status);
     data.setShowCreateModal(true);
   }, [data]);
 
@@ -705,6 +1115,17 @@ export default function MissionControlPage() {
     } catch (err) {
       console.error('Failed to assign:', err);
     }
+  }, [data]);
+
+  const handleDeleteIssue = useCallback(async (taskId: string) => {
+    const res = await fetch(`/paperclip-internal/api/issues/${taskId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`);
+    }
+    data.setSelectedTaskId(null);
+    data.refresh();
   }, [data]);
 
   // Agent detail view
@@ -777,12 +1198,14 @@ export default function MissionControlPage() {
               <ClickUpListView
                 tasksByStatus={data.tasksByStatus}
                 allTasks={allTasks}
+                rawIssues={data.raw.issues.data || []}
                 agentMap={data.agentMap}
                 onTaskClick={handleTaskClick}
                 onAddTask={handleAddTask}
                 activeFields={activeFields}
                 onAssign={handleAssign}
                 onCreateSubtask={handleCreateSubtask}
+                onRefresh={data.refresh}
               />
             ) : data.viewMode === 'board' ? (
               <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
@@ -815,8 +1238,11 @@ export default function MissionControlPage() {
           issue={selectedIssue}
           allIssues={data.raw.issues.data || []}
           agentMap={data.agentMap}
+          agents={data.raw.agents.data || []}
           onClose={() => data.setSelectedTaskId(null)}
           onNavigateTask={handleNavigateTask}
+          onDeleteIssue={handleDeleteIssue}
+          onRefreshIssue={data.refresh}
         />
       )}
 
@@ -825,6 +1251,7 @@ export default function MissionControlPage() {
         <CreateTaskModal
           agents={data.raw.agents.data || []}
           onSubmit={data.createTask}
+          initialStatus={createTaskStatus}
           onClose={() => data.setShowCreateModal(false)}
         />
       )}

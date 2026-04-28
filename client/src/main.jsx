@@ -8,6 +8,22 @@ import { ApiErrorBoundaryProvider } from './hooks/ApiErrorBoundaryContext';
 import 'katex/dist/katex.min.css';
 import 'katex/dist/contrib/copy-tex.js';
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      registration.unregister().catch(() => {});
+    });
+  }).catch(() => {});
+}
+
+if ('caches' in window) {
+  caches.keys().then((keys) => {
+    keys.forEach((key) => {
+      caches.delete(key).catch(() => {});
+    });
+  }).catch(() => {});
+}
+
 const container = document.getElementById('root');
 const root = createRoot(container);
 

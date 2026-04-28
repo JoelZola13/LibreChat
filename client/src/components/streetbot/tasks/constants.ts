@@ -17,7 +17,7 @@ export type PriorityKey = keyof typeof PRIORITIES;
 // Default statuses with ClickUp-style colors
 export const DEFAULT_STATUSES = [
   { id: "backlog", name: "BACKLOG", color: "#a3a3a3", category: "backlog" },
-  { id: "todo", name: "TO DO", color: "#6b7280", category: "open" },
+  { id: "todo", name: "TO DO", color: "#ef4444", category: "open" },
   { id: "in_progress", name: "IN PROGRESS", color: "#eab308", category: "in_progress" },
   { id: "done", name: "COMPLETE", color: "#22c55e", category: "done" },
 ] as const;

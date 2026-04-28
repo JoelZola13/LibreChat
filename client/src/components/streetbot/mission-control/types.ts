@@ -59,6 +59,7 @@ export interface PaperclipIssue {
   identifier: string;
   labels: Array<{ id: string; name: string; color?: string }>;
   startedAt?: string | null;
+  dueDate?: string | null;
   createdAt: string;
   completedAt: string | null;
   cancelledAt?: string | null;
@@ -190,4 +191,9 @@ export interface DispatchResponse {
     title: string;
     assignee: string;
   };
+}
+
+export interface HumanAssigneeOption {
+  id: string;
+  name: string;
 }

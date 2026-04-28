@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { paperclipFetch } from './config';
 import type { PaperclipIssue, PaperclipAgent, ActivityItem } from './types';
+import { buildAgentMap, stripCustomAssigneeMarker } from './paperclipAdapter';
 
 // ── Helpers ──
 
@@ -27,7 +28,7 @@ function formatDate(dateStr?: string | null): string {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  todo: '#F59E0B', in_progress: '#3B82F6', done: '#10B981', backlog: '#6B7280', blocked: '#EF4444',
+  todo: '#EF4444', in_progress: '#3B82F6', done: '#10B981', backlog: '#6B7280', blocked: '#EF4444',
 };
 const STATUS_LABELS: Record<string, string> = {
   todo: 'To Do', in_progress: 'In Progress', done: 'Done', backlog: 'Backlog', blocked: 'Blocked',
@@ -60,8 +61,14 @@ export default function TaskDetailView({ identifier, allIssues, allAgents, color
     allAgents.forEach(a => map.set(a.id, a));
     return map;
   }, [allAgents]);
+  const assigneeMap = useMemo(() => buildAgentMap(allAgents, allIssues), [allAgents, allIssues]);
 
-  const assignee = issue?.assigneeAgentId ? agentMap.get(issue.assigneeAgentId) : null;
+  const assignee = issue
+    ? assigneeMap[
+      issue.assigneeAgentId
+      || (issue.assigneeUserId === 'custom-other' ? `custom-other:${issue.id}` : issue.assigneeUserId || '')
+    ]
+    : null;
   const creator = issue?.createdByAgentId ? agentMap.get(issue.createdByAgentId) : null;
 
   // Load subtasks and activity
@@ -145,13 +152,13 @@ export default function TaskDetailView({ identifier, allIssues, allAgents, color
               </div>
             </div>
 
-            {issue.description && (
+            {stripCustomAssigneeMarker(issue.description) && (
               <div style={{
                 padding: '12px 16px', borderRadius: 12,
                 background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
                 color: colors.textSecondary, fontSize: '0.85rem', lineHeight: 1.6, whiteSpace: 'pre-wrap',
               }}>
-                {issue.description}
+                {stripCustomAssigneeMarker(issue.description)}
               </div>
             )}
           </div>
@@ -356,7 +363,7 @@ export default function TaskDetailView({ identifier, allIssues, allAgents, color
               <div style={{ fontSize: '0.65rem', fontWeight: 600, color: colors.textMuted, marginBottom: 4, textTransform: 'uppercase' }}>Assignee</div>
               {assignee ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Bot size={14} color="#8B5CF6" />
+                  <User size={14} color="#3B82F6" />
                   <span style={{ fontSize: '0.8rem', color: colors.text, fontWeight: 500 }}>{assignee.name}</span>
                 </div>
               ) : (

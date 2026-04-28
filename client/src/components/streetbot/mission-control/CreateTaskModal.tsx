@@ -1,21 +1,35 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { DEFAULT_COLORS } from '../tasks/constants';
+import { useAuthContext } from '~/hooks/AuthContext';
 import type { PaperclipAgent } from './types';
+import { CUSTOM_OTHER_ASSIGNEE_ID, HUMAN_ASSIGNEES } from './paperclipAdapter';
 
 const C = DEFAULT_COLORS;
 
 interface Props {
   agents: PaperclipAgent[];
-  onSubmit: (payload: { title: string; description?: string; priority?: string; agentName?: string }) => Promise<void>;
+  onSubmit: (payload: {
+    title: string;
+    description?: string;
+    priority?: string;
+    status?: 'todo' | 'in_progress' | 'done';
+    agentName?: string;
+    agentId?: string;
+    assigneeUserId?: string;
+    customAssigneeName?: string;
+  }) => Promise<void>;
+  initialStatus?: 'todo' | 'in_progress' | 'done';
   onClose: () => void;
 }
 
-export default function CreateTaskModal({ agents, onSubmit, onClose }: Props) {
+export default function CreateTaskModal({ agents, onSubmit, initialStatus = 'todo', onClose }: Props) {
+  const { user } = useAuthContext();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
-  const [agentName, setAgentName] = useState('');
+  const [assigneeValue, setAssigneeValue] = useState('');
+  const [customAssigneeName, setCustomAssigneeName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -33,17 +47,53 @@ export default function CreateTaskModal({ agents, onSubmit, onClose }: Props) {
     [...agents].sort((a, b) => a.name.localeCompare(b.name)),
     [agents]
   );
+  const matchedHumanAssignee = useMemo(() => {
+    const normalizedUserName = user?.name?.trim().toLowerCase();
+    const matchedAssignee = normalizedUserName ? HUMAN_ASSIGNEES.find((assignee) =>
+      assignee.id !== CUSTOM_OTHER_ASSIGNEE_ID && assignee.name.trim().toLowerCase() === normalizedUserName
+    ) : null;
+    return matchedAssignee
+      || HUMAN_ASSIGNEES.find((assignee) => assignee.id === 'ayse-barut')
+      || null;
+  }, [user?.name]);
+  const otherAssigneeSelected = assigneeValue === `human:${CUSTOM_OTHER_ASSIGNEE_ID}`;
+
+  useEffect(() => {
+    if (initialStatus !== 'in_progress' || assigneeValue || !matchedHumanAssignee) {
+      return;
+    }
+    setAssigneeValue(`human:${matchedHumanAssignee.id}`);
+  }, [initialStatus, assigneeValue, matchedHumanAssignee]);
 
   const handleSubmit = useCallback(async () => {
     if (!title.trim()) return;
+    if (otherAssigneeSelected && !customAssigneeName.trim()) {
+      setError('Enter a name for the Other assignee');
+      return;
+    }
+    if (initialStatus === 'in_progress' && !assigneeValue) {
+      setError('In Progress tasks need an assignee');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await onSubmit({
+      const payload: Parameters<Props['onSubmit']>[0] = {
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
-        agentName: agentName || undefined,
+        status: initialStatus,
+      };
+      if (assigneeValue.startsWith('agent:')) {
+        payload.agentId = assigneeValue.slice('agent:'.length);
+      } else if (assigneeValue.startsWith('human:')) {
+        payload.assigneeUserId = assigneeValue.slice('human:'.length);
+        if (payload.assigneeUserId === CUSTOM_OTHER_ASSIGNEE_ID) {
+          payload.customAssigneeName = customAssigneeName.trim();
+        }
+      }
+      await onSubmit({
+        ...payload,
       });
       onClose();
     } catch (e: any) {
@@ -51,7 +101,7 @@ export default function CreateTaskModal({ agents, onSubmit, onClose }: Props) {
     } finally {
       setSubmitting(false);
     }
-  }, [title, description, priority, agentName, onSubmit, onClose]);
+  }, [title, description, priority, initialStatus, assigneeValue, customAssigneeName, otherAssigneeSelected, onSubmit, onClose]);
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: '0.8rem',
@@ -125,15 +175,38 @@ export default function CreateTaskModal({ agents, onSubmit, onClose }: Props) {
                 Assignee
               </label>
               <select
-                value={agentName}
-                onChange={e => setAgentName(e.target.value)}
+                value={assigneeValue}
+                onChange={e => {
+                  setAssigneeValue(e.target.value);
+                  if (e.target.value !== `human:${CUSTOM_OTHER_ASSIGNEE_ID}`) {
+                    setCustomAssigneeName('');
+                  }
+                }}
                 style={{ ...inputStyle, cursor: 'pointer' }}
               >
                 <option value="">Unassigned</option>
+                <optgroup label="People">
+                  {HUMAN_ASSIGNEES.map((assignee) => (
+                    <option key={assignee.id} value={`human:${assignee.id}`}>{assignee.name}</option>
+                  ))}
+                </optgroup>
+                {sortedAgents.length > 0 && (
+                  <optgroup label="Agents">
                 {sortedAgents.map(a => (
-                  <option key={a.id} value={a.name}>{a.name} — {a.title || a.role}</option>
+                    <option key={a.id} value={`agent:${a.id}`}>{a.name} — {a.title || a.role}</option>
                 ))}
+                  </optgroup>
+                )}
               </select>
+              {otherAssigneeSelected && (
+                <input
+                  type="text"
+                  placeholder="Type assignee name..."
+                  value={customAssigneeName}
+                  onChange={e => setCustomAssigneeName(e.target.value)}
+                  style={{ ...inputStyle, marginTop: 8 }}
+                />
+              )}
             </div>
 
             <div style={{ width: 120 }}>
@@ -180,11 +253,11 @@ export default function CreateTaskModal({ agents, onSubmit, onClose }: Props) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!title.trim() || submitting}
+            disabled={!title.trim() || submitting || (otherAssigneeSelected && !customAssigneeName.trim())}
             style={{
               padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: !title.trim() ? C.surface : C.accent,
-              color: !title.trim() ? C.textMuted : '#000',
+              background: (!title.trim() || (otherAssigneeSelected && !customAssigneeName.trim())) ? C.surface : C.accent,
+              color: (!title.trim() || (otherAssigneeSelected && !customAssigneeName.trim())) ? C.textMuted : '#000',
               fontSize: '0.8rem', fontWeight: 700,
               opacity: submitting ? 0.7 : 1,
               transition: 'all 0.12s',
