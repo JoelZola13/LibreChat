@@ -6292,6 +6292,51 @@ export default function CaseManagementPage() {
       setWikiIngestPendingFiles(files);
       setWikiIngestStatus(`${files.length} file${files.length === 1 ? '' : 's'} ready for Case Wiki ingestion.`);
     };
+    const openWikiFilePicker = async () => {
+      if (wikiIngesting) return;
+
+      const nativePicker =
+        typeof window !== 'undefined'
+          ? (window as Window & {
+              showOpenFilePicker?: (options?: { multiple?: boolean }) => Promise<Array<{ getFile: () => Promise<File> }>>;
+            }).showOpenFilePicker
+          : undefined;
+
+      if (nativePicker) {
+        try {
+          const handles = await nativePicker.call(window, { multiple: true });
+          const files = await Promise.all(handles.map((handle) => handle.getFile()));
+          setWikiIngestPendingFiles(files);
+          setWikiIngestStatus(
+            files.length
+              ? `${files.length} file${files.length === 1 ? '' : 's'} ready for Case Wiki ingestion.`
+              : 'Choose files, drop files here, or paste source text before ingesting into the Case Wiki.',
+          );
+          if (wikiIngestInputRef.current) {
+            wikiIngestInputRef.current.value = '';
+          }
+          return;
+        } catch (error) {
+          const cancelled =
+            error instanceof DOMException
+              ? error.name === 'AbortError'
+              : Boolean(error && typeof error === 'object' && 'name' in error && (error as { name?: string }).name === 'AbortError');
+          if (cancelled) {
+            setWikiIngestStatus('No files selected yet. Choose files, drop files here, or paste source text.');
+            return;
+          }
+        }
+      }
+
+      const input = wikiIngestInputRef.current;
+      if (input) {
+        input.click();
+        setWikiIngestStatus('File picker opened. Choose one or more files, or paste source text if the picker does not appear.');
+        return;
+      }
+
+      setWikiIngestStatus('File picker unavailable. Paste source text or drag files into the Case Wiki ingest panel.');
+    };
     const submitWikiIngestModal = async () => {
       const pastedText = wikiIngestText.trim();
       let filesToIngest = wikiIngestPendingFiles;
@@ -6311,7 +6356,7 @@ export default function CaseManagementPage() {
       }
 
       if (!filesToIngest.length) {
-        setWikiIngestStatus('Choose files, drop files here, or paste source text before ingesting into the Case Wiki.');
+        await openWikiFilePicker();
         return;
       }
       const ingested = await ingestWikiFiles(filesToIngest, wikiIngestContext);
@@ -6365,7 +6410,7 @@ export default function CaseManagementPage() {
               onClick={() => {
                 setWikiIngestStatus('Add files or paste source text in the Case Wiki ingest panel below.');
                 wikiIngestInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                wikiIngestInputRef.current?.focus();
+                void openWikiFilePicker();
               }}
               disabled={wikiIngesting}
               {...accentButtonHoverHandlers}
@@ -6410,7 +6455,7 @@ export default function CaseManagementPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 0.7fr) minmax(260px, 1fr)', gap: 12 }}>
             <div style={{ display: 'grid', gap: 10 }}>
-              <label style={{ display: 'grid', gap: 8, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
+              <div style={{ display: 'grid', gap: 8, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
                 Source files
                 <input
                   ref={wikiIngestInputRef}
@@ -6422,15 +6467,43 @@ export default function CaseManagementPage() {
                   aria-label="Choose files for Case Wiki ingestion"
                   onChange={handleWikiIngestFileSelection}
                   style={{
-                    ...glassButton,
-                    borderRadius: 8,
-                    padding: 10,
-                    color: colors.text,
-                    fontSize: 13,
-                    fontWeight: 700,
+                    position: 'absolute',
+                    width: 1,
+                    height: 1,
+                    opacity: 0,
+                    pointerEvents: 'none',
                   }}
                 />
-              </label>
+                <div
+                  style={{
+                    ...glassButton,
+                    borderRadius: 8,
+                    padding: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span style={{ color: colors.textSecondary, fontSize: 13, fontWeight: 800 }}>
+                    {wikiIngestPendingFiles.length
+                      ? `${wikiIngestPendingFiles.length} selected source${wikiIngestPendingFiles.length === 1 ? '' : 's'}`
+                      : 'No files selected yet'}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="case-wiki-inline-file-picker"
+                    style={{ ...buttonStyle, padding: '8px 10px' }}
+                    onClick={() => void openWikiFilePicker()}
+                    disabled={wikiIngesting}
+                    {...buttonHoverHandlers}
+                  >
+                    <Upload size={15} />
+                    Choose files
+                  </button>
+                </div>
+              </div>
 
               <div
                 data-testid="case-wiki-inline-ingest-dropzone"
@@ -6553,7 +6626,7 @@ export default function CaseManagementPage() {
                     ? 'Ingest selected files'
                     : wikiIngestText.trim()
                       ? 'Ingest pasted source'
-                      : 'Ingest source'}
+                      : 'Choose files'}
               </button>
             </div>
           </div>
