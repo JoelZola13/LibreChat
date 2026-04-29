@@ -3788,6 +3788,8 @@ export default function CaseManagementPage() {
   const [quickNote, setQuickNote] = useState('');
   const [structuredNoteType, setStructuredNoteType] = useState('outreach contact');
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [wikiIngestModalOpen, setWikiIngestModalOpen] = useState(false);
+  const [wikiIngestPendingFiles, setWikiIngestPendingFiles] = useState<File[]>([]);
   const [wikiIngesting, setWikiIngesting] = useState(false);
   const [wikiIngestStatus, setWikiIngestStatus] = useState('');
   const [draftNotice, setDraftNotice] = useState(
@@ -5569,12 +5571,12 @@ export default function CaseManagementPage() {
     setDraftNotice(`${records.length} document${records.length === 1 ? '' : 's'} added to the local draft catalog.`);
   };
 
-  const ingestWikiFiles = async (files: FileList | null, context: WikiIngestContext) => {
-    if (!files?.length) return;
+  const ingestWikiFiles = async (files: FileList | File[] | null, context: WikiIngestContext) => {
+    if (!files?.length) return false;
     if (!token) {
       setWikiIngestStatus('Sign in before ingesting files into the Case Wiki.');
       setDraftNotice('Case Wiki ingestion needs a Street Voices session.');
-      return;
+      return false;
     }
 
     const uploadedFiles = Array.from(files);
@@ -5633,9 +5635,11 @@ export default function CaseManagementPage() {
         action: `ingested ${incomingWikiRecords.length} wiki source file${incomingWikiRecords.length === 1 ? '' : 's'}`,
         object: context.clientName || context.caseTitle || context.serviceName || 'Case Wiki',
       });
+      return true;
     } catch {
       setWikiIngestStatus('File ingestion failed. The current wiki remains unchanged.');
       setDraftNotice('Case Wiki ingestion failed; try again or check the server logs.');
+      return false;
     } finally {
       setWikiIngesting(false);
     }
@@ -6265,12 +6269,23 @@ export default function CaseManagementPage() {
       serviceName: selectedPageOrganization?.name,
       pageId: selectedPage?.id,
     };
-    const handleWikiIngestInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      void ingestWikiFiles(event.currentTarget.files, wikiIngestContext);
-      event.currentTarget.value = '';
+    const handleWikiIngestFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+      setWikiIngestPendingFiles(Array.from(event.currentTarget.files ?? []));
+    };
+    const submitWikiIngestModal = async () => {
+      if (!wikiIngestPendingFiles.length) {
+        setWikiIngestStatus('Choose one or more files before ingesting into the Case Wiki.');
+        return;
+      }
+      const ingested = await ingestWikiFiles(wikiIngestPendingFiles, wikiIngestContext);
+      if (ingested) {
+        setWikiIngestPendingFiles([]);
+        setWikiIngestModalOpen(false);
+      }
     };
 
     return (
+      <>
       <section style={panelStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'start' }}>
           <span>
@@ -6289,39 +6304,24 @@ export default function CaseManagementPage() {
             <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
               {wikiIngestionRecords.length} ingested files
             </span>
-            <input
-              id="case-wiki-ingest-file-input"
-              ref={wikiIngestInputRef}
-              data-testid="case-wiki-ingest-input"
-              type="file"
-              multiple
-              disabled={wikiIngesting}
-              aria-label="Ingest files into the Case Wiki"
-              onChange={handleWikiIngestInputChange}
-              style={{
-                position: 'fixed',
-                left: -9999,
-                top: -9999,
-                width: 1,
-                height: 1,
-                opacity: 0.01,
-              }}
-            />
-            <label
-              htmlFor="case-wiki-ingest-file-input"
+            <button
+              type="button"
               data-testid="case-wiki-ingest-button"
               style={{
                 ...primaryButtonStyle,
                 cursor: wikiIngesting ? 'not-allowed' : 'pointer',
                 opacity: wikiIngesting ? 0.76 : 1,
-                pointerEvents: wikiIngesting ? 'none' : 'auto',
               }}
-              aria-disabled={wikiIngesting}
+              onClick={() => {
+                setWikiIngestPendingFiles([]);
+                setWikiIngestModalOpen(true);
+              }}
+              disabled={wikiIngesting}
               {...accentButtonHoverHandlers}
             >
               <Upload size={16} />
               {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
-            </label>
+            </button>
           </div>
         </div>
 
@@ -6614,6 +6614,129 @@ export default function CaseManagementPage() {
           </article>
         </div>
       </section>
+      {wikiIngestModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="case-wiki-ingest-modal-title"
+          data-testid="case-wiki-ingest-modal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 18,
+            background: isDark ? 'rgba(0,0,0,0.68)' : 'rgba(15,23,42,0.26)',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <section
+            style={{
+              ...glassCard,
+              width: 'min(100%, 560px)',
+              borderRadius: 8,
+              padding: 18,
+              boxShadow: '0 24px 80px rgba(0,0,0,0.32)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
+              <div>
+                <h3 id="case-wiki-ingest-modal-title" style={{ margin: 0, color: colors.text, fontSize: 22 }}>
+                  Ingest files into Case Wiki
+                </h3>
+                <p style={{ margin: '8px 0 0', color: colors.textSecondary, fontSize: 13, lineHeight: 1.5 }}>
+                  Add documents, images, PDFs, notes, exports, or any other file type. The wiki will create source records and send graph nodes to Neo4j.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close ingest files modal"
+                style={{ ...buttonStyle, padding: 8 }}
+                onClick={() => {
+                  setWikiIngestPendingFiles([]);
+                  setWikiIngestModalOpen(false);
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <label style={{ display: 'grid', gap: 8, marginTop: 16, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
+              Select source files
+              <input
+                ref={wikiIngestInputRef}
+                data-testid="case-wiki-ingest-input"
+                type="file"
+                multiple
+                disabled={wikiIngesting}
+                aria-label="Choose files for Case Wiki ingestion"
+                onChange={handleWikiIngestFileSelection}
+                style={{
+                  ...glassButton,
+                  borderRadius: 8,
+                  padding: 10,
+                  color: colors.text,
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              />
+            </label>
+
+            <div style={{ ...surfaceStyle, marginTop: 12, display: 'grid', gap: 8 }}>
+              <strong style={{ color: colors.text, fontSize: 13 }}>
+                {wikiIngestPendingFiles.length
+                  ? `${wikiIngestPendingFiles.length} file${wikiIngestPendingFiles.length === 1 ? '' : 's'} ready`
+                  : 'No files selected yet'}
+              </strong>
+              {wikiIngestPendingFiles.length > 0 && (
+                <div style={{ display: 'grid', gap: 5 }}>
+                  {wikiIngestPendingFiles.slice(0, 5).map((file) => (
+                    <span key={`${file.name}-${file.size}`} style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      {file.name} · {Math.max(1, Math.round(file.size / 1024))} KB
+                    </span>
+                  ))}
+                  {wikiIngestPendingFiles.length > 5 && (
+                    <span style={{ color: colors.textMuted, fontSize: 12 }}>
+                      +{wikiIngestPendingFiles.length - 5} more
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
+              <button
+                type="button"
+                style={buttonStyle}
+                onClick={() => {
+                  setWikiIngestPendingFiles([]);
+                  setWikiIngestModalOpen(false);
+                }}
+                {...buttonHoverHandlers}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="case-wiki-ingest-submit"
+                style={{
+                  ...primaryButtonStyle,
+                  opacity: !wikiIngestPendingFiles.length || wikiIngesting ? 0.62 : 1,
+                  cursor: !wikiIngestPendingFiles.length || wikiIngesting ? 'not-allowed' : 'pointer',
+                }}
+                onClick={() => void submitWikiIngestModal()}
+                disabled={!wikiIngestPendingFiles.length || wikiIngesting}
+                {...accentButtonHoverHandlers}
+              >
+                <Upload size={16} />
+                {wikiIngesting ? 'Ingesting...' : 'Ingest selected files'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      </>
     );
   }
 
