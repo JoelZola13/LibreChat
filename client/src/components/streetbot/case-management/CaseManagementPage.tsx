@@ -6289,36 +6289,36 @@ export default function CaseManagementPage() {
             <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
               {wikiIngestionRecords.length} ingested files
             </span>
+            <input
+              id="case-wiki-ingest-file-input"
+              ref={wikiIngestInputRef}
+              data-testid="case-wiki-ingest-input"
+              type="file"
+              multiple
+              disabled={wikiIngesting}
+              aria-label="Ingest files into the Case Wiki"
+              onChange={handleWikiIngestInputChange}
+              style={{
+                position: 'fixed',
+                left: -9999,
+                top: -9999,
+                width: 1,
+                height: 1,
+                opacity: 0.01,
+              }}
+            />
             <label
+              htmlFor="case-wiki-ingest-file-input"
               data-testid="case-wiki-ingest-button"
               style={{
                 ...primaryButtonStyle,
-                position: 'relative',
-                overflow: 'hidden',
                 cursor: wikiIngesting ? 'not-allowed' : 'pointer',
                 opacity: wikiIngesting ? 0.76 : 1,
+                pointerEvents: wikiIngesting ? 'none' : 'auto',
               }}
               aria-disabled={wikiIngesting}
               {...accentButtonHoverHandlers}
             >
-              <input
-                ref={wikiIngestInputRef}
-                data-testid="case-wiki-ingest-input"
-                type="file"
-                multiple
-                disabled={wikiIngesting}
-                aria-label="Ingest files into the Case Wiki"
-                onChange={handleWikiIngestInputChange}
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  width: '100%',
-                  height: '100%',
-                  opacity: 0,
-                  zIndex: 2,
-                  cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                }}
-              />
               <Upload size={16} />
               {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
             </label>
