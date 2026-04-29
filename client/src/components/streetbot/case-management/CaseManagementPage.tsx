@@ -6292,42 +6292,8 @@ export default function CaseManagementPage() {
       setWikiIngestPendingFiles(files);
       setWikiIngestStatus(`${files.length} file${files.length === 1 ? '' : 's'} ready for Case Wiki ingestion.`);
     };
-    const openWikiFilePicker = async () => {
+    const openWikiFilePicker = () => {
       if (wikiIngesting) return;
-
-      const nativePicker =
-        typeof window !== 'undefined'
-          ? (window as Window & {
-              showOpenFilePicker?: (options?: { multiple?: boolean }) => Promise<Array<{ getFile: () => Promise<File> }>>;
-            }).showOpenFilePicker
-          : undefined;
-
-      if (nativePicker) {
-        try {
-          const handles = await nativePicker.call(window, { multiple: true });
-          const files = await Promise.all(handles.map((handle) => handle.getFile()));
-          setWikiIngestPendingFiles(files);
-          setWikiIngestStatus(
-            files.length
-              ? `${files.length} file${files.length === 1 ? '' : 's'} ready for Case Wiki ingestion.`
-              : 'Choose files, drop files here, or paste source text before ingesting into the Case Wiki.',
-          );
-          if (wikiIngestInputRef.current) {
-            wikiIngestInputRef.current.value = '';
-          }
-          return;
-        } catch (error) {
-          const cancelled =
-            error instanceof DOMException
-              ? error.name === 'AbortError'
-              : Boolean(error && typeof error === 'object' && 'name' in error && (error as { name?: string }).name === 'AbortError');
-          if (cancelled) {
-            setWikiIngestStatus('No files selected yet. Choose files, drop files here, or paste source text.');
-            return;
-          }
-        }
-      }
-
       const input = wikiIngestInputRef.current;
       if (input) {
         input.click();
@@ -6356,7 +6322,7 @@ export default function CaseManagementPage() {
       }
 
       if (!filesToIngest.length) {
-        await openWikiFilePicker();
+        openWikiFilePicker();
         return;
       }
       const ingested = await ingestWikiFiles(filesToIngest, wikiIngestContext);
@@ -6410,7 +6376,7 @@ export default function CaseManagementPage() {
               onClick={() => {
                 setWikiIngestStatus('Add files or paste source text in the Case Wiki ingest panel below.');
                 wikiIngestInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                void openWikiFilePicker();
+                openWikiFilePicker();
               }}
               disabled={wikiIngesting}
               {...accentButtonHoverHandlers}
