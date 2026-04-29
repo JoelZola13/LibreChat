@@ -6322,25 +6322,6 @@ export default function CaseManagementPage() {
               <Upload size={16} />
               {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
             </label>
-            <input
-              data-testid="case-wiki-ingest-native-input"
-              type="file"
-              multiple
-              disabled={wikiIngesting}
-              aria-label="Choose files for Case Wiki ingestion"
-              onChange={handleWikiIngestInputChange}
-              style={{
-                ...glassButton,
-                borderRadius: 8,
-                padding: '9px 10px',
-                minHeight: 39,
-                maxWidth: 230,
-                color: colors.text,
-                fontSize: 12,
-                fontWeight: 700,
-                opacity: wikiIngesting ? 0.76 : 1,
-              }}
-            />
           </div>
         </div>
 
