@@ -41,6 +41,7 @@ import { useAuthContext } from '~/hooks/AuthContext';
 
 type TabId =
   | 'overview'
+  | 'knowledge'
   | 'clients'
   | 'cases'
   | 'tasks'
@@ -232,6 +233,68 @@ interface TimelineEvent {
   detail: string;
 }
 
+interface ClientWikiSourceNoteSeed {
+  caseId: string;
+  timestamp: string;
+  author: string;
+  type: string;
+  narrative: string;
+  structuredFields: string[];
+  attachments: string[];
+  followUpRequired: boolean;
+  visibility: NoteRecord['visibility'];
+  aiSummary: string;
+  aiTags: string[];
+}
+
+interface ClientWikiMilestone {
+  caseId: string;
+  occurredAt: string;
+  type: string;
+  title: string;
+  detail: string;
+  source: string;
+}
+
+interface ClientWikiProfile {
+  clientId: string;
+  lead: string;
+  profileContext: string[];
+  workingSynthesis: string[];
+  sourceNotes: ClientWikiSourceNoteSeed[];
+  milestones: ClientWikiMilestone[];
+  retrievalHints: string[];
+  openQuestions: string[];
+}
+
+interface WikiIngestionRecord {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+  status: 'ready' | 'metadata-only' | 'failed';
+  extractionStatus: string;
+  extractionMethod: string;
+  graphStatus: string;
+  graphMessage: string;
+  nodeCount: number;
+  edgeCount: number;
+  linkedClientId?: string;
+  linkedCaseId?: string;
+  linkedServiceName?: string;
+  pageId: string;
+  title: string;
+  summary: string;
+  textPreview: string;
+  sections: Array<{ heading: string; body: string }>;
+  entities: string[];
+  sourceFileId?: string;
+  noteId?: string;
+  documentId?: string;
+  timelineId?: string;
+}
+
 interface BotAlert {
   id: string;
   caseId: string;
@@ -353,8 +416,18 @@ interface OrganizationDraft {
   averageTurnaroundDays: string;
 }
 
+interface WikiIngestContext {
+  clientId?: string;
+  clientName?: string;
+  caseId?: string;
+  caseTitle?: string;
+  serviceName?: string;
+  pageId?: string;
+}
+
 const tabs: Array<{ id: TabId; label: string; icon: LucideIcon }> = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
+  { id: 'knowledge', label: 'Knowledge', icon: Sparkles },
   { id: 'clients', label: 'Clients', icon: Users },
   { id: 'cases', label: 'Cases', icon: Briefcase },
   { id: 'tasks', label: 'Tasks', icon: ListTodo },
@@ -364,6 +437,54 @@ const tabs: Array<{ id: TabId; label: string; icon: LucideIcon }> = [
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
+
+const tabIds = new Set<TabId>(tabs.map((tab) => tab.id));
+
+const directoryServiceIds: Record<string, string> = {
+  'Harbour Shelter Intake': '15420',
+  'Toronto Harbour Light': '15420',
+  'Bridge Works Employment': '3199',
+  'Yonge Street Mission Employment Centre': '3199',
+  'Downtown Legal Clinic': '3577',
+  'Artists\' Legal Advice Services': '15609',
+  'Mobile Health Outreach': '2957',
+  'Regent Park Community Health Centre': '2957',
+  'City ID Desk': '3623',
+  'Parkdale Site ID Clinic': '3623',
+  'Parkdale Site Id Clinic': '3623',
+  'Community Food Bank': '15432',
+  'Safe Steps Counseling': '2988',
+  'Youth Futures Studio': '2988',
+  'Benefits Navigator Desk': '3498',
+  'WTCLS Income Assistance': '3498',
+  'Wtcls Income Assistance': '3498',
+  'Tenant Rights Hub': '15623',
+};
+
+function slugifyRoute(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function profilePathForName(name: string) {
+  return `/creatives/${slugifyRoute(name)}`;
+}
+
+function directoryPathForOrganization(name: string) {
+  const serviceId = directoryServiceIds[name];
+  if (serviceId) return `/directory/service/${serviceId}`;
+  return `/directory?q=${encodeURIComponent(name)}`;
+}
+
+function caseManagementTabFromPath(): TabId | null {
+  if (typeof window === 'undefined') return null;
+  const segment = window.location.pathname.replace(/^\/case-management\/?/, '').split('/')[0] as TabId | '';
+  return segment && tabIds.has(segment as TabId) ? (segment as TabId) : null;
+}
 
 const initialClients: ClientRecord[] = [
   {
@@ -1895,6 +2016,932 @@ const initialTimelineEvents: TimelineEvent[] = [
   },
 ];
 
+const clientWikiProfiles: ClientWikiProfile[] = [
+  {
+    clientId: 'client-001',
+    lead:
+      'Maya Chen is an active housing and benefits client whose case history shows a shift from urgent street outreach toward document stabilization, shelter referral readiness, and benefits package completion.',
+    profileContext: [
+      'Contact works best by text first, with phone follow-up after 4 PM when the device is charged and reachable.',
+      'Housing work and benefits work are linked because missing ID and consent paperwork affect both referral pathways.',
+      'Medical vulnerability should remain visible in triage notes so shelter placement decisions do not treat the case as a routine vacancy request.',
+    ],
+    workingSynthesis: [
+      'The strongest current pattern is document dependency: the same missing ID proof appears in housing, benefits, and appointment prep.',
+      'When contact is successful, Maya completes concrete steps quickly; the system should turn each contact into a short checklist before the next outreach window.',
+      'The case is ready for cross-team handoff only if the shelter referral, consent packet, and benefits document list are shown together.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-001',
+        timestamp: '2026-03-29T15:20:00',
+        author: 'Nia Patel',
+        type: 'street outreach baseline',
+        narrative:
+          'Initial wiki baseline created after Maya identified housing as the first priority and benefits as the second priority. Worker noted that document recovery has to be treated as part of the housing plan rather than a separate administrative task.',
+        structuredFields: ['Housing first priority', 'Benefits linked', 'Document recovery dependency'],
+        attachments: ['outreach-baseline-maya.pdf'],
+        followUpRequired: true,
+        visibility: 'team',
+        aiSummary: 'Maya needs one combined plan for housing, ID, and benefits rather than parallel disconnected tasks.',
+        aiTags: ['wiki baseline', 'housing', 'document dependency'],
+      },
+      {
+        caseId: 'case-002',
+        timestamp: '2026-04-08T16:35:00',
+        author: 'Street Bot',
+        type: 'wiki synthesis',
+        narrative:
+          'Compared notes, tasks, and referrals and found that the next best action is to gather acceptable alternate ID proof before the benefits appointment. The wiki should surface shelter intake rules, benefits documents, and consent status together.',
+        structuredFields: ['Cross-case synthesis', 'Alternate ID rule', 'Benefits prep'],
+        attachments: [],
+        followUpRequired: true,
+        visibility: 'internal',
+        aiSummary: 'Surface alternate ID requirements across Maya housing and benefits cases.',
+        aiTags: ['automation', 'cross-case', 'retrieval hint'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-001',
+        occurredAt: '2026-03-29T15:20:00',
+        type: 'wiki baseline',
+        title: 'Housing and benefits baseline captured',
+        detail: 'The first client wiki snapshot connected housing urgency with ID recovery and benefits preparation.',
+        source: 'street outreach baseline',
+      },
+      {
+        caseId: 'case-001',
+        occurredAt: '2026-04-02T10:00:00',
+        type: 'case opened',
+        title: 'Housing stabilization case opened',
+        detail: 'Case opened from outreach source with emergency housing, ID replacement, and intake scheduling goals.',
+        source: 'case record SV-CASE-2401',
+      },
+      {
+        caseId: 'case-002',
+        occurredAt: '2026-04-08T16:35:00',
+        type: 'knowledge synthesis',
+        title: 'Benefits and housing dependencies linked',
+        detail: 'Street Bot connected missing ID proof across both open cases and recommended a shared checklist.',
+        source: 'wiki synthesis',
+      },
+      {
+        caseId: 'case-001',
+        occurredAt: '2026-04-14T09:45:00',
+        type: 'document uploaded',
+        title: 'Consent document added',
+        detail: 'Signed consent photo was uploaded and tagged for shelter referral review.',
+        source: 'document record',
+      },
+    ],
+    retrievalHints: [
+      'Ask: What documents block Maya Chen housing and benefits work?',
+      'Retrieve notes tagged housing, consent, urgent, alternate ID, and benefits.',
+      'When Maya is selected, return the shelter referral and benefits checklist together.',
+    ],
+    openQuestions: [
+      'Will Toronto Harbour Light accept the consent photo while ID recovery is in progress?',
+      'Which benefits fields still require bank statement confirmation?',
+      'Is there a safer contact window than after 4 PM for urgent shelter updates?',
+    ],
+  },
+  {
+    clientId: 'client-002',
+    lead:
+      'Devon Brooks has two active threads: employment bridge support and clinic paperwork. The wiki record shows a client who engages when reminders are specific but loses momentum when consent language and appointment logistics are split across teams.',
+    profileContext: [
+      'Phone contact is preferred, but reminders need to be plain and tied to appointment purpose.',
+      'Employment support and clinic paperwork both depend on consent being completed in a low-pressure setting.',
+      'Missed orientation should be read as a workflow design issue first, not disengagement.',
+    ],
+    workingSynthesis: [
+      'Devon responds well to concrete next steps and short reminders; vague partner follow-up creates delay.',
+      'Clinic consent and employment orientation should be scheduled around drop-in hours to reduce missed appointments.',
+      'The wiki should keep partner response status, orientation timing, and consent status on one page.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-003',
+        timestamp: '2026-03-25T11:05:00',
+        author: 'Omar Williams',
+        type: 'employment history note',
+        narrative:
+          'Devon described casual work history and asked for help turning recent short jobs into a resume story. Worker noted that job readiness should start with confidence and communication before applications.',
+        structuredFields: ['Resume story needed', 'Confidence building', 'Orientation pending'],
+        attachments: ['devon-work-history.docx'],
+        followUpRequired: true,
+        visibility: 'team',
+        aiSummary: 'Employment support should begin with resume narrative and reminder scaffolding.',
+        aiTags: ['employment', 'resume', 'confidence'],
+      },
+      {
+        caseId: 'case-006',
+        timestamp: '2026-04-09T13:50:00',
+        author: 'Omar Williams',
+        type: 'clinic consent debrief',
+        narrative:
+          'Devon asked for more time with the clinic consent form and wanted the health card copy request explained line by line. Worker marked consent review as a case management task rather than a document upload only.',
+        structuredFields: ['Consent needs explanation', 'Health card copy pending', 'Drop-in review preferred'],
+        attachments: ['clinic-consent-draft.pdf'],
+        followUpRequired: true,
+        visibility: 'internal',
+        aiSummary: 'Consent completion needs a guided review during drop-in hours.',
+        aiTags: ['medical coordination', 'consent', 'paperwork'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-003',
+        occurredAt: '2026-03-22T10:00:00',
+        type: 'case opened',
+        title: 'Employment bridge case opened',
+        detail: 'Drop-in intake identified orientation, resume update, and reminder support as the first workflow.',
+        source: 'case record SV-CASE-2403',
+      },
+      {
+        caseId: 'case-003',
+        occurredAt: '2026-03-25T11:05:00',
+        type: 'wiki note',
+        title: 'Work history converted into resume story',
+        detail: 'Wiki note captured recent casual work, confidence goals, and communication support.',
+        source: 'employment history note',
+      },
+      {
+        caseId: 'case-006',
+        occurredAt: '2026-04-09T13:30:00',
+        type: 'clinic referral sent',
+        title: 'Clinic appointment hold requested',
+        detail: 'Referral sent with draft consent and request for the clinic to hold an appointment slot.',
+        source: 'timeline record',
+      },
+      {
+        caseId: 'case-006',
+        occurredAt: '2026-04-12T13:15:00',
+        type: 'phone call',
+        title: 'Reminder pattern confirmed',
+        detail: 'Devon confirmed interest and asked for reminder before employment orientation.',
+        source: 'phone call note',
+      },
+    ],
+    retrievalHints: [
+      'Ask: What reminders does Devon need before appointments?',
+      'Retrieve employment, consent, clinic, orientation, and resume notes together.',
+      'When Devon is selected, return both employment partner status and clinic consent status.',
+    ],
+    openQuestions: [
+      'Can the employment partner offer an orientation after drop-in hours?',
+      'Does the clinic accept a later health card copy if consent is completed first?',
+      'Which reminder channel has the best response rate for Devon?',
+    ],
+  },
+  {
+    clientId: 'client-003',
+    lead:
+      'Alina Morgan is a youth participant whose benefits renewal is low risk but time sensitive. The wiki shows a strong documentation pattern and a preference for hybrid, low-stimulation review.',
+    profileContext: [
+      'Hybrid meetings are preferred and help keep document review manageable.',
+      'Benefits renewal is connected to youth program stability because income continuity supports participation.',
+      'Email and WhatsApp are better than phone calls for follow-up unless the issue is urgent.',
+    ],
+    workingSynthesis: [
+      'Alina has the needed documents but benefits from quiet review time and a written recap.',
+      'The wiki should keep renewal due dates, youth program goals, and counseling intake context together.',
+      'The main risk is not missing information; it is losing the submission window.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-004',
+        timestamp: '2026-04-04T14:20:00',
+        author: 'Nia Patel',
+        type: 'benefits renewal prep',
+        narrative:
+          'Alina forwarded document screenshots and asked for a quiet hybrid review before submission. Worker noted that the renewal package is complete enough for a final check.',
+        structuredFields: ['Documents forwarded', 'Hybrid review requested', 'Final check needed'],
+        attachments: ['alina-renewal-screenshots.zip'],
+        followUpRequired: true,
+        visibility: 'team',
+        aiSummary: 'Benefits renewal is ready for a quiet final review before submission.',
+        aiTags: ['benefits', 'youth', 'hybrid review'],
+      },
+      {
+        caseId: 'case-004',
+        timestamp: '2026-04-11T12:30:00',
+        author: 'Street Bot',
+        type: 'deadline watch',
+        narrative:
+          'Deadline watch added because the benefits renewal due date is approaching while the case is low priority. Wiki should keep the due date visible even when risk is low.',
+        structuredFields: ['Deadline watch', 'Low risk but time sensitive'],
+        attachments: [],
+        followUpRequired: true,
+        visibility: 'internal',
+        aiSummary: 'Low-risk renewal still needs due-date visibility.',
+        aiTags: ['deadline', 'benefits', 'automation'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-004',
+        occurredAt: '2026-04-04T14:20:00',
+        type: 'documents gathered',
+        title: 'Renewal screenshots received',
+        detail: 'Client sent document screenshots and asked for a hybrid final review.',
+        source: 'benefits renewal prep',
+      },
+      {
+        caseId: 'case-004',
+        occurredAt: '2026-04-08T10:00:00',
+        type: 'case opened',
+        title: 'Benefits renewal case opened',
+        detail: 'Youth program referral created renewal support case with submission due by Apr 25.',
+        source: 'case record SV-CASE-2404',
+      },
+      {
+        caseId: 'case-004',
+        occurredAt: '2026-04-10T16:45:00',
+        type: 'office visit',
+        title: 'Checklist reviewed',
+        detail: 'Renewal checklist reviewed; all documents are available in email.',
+        source: 'office visit note',
+      },
+      {
+        caseId: 'case-004',
+        occurredAt: '2026-04-11T12:30:00',
+        type: 'automation',
+        title: 'Deadline watch added',
+        detail: 'Street Bot marked low-risk renewal as time sensitive because the submission window is narrowing.',
+        source: 'deadline watch',
+      },
+    ],
+    retrievalHints: [
+      'Ask: What is still needed for Alina Morgan benefits renewal?',
+      'Retrieve renewal checklist, youth program participation, and due-date watch records.',
+      'Prioritize notes with hybrid review and document screenshots.',
+    ],
+    openQuestions: [
+      'Has the final renewal review been booked in a quiet meeting window?',
+      'Which confirmation number should be recorded after submission?',
+      'Should counseling intake context be linked to the same youth support page?',
+    ],
+  },
+  {
+    clientId: 'client-004',
+    lead:
+      'Samir Ahmed is an urgent legal-support client with interpreter needs, expired consent, and stale contact. The wiki needs to preserve legal deadlines, outreach attempts, and consent status in one readable chronology.',
+    profileContext: [
+      'Interpreter support is required for complex legal or benefits language.',
+      'Consent expiry is not just compliance context; it blocks partner communication close to a legal deadline.',
+      'No-contact periods should trigger escalation because the case has deadline and placement risk.',
+    ],
+    workingSynthesis: [
+      'The case risk comes from three items compounding: legal deadline, expired consent, and limited contact.',
+      'The wiki should make the latest confirmed location and interpreter plan immediately visible.',
+      'Supervisor escalation is appropriate until consent and appointment confirmation are both updated.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-005',
+        timestamp: '2026-03-21T10:10:00',
+        author: 'Priya Singh',
+        type: 'legal timeline reconstruction',
+        narrative:
+          'Built a plain-language legal timeline from clinic intake notes. Key dates were translated into Arabic summary language and flagged for interpreter-supported confirmation.',
+        structuredFields: ['Timeline reconstructed', 'Interpreter summary needed', 'Legal deadline visible'],
+        attachments: ['samir-legal-timeline.pdf'],
+        followUpRequired: true,
+        visibility: 'restricted',
+        aiSummary: 'Legal timeline exists but must be confirmed with interpreter support.',
+        aiTags: ['legal', 'timeline', 'interpreter'],
+      },
+      {
+        caseId: 'case-005',
+        timestamp: '2026-04-13T11:05:00',
+        author: 'Street Bot',
+        type: 'escalation synthesis',
+        narrative:
+          'Street Bot linked expired consent, no contact in 14 days, and legal deadline proximity. Recommended shelter desk contact before closing the outreach loop.',
+        structuredFields: ['Expired consent', 'No contact pattern', 'Shelter desk route'],
+        attachments: [],
+        followUpRequired: true,
+        visibility: 'restricted',
+        aiSummary: 'Escalate Samir case until contact and consent are updated.',
+        aiTags: ['urgent', 'legal', 'no contact'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-005',
+        occurredAt: '2026-03-18T09:00:00',
+        type: 'case opened',
+        title: 'Legal support case opened',
+        detail: 'Legal clinic referral opened with interpreter need and consent monitoring.',
+        source: 'case record SV-CASE-2405',
+      },
+      {
+        caseId: 'case-005',
+        occurredAt: '2026-03-21T10:10:00',
+        type: 'wiki source',
+        title: 'Legal timeline reconstructed',
+        detail: 'Worker created a plain-language timeline and marked interpreter confirmation as required.',
+        source: 'legal timeline reconstruction',
+      },
+      {
+        caseId: 'case-005',
+        occurredAt: '2026-03-30T11:20:00',
+        type: 'legal support',
+        title: 'Clinic intake completed',
+        detail: 'Clinic requested updated consent and appointment confirmation.',
+        source: 'legal support note',
+      },
+      {
+        caseId: 'case-005',
+        occurredAt: '2026-04-13T11:05:00',
+        type: 'supervisor escalation',
+        title: 'Consent and no-contact escalation',
+        detail: 'Street Bot and supervisor review connected stale contact to legal deadline risk.',
+        source: 'escalation synthesis',
+      },
+    ],
+    retrievalHints: [
+      'Ask: Why is Samir Ahmed urgent today?',
+      'Retrieve legal deadline, expired consent, interpreter plan, and last confirmed contact.',
+      'Use restricted visibility notes before summarizing partner-facing content.',
+    ],
+    openQuestions: [
+      'Has the shelter desk confirmed a contact route?',
+      'Can updated consent be completed with interpreter support before the legal appointment?',
+      'What is the final legal clinic deadline date and who owns it?',
+    ],
+  },
+  {
+    clientId: 'client-005',
+    lead:
+      'Rosa Martinez has an active ID and settlement support case plus a resolved food security bridge. The wiki demonstrates how closed support can remain useful context for active document and language-access work.',
+    profileContext: [
+      'Spanish-language summaries improve follow-through and reduce repeated explanations.',
+      'ID replacement, settlement support, and benefits screening all rely on proof-of-address clarity.',
+      'Food bank closure is stable but remains relevant because location, language, and family context inform other appointments.',
+    ],
+    workingSynthesis: [
+      'Rosa makes progress when instructions are translated and appointment expectations are written.',
+      'Proof of address is the bottleneck; once accepted, several downstream referrals can move together.',
+      'Closed case knowledge should not disappear because it contains successful communication patterns.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-007',
+        timestamp: '2026-04-06T09:45:00',
+        author: 'Priya Singh',
+        type: 'language access note',
+        narrative:
+          'Rosa asked that all appointment instructions include a Spanish-language summary and a short list of documents to bring. Worker added translation as a standing wiki preference.',
+        structuredFields: ['Spanish summary required', 'Appointment checklist', 'Standing preference'],
+        attachments: ['rosa-spanish-instructions-template.docx'],
+        followUpRequired: true,
+        visibility: 'team',
+        aiSummary: 'Spanish summaries are a standing support need for Rosa appointments.',
+        aiTags: ['language access', 'ID replacement', 'settlement'],
+      },
+      {
+        caseId: 'case-008',
+        timestamp: '2026-04-12T16:05:00',
+        author: 'Street Bot',
+        type: 'closure reuse note',
+        narrative:
+          'Closed food bank case contains useful navigation details: Tuesday pickup, translated directions, and household registration status. Wiki should reuse these details when planning future community referrals.',
+        structuredFields: ['Closed case reusable', 'Translated directions', 'Community referral context'],
+        attachments: [],
+        followUpRequired: false,
+        visibility: 'internal',
+        aiSummary: 'Closed food security case provides reusable language and location context.',
+        aiTags: ['closure', 'food security', 'knowledge reuse'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-007',
+        occurredAt: '2026-04-04T10:00:00',
+        type: 'case opened',
+        title: 'ID replacement case opened',
+        detail: 'Settlement and ID replacement plan opened from community meal program referral.',
+        source: 'case record SV-CASE-2407',
+      },
+      {
+        caseId: 'case-007',
+        occurredAt: '2026-04-06T09:45:00',
+        type: 'language access',
+        title: 'Spanish appointment summary added',
+        detail: 'Spanish-language appointment instructions became a standing wiki preference.',
+        source: 'language access note',
+      },
+      {
+        caseId: 'case-008',
+        occurredAt: '2026-04-12T15:40:00',
+        type: 'case resolved',
+        title: 'Food security bridge resolved',
+        detail: 'Weekly hamper pickup confirmed and translated instructions shared.',
+        source: 'closure note',
+      },
+      {
+        caseId: 'case-007',
+        occurredAt: '2026-04-13T10:40:00',
+        type: 'document uploaded',
+        title: 'ID proof documents added',
+        detail: 'Prior ID photo and address support letter attached for City ID Desk review.',
+        source: 'document upload',
+      },
+    ],
+    retrievalHints: [
+      'Ask: What proof of address does Rosa Martinez need?',
+      'Retrieve ID replacement, Spanish instructions, proof documents, and closed food bank context.',
+      'When planning a new referral, include the translated directions preference.',
+    ],
+    openQuestions: [
+      'Will City ID Desk accept the family letter plus meal program letter?',
+      'Should settlement support proceed before ID appointment confirmation?',
+      'Was the first food bank pickup completed without additional language support?',
+    ],
+  },
+  {
+    clientId: 'client-006',
+    lead:
+      'Jordan Lee is a high-risk outreach client whose counseling referral is affected by missed appointment history, phone battery instability, pending consent, and timing preferences.',
+    profileContext: [
+      'Short meetings and written recaps reduce friction.',
+      'Text reminders should include practical details such as charging station options and appointment time.',
+      'Mental health navigation is connected to outreach stability; missed intake should trigger reschedule design, not case closure.',
+    ],
+    workingSynthesis: [
+      'The main barrier is not willingness; it is appointment fit and communication reliability.',
+      'Afternoon slots and low-battery reminder language are critical to the next handoff.',
+      'Restricted notes should stay visible to workers but not over-shared with external partners.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-009',
+        timestamp: '2026-04-05T18:20:00',
+        author: 'Omar Williams',
+        type: 'reminder design note',
+        narrative:
+          'Jordan explained that morning appointments are hard to keep and phone battery is often below 10 percent by late afternoon. Worker drafted reminder language with charging station information.',
+        structuredFields: ['Afternoon appointments only', 'Phone battery barrier', 'Reminder language drafted'],
+        attachments: ['jordan-sms-reminder-template.txt'],
+        followUpRequired: true,
+        visibility: 'restricted',
+        aiSummary: 'Reminder plan should include appointment time, charging station, and short written recap.',
+        aiTags: ['mental health', 'reminder design', 'phone instability'],
+      },
+      {
+        caseId: 'case-009',
+        timestamp: '2026-04-14T08:55:00',
+        author: 'Street Bot',
+        type: 'risk synthesis',
+        narrative:
+          'Pattern synthesis connected missed counseling intake, pending consent, and high-risk outreach notes. Suggested same-day partner callback and SMS plan before another appointment is booked.',
+        structuredFields: ['Missed intake', 'Pending consent', 'Same-day callback'],
+        attachments: [],
+        followUpRequired: true,
+        visibility: 'restricted',
+        aiSummary: 'Do not rebook counseling without a reminder and consent plan.',
+        aiTags: ['automation', 'risk', 'counseling'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-009',
+        occurredAt: '2026-04-01T10:00:00',
+        type: 'case opened',
+        title: 'Counseling warm handoff case opened',
+        detail: 'Harm reduction route opened a mental health navigation case with warm handoff goals.',
+        source: 'case record SV-CASE-2409',
+      },
+      {
+        caseId: 'case-009',
+        occurredAt: '2026-04-05T18:20:00',
+        type: 'wiki note',
+        title: 'Low-battery reminder plan drafted',
+        detail: 'Worker documented phone battery barrier and afternoon appointment preference.',
+        source: 'reminder design note',
+      },
+      {
+        caseId: 'case-009',
+        occurredAt: '2026-04-13T16:00:00',
+        type: 'missed appointment',
+        title: 'Counseling intake missed',
+        detail: 'Partner requested reschedule with a clearer afternoon reminder plan.',
+        source: 'timeline record',
+      },
+      {
+        caseId: 'case-009',
+        occurredAt: '2026-04-14T08:55:00',
+        type: 'risk synthesis',
+        title: 'Same-day reschedule plan recommended',
+        detail: 'Street Bot recommended partner callback before any new counseling appointment is booked.',
+        source: 'risk synthesis',
+      },
+    ],
+    retrievalHints: [
+      'Ask: What failed in Jordan Lee counseling referral?',
+      'Retrieve missed intake, reminder template, consent status, and phone barrier notes.',
+      'Use restricted notes for internal planning and summarize carefully for partner communication.',
+    ],
+    openQuestions: [
+      'Which partner afternoon slot is available?',
+      'Has consent been completed enough for a warm handoff?',
+      'What charging station or contact backup should be included in reminders?',
+    ],
+  },
+  {
+    clientId: 'client-007',
+    lead:
+      'Keisha Thompson is waiting on medical verification for disability support. The wiki record highlights accessibility planning, clinic turnaround, and the need to keep mobility context attached to benefits paperwork.',
+    profileContext: [
+      'Phone before noon is preferred.',
+      'Accessible route planning and seated waiting areas should be treated as appointment requirements.',
+      'Medical verification and disability support are one workflow; document status should stay linked to travel planning.',
+    ],
+    workingSynthesis: [
+      'The case is stable if the clinic returns verification on time and the route is accessible.',
+      'A benefits package can be prepared in parallel while the medical form is pending.',
+      'The wiki should preserve practical access details because they determine whether appointments are realistic.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-010',
+        timestamp: '2026-04-03T12:15:00',
+        author: 'Nia Patel',
+        type: 'access planning note',
+        narrative:
+          'Keisha described pain after long standing waits and asked for routes with seated transfer points. Worker linked accessibility planning to clinic and benefits appointments.',
+        structuredFields: ['Seated waiting area needed', 'Accessible route planning', 'Benefits package parallel prep'],
+        attachments: ['keisha-access-route-notes.pdf'],
+        followUpRequired: true,
+        visibility: 'team',
+        aiSummary: 'Accessibility needs affect clinic verification and benefits submission planning.',
+        aiTags: ['accessibility', 'medical verification', 'benefits'],
+      },
+      {
+        caseId: 'case-010',
+        timestamp: '2026-04-11T09:35:00',
+        author: 'Street Bot',
+        type: 'clinic turnaround watch',
+        narrative:
+          'No verification document has arrived yet. Street Bot suggested checking clinic status and preparing the benefits package shell so submission can happen quickly once the form arrives.',
+        structuredFields: ['Verification pending', 'Prepare benefits shell', 'Clinic status check'],
+        attachments: [],
+        followUpRequired: true,
+        visibility: 'internal',
+        aiSummary: 'Prepare disability support package while waiting for clinic verification.',
+        aiTags: ['clinic', 'benefits', 'automation'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-010',
+        occurredAt: '2026-04-03T10:00:00',
+        type: 'case opened',
+        title: 'Medical verification case opened',
+        detail: 'North clinic referral created medical verification workflow for disability support.',
+        source: 'case record SV-CASE-2410',
+      },
+      {
+        caseId: 'case-010',
+        occurredAt: '2026-04-03T12:15:00',
+        type: 'access planning',
+        title: 'Accessible route requirement documented',
+        detail: 'Wiki note linked mobility needs to clinic appointment planning.',
+        source: 'access planning note',
+      },
+      {
+        caseId: 'case-010',
+        occurredAt: '2026-04-09T09:20:00',
+        type: 'referral scheduled',
+        title: 'Medical verification queued',
+        detail: 'Clinic accepted verification request and scheduled signature review.',
+        source: 'timeline record',
+      },
+      {
+        caseId: 'case-010',
+        occurredAt: '2026-04-11T09:35:00',
+        type: 'automation',
+        title: 'Clinic turnaround watch added',
+        detail: 'Street Bot recommended preparing benefits package shell while waiting on verification.',
+        source: 'clinic turnaround watch',
+      },
+    ],
+    retrievalHints: [
+      'Ask: What accessibility support does Keisha need for appointments?',
+      'Retrieve clinic verification, route planning, disability support, and seated waiting notes.',
+      'Return practical appointment constraints alongside medical document status.',
+    ],
+    openQuestions: [
+      'Can the clinic fax verification directly to the benefits office?',
+      'Which route has the least standing time?',
+      'Is a support person needed for the clinic appointment?',
+    ],
+  },
+  {
+    clientId: 'client-008',
+    lead:
+      'Tariq Johnson is a youth employment and school re-entry client. The wiki tracks readiness, evening availability, transit support, and school credit mapping over time.',
+    profileContext: [
+      'Evening appointments are preferred because of family responsibilities.',
+      'Youth employment orientation should be paired with school credit mapping instead of treated as separate goals.',
+      'Transit pass support is a practical requirement for reliable attendance.',
+    ],
+    workingSynthesis: [
+      'Tariq is engaged and future oriented; the case should protect momentum by bundling orientation and school contact.',
+      'The wiki should show youth program identity, employment goals, and school re-entry next steps together.',
+      'Low risk does not mean low value; this is a prevention and stabilization workflow.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-011',
+        timestamp: '2026-04-13T18:05:00',
+        author: 'Leah Fraser',
+        type: 'youth goal mapping',
+        narrative:
+          'Tariq identified evening work, school credit recovery, and media room participation as connected goals. Worker captured a combined youth plan instead of separate program notes.',
+        structuredFields: ['Evening work goal', 'Credit recovery', 'Media room participation'],
+        attachments: ['tariq-youth-goals.docx'],
+        followUpRequired: true,
+        visibility: 'team',
+        aiSummary: 'Tariq needs a bundled employment and school re-entry plan.',
+        aiTags: ['youth', 'employment', 'school re-entry'],
+      },
+      {
+        caseId: 'case-011',
+        timestamp: '2026-04-15T16:30:00',
+        author: 'Street Bot',
+        type: 'opportunity match',
+        narrative:
+          'Street Bot matched Tariq with evening-friendly youth employment orientation and suggested adding transit pass support before the appointment is confirmed.',
+        structuredFields: ['Evening orientation match', 'Transit support needed', 'Opportunity match'],
+        attachments: [],
+        followUpRequired: true,
+        visibility: 'internal',
+        aiSummary: 'Book evening orientation only after transit support is confirmed.',
+        aiTags: ['automation', 'orientation', 'transit'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-011',
+        occurredAt: '2026-04-13T17:55:00',
+        type: 'intake started',
+        title: 'Youth employment intake opened',
+        detail: 'Readiness checklist completed and orientation slot identified.',
+        source: 'timeline record',
+      },
+      {
+        caseId: 'case-011',
+        occurredAt: '2026-04-13T18:05:00',
+        type: 'goal mapping',
+        title: 'School and work goals linked',
+        detail: 'Wiki note connected employment orientation, school credit recovery, and media room participation.',
+        source: 'youth goal mapping',
+      },
+      {
+        caseId: 'case-011',
+        occurredAt: '2026-04-15T16:30:00',
+        type: 'opportunity match',
+        title: 'Evening-friendly orientation matched',
+        detail: 'Street Bot suggested confirming transit support before booking orientation.',
+        source: 'opportunity match',
+      },
+      {
+        caseId: 'case-011',
+        occurredAt: '2026-04-21T16:00:00',
+        type: 'planned follow-up',
+        title: 'Youth orientation follow-up due',
+        detail: 'Case task is due to book orientation and confirm school contact.',
+        source: 'task record',
+      },
+    ],
+    retrievalHints: [
+      'Ask: How do Tariq Johnson employment and school goals connect?',
+      'Retrieve youth readiness, orientation, school credit, media room, and transit notes.',
+      'Show prevention-oriented context even though risk level is low.',
+    ],
+    openQuestions: [
+      'Which school contact can confirm credit recovery options?',
+      'Is transit pass support approved before orientation?',
+      'Should media room participation be part of the employment readiness plan?',
+    ],
+  },
+  {
+    clientId: 'client-009',
+    lead:
+      'Marion Green is a closed housing stabilization client. The wiki demonstrates aftercare memory: stable placement, active income support, large-print documents, and optional 30-day follow-up remain available after closure.',
+    profileContext: [
+      'Large-print documents should remain a standing accessibility preference.',
+      'Closure does not erase knowledge; aftercare context helps prevent re-intake from starting from zero.',
+      'Phone contact is preferred for the optional 30-day check-in.',
+    ],
+    workingSynthesis: [
+      'The closure is strong because housing, benefits, and aftercare resources were all confirmed.',
+      'The wiki should make clear what changed from active crisis work to aftercare monitoring.',
+      'Future reactivation should begin from the closure summary and accessibility preferences.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-012',
+        timestamp: '2026-03-18T13:25:00',
+        author: 'Priya Singh',
+        type: 'housing stabilization checkpoint',
+        narrative:
+          'Marion confirmed the unit felt safe and asked that future paperwork be printed large enough to read without strain. Worker marked large-print documents as a permanent profile preference.',
+        structuredFields: ['Placement feels safe', 'Large-print preference', 'Aftercare context'],
+        attachments: ['marion-housing-checkpoint.pdf'],
+        followUpRequired: false,
+        visibility: 'team',
+        aiSummary: 'Housing stabilization is strong; keep large-print preference in aftercare.',
+        aiTags: ['housing', 'accessibility', 'aftercare'],
+      },
+      {
+        caseId: 'case-012',
+        timestamp: '2026-04-10T16:25:00',
+        author: 'Street Bot',
+        type: 'closure synthesis',
+        narrative:
+          'Street Bot summarized closure evidence: stable placement, income support active, benefits confirmation documented, and no immediate case management need. Suggested optional 30-day check-in.',
+        structuredFields: ['Stable placement', 'Benefits active', 'Optional aftercare'],
+        attachments: [],
+        followUpRequired: false,
+        visibility: 'internal',
+        aiSummary: 'Marion case is closed with aftercare memory preserved.',
+        aiTags: ['closure', 'aftercare', 'stabilized'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-012',
+        occurredAt: '2026-02-18T10:00:00',
+        type: 'case opened',
+        title: 'Housing placement case opened',
+        detail: 'Housing office referral opened with placement confirmation and benefits verification goals.',
+        source: 'case record SV-CASE-2412',
+      },
+      {
+        caseId: 'case-012',
+        occurredAt: '2026-03-18T13:25:00',
+        type: 'stabilization checkpoint',
+        title: 'Safe placement confirmed',
+        detail: 'Marion confirmed placement felt safe and large-print documents were needed.',
+        source: 'housing stabilization checkpoint',
+      },
+      {
+        caseId: 'case-012',
+        occurredAt: '2026-04-10T16:15:00',
+        type: 'case closed',
+        title: 'Housing case closed',
+        detail: 'Stable placement, benefits activation, and aftercare resources were confirmed.',
+        source: 'timeline record',
+      },
+      {
+        caseId: 'case-012',
+        occurredAt: '2026-05-12T10:00:00',
+        type: 'planned aftercare',
+        title: 'Optional aftercare call scheduled',
+        detail: 'Closure plan keeps a 30-day aftercare call visible without reopening the case.',
+        source: 'case follow-up date',
+      },
+    ],
+    retrievalHints: [
+      'Ask: Why was Marion Green case closed?',
+      'Retrieve closure summary, housing confirmation, benefits activation, and large-print preference.',
+      'Use aftercare memory before opening any new case.',
+    ],
+    openQuestions: [
+      'Did Marion complete the optional 30-day aftercare call?',
+      'Are large-print forms available for future benefits updates?',
+      'Should closure evidence be included in monthly outcomes reporting?',
+    ],
+  },
+  {
+    clientId: 'client-010',
+    lead:
+      'Eli Novak is rebuilding a benefits appeal from partial documents. The wiki follows document recovery, plain-language timeline creation, ID copy retrieval, and food support context.',
+    profileContext: [
+      'Email first works best; phone should be reserved for appointments.',
+      'Plain-language written steps are necessary because appeal language is complex.',
+      'ID copy recovery, benefits appeal, and food support are connected stabilization tasks.',
+    ],
+    workingSynthesis: [
+      'Eli has enough partial paperwork to begin a timeline but not enough to submit confidently.',
+      'The next useful wiki output is a chronological appeal map with missing dates highlighted.',
+      'Food support should stay linked because benefits interruption affects immediate stability.',
+    ],
+    sourceNotes: [
+      {
+        caseId: 'case-013',
+        timestamp: '2026-04-07T14:10:00',
+        author: 'Leah Fraser',
+        type: 'appeal intake baseline',
+        narrative:
+          'Eli arrived with partial appeal paperwork and described several missing dates. Worker created a wiki baseline so recovered documents, appeal events, and benefits navigator questions can be added over time.',
+        structuredFields: ['Partial paperwork', 'Missing dates', 'Appeal baseline'],
+        attachments: ['eli-appeal-baseline.pdf'],
+        followUpRequired: true,
+        visibility: 'team',
+        aiSummary: 'Appeal timeline should start now and mark missing dates clearly.',
+        aiTags: ['benefits appeal', 'document recovery', 'baseline'],
+      },
+      {
+        caseId: 'case-013',
+        timestamp: '2026-04-14T13:20:00',
+        author: 'Street Bot',
+        type: 'retrieval prep',
+        narrative:
+          'Street Bot identified likely retrieval targets for AI search: appeal letter scan, ID copy request, benefits navigator appointment, and plain-language timeline task.',
+        structuredFields: ['Retrieval targets', 'Timeline task', 'Navigator appointment'],
+        attachments: [],
+        followUpRequired: true,
+        visibility: 'internal',
+        aiSummary: 'Use appeal letter, ID recovery, and navigator appointment as retrieval anchors.',
+        aiTags: ['retrieval', 'appeal', 'documents'],
+      },
+    ],
+    milestones: [
+      {
+        caseId: 'case-013',
+        occurredAt: '2026-04-07T10:00:00',
+        type: 'case opened',
+        title: 'Benefits appeal case opened',
+        detail: 'Library outreach desk opened benefits appeal document recovery case.',
+        source: 'case record SV-CASE-2413',
+      },
+      {
+        caseId: 'case-013',
+        occurredAt: '2026-04-07T14:10:00',
+        type: 'wiki baseline',
+        title: 'Appeal baseline created',
+        detail: 'Worker captured missing dates and partial paperwork as a starting wiki timeline.',
+        source: 'appeal intake baseline',
+      },
+      {
+        caseId: 'case-013',
+        occurredAt: '2026-04-12T12:30:00',
+        type: 'document uploaded',
+        title: 'Benefits appeal letter added',
+        detail: 'Appeal letter scan uploaded and flagged for plain-language timeline work.',
+        source: 'timeline record',
+      },
+      {
+        caseId: 'case-013',
+        occurredAt: '2026-04-14T13:20:00',
+        type: 'retrieval prep',
+        title: 'AI retrieval anchors identified',
+        detail: 'Street Bot listed appeal letter, ID copy, navigator appointment, and timeline task as retrieval anchors.',
+        source: 'retrieval prep',
+      },
+    ],
+    retrievalHints: [
+      'Ask: What is missing from Eli Novak benefits appeal?',
+      'Retrieve appeal letter scan, ID copy request, navigator appointment, and missing-date notes.',
+      'Return a chronological appeal map with missing facts marked instead of hidden.',
+    ],
+    openQuestions: [
+      'Which appeal dates are confirmed by documents versus memory?',
+      'Has the ID copy request been accepted?',
+      'What questions should Eli bring to the benefits navigator appointment?',
+    ],
+  },
+];
+
+const clientWikiSourceNotes: NoteRecord[] = clientWikiProfiles.flatMap((profile) =>
+  profile.sourceNotes.map((note, index) => ({
+    id: `wiki-note-${profile.clientId}-${index + 1}`,
+    timestamp: note.timestamp,
+    author: note.author,
+    clientId: profile.clientId,
+    caseId: note.caseId,
+    type: note.type,
+    narrative: note.narrative,
+    structuredFields: note.structuredFields,
+    attachments: note.attachments,
+    followUpRequired: note.followUpRequired,
+    visibility: note.visibility,
+    aiSummary: note.aiSummary,
+    aiTags: note.aiTags,
+  })),
+);
+
+const clientWikiTimelineEvents: TimelineEvent[] = clientWikiProfiles.flatMap((profile) =>
+  profile.milestones.map((milestone, index) => ({
+    id: `wiki-tl-${profile.clientId}-${index + 1}`,
+    clientId: profile.clientId,
+    caseId: milestone.caseId,
+    occurredAt: milestone.occurredAt,
+    type: milestone.type,
+    title: milestone.title,
+    detail: milestone.detail,
+  })),
+);
+
+const caseManagementSeedNotes: NoteRecord[] = [...initialNotes, ...clientWikiSourceNotes];
+const caseManagementSeedTimelineEvents: TimelineEvent[] = [...initialTimelineEvents, ...clientWikiTimelineEvents];
+
 const botAlerts: BotAlert[] = [
   {
     id: 'bot-001',
@@ -2521,6 +3568,8 @@ function EmptyHint({ text }: { text: string }) {
 
 const CASE_MANAGEMENT_STORAGE_KEY = 'streetvoices:case-management:v1';
 const CASE_MANAGEMENT_API_PATH = '/api/case-management/workspace';
+const CASE_MANAGEMENT_WIKI_INGEST_PATH = '/api/case-management/wiki/ingest';
+const CASE_MANAGEMENT_WIKI_INGESTIONS_PATH = '/api/case-management/wiki/ingestions';
 
 interface CaseManagementDraft {
   version: 1;
@@ -2533,6 +3582,7 @@ interface CaseManagementDraft {
   appointmentRecords: AppointmentRecord[];
   documentRecords: DocumentRecord[];
   timelineRecords: TimelineEvent[];
+  wikiIngestionRecords: WikiIngestionRecord[];
   auditRecords: AuditEvent[];
   caseTypeRecords: CaseType[];
   organizationRecords: OrganizationRecord[];
@@ -2554,6 +3604,17 @@ interface CaseManagementDraft {
   dismissedNotificationIds?: string[];
 }
 
+function mergeSeedRecords<T extends { id: string }>(records: T[], seedRecords: T[]) {
+  const seen = new Set(records.map((record) => record.id));
+  return [...records, ...seedRecords.filter((record) => !seen.has(record.id))];
+}
+
+function mergeById<T extends { id: string }>(existing: T[], incoming: T[]) {
+  const merged = new Map(existing.map((record) => [record.id, record]));
+  incoming.forEach((record) => merged.set(record.id, record));
+  return Array.from(merged.values());
+}
+
 function parseCaseManagementDraft(value: unknown): CaseManagementDraft | null {
   if (!value || typeof value !== 'object') return null;
   const draft = value as Partial<CaseManagementDraft> & {
@@ -2570,40 +3631,45 @@ function parseCaseManagementDraft(value: unknown): CaseManagementDraft | null {
   return {
     version: 1,
     savedAt: typeof draft.savedAt === 'string' ? draft.savedAt : new Date().toISOString(),
-    clientRecords: Array.isArray(draft.clientRecords) ? draft.clientRecords : initialClients,
-    caseRecords: draft.caseRecords,
-    taskRecords: draft.taskRecords,
-    noteRecords: draft.noteRecords,
+    clientRecords: mergeSeedRecords(Array.isArray(draft.clientRecords) ? draft.clientRecords : [], initialClients),
+    caseRecords: mergeSeedRecords(draft.caseRecords, initialCases),
+    taskRecords: mergeSeedRecords(draft.taskRecords, initialTasks),
+    noteRecords: mergeSeedRecords(draft.noteRecords, caseManagementSeedNotes),
     referralRecords: Array.isArray(draft.referralRecords)
-      ? draft.referralRecords
+      ? mergeSeedRecords(draft.referralRecords, initialReferrals)
       : Array.isArray(draft.referrals)
-        ? (draft.referrals as ReferralRecord[])
+        ? mergeSeedRecords(draft.referrals as ReferralRecord[], initialReferrals)
         : initialReferrals,
     appointmentRecords: Array.isArray(draft.appointmentRecords)
-      ? draft.appointmentRecords
+      ? mergeSeedRecords(draft.appointmentRecords, initialAppointments)
       : Array.isArray(draft.appointments)
-        ? (draft.appointments as AppointmentRecord[])
+        ? mergeSeedRecords(draft.appointments as AppointmentRecord[], initialAppointments)
         : initialAppointments,
-    documentRecords: Array.isArray(draft.documentRecords) ? draft.documentRecords : initialDocuments,
+    documentRecords: Array.isArray(draft.documentRecords)
+      ? mergeSeedRecords(draft.documentRecords, initialDocuments)
+      : initialDocuments,
     timelineRecords: Array.isArray(draft.timelineRecords)
-      ? draft.timelineRecords
+      ? mergeSeedRecords(draft.timelineRecords, caseManagementSeedTimelineEvents)
       : Array.isArray(draft.timelineEvents)
-        ? (draft.timelineEvents as TimelineEvent[])
-        : initialTimelineEvents,
+        ? mergeSeedRecords(draft.timelineEvents as TimelineEvent[], caseManagementSeedTimelineEvents)
+        : caseManagementSeedTimelineEvents,
+    wikiIngestionRecords: Array.isArray(draft.wikiIngestionRecords)
+      ? (draft.wikiIngestionRecords as WikiIngestionRecord[])
+      : [],
     auditRecords: Array.isArray(draft.auditRecords)
-      ? draft.auditRecords
+      ? mergeSeedRecords(draft.auditRecords, initialAuditEvents)
       : Array.isArray(draft.auditEvents)
-        ? (draft.auditEvents as AuditEvent[])
+        ? mergeSeedRecords(draft.auditEvents as AuditEvent[], initialAuditEvents)
         : initialAuditEvents,
     caseTypeRecords: Array.isArray(draft.caseTypeRecords)
-      ? draft.caseTypeRecords
+      ? mergeSeedRecords(draft.caseTypeRecords, initialCaseTypes)
       : Array.isArray(draft.caseTypes)
-        ? (draft.caseTypes as CaseType[])
+        ? mergeSeedRecords(draft.caseTypes as CaseType[], initialCaseTypes)
         : initialCaseTypes,
     organizationRecords: Array.isArray(draft.organizationRecords)
-      ? draft.organizationRecords
+      ? mergeSeedRecords(draft.organizationRecords, initialOrganizations)
       : Array.isArray(draft.organizations)
-        ? (draft.organizations as OrganizationRecord[])
+        ? mergeSeedRecords(draft.organizations as OrganizationRecord[], initialOrganizations)
         : initialOrganizations,
     activeTab: draft.activeTab,
     selectedClientId: draft.selectedClientId,
@@ -2676,8 +3742,13 @@ export default function CaseManagementPage() {
   const savedDraft = useMemo(readCaseManagementDraft, []);
   const importInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const wikiIngestInputRef = useRef<HTMLInputElement>(null);
   const serverSaveTimerRef = useRef<number | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>(savedDraft?.activeTab ?? 'overview');
+  const [activeTab, setActiveTab] = useState<TabId>(() => caseManagementTabFromPath() ?? savedDraft?.activeTab ?? 'overview');
+  const [selectedWikiPageId, setSelectedWikiPageId] = useState(() => {
+    if (typeof window === 'undefined') return 'client:client-001';
+    return new URLSearchParams(window.location.search).get('page') ?? 'client:client-001';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [riskFilter, setRiskFilter] = useState<'all' | RiskLevel>(savedDraft?.riskFilter ?? 'all');
   const [workerFilter, setWorkerFilter] = useState(savedDraft?.workerFilter ?? 'all');
@@ -2696,11 +3767,12 @@ export default function CaseManagementPage() {
   const [clientRecords, setClientRecords] = useState(savedDraft?.clientRecords ?? initialClients);
   const [caseRecords, setCaseRecords] = useState(savedDraft?.caseRecords ?? initialCases);
   const [taskRecords, setTaskRecords] = useState(savedDraft?.taskRecords ?? initialTasks);
-  const [noteRecords, setNoteRecords] = useState(savedDraft?.noteRecords ?? initialNotes);
+  const [noteRecords, setNoteRecords] = useState(savedDraft?.noteRecords ?? caseManagementSeedNotes);
   const [referralRecords, setReferralRecords] = useState(savedDraft?.referralRecords ?? initialReferrals);
   const [appointmentRecords, setAppointmentRecords] = useState(savedDraft?.appointmentRecords ?? initialAppointments);
   const [documentRecords, setDocumentRecords] = useState(savedDraft?.documentRecords ?? initialDocuments);
-  const [timelineRecords, setTimelineRecords] = useState(savedDraft?.timelineRecords ?? initialTimelineEvents);
+  const [timelineRecords, setTimelineRecords] = useState(savedDraft?.timelineRecords ?? caseManagementSeedTimelineEvents);
+  const [wikiIngestionRecords, setWikiIngestionRecords] = useState(savedDraft?.wikiIngestionRecords ?? []);
   const [auditRecords, setAuditRecords] = useState(savedDraft?.auditRecords ?? initialAuditEvents);
   const [caseTypeRecords, setCaseTypeRecords] = useState(savedDraft?.caseTypeRecords ?? initialCaseTypes);
   const [organizationRecords, setOrganizationRecords] = useState(savedDraft?.organizationRecords ?? initialOrganizations);
@@ -2716,6 +3788,8 @@ export default function CaseManagementPage() {
   const [quickNote, setQuickNote] = useState('');
   const [structuredNoteType, setStructuredNoteType] = useState('outreach contact');
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [wikiIngesting, setWikiIngesting] = useState(false);
+  const [wikiIngestStatus, setWikiIngestStatus] = useState('');
   const [draftNotice, setDraftNotice] = useState(
     savedDraft ? `Local draft restored from ${formatDateTime(savedDraft.savedAt)}.` : 'Changes save locally in this browser.',
   );
@@ -3147,31 +4221,31 @@ export default function CaseManagementPage() {
 
     if (view === 'urgent') {
       setPriorityFilter('urgent');
-      setActiveTab('cases');
+      handleTabChange('cases');
       setDraftNotice('Saved view applied: urgent work.');
       return;
     }
     if (view === 'today') {
       setActivityFilter('follow-up today');
-      setActiveTab('overview');
+      handleTabChange('overview');
       setDraftNotice('Saved view applied: follow-ups due today.');
       return;
     }
     if (view === 'stale') {
       setActivityFilter('no contact 14 days');
-      setActiveTab('clients');
+      handleTabChange('clients');
       setDraftNotice('Saved view applied: no contact in 14 days.');
       return;
     }
     if (view === 'documents') {
       setActivityFilter('document expiring');
-      setActiveTab('documents');
+      handleTabChange('documents');
       setDraftNotice('Saved view applied: expiring documents.');
       return;
     }
     if (view === 'referrals') {
       setActivityFilter('unresolved referral');
-      setActiveTab('referrals');
+      handleTabChange('referrals');
       setDraftNotice('Saved view applied: unresolved referrals.');
       return;
     }
@@ -3345,14 +4419,14 @@ export default function CaseManagementPage() {
       supportingDocuments: '',
     });
     setProfileAction('referral');
-    setActiveTab('clients');
+    handleTabChange('clients');
     setDraftNotice(`${organization.name} loaded into the referral quick action for ${selectedClient.fullName}.`);
   };
 
   const openNotification = (notification: CaseNotification) => {
     setSelectedClientId(notification.clientId);
     setSelectedCaseId(notification.caseId);
-    setActiveTab(notification.actionTab);
+    handleTabChange(notification.actionTab);
     setDraftNotice(`Opened ${notification.title}.`);
   };
 
@@ -3396,7 +4470,7 @@ export default function CaseManagementPage() {
     dismissNotification(notification.id);
     setSelectedClientId(client.id);
     setSelectedCaseId(caseItem.id);
-    setActiveTab('tasks');
+    handleTabChange('tasks');
     setTaskView('all');
     setDraftNotice(`Created follow-up task from "${notification.title}".`);
   };
@@ -3557,7 +4631,7 @@ export default function CaseManagementPage() {
       object: caseRecord.caseId,
     });
     setSelectedCaseId(caseId);
-    setActiveTab('cases');
+    handleTabChange('cases');
     setProfileAction(null);
     setCaseQuickDraft(emptyCaseQuickDraft);
     setDraftNotice(`Created ${caseRecord.title} for ${selectedClient.fullName}.`);
@@ -3621,7 +4695,7 @@ export default function CaseManagementPage() {
       action: 'created referral and follow-up task',
       object: organization,
     });
-    setActiveTab('referrals');
+    handleTabChange('referrals');
     setProfileAction(null);
     setReferralQuickDraft(emptyReferralQuickDraft);
     setDraftNotice(`Referral to ${organization} created with a follow-up task.`);
@@ -3683,7 +4757,7 @@ export default function CaseManagementPage() {
       action: 'scheduled appointment',
       object: purpose,
     });
-    setActiveTab('calendar');
+    handleTabChange('calendar');
     setProfileAction(null);
     setAppointmentQuickDraft(emptyAppointmentQuickDraft);
     setDraftNotice(`Scheduled ${purpose} for ${selectedClient.fullName}.`);
@@ -3722,7 +4796,7 @@ export default function CaseManagementPage() {
       action: 'generated case summary draft',
       object: selectedCase.caseId,
     });
-    setActiveTab('cases');
+    handleTabChange('cases');
     setProfileAction(null);
     setDraftNotice(`Street Bot summary drafted for ${selectedClient.fullName}.`);
   };
@@ -3733,20 +4807,20 @@ export default function CaseManagementPage() {
       return;
     }
     if (action === 'Add note') {
-      setActiveTab('cases');
+      handleTabChange('cases');
       setProfileAction(null);
       setDraftNotice('Use quick note mode in the selected case to add the note.');
       return;
     }
     if (action === 'Assign task') {
-      setActiveTab('cases');
+      handleTabChange('cases');
       setProfileAction(null);
       setDraftNotice('Use Create task in the selected case to assign a follow-up.');
       return;
     }
     if (action === 'Upload file') {
       setProfileAction(null);
-      setActiveTab('documents');
+      handleTabChange('documents');
       documentInputRef.current?.click();
       return;
     }
@@ -3896,6 +4970,7 @@ export default function CaseManagementPage() {
     appointmentRecords,
     documentRecords,
     timelineRecords,
+    wikiIngestionRecords,
     auditRecords,
     caseTypeRecords,
     organizationRecords,
@@ -3951,6 +5026,7 @@ export default function CaseManagementPage() {
     taskRecords,
     taskView,
     timelineRecords,
+    wikiIngestionRecords,
     workerFilter,
   ]);
 
@@ -4001,10 +5077,11 @@ export default function CaseManagementPage() {
         setAppointmentRecords(draft.appointmentRecords);
         setDocumentRecords(draft.documentRecords);
         setTimelineRecords(draft.timelineRecords);
+        setWikiIngestionRecords(draft.wikiIngestionRecords);
         setAuditRecords(draft.auditRecords);
         setCaseTypeRecords(draft.caseTypeRecords);
         setOrganizationRecords(draft.organizationRecords);
-        setActiveTab(draft.activeTab ?? 'overview');
+        setActiveTab(caseManagementTabFromPath() ?? draft.activeTab ?? 'overview');
         setCaseView(draft.caseView ?? 'table');
         setTaskView(draft.taskView ?? 'my');
         setRiskFilter(draft.riskFilter ?? 'all');
@@ -4035,6 +5112,43 @@ export default function CaseManagementPage() {
       cancelled = true;
     };
   }, [savedDraft, token]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadWikiIngestions = async () => {
+      if (!token) return;
+      try {
+        const response = await fetch(CASE_MANAGEMENT_WIKI_INGESTIONS_PATH, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as {
+          wikiIngestionRecords?: WikiIngestionRecord[];
+          generatedRecords?: {
+            noteRecords?: NoteRecord[];
+            documentRecords?: DocumentRecord[];
+            timelineRecords?: TimelineEvent[];
+          };
+        };
+        if (!cancelled && Array.isArray(payload.wikiIngestionRecords)) {
+          setWikiIngestionRecords((records) => mergeById(records, payload.wikiIngestionRecords ?? []));
+          setNoteRecords((records) => mergeById(records, payload.generatedRecords?.noteRecords ?? []));
+          setDocumentRecords((records) => mergeById(records, payload.generatedRecords?.documentRecords ?? []));
+          setTimelineRecords((records) => mergeById(records, payload.generatedRecords?.timelineRecords ?? []));
+        }
+      } catch {
+        if (!cancelled) {
+          setWikiIngestStatus('Stored wiki ingestions are unavailable; the local wiki still works.');
+        }
+      }
+    };
+
+    loadWikiIngestions();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!serverPersistenceReady || !token || typeof window === 'undefined') return;
@@ -4085,6 +5199,7 @@ export default function CaseManagementPage() {
     taskRecords,
     taskView,
     timelineRecords,
+    wikiIngestionRecords,
     token,
     workerFilter,
   ]);
@@ -4333,6 +5448,7 @@ export default function CaseManagementPage() {
       setAppointmentRecords(draft.appointmentRecords);
       setDocumentRecords(draft.documentRecords);
       setTimelineRecords(draft.timelineRecords);
+      setWikiIngestionRecords(draft.wikiIngestionRecords);
       setCaseTypeRecords(draft.caseTypeRecords);
       setOrganizationRecords(draft.organizationRecords);
       setAuditRecords([
@@ -4373,11 +5489,12 @@ export default function CaseManagementPage() {
     setClientRecords(initialClients);
     setCaseRecords(initialCases);
     setTaskRecords(initialTasks);
-    setNoteRecords(initialNotes);
+    setNoteRecords(caseManagementSeedNotes);
     setReferralRecords(initialReferrals);
     setAppointmentRecords(initialAppointments);
     setDocumentRecords(initialDocuments);
-    setTimelineRecords(initialTimelineEvents);
+    setTimelineRecords(caseManagementSeedTimelineEvents);
+    setWikiIngestionRecords([]);
     setCaseTypeRecords(initialCaseTypes);
     setOrganizationRecords(initialOrganizations);
     setAuditRecords([
@@ -4392,7 +5509,7 @@ export default function CaseManagementPage() {
     ]);
     setSelectedClientId(initialClients[0].id);
     setSelectedCaseId(initialCases[0].id);
-    setActiveTab('overview');
+    handleTabChange('overview');
     setCaseView('table');
     setTaskView('my');
     setRiskFilter('all');
@@ -4414,6 +5531,7 @@ export default function CaseManagementPage() {
     setAppointmentQuickDraft(emptyAppointmentQuickDraft);
     setCaseTypeDraft(emptyCaseTypeDraft);
     setOrganizationDraft(emptyOrganizationDraft);
+    setWikiIngestStatus('');
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(CASE_MANAGEMENT_STORAGE_KEY);
     }
@@ -4447,8 +5565,80 @@ export default function CaseManagementPage() {
       action: `uploaded ${records.length} document${records.length === 1 ? '' : 's'}`,
       object: selectedCase.caseId,
     });
-    setActiveTab('documents');
+    handleTabChange('documents');
     setDraftNotice(`${records.length} document${records.length === 1 ? '' : 's'} added to the local draft catalog.`);
+  };
+
+  const ingestWikiFiles = async (files: FileList | null, context: WikiIngestContext) => {
+    if (!files?.length) return;
+    if (!token) {
+      setWikiIngestStatus('Sign in before ingesting files into the Case Wiki.');
+      setDraftNotice('Case Wiki ingestion needs a Street Voices session.');
+      return;
+    }
+
+    const uploadedFiles = Array.from(files);
+    const formData = new FormData();
+    uploadedFiles.forEach((file) => formData.append('files', file));
+    Object.entries(context).forEach(([key, value]) => {
+      if (value) formData.append(key, value);
+    });
+
+    setWikiIngesting(true);
+    setWikiIngestStatus(`Ingesting ${uploadedFiles.length} file${uploadedFiles.length === 1 ? '' : 's'} into the Case Wiki...`);
+
+    try {
+      const response = await fetch(CASE_MANAGEMENT_WIKI_INGEST_PATH, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!response.ok) throw new Error(`Upload failed with ${response.status}`);
+
+      const payload = (await response.json()) as {
+        wikiIngestionRecords?: WikiIngestionRecord[];
+        generatedRecords?: {
+          noteRecords?: NoteRecord[];
+          documentRecords?: DocumentRecord[];
+          timelineRecords?: TimelineEvent[];
+        };
+        neo4j?: Array<{ status?: string; message?: string; skippedReason?: string }>;
+      };
+      const incomingWikiRecords = payload.wikiIngestionRecords ?? [];
+      const incomingNotes = payload.generatedRecords?.noteRecords ?? [];
+      const incomingDocuments = payload.generatedRecords?.documentRecords ?? [];
+      const incomingTimeline = payload.generatedRecords?.timelineRecords ?? [];
+
+      setWikiIngestionRecords((records) => mergeById(records, incomingWikiRecords));
+      setNoteRecords((records) => mergeById(records, incomingNotes));
+      setDocumentRecords((records) => mergeById(records, incomingDocuments));
+      setTimelineRecords((records) => mergeById(records, incomingTimeline));
+
+      const firstIngestion = incomingWikiRecords[0];
+      if (firstIngestion?.pageId) {
+        setSelectedWikiPageId(firstIngestion.pageId);
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          params.set('page', firstIngestion.pageId);
+          window.history.replaceState(null, '', `/case-management/knowledge?${params.toString()}`);
+        }
+      }
+
+      const graphStatuses = Array.from(new Set((payload.neo4j ?? []).map((item) => item.status ?? 'unknown')));
+      const graphLabel = graphStatuses.length ? graphStatuses.join(', ') : 'not reported';
+      setWikiIngestStatus(`Ingested ${incomingWikiRecords.length} file${incomingWikiRecords.length === 1 ? '' : 's'}. Neo4j status: ${graphLabel}.`);
+      setDraftNotice(`Case Wiki generated ${incomingWikiRecords.length} source page${incomingWikiRecords.length === 1 ? '' : 's'} from uploaded files.`);
+      addAuditEvent({
+        actor: 'Case Wiki ingestion',
+        action: `ingested ${incomingWikiRecords.length} wiki source file${incomingWikiRecords.length === 1 ? '' : 's'}`,
+        object: context.clientName || context.caseTitle || context.serviceName || 'Case Wiki',
+      });
+    } catch {
+      setWikiIngestStatus('File ingestion failed. The current wiki remains unchanged.');
+      setDraftNotice('Case Wiki ingestion failed; try again or check the server logs.');
+    } finally {
+      setWikiIngesting(false);
+    }
   };
 
   const panelStyle = {
@@ -4486,6 +5676,47 @@ export default function CaseManagementPage() {
     fontSize: 13,
     fontWeight: 750,
   } satisfies React.CSSProperties;
+
+  const routeLinkStyle = {
+    color: colors.text,
+    fontWeight: 800,
+    textDecoration: 'none',
+    borderBottom: `1px solid ${colors.accent}`,
+  } satisfies React.CSSProperties;
+
+  const wikiRouteLinkStyle = {
+    color: '#174ea6',
+    fontWeight: 800,
+    textDecoration: 'none',
+    borderBottom: '1px solid rgba(23, 78, 166, 0.35)',
+  } satisfies React.CSSProperties;
+
+  const openInAppStyle = {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: 750,
+    textDecoration: 'none',
+  } satisfies React.CSSProperties;
+
+  const handleTabChange = (tabId: TabId) => {
+    setActiveTab(tabId);
+    if (typeof window !== 'undefined') {
+      const nextPath = tabId === 'overview' ? '/case-management' : `/case-management/${tabId}`;
+      window.history.replaceState(null, '', nextPath);
+    }
+  };
+
+  const renderProfileLink = (name: string, label = name, style: React.CSSProperties = routeLinkStyle) => (
+    <a href={profilePathForName(name)} style={style} onClick={(event) => event.stopPropagation()}>
+      {label}
+    </a>
+  );
+
+  const renderDirectoryLink = (organization: string, label = organization, style: React.CSSProperties = routeLinkStyle) => (
+    <a href={directoryPathForOrganization(organization)} style={style} onClick={(event) => event.stopPropagation()}>
+      {label}
+    </a>
+  );
 
   return (
     <div
@@ -4546,7 +5777,7 @@ export default function CaseManagementPage() {
               type="button"
               style={primaryButtonStyle}
               onClick={() => {
-                setActiveTab('clients');
+                handleTabChange('clients');
                 setClientIntakeOpen(true);
                 setDraftNotice('Client intake is open. Creating a client also creates an intake case and follow-up task.');
               }}
@@ -4606,7 +5837,7 @@ export default function CaseManagementPage() {
               <button
                 type="button"
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 style={{
                   ...buttonStyle,
                   background: selected ? colors.accent : colors.surface,
@@ -4690,6 +5921,7 @@ export default function CaseManagementPage() {
         {renderFilterBar()}
 
         {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'knowledge' && renderKnowledge()}
         {activeTab === 'clients' && renderClients()}
         {activeTab === 'cases' && renderCases()}
         {activeTab === 'tasks' && renderTasks()}
@@ -4880,6 +6112,496 @@ export default function CaseManagementPage() {
     );
   }
 
+  function renderKnowledge() {
+    type WikiPage = {
+      id: string;
+      kind: 'Client' | 'Case' | 'Service' | 'Workflow' | 'Ingested file';
+      title: string;
+      subtitle: string;
+      updatedAt: string;
+      summary: string;
+      clientId?: string;
+      caseId?: string;
+      organizationName?: string;
+      caseTypeName?: string;
+      ingestionId?: string;
+    };
+
+    const wikiPages: WikiPage[] = [
+      ...clientRecords.map((client) => ({
+        id: `client:${client.id}`,
+        kind: 'Client' as const,
+        title: client.fullName,
+        subtitle: `${client.clientId} · ${client.assignedWorker}`,
+        updatedAt: client.latestContact,
+        summary: `${client.serviceHistory}. Current risk is ${client.riskLevel}; next follow-up is ${formatDateTime(client.nextFollowUp)}.`,
+        clientId: client.id,
+      })),
+      ...caseRecords.map((caseItem) => {
+        const client = clientRecords.find((candidate) => candidate.id === caseItem.clientId);
+        return {
+          id: `case:${caseItem.id}`,
+          kind: 'Case' as const,
+          title: caseItem.title,
+          subtitle: `${caseItem.caseId} · ${client?.fullName ?? 'No client'} · ${caseItem.assignedStaff}`,
+          updatedAt: caseItem.nextFollowUp,
+          summary: caseItem.summary,
+          clientId: caseItem.clientId,
+          caseId: caseItem.id,
+        };
+      }),
+      ...organizationRecords.map((organization) => ({
+        id: `service:${organization.id}`,
+        kind: 'Service' as const,
+        title: organization.name,
+        subtitle: `${organization.serviceCategories.join(', ')} · ${organization.contactPerson}`,
+        updatedAt: `${organization.averageTurnaroundDays} day turnaround`,
+        summary: `${organization.eligibility} ${organization.notes}`,
+        organizationName: organization.name,
+      })),
+      ...caseTypeRecords.map((caseType) => ({
+        id: `workflow:${caseType.id}`,
+        kind: 'Workflow' as const,
+        title: caseType.name,
+        subtitle: `${caseType.workflow.length} workflow steps`,
+        updatedAt: 'Workflow library',
+        summary: caseType.successCriteria,
+        caseTypeName: caseType.name,
+      })),
+      ...wikiIngestionRecords.map((ingestion) => ({
+        id: ingestion.pageId || `ingest:${ingestion.id}`,
+        kind: 'Ingested file' as const,
+        title: ingestion.title || ingestion.fileName,
+        subtitle: `${ingestion.fileName} · ${ingestion.extractionStatus} · Neo4j ${ingestion.graphStatus}`,
+        updatedAt: ingestion.uploadedAt,
+        summary: ingestion.summary,
+        clientId: ingestion.linkedClientId,
+        caseId: ingestion.linkedCaseId,
+        organizationName: ingestion.linkedServiceName,
+        ingestionId: ingestion.id,
+      })),
+    ];
+    const selectedPage = wikiPages.find((page) => page.id === selectedWikiPageId) ?? wikiPages[0];
+    const selectedIngestion = selectedPage?.ingestionId
+      ? wikiIngestionRecords.find((ingestion) => ingestion.id === selectedPage.ingestionId)
+      : null;
+    const selectedPageClient = selectedPage?.clientId ? clientRecords.find((client) => client.id === selectedPage.clientId) : null;
+    const selectedPageCase = selectedPage?.caseId ? caseRecords.find((caseItem) => caseItem.id === selectedPage.caseId) : null;
+    const selectedPageOrganization = selectedPage?.organizationName
+      ? organizationRecords.find((organization) => organization.name === selectedPage.organizationName)
+      : null;
+	    const selectedPageWorkflow = selectedPage?.caseTypeName
+	      ? caseTypeRecords.find((caseType) => caseType.name === selectedPage.caseTypeName)
+	      : null;
+	    const selectedPageCaseClient = selectedPageCase
+	      ? clientRecords.find((client) => client.id === selectedPageCase.clientId)
+	      : null;
+	    const selectedWikiClient = selectedPageClient ?? selectedPageCaseClient ?? null;
+	    const selectedClientWiki = selectedWikiClient
+	      ? clientWikiProfiles.find((profile) => profile.clientId === selectedWikiClient.id)
+	      : null;
+	    const linkedCases = selectedPageClient
+	      ? caseRecords.filter((caseItem) => caseItem.clientId === selectedPageClient.id)
+      : selectedPageWorkflow
+        ? caseRecords.filter((caseItem) => caseItem.type === selectedPageWorkflow.name)
+        : selectedPageCase
+          ? [selectedPageCase]
+          : [];
+    const linkedNotes = noteRecords.filter((note) =>
+      (selectedPageClient && note.clientId === selectedPageClient.id) ||
+      (selectedPageCase && note.caseId === selectedPageCase.id) ||
+      (selectedIngestion && selectedIngestion.noteId === note.id) ||
+      (selectedPageWorkflow && linkedCases.some((caseItem) => caseItem.id === note.caseId)),
+    );
+    const linkedReferrals = referralRecords.filter((referral) =>
+      (selectedPageClient && referral.clientId === selectedPageClient.id) ||
+      (selectedPageCase && referral.caseId === selectedPageCase.id) ||
+      (selectedPageOrganization && referral.organization === selectedPageOrganization.name) ||
+      (selectedPageWorkflow && linkedCases.some((caseItem) => caseItem.id === referral.caseId)),
+    );
+    const linkedDocuments = documentRecords.filter((document) =>
+      (selectedPageClient && document.clientId === selectedPageClient.id) ||
+      (selectedPageCase && document.caseId === selectedPageCase.id) ||
+      (selectedIngestion && selectedIngestion.documentId === document.id) ||
+      (selectedPageWorkflow && linkedCases.some((caseItem) => caseItem.id === document.caseId)),
+    );
+	    const linkedTimeline = timelineRecords.filter((event) =>
+	      (selectedPageClient && event.clientId === selectedPageClient.id) ||
+	      (selectedPageCase && event.caseId === selectedPageCase.id) ||
+	      (selectedIngestion && selectedIngestion.timelineId === event.id) ||
+	      (selectedPageWorkflow && linkedCases.some((caseItem) => caseItem.id === event.caseId)),
+	    );
+	    const sortedLinkedNotes = [...linkedNotes].sort((first, second) => toDate(second.timestamp).getTime() - toDate(first.timestamp).getTime());
+	    const sortedLinkedTimeline = [...linkedTimeline].sort(
+	      (first, second) => toDate(second.occurredAt).getTime() - toDate(first.occurredAt).getTime(),
+	    );
+	    const linkedTimelineDates = sortedLinkedTimeline
+	      .map((event) => toDate(event.occurredAt).getTime())
+	      .filter((timestamp) => Number.isFinite(timestamp));
+	    const timelineStart = linkedTimelineDates.length ? new Date(Math.min(...linkedTimelineDates)).toISOString() : null;
+	    const timelineEnd = linkedTimelineDates.length ? new Date(Math.max(...linkedTimelineDates)).toISOString() : null;
+    const pageGroups = [
+      ['Clients', wikiPages.filter((page) => page.kind === 'Client')],
+      ['Cases', wikiPages.filter((page) => page.kind === 'Case')],
+      ['Services', wikiPages.filter((page) => page.kind === 'Service')],
+      ['Workflows', wikiPages.filter((page) => page.kind === 'Workflow')],
+      ['Ingested files', wikiPages.filter((page) => page.kind === 'Ingested file')],
+    ] as const;
+    const selectedPageLiveHref = selectedPageClient
+      ? profilePathForName(selectedPageClient.fullName)
+      : selectedPageOrganization
+        ? directoryPathForOrganization(selectedPageOrganization.name)
+        : null;
+    const ingestContextCase = selectedPageCase ?? linkedCases[0] ?? selectedCase;
+    const ingestContextClient =
+      selectedWikiClient ??
+      (ingestContextCase ? clientRecords.find((client) => client.id === ingestContextCase.clientId) : null) ??
+      selectedClient;
+    const wikiIngestContext: WikiIngestContext = {
+      clientId: ingestContextClient?.id,
+      clientName: ingestContextClient?.fullName,
+      caseId: ingestContextCase?.id,
+      caseTitle: ingestContextCase?.title,
+      serviceName: selectedPageOrganization?.name,
+      pageId: selectedPage?.id,
+    };
+
+    return (
+      <section style={panelStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'start' }}>
+          <span>
+            <SectionTitle icon={Sparkles} title="Case Wiki" />
+            <p style={{ margin: '8px 0 0', color: colors.textSecondary, fontSize: 13, maxWidth: 820 }}>
+              Wikipedia-style case notes, live source records, linked Street Profiles, and directory services for the current Case Management workspace.
+            </p>
+          </span>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
+              {wikiPages.length} wiki pages
+            </span>
+            <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
+              {noteRecords.length} source notes
+            </span>
+            <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
+              {wikiIngestionRecords.length} ingested files
+            </span>
+            <input
+              ref={wikiIngestInputRef}
+              data-testid="case-wiki-ingest-input"
+              type="file"
+              multiple
+              onChange={(event) => {
+                void ingestWikiFiles(event.target.files, wikiIngestContext);
+                event.target.value = '';
+              }}
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              data-testid="case-wiki-ingest-button"
+              style={primaryButtonStyle}
+              onClick={() => wikiIngestInputRef.current?.click()}
+              disabled={wikiIngesting}
+              {...accentButtonHoverHandlers}
+            >
+              <Upload size={16} />
+              {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
+            </button>
+          </div>
+        </div>
+
+        {wikiIngestStatus && (
+          <div style={{ ...surfaceStyle, marginTop: 12, color: colors.textSecondary, fontSize: 13 }}>
+            <strong style={{ color: colors.text }}>Wiki ingestion:</strong> {wikiIngestStatus}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.34fr) minmax(0, 1fr)', gap: 16, marginTop: 16 }}>
+          <aside style={{ ...surfaceStyle, display: 'grid', gap: 12, alignContent: 'start', maxHeight: 'min(72vh, 920px)', overflowY: 'auto' }}>
+            <strong style={{ color: colors.text }}>Wiki index</strong>
+            {pageGroups.map(([groupLabel, pages]) => (
+              <div key={groupLabel} style={{ display: 'grid', gap: 6 }}>
+                <span style={{ color: colors.textMuted, fontSize: 11, fontWeight: 800, letterSpacing: 0.2, textTransform: 'uppercase' }}>
+                  {groupLabel}
+                </span>
+                {pages.map((page) => (
+                  <button
+                    type="button"
+                    key={page.id}
+                    onClick={() => {
+                      setSelectedWikiPageId(page.id);
+                      if (typeof window !== 'undefined') {
+                        const params = new URLSearchParams(window.location.search);
+                        params.set('page', page.id);
+                        window.history.replaceState(null, '', `/case-management/knowledge?${params.toString()}`);
+                      }
+                    }}
+                    style={{
+                      border: `1px solid ${page.id === selectedPage?.id ? colors.accent : colors.border}`,
+                      background: page.id === selectedPage?.id ? colors.surfaceHover : 'transparent',
+                      borderRadius: 8,
+                      color: colors.text,
+                      padding: 10,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <strong style={{ display: 'block', fontSize: 13 }}>{page.title}</strong>
+                    <span style={{ display: 'block', marginTop: 4, color: colors.textMuted, fontSize: 12 }}>{page.subtitle}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </aside>
+
+          <article style={{ ...surfaceStyle, background: isDark ? 'rgba(255,255,255,0.92)' : '#fff', color: '#111827' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid rgba(17, 24, 39, 0.18)', paddingBottom: 14 }}>
+              <div>
+                <span style={{ display: 'inline-flex', border: '1px solid rgba(17,24,39,0.18)', borderRadius: 8, padding: '5px 8px', fontSize: 12, fontWeight: 800 }}>
+                  {selectedPage?.kind} article
+                </span>
+                <h2 style={{ margin: '12px 0 6px', color: '#111827', fontSize: 34, fontFamily: 'Georgia, serif' }}>{selectedPage?.title}</h2>
+                <p style={{ margin: 0, color: '#4b5563', fontSize: 14 }}>{selectedPage?.subtitle}</p>
+              </div>
+              {selectedPageLiveHref && (
+                <a href={selectedPageLiveHref} style={{ ...openInAppStyle, color: '#174ea6' }}>
+                  Open live record
+                </a>
+              )}
+            </div>
+
+	            <p style={{ margin: '16px 0', color: '#111827', lineHeight: 1.65 }}>
+	              {selectedClientWiki?.lead ?? selectedPage?.summary} This wiki entry preserves the operational story around the record so staff can see
+	              source notes, referrals, documents, chronology, and backlinks before moving back into the live application.
+	            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 260px', gap: 14 }}>
+              <div style={{ display: 'grid', gap: 14 }}>
+                <section style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 14 }}>
+                  <h3 style={{ margin: '0 0 8px', color: '#111827', fontFamily: 'Georgia, serif' }}>In brief</h3>
+	                  <ul style={{ margin: 0, paddingLeft: 18, color: '#1f2937', lineHeight: 1.6 }}>
+	                    <li>{linkedCases.length} linked case{linkedCases.length === 1 ? '' : 's'} in this topic.</li>
+	                    <li>{linkedNotes.length} note{linkedNotes.length === 1 ? '' : 's'} and {linkedDocuments.length} document{linkedDocuments.length === 1 ? '' : 's'} are available as sources.</li>
+	                    <li>{linkedReferrals.length} referral{linkedReferrals.length === 1 ? '' : 's'} connect this page to the service directory.</li>
+	                    {timelineStart && timelineEnd && (
+	                      <li>
+	                        Timeline coverage runs from {formatDate(timelineStart)} to {formatDate(timelineEnd)}.
+	                      </li>
+	                    )}
+	                    {selectedClientWiki && <li>{selectedClientWiki.retrievalHints.length} AI retrieval hint{selectedClientWiki.retrievalHints.length === 1 ? '' : 's'} are documented for this client.</li>}
+	                  </ul>
+	                </section>
+
+	                {selectedIngestion && (
+	                  <section style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 14 }}>
+	                    <h3 style={{ margin: '0 0 8px', color: '#111827', fontFamily: 'Georgia, serif' }}>Generated from upload</h3>
+	                    <p style={{ margin: '0 0 12px', color: '#1f2937', lineHeight: 1.55 }}>
+	                      {selectedIngestion.fileName} was accepted as a wiki source, converted into a source note, linked document, chronology item,
+	                      and graph-ready knowledge nodes for retrieval.
+	                    </p>
+	                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginBottom: 12 }}>
+	                      {[
+	                        ['File type', selectedIngestion.mimeType || 'unknown'],
+	                        ['Extraction', `${selectedIngestion.extractionStatus} via ${selectedIngestion.extractionMethod}`],
+	                        ['Neo4j', `${selectedIngestion.graphStatus}${selectedIngestion.graphMessage ? `: ${selectedIngestion.graphMessage}` : ''}`],
+	                        ['Graph shape', `${selectedIngestion.nodeCount} nodes · ${selectedIngestion.edgeCount} edges`],
+	                      ].map(([label, value]) => (
+	                        <div key={label} style={{ border: '1px solid rgba(17,24,39,0.14)', borderRadius: 8, padding: 10 }}>
+	                          <strong style={{ display: 'block', color: '#111827', fontSize: 12 }}>{label}</strong>
+	                          <span style={{ display: 'block', marginTop: 4, color: '#4b5563', fontSize: 12, lineHeight: 1.4 }}>{value}</span>
+	                        </div>
+	                      ))}
+	                    </div>
+	                    {selectedIngestion.entities.length > 0 && (
+	                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+	                        {selectedIngestion.entities.map((entity) => (
+	                          <span key={entity} style={{ background: 'rgba(23,78,166,0.08)', borderRadius: 8, padding: '4px 7px', color: '#174ea6', fontSize: 11, fontWeight: 800 }}>
+	                            {entity}
+	                          </span>
+	                        ))}
+	                      </div>
+	                    )}
+	                    <div style={{ display: 'grid', gap: 10 }}>
+	                      {selectedIngestion.sections.map((section) => (
+	                        <div key={`${selectedIngestion.id}-${section.heading}`} style={{ borderTop: '1px solid rgba(17,24,39,0.12)', paddingTop: 10 }}>
+	                          <strong style={{ color: '#174ea6' }}>{section.heading}</strong>
+	                          <p style={{ margin: '5px 0 0', color: '#1f2937', lineHeight: 1.6 }}>{section.body}</p>
+	                        </div>
+	                      ))}
+	                    </div>
+	                  </section>
+	                )}
+
+	                {selectedClientWiki && (
+	                  <section style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 14 }}>
+	                    <h3 style={{ margin: '0 0 8px', color: '#111827', fontFamily: 'Georgia, serif' }}>Longitudinal client wiki</h3>
+	                    <div style={{ display: 'grid', gap: 12 }}>
+	                      <div>
+	                        <strong style={{ color: '#174ea6' }}>Profile context</strong>
+	                        <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#1f2937', lineHeight: 1.55 }}>
+	                          {selectedClientWiki.profileContext.map((item) => (
+	                            <li key={item}>{item}</li>
+	                          ))}
+	                        </ul>
+	                      </div>
+	                      <div>
+	                        <strong style={{ color: '#174ea6' }}>Working synthesis</strong>
+	                        <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#1f2937', lineHeight: 1.55 }}>
+	                          {selectedClientWiki.workingSynthesis.map((item) => (
+	                            <li key={item}>{item}</li>
+	                          ))}
+	                        </ul>
+	                      </div>
+	                    </div>
+	                  </section>
+	                )}
+
+	                {selectedClientWiki && (
+	                  <section style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 14 }}>
+	                    <h3 style={{ margin: '0 0 8px', color: '#111827', fontFamily: 'Georgia, serif' }}>Change over time</h3>
+	                    <div style={{ display: 'grid', gap: 10 }}>
+	                      {selectedClientWiki.milestones.map((milestone) => (
+	                        <div key={`${milestone.caseId}-${milestone.occurredAt}-${milestone.title}`} style={{ borderBottom: '1px solid rgba(17,24,39,0.12)', paddingBottom: 10 }}>
+	                          <span style={{ display: 'block', color: '#6b7280', fontSize: 12 }}>{formatDateTime(milestone.occurredAt)} · {milestone.type}</span>
+	                          <strong style={{ display: 'block', color: '#111827', marginTop: 3 }}>{milestone.title}</strong>
+	                          <p style={{ margin: '4px 0', color: '#1f2937', lineHeight: 1.55 }}>{milestone.detail}</p>
+	                          <span style={{ color: '#6b7280', fontSize: 12 }}>Source: {milestone.source}</span>
+	                        </div>
+	                      ))}
+	                    </div>
+	                  </section>
+	                )}
+
+	                <section style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 14 }}>
+	                  <h3 style={{ margin: '0 0 8px', color: '#111827', fontFamily: 'Georgia, serif' }}>Detailed case notes</h3>
+	                  <div style={{ display: 'grid', gap: 10 }}>
+	                    {sortedLinkedNotes.slice(0, 12).map((note) => {
+	                      const client = clientRecords.find((candidate) => candidate.id === note.clientId);
+	                      return (
+	                        <div key={note.id} style={{ borderBottom: '1px solid rgba(17,24,39,0.12)', paddingBottom: 10 }}>
+	                          <strong style={{ color: '#174ea6' }}>{note.type}</strong>
+	                          <p style={{ margin: '5px 0', color: '#1f2937', lineHeight: 1.55 }}>{note.narrative}</p>
+	                          <p style={{ margin: '5px 0', color: '#374151', lineHeight: 1.5, fontSize: 13 }}>
+	                            <strong>Wiki synthesis:</strong> {note.aiSummary}
+	                          </p>
+	                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+	                            {note.structuredFields.map((field) => (
+	                              <span key={field} style={{ border: '1px solid rgba(17,24,39,0.18)', borderRadius: 8, padding: '3px 6px', color: '#4b5563', fontSize: 11 }}>
+	                                {field}
+	                              </span>
+	                            ))}
+	                            {note.aiTags.map((tag) => (
+	                              <span key={tag} style={{ background: 'rgba(23,78,166,0.08)', borderRadius: 8, padding: '3px 6px', color: '#174ea6', fontSize: 11 }}>
+	                                {tag}
+	                              </span>
+	                            ))}
+	                          </div>
+	                          <span style={{ color: '#6b7280', fontSize: 12 }}>
+	                            {formatDateTime(note.timestamp)} · {renderProfileLink(note.author, note.author, wikiRouteLinkStyle)} · {client ? renderProfileLink(client.fullName, client.fullName, wikiRouteLinkStyle) : 'No client'}
+	                            {note.attachments.length > 0 ? ` · ${note.attachments.join(', ')}` : ''}
+	                          </span>
+	                        </div>
+	                      );
+	                    })}
+                    {linkedNotes.length === 0 && <p style={{ margin: 0, color: '#6b7280' }}>No notes are linked to this wiki page yet.</p>}
+                  </div>
+                </section>
+
+	                <section style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 14 }}>
+	                  <h3 style={{ margin: '0 0 8px', color: '#111827', fontFamily: 'Georgia, serif' }}>Connected services and referrals</h3>
+	                  <div style={{ display: 'grid', gap: 8 }}>
+                    {linkedReferrals.slice(0, 5).map((referral) => {
+                      const client = clientRecords.find((candidate) => candidate.id === referral.clientId);
+                      return (
+                        <div key={referral.id} style={{ color: '#1f2937', lineHeight: 1.55 }}>
+                          {renderDirectoryLink(referral.organization, referral.organization, wikiRouteLinkStyle)} · {referral.serviceCategory} · {referral.status}
+                          {client && <span> · {renderProfileLink(client.fullName, client.fullName, wikiRouteLinkStyle)}</span>}
+                        </div>
+                      );
+                    })}
+	                    {linkedReferrals.length === 0 && <p style={{ margin: 0, color: '#6b7280' }}>No referrals are linked to this wiki page yet.</p>}
+	                  </div>
+	                </section>
+
+	                {selectedClientWiki && (
+	                  <section style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 14 }}>
+	                    <h3 style={{ margin: '0 0 8px', color: '#111827', fontFamily: 'Georgia, serif' }}>Retrieval and open questions</h3>
+	                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+	                      <div>
+	                        <strong style={{ color: '#174ea6' }}>AI retrieval hints</strong>
+	                        <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#1f2937', lineHeight: 1.55 }}>
+	                          {selectedClientWiki.retrievalHints.map((hint) => (
+	                            <li key={hint}>{hint}</li>
+	                          ))}
+	                        </ul>
+	                      </div>
+	                      <div>
+	                        <strong style={{ color: '#174ea6' }}>Open questions</strong>
+	                        <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#1f2937', lineHeight: 1.55 }}>
+	                          {selectedClientWiki.openQuestions.map((question) => (
+	                            <li key={question}>{question}</li>
+	                          ))}
+	                        </ul>
+	                      </div>
+	                    </div>
+	                  </section>
+	                )}
+	              </div>
+
+              <aside style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
+                <div style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 12 }}>
+	                  <strong style={{ color: '#111827' }}>Live links</strong>
+	                  <div style={{ display: 'grid', gap: 7, marginTop: 10 }}>
+	                    {selectedWikiClient && <a href={profilePathForName(selectedWikiClient.fullName)} style={wikiRouteLinkStyle}>Street Profile: {selectedWikiClient.fullName}</a>}
+	                    {selectedPageCase && <button type="button" onClick={() => { setSelectedCaseId(selectedPageCase.id); handleTabChange('cases'); }} style={{ ...buttonStyle, color: colors.text }}>Open case record</button>}
+	                    {selectedPageOrganization && <a href={directoryPathForOrganization(selectedPageOrganization.name)} style={wikiRouteLinkStyle}>Directory: {selectedPageOrganization.name}</a>}
+                    {linkedCases.slice(0, 4).map((caseItem) => (
+                      <button key={caseItem.id} type="button" onClick={() => { setSelectedCaseId(caseItem.id); setSelectedClientId(caseItem.clientId); handleTabChange('cases'); }} style={{ ...buttonStyle, color: colors.text }}>
+                        {caseItem.caseId}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+	                <div style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 12 }}>
+	                  <strong style={{ color: '#111827' }}>Chronology</strong>
+	                  <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+	                    {sortedLinkedTimeline.slice(0, 10).map((event) => (
+	                      <div key={event.id}>
+	                        <span style={{ display: 'block', color: '#6b7280', fontSize: 12 }}>{formatDateTime(event.occurredAt)}</span>
+	                        <strong style={{ color: '#111827', fontSize: 13 }}>{event.title}</strong>
+	                        <p style={{ margin: '3px 0 0', color: '#4b5563', fontSize: 12, lineHeight: 1.4 }}>{event.detail}</p>
+	                      </div>
+	                    ))}
+                    {linkedTimeline.length === 0 && <span style={{ color: '#6b7280', fontSize: 13 }}>No timeline events yet.</span>}
+                  </div>
+                </div>
+
+                <div style={{ border: '1px solid rgba(17,24,39,0.16)', borderRadius: 8, padding: 12 }}>
+	                  <strong style={{ color: '#111827' }}>Sources</strong>
+	                  <p style={{ margin: '8px 0 0', color: '#4b5563', fontSize: 13, lineHeight: 1.5 }}>
+	                    Compiled from {linkedNotes.length} notes, {linkedReferrals.length} referrals, {linkedDocuments.length} documents, and {linkedTimeline.length} timeline entries.
+	                  </p>
+	                  {selectedClientWiki && (
+	                    <p style={{ margin: '8px 0 0', color: '#4b5563', fontSize: 13, lineHeight: 1.5 }}>
+	                      Includes {selectedClientWiki.sourceNotes.length} synthetic wiki source notes and {selectedClientWiki.milestones.length} time-based milestones for demo retrieval.
+	                    </p>
+	                  )}
+	                  {selectedIngestion && (
+	                    <p style={{ margin: '8px 0 0', color: '#4b5563', fontSize: 13, lineHeight: 1.5 }}>
+	                      Upload source: {selectedIngestion.fileName}. Graph persistence: {selectedIngestion.graphStatus}
+	                      {selectedIngestion.graphMessage ? ` (${selectedIngestion.graphMessage})` : ''}.
+	                    </p>
+	                  )}
+	                </div>
+              </aside>
+            </div>
+          </article>
+        </div>
+      </section>
+    );
+  }
+
   function renderOverview() {
     const stats = [
       { label: 'Active clients', value: clientRecords.filter((client) => client.status === 'active').length, icon: Users, detail: 'in this workspace' },
@@ -4940,11 +6662,11 @@ export default function CaseManagementPage() {
                 type="button"
                 style={{ ...surfaceStyle, textAlign: 'left', cursor: 'pointer' }}
                 onClick={() => {
-                  if (stat.label.includes('client')) setActiveTab('clients');
-                  if (stat.label.includes('case') || stat.label.includes('Urgent')) setActiveTab('cases');
-                  if (stat.label.includes('task')) setActiveTab('tasks');
-                  if (stat.label.includes('Appointment')) setActiveTab('calendar');
-                  if (stat.label.includes('Workflow')) setActiveTab('overview');
+                  if (stat.label.includes('client')) handleTabChange('clients');
+                  if (stat.label.includes('case') || stat.label.includes('Urgent')) handleTabChange('cases');
+                  if (stat.label.includes('task')) handleTabChange('tasks');
+                  if (stat.label.includes('Appointment')) handleTabChange('calendar');
+                  if (stat.label.includes('Workflow')) handleTabChange('overview');
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -4977,7 +6699,7 @@ export default function CaseManagementPage() {
                     onClick={() => {
                       setSelectedCaseId(caseItem.id);
                       setSelectedClientId(caseItem.clientId);
-                      setActiveTab('cases');
+                      handleTabChange('cases');
                     }}
                     style={{
                       display: 'grid',
@@ -4996,7 +6718,7 @@ export default function CaseManagementPage() {
                     <span style={{ minWidth: 0 }}>
                       <strong style={{ display: 'block', fontSize: 14 }}>{caseItem.title}</strong>
                       <span style={{ display: 'block', marginTop: 4, color: colors.textSecondary, fontSize: 12 }}>
-                        {client?.fullName} · next action: {caseItem.nextAction}
+                        {client ? renderProfileLink(client.fullName) : 'No client'} · next action: {caseItem.nextAction}
                       </span>
                     </span>
                     <PriorityBadge priority={caseItem.priority} />
@@ -5025,7 +6747,7 @@ export default function CaseManagementPage() {
                         if (caseItem) {
                           setSelectedCaseId(caseItem.id);
                           setSelectedClientId(caseItem.clientId);
-                          setActiveTab('cases');
+                          handleTabChange('cases');
                         }
                       }}
                     >
@@ -5051,12 +6773,12 @@ export default function CaseManagementPage() {
                   onClick={() => {
                     setSelectedCaseId(caseItem.id);
                     setSelectedClientId(caseItem.clientId);
-                    setActiveTab('cases');
+                    handleTabChange('cases');
                   }}
                 >
                   <strong style={{ display: 'block', color: colors.text }}>{caseItem.title}</strong>
                   <span style={{ display: 'block', marginTop: 4, color: colors.textSecondary, fontSize: 12 }}>
-                    {client?.fullName} · {label}
+                    {client ? renderProfileLink(client.fullName) : 'No client'} · {label}
                   </span>
                   <span style={{ display: 'block', marginTop: 6, color: colors.textMuted, fontSize: 12 }}>{formatDateTime(occurredAt)}</span>
                 </button>
@@ -5077,12 +6799,12 @@ export default function CaseManagementPage() {
                     onClick={() => {
                       setSelectedCaseId(referral.caseId);
                       setSelectedClientId(referral.clientId);
-                      setActiveTab('referrals');
+                      handleTabChange('referrals');
                     }}
                   >
-                    <strong style={{ display: 'block', color: colors.text }}>{referral.organization}</strong>
+                    <strong style={{ display: 'block', color: colors.text }}>{renderDirectoryLink(referral.organization)}</strong>
                     <span style={{ display: 'block', marginTop: 4, color: colors.textSecondary, fontSize: 12 }}>
-                      {client?.fullName} · {referral.serviceCategory}
+                      {client ? renderProfileLink(client.fullName) : 'No client'} · {referral.serviceCategory}
                     </span>
                     <span style={{ display: 'block', marginTop: 6, color: colors.textMuted, fontSize: 12 }}>
                       {formatDate(referral.referralDate)} · {referral.status}
@@ -5106,12 +6828,12 @@ export default function CaseManagementPage() {
                     onClick={() => {
                       setSelectedCaseId(note.caseId);
                       setSelectedClientId(note.clientId);
-                      setActiveTab('cases');
+                      handleTabChange('cases');
                     }}
                   >
                     <strong style={{ display: 'block', color: colors.text }}>{note.type}</strong>
                     <span style={{ display: 'block', marginTop: 4, color: colors.textSecondary, fontSize: 12 }}>
-                      {client?.fullName} · {note.author}
+                      {client ? renderProfileLink(client.fullName) : 'No client'} · {renderProfileLink(note.author)}
                     </span>
                     <span style={{ display: 'block', marginTop: 6, color: colors.textMuted, fontSize: 12 }}>{note.aiSummary}</span>
                   </button>
@@ -5165,7 +6887,7 @@ export default function CaseManagementPage() {
                   <div key={worker} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: colors.textSecondary, fontSize: 13 }}>
-                        <span>{worker}</span>
+                        <span>{renderProfileLink(worker)}</span>
                         <strong style={{ color: colors.text }}>{count}</strong>
                       </div>
                       <div style={{ height: 9, borderRadius: 8, background: colors.surface, marginTop: 6, overflow: 'hidden' }}>
@@ -5300,13 +7022,13 @@ export default function CaseManagementPage() {
                     }}
                   >
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}` }}>
-                      <strong style={{ display: 'block', color: colors.text }}>{client.fullName}</strong>
+                      <strong style={{ display: 'block' }}>{renderProfileLink(client.fullName)}</strong>
                       <span style={{ color: colors.textMuted, fontSize: 12 }}>
                         {client.preferredName} · {client.pronouns}
                       </span>
                     </td>
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{client.clientId}</td>
-                    <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{client.assignedWorker}</td>
+                    <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{renderProfileLink(client.assignedWorker)}</td>
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.text }}>{activeCaseCountForClient(client.id)}</td>
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{formatDateTime(client.latestContact)}</td>
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}` }}><RiskBadge risk={client.riskLevel} /></td>
@@ -5539,7 +7261,7 @@ export default function CaseManagementPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <p style={{ margin: 0, color: colors.textMuted, fontSize: 12 }}>{selectedClient.clientId}</p>
-            <h2 style={{ margin: '4px 0 6px', color: colors.text, fontSize: 24 }}>{selectedClient.fullName}</h2>
+            <h2 style={{ margin: '4px 0 6px', color: colors.text, fontSize: 24 }}>{renderProfileLink(selectedClient.fullName)}</h2>
             <RiskBadge risk={selectedClient.riskLevel} />
           </div>
           <div
@@ -5621,7 +7343,7 @@ export default function CaseManagementPage() {
                 key={caseItem.id}
                 onClick={() => {
                   setSelectedCaseId(caseItem.id);
-                  setActiveTab('cases');
+                  handleTabChange('cases');
                 }}
                 style={{
                   display: 'flex',
@@ -5978,14 +7700,14 @@ export default function CaseManagementPage() {
                         style={{ cursor: 'pointer', background: caseItem.id === selectedCase.id ? colors.surface : 'transparent' }}
                       >
                         <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{caseItem.caseId}</td>
-                        <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.text }}>{client?.fullName}</td>
+                        <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.text }}>{client ? renderProfileLink(client.fullName) : 'No client'}</td>
                         <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}` }}>
                           <strong style={{ color: colors.text }}>{caseItem.title}</strong>
                         </td>
                         <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{caseItem.type}</td>
                         <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}` }}><StatusBadge label={caseItem.status} /></td>
                         <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}` }}><PriorityBadge priority={caseItem.priority} /></td>
-                        <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{caseItem.assignedStaff}</td>
+                        <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{renderProfileLink(caseItem.assignedStaff)}</td>
                         <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{formatDate(caseItem.openedDate)}</td>
                         <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{formatDateTime(caseItem.nextFollowUp)}</td>
                       </tr>
@@ -6062,7 +7784,7 @@ export default function CaseManagementPage() {
                     }}
                   >
                     <strong style={{ display: 'block', fontSize: 13 }}>{caseItem.title}</strong>
-                    <span style={{ display: 'block', marginTop: 4, color: colors.textMuted, fontSize: 12 }}>{caseItem.assignedStaff}</span>
+                    <span style={{ display: 'block', marginTop: 4, color: colors.textMuted, fontSize: 12 }}>{renderProfileLink(caseItem.assignedStaff)}</span>
                   </button>
                 ))}
                 {items.length === 0 && <EmptyHint text="No cases in this status." />}
@@ -6076,6 +7798,15 @@ export default function CaseManagementPage() {
 
   function renderCaseDetail() {
     const client = clientRecords.find((candidate) => candidate.id === selectedCase.clientId) ?? selectedClient;
+    const detailFields = [
+      { label: 'Client', value: renderProfileLink(client.fullName) },
+      { label: 'Owner', value: renderProfileLink(selectedCase.assignedStaff) },
+      { label: 'Team', value: selectedCase.assignedTeam },
+      { label: 'Target date', value: formatDate(selectedCase.targetResolutionDate) },
+      { label: 'Opened', value: formatDate(selectedCase.openedDate) },
+      { label: 'Next follow-up', value: formatDateTime(selectedCase.nextFollowUp) },
+    ];
+
     return (
       <aside style={{ ...panelStyle, display: 'grid', gap: 16, alignContent: 'start' }}>
         <div>
@@ -6091,14 +7822,7 @@ export default function CaseManagementPage() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-          {[
-            ['Client', client.fullName],
-            ['Owner', selectedCase.assignedStaff],
-            ['Team', selectedCase.assignedTeam],
-            ['Target date', formatDate(selectedCase.targetResolutionDate)],
-            ['Opened', formatDate(selectedCase.openedDate)],
-            ['Next follow-up', formatDateTime(selectedCase.nextFollowUp)],
-          ].map(([label, value]) => (
+          {detailFields.map(({ label, value }) => (
             <div key={label} style={{ ...surfaceStyle, padding: 10 }}>
               <span style={{ display: 'block', color: colors.textMuted, fontSize: 11 }}>{label}</span>
               <strong style={{ display: 'block', marginTop: 3, color: colors.text, fontSize: 13 }}>{value}</strong>
@@ -6261,7 +7985,7 @@ export default function CaseManagementPage() {
                   <PriorityBadge priority={task.priority} />
                 </div>
                 <h3 style={{ margin: '12px 0 6px', color: colors.text, fontSize: 16 }}>{task.title}</h3>
-                <p style={{ margin: 0, color: colors.textSecondary, fontSize: 13 }}>{client?.fullName} · {caseItem?.title}</p>
+                <p style={{ margin: 0, color: colors.textSecondary, fontSize: 13 }}>{client ? renderProfileLink(client.fullName) : 'No client'} · {caseItem?.title}</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
                   <StatusBadge label={task.status} />
                   <span style={{ color: isOverdue(task.dueDate) ? '#fee2e2' : colors.textSecondary, background: isOverdue(task.dueDate) ? 'rgba(239, 68, 68, 0.24)' : colors.surface, borderRadius: 8, padding: '5px 8px', fontSize: 12, fontWeight: 700 }}>
@@ -6269,7 +7993,7 @@ export default function CaseManagementPage() {
                   </span>
                 </div>
                 <p style={{ margin: '12px 0 0', color: colors.textMuted, fontSize: 12 }}>
-                  Owner: {task.owner} · Reminder: {task.reminderRules}
+                  Owner: {renderProfileLink(task.owner)} · Reminder: {task.reminderRules}
                 </p>
                 <p style={{ margin: '6px 0 0', color: colors.textMuted, fontSize: 12 }}>Blocker: {task.dependency}</p>
                 <button
@@ -6305,9 +8029,13 @@ export default function CaseManagementPage() {
                   <StatusBadge label={appointment.attendanceStatus === 'attended' ? 'complete' : appointment.attendanceStatus === 'missed' ? 'follow-up needed' : 'scheduled'} />
                 </div>
                 <h3 style={{ margin: '12px 0 6px', color: colors.text, fontSize: 16 }}>{appointment.purpose}</h3>
-                <p style={{ margin: 0, color: colors.textSecondary, fontSize: 13 }}>{client?.fullName} · {caseItem?.title}</p>
+                <p style={{ margin: 0, color: colors.textSecondary, fontSize: 13 }}>
+                  {client ? renderProfileLink(client.fullName) : 'No client'} · {caseItem?.title}
+                </p>
                 <p style={{ margin: '10px 0 0', color: colors.text, fontSize: 14, fontWeight: 750 }}>{formatDateTime(appointment.dateTime)}</p>
-                <p style={{ margin: '6px 0 0', color: colors.textMuted, fontSize: 12 }}>{appointment.location} · {appointment.serviceProvider}</p>
+                <p style={{ margin: '6px 0 0', color: colors.textMuted, fontSize: 12 }}>
+                  {renderDirectoryLink(appointment.location)} · {renderDirectoryLink(appointment.serviceProvider)}
+                </p>
                 <strong style={{ display: 'block', marginTop: 12, color: colors.text, fontSize: 13 }}>Preparation checklist</strong>
                 <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: colors.textSecondary, fontSize: 12 }}>
                   {appointment.prepChecklist.map((item) => <li key={item}>{item}</li>)}
@@ -6340,9 +8068,9 @@ export default function CaseManagementPage() {
                 const client = clientRecords.find((candidate) => candidate.id === referral.clientId);
                 return (
                   <tr key={referral.id}>
-                    <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.text }}><strong>{referral.organization}</strong></td>
+                    <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.text }}><strong>{renderDirectoryLink(referral.organization)}</strong></td>
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{referral.serviceCategory}</td>
-                    <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{client?.fullName}</td>
+                    <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{client ? renderProfileLink(client.fullName) : 'No client'}</td>
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{formatDate(referral.referralDate)}</td>
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}` }}><StatusBadge label={referral.status} /></td>
                     <td style={{ padding: '12px 8px', borderBottom: `1px solid ${colors.border}`, color: colors.textSecondary }}>{referral.contactPerson}<br />{referral.contact}</td>
@@ -6363,7 +8091,7 @@ export default function CaseManagementPage() {
               <article key={organization.id} style={{ ...surfaceStyle, opacity: organization.active ? 1 : 0.62 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                   <span style={{ minWidth: 0 }}>
-                    <strong style={{ display: 'block', color: colors.text }}>{organization.name}</strong>
+                    <strong style={{ display: 'block' }}>{renderDirectoryLink(organization.name)}</strong>
                     <span style={{ display: 'block', marginTop: 4, color: colors.textMuted, fontSize: 12 }}>
                       {organization.contactPerson} · {organization.contact}
                     </span>
@@ -6456,7 +8184,7 @@ export default function CaseManagementPage() {
                   <span style={{ minWidth: 0 }}>
                     <strong style={{ display: 'block', color: colors.text, fontSize: 14 }}>{document.name}</strong>
                     <span style={{ display: 'block', color: colors.textSecondary, fontSize: 12 }}>
-                      {client?.fullName} · {document.type} · {document.tag} · {document.permission}
+                      {client ? renderProfileLink(client.fullName) : 'No client'} · {document.type} · {document.tag} · {document.permission}
                     </span>
                     <span style={{ display: 'block', color: colors.textMuted, fontSize: 12 }}>
                       OCR searchable: {document.searchableText}
@@ -6824,7 +8552,7 @@ export default function CaseManagementPage() {
               <article key={organization.id} style={{ ...surfaceStyle, opacity: organization.active ? 1 : 0.62 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                   <span>
-                    <strong style={{ display: 'block', color: colors.text }}>{organization.name}</strong>
+                    <strong style={{ display: 'block', color: colors.text }}>{renderDirectoryLink(organization.name)}</strong>
                     <span style={{ display: 'block', marginTop: 4, color: colors.textMuted, fontSize: 12 }}>
                       {organization.contactPerson} · {organization.contact} · {organization.phone}
                     </span>
