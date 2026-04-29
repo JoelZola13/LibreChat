@@ -3790,6 +3790,7 @@ export default function CaseManagementPage() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [wikiIngestModalOpen, setWikiIngestModalOpen] = useState(false);
   const [wikiIngestPendingFiles, setWikiIngestPendingFiles] = useState<File[]>([]);
+  const [wikiIngestDragActive, setWikiIngestDragActive] = useState(false);
   const [wikiIngesting, setWikiIngesting] = useState(false);
   const [wikiIngestStatus, setWikiIngestStatus] = useState('');
   const [draftNotice, setDraftNotice] = useState(
@@ -6270,10 +6271,29 @@ export default function CaseManagementPage() {
       pageId: selectedPage?.id,
     };
     const handleWikiIngestFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
-      setWikiIngestPendingFiles(Array.from(event.currentTarget.files ?? []));
+      const files = Array.from(event.currentTarget.files ?? []);
+      setWikiIngestPendingFiles(files);
+      setWikiIngestStatus(
+        files.length
+          ? `${files.length} file${files.length === 1 ? '' : 's'} ready for Case Wiki ingestion.`
+          : 'Choose one or more files before ingesting into the Case Wiki.',
+      );
+    };
+    const handleWikiIngestDrop = (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setWikiIngestDragActive(false);
+      const files = Array.from(event.dataTransfer.files ?? []);
+      if (!files.length) {
+        setWikiIngestStatus('Drop one or more files before ingesting into the Case Wiki.');
+        return;
+      }
+      setWikiIngestPendingFiles(files);
+      setWikiIngestStatus(`${files.length} file${files.length === 1 ? '' : 's'} ready for Case Wiki ingestion.`);
     };
     const submitWikiIngestModal = async () => {
       if (!wikiIngestPendingFiles.length) {
+        wikiIngestInputRef.current?.click();
         setWikiIngestStatus('Choose one or more files before ingesting into the Case Wiki.');
         return;
       }
@@ -6314,6 +6334,7 @@ export default function CaseManagementPage() {
               }}
               onClick={() => {
                 setWikiIngestPendingFiles([]);
+                setWikiIngestStatus('');
                 setWikiIngestModalOpen(true);
               }}
               disabled={wikiIngesting}
@@ -6655,6 +6676,7 @@ export default function CaseManagementPage() {
                 style={{ ...buttonStyle, padding: 8 }}
                 onClick={() => {
                   setWikiIngestPendingFiles([]);
+                  setWikiIngestDragActive(false);
                   setWikiIngestModalOpen(false);
                 }}
               >
@@ -6663,7 +6685,7 @@ export default function CaseManagementPage() {
             </div>
 
             <label style={{ display: 'grid', gap: 8, marginTop: 16, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
-              Select source files
+              Source files
               <input
                 ref={wikiIngestInputRef}
                 data-testid="case-wiki-ingest-input"
@@ -6683,7 +6705,33 @@ export default function CaseManagementPage() {
               />
             </label>
 
-            <div style={{ ...surfaceStyle, marginTop: 12, display: 'grid', gap: 8 }}>
+            <div
+              data-testid="case-wiki-ingest-dropzone"
+              onDragEnter={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setWikiIngestDragActive(true);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setWikiIngestDragActive(true);
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setWikiIngestDragActive(false);
+              }}
+              onDrop={handleWikiIngestDrop}
+              style={{
+                ...surfaceStyle,
+                marginTop: 12,
+                display: 'grid',
+                gap: 8,
+                borderColor: wikiIngestDragActive ? colors.accent : colors.border,
+                background: wikiIngestDragActive ? colors.surfaceHover : surfaceStyle.background,
+              }}
+            >
               <strong style={{ color: colors.text, fontSize: 13 }}>
                 {wikiIngestPendingFiles.length
                   ? `${wikiIngestPendingFiles.length} file${wikiIngestPendingFiles.length === 1 ? '' : 's'} ready`
@@ -6705,12 +6753,19 @@ export default function CaseManagementPage() {
               )}
             </div>
 
+            {wikiIngestStatus && (
+              <div style={{ ...surfaceStyle, marginTop: 12, color: colors.textSecondary, fontSize: 13, lineHeight: 1.45 }}>
+                <strong style={{ color: colors.text }}>Status:</strong> {wikiIngestStatus}
+              </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
               <button
                 type="button"
                 style={buttonStyle}
                 onClick={() => {
                   setWikiIngestPendingFiles([]);
+                  setWikiIngestDragActive(false);
                   setWikiIngestModalOpen(false);
                 }}
                 {...buttonHoverHandlers}
@@ -6722,15 +6777,15 @@ export default function CaseManagementPage() {
                 data-testid="case-wiki-ingest-submit"
                 style={{
                   ...primaryButtonStyle,
-                  opacity: !wikiIngestPendingFiles.length || wikiIngesting ? 0.62 : 1,
-                  cursor: !wikiIngestPendingFiles.length || wikiIngesting ? 'not-allowed' : 'pointer',
+                  opacity: wikiIngesting ? 0.62 : 1,
+                  cursor: wikiIngesting ? 'not-allowed' : 'pointer',
                 }}
                 onClick={() => void submitWikiIngestModal()}
-                disabled={!wikiIngestPendingFiles.length || wikiIngesting}
+                disabled={wikiIngesting}
                 {...accentButtonHoverHandlers}
               >
                 <Upload size={16} />
-                {wikiIngesting ? 'Ingesting...' : 'Ingest selected files'}
+                {wikiIngesting ? 'Ingesting...' : wikiIngestPendingFiles.length ? 'Ingest selected files' : 'Choose files'}
               </button>
             </div>
           </section>
