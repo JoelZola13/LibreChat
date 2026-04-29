@@ -5117,7 +5117,7 @@ export default function CaseManagementPage() {
     let cancelled = false;
 
     const loadWikiIngestions = async () => {
-      if (!token) return;
+      if (!token || !serverPersistenceReady) return;
       try {
         const response = await fetch(CASE_MANAGEMENT_WIKI_INGESTIONS_PATH, {
           headers: { Authorization: `Bearer ${token}` },
@@ -5148,7 +5148,7 @@ export default function CaseManagementPage() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [serverPersistenceReady, token]);
 
   useEffect(() => {
     if (!serverPersistenceReady || !token || typeof window === 'undefined') return;
