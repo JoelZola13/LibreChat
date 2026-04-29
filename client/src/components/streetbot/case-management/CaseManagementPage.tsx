@@ -3788,7 +3788,6 @@ export default function CaseManagementPage() {
   const [quickNote, setQuickNote] = useState('');
   const [structuredNoteType, setStructuredNoteType] = useState('outreach contact');
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [wikiIngestModalOpen, setWikiIngestModalOpen] = useState(false);
   const [wikiIngestPendingFiles, setWikiIngestPendingFiles] = useState<File[]>([]);
   const [wikiIngestDragActive, setWikiIngestDragActive] = useState(false);
   const [wikiIngestText, setWikiIngestText] = useState('');
@@ -6321,7 +6320,6 @@ export default function CaseManagementPage() {
         setWikiIngestDragActive(false);
         setWikiIngestText('');
         setWikiIngestSourceName('');
-        setWikiIngestModalOpen(false);
       }
     };
     const clearWikiIngestDraft = () => {
@@ -6365,7 +6363,6 @@ export default function CaseManagementPage() {
                 opacity: wikiIngesting ? 0.76 : 1,
               }}
               onClick={() => {
-                setWikiIngestModalOpen(false);
                 setWikiIngestStatus('Add files or paste source text in the Case Wiki ingest panel below.');
                 wikiIngestInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 wikiIngestInputRef.current?.focus();
@@ -6845,227 +6842,6 @@ export default function CaseManagementPage() {
           </article>
         </div>
       </section>
-      {wikiIngestModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="case-wiki-ingest-modal-title"
-          data-testid="case-wiki-ingest-modal"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 10000,
-            display: 'grid',
-            placeItems: 'center',
-            padding: 18,
-            background: isDark ? 'rgba(0,0,0,0.68)' : 'rgba(15,23,42,0.26)',
-            backdropFilter: 'blur(10px)',
-          }}
-        >
-          <section
-            style={{
-              ...glassCard,
-              width: 'min(100%, 560px)',
-              borderRadius: 8,
-              padding: 18,
-              boxShadow: '0 24px 80px rgba(0,0,0,0.32)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
-              <div>
-                <h3 id="case-wiki-ingest-modal-title" style={{ margin: 0, color: colors.text, fontSize: 22 }}>
-                  Ingest files into Case Wiki
-                </h3>
-                <p style={{ margin: '8px 0 0', color: colors.textSecondary, fontSize: 13, lineHeight: 1.5 }}>
-                  Add documents, images, PDFs, notes, exports, or any other file type. The wiki will create source records and send graph nodes to Neo4j.
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Close ingest files modal"
-                style={{ ...buttonStyle, padding: 8 }}
-                onClick={() => {
-                  setWikiIngestPendingFiles([]);
-                  setWikiIngestDragActive(false);
-                  setWikiIngestText('');
-                  setWikiIngestSourceName('');
-                  setWikiIngestModalOpen(false);
-                }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <label style={{ display: 'grid', gap: 8, marginTop: 16, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
-              Source files
-              <input
-                ref={wikiIngestInputRef}
-                id="case-wiki-ingest-file-input"
-                data-testid="case-wiki-ingest-input"
-                type="file"
-                multiple
-                disabled={wikiIngesting}
-                aria-label="Choose files for Case Wiki ingestion"
-                onChange={handleWikiIngestFileSelection}
-                style={{
-                  ...glassButton,
-                  borderRadius: 8,
-                  padding: 10,
-                  color: colors.text,
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              />
-            </label>
-
-            <div
-              data-testid="case-wiki-ingest-dropzone"
-              onDragEnter={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setWikiIngestDragActive(true);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setWikiIngestDragActive(true);
-              }}
-              onDragLeave={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setWikiIngestDragActive(false);
-              }}
-              onDrop={handleWikiIngestDrop}
-              style={{
-                ...surfaceStyle,
-                marginTop: 12,
-                display: 'grid',
-                gap: 8,
-                borderColor: wikiIngestDragActive ? colors.accent : colors.border,
-                background: wikiIngestDragActive ? colors.surfaceHover : surfaceStyle.background,
-              }}
-            >
-              <strong style={{ color: colors.text, fontSize: 13 }}>
-                {wikiIngestPendingFiles.length
-                  ? `${wikiIngestPendingFiles.length} file${wikiIngestPendingFiles.length === 1 ? '' : 's'} ready`
-                  : wikiIngestText.trim()
-                    ? 'Pasted source text ready'
-                    : 'No files selected yet'}
-              </strong>
-              {wikiIngestPendingFiles.length > 0 && (
-                <div style={{ display: 'grid', gap: 5 }}>
-                  {wikiIngestPendingFiles.slice(0, 5).map((file) => (
-                    <span key={`${file.name}-${file.size}`} style={{ color: colors.textSecondary, fontSize: 12 }}>
-                      {file.name} · {Math.max(1, Math.round(file.size / 1024))} KB
-                    </span>
-                  ))}
-                  {wikiIngestPendingFiles.length > 5 && (
-                    <span style={{ color: colors.textMuted, fontSize: 12 }}>
-                      +{wikiIngestPendingFiles.length - 5} more
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-              <label style={{ display: 'grid', gap: 6, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
-                Or paste source text
-                <input
-                  type="text"
-                  value={wikiIngestSourceName}
-                  onChange={(event) => setWikiIngestSourceName(event.currentTarget.value)}
-                  placeholder="Optional source name"
-                  style={{
-                    ...glassButton,
-                    borderRadius: 8,
-                    color: colors.text,
-                    padding: '10px 12px',
-                  }}
-                />
-              </label>
-              <textarea
-                value={wikiIngestText}
-                onChange={(event) => {
-                  setWikiIngestText(event.currentTarget.value);
-                  if (event.currentTarget.value.trim()) {
-                    setWikiIngestStatus('Pasted source text ready for Case Wiki ingestion.');
-                  }
-                }}
-                placeholder="Paste notes, copied PDF text, email text, intake details, or any other source content here."
-                rows={5}
-                style={{
-                  ...glassButton,
-                  borderRadius: 8,
-                  color: colors.text,
-                  lineHeight: 1.5,
-                  minHeight: 116,
-                  padding: 12,
-                  resize: 'vertical',
-                }}
-              />
-            </div>
-
-            {wikiIngestStatus && (
-              <div style={{ ...surfaceStyle, marginTop: 12, color: colors.textSecondary, fontSize: 13, lineHeight: 1.45 }}>
-                <strong style={{ color: colors.text }}>Status:</strong> {wikiIngestStatus}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
-              <button
-                type="button"
-                style={buttonStyle}
-                onClick={() => {
-                  setWikiIngestPendingFiles([]);
-                  setWikiIngestDragActive(false);
-                  setWikiIngestText('');
-                  setWikiIngestSourceName('');
-                  setWikiIngestModalOpen(false);
-                }}
-                {...buttonHoverHandlers}
-              >
-                Cancel
-              </button>
-              {!wikiIngestPendingFiles.length && !wikiIngestText.trim() ? (
-                <label
-                  htmlFor="case-wiki-ingest-file-input"
-                  data-testid="case-wiki-ingest-pick-label"
-                  style={{
-                    ...primaryButtonStyle,
-                    cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                    opacity: wikiIngesting ? 0.62 : 1,
-                  }}
-                  {...accentButtonHoverHandlers}
-                >
-                  <Upload size={16} />
-                  Choose files
-                </label>
-              ) : (
-                <button
-                  type="button"
-                  data-testid="case-wiki-ingest-submit"
-                  style={{
-                    ...primaryButtonStyle,
-                    opacity: wikiIngesting ? 0.62 : 1,
-                    cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                  }}
-                  onClick={() => void submitWikiIngestModal()}
-                  disabled={wikiIngesting}
-                  {...accentButtonHoverHandlers}
-                >
-                  <Upload size={16} />
-                  {wikiIngesting
-                    ? 'Ingesting...'
-                    : wikiIngestPendingFiles.length
-                      ? 'Ingest selected files'
-                      : 'Ingest pasted source'}
-                </button>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
       </>
     );
   }
