@@ -6265,6 +6265,10 @@ export default function CaseManagementPage() {
       serviceName: selectedPageOrganization?.name,
       pageId: selectedPage?.id,
     };
+    const handleWikiIngestInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      void ingestWikiFiles(event.currentTarget.files, wikiIngestContext);
+      event.currentTarget.value = '';
+    };
 
     return (
       <section style={panelStyle}>
@@ -6304,10 +6308,7 @@ export default function CaseManagementPage() {
                 multiple
                 disabled={wikiIngesting}
                 aria-label="Ingest files into the Case Wiki"
-                onChange={(event) => {
-                  void ingestWikiFiles(event.target.files, wikiIngestContext);
-                  event.target.value = '';
-                }}
+                onChange={handleWikiIngestInputChange}
                 style={{
                   position: 'absolute',
                   inset: 0,
@@ -6321,6 +6322,25 @@ export default function CaseManagementPage() {
               <Upload size={16} />
               {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
             </label>
+            <input
+              data-testid="case-wiki-ingest-native-input"
+              type="file"
+              multiple
+              disabled={wikiIngesting}
+              aria-label="Choose files for Case Wiki ingestion"
+              onChange={handleWikiIngestInputChange}
+              style={{
+                ...glassButton,
+                borderRadius: 8,
+                padding: '9px 10px',
+                minHeight: 39,
+                maxWidth: 230,
+                color: colors.text,
+                fontSize: 12,
+                fontWeight: 700,
+                opacity: wikiIngesting ? 0.76 : 1,
+              }}
+            />
           </div>
         </div>
 
