@@ -6292,17 +6292,6 @@ export default function CaseManagementPage() {
       setWikiIngestPendingFiles(files);
       setWikiIngestStatus(`${files.length} file${files.length === 1 ? '' : 's'} ready for Case Wiki ingestion.`);
     };
-    const openWikiFilePicker = () => {
-      if (wikiIngesting) return;
-      const input = wikiIngestInputRef.current;
-      if (input) {
-        input.click();
-        setWikiIngestStatus('File picker opened. Choose one or more files, or paste source text if the picker does not appear.');
-        return;
-      }
-
-      setWikiIngestStatus('File picker unavailable. Paste source text or drag files into the Case Wiki ingest panel.');
-    };
     const submitWikiIngestModal = async () => {
       const pastedText = wikiIngestText.trim();
       let filesToIngest = wikiIngestPendingFiles;
@@ -6322,7 +6311,7 @@ export default function CaseManagementPage() {
       }
 
       if (!filesToIngest.length) {
-        openWikiFilePicker();
+        setWikiIngestStatus('Choose files, drop files here, or paste source text before ingesting into the Case Wiki.');
         return;
       }
       const ingested = await ingestWikiFiles(filesToIngest, wikiIngestContext);
@@ -6365,25 +6354,26 @@ export default function CaseManagementPage() {
             <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
               {wikiIngestionRecords.length} ingested files
             </span>
-            <button
-              type="button"
+            <label
+              htmlFor="case-wiki-inline-ingest-file-input"
+              role="button"
+              tabIndex={wikiIngesting ? -1 : 0}
               data-testid="case-wiki-ingest-button"
               style={{
                 ...primaryButtonStyle,
                 cursor: wikiIngesting ? 'not-allowed' : 'pointer',
                 opacity: wikiIngesting ? 0.76 : 1,
+                pointerEvents: wikiIngesting ? 'none' : 'auto',
               }}
               onClick={() => {
                 setWikiIngestStatus('Add files or paste source text in the Case Wiki ingest panel below.');
                 wikiIngestInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                openWikiFilePicker();
               }}
-              disabled={wikiIngesting}
               {...accentButtonHoverHandlers}
             >
               <Upload size={16} />
               {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
-            </button>
+            </label>
           </div>
         </div>
 
@@ -6457,17 +6447,24 @@ export default function CaseManagementPage() {
                       ? `${wikiIngestPendingFiles.length} selected source${wikiIngestPendingFiles.length === 1 ? '' : 's'}`
                       : 'No files selected yet'}
                   </span>
-                  <button
-                    type="button"
+                  <label
+                    htmlFor="case-wiki-inline-ingest-file-input"
+                    role="button"
+                    tabIndex={wikiIngesting ? -1 : 0}
                     data-testid="case-wiki-inline-file-picker"
-                    style={{ ...buttonStyle, padding: '8px 10px' }}
-                    onClick={() => void openWikiFilePicker()}
-                    disabled={wikiIngesting}
+                    style={{
+                      ...buttonStyle,
+                      padding: '8px 10px',
+                      cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                      opacity: wikiIngesting ? 0.62 : 1,
+                      pointerEvents: wikiIngesting ? 'none' : 'auto',
+                    }}
+                    onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
                     {...buttonHoverHandlers}
                   >
                     <Upload size={15} />
                     Choose files
-                  </button>
+                  </label>
                 </div>
               </div>
 
@@ -6573,27 +6570,45 @@ export default function CaseManagementPage() {
               <button type="button" style={buttonStyle} onClick={clearWikiIngestDraft} disabled={wikiIngesting} {...buttonHoverHandlers}>
                 Clear
               </button>
-              <button
-                type="button"
-                data-testid="case-wiki-inline-ingest-submit"
-                style={{
-                  ...primaryButtonStyle,
-                  opacity: wikiIngesting ? 0.62 : 1,
-                  cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                }}
-                onClick={() => void submitWikiIngestModal()}
-                disabled={wikiIngesting}
-                {...accentButtonHoverHandlers}
-              >
-                <Upload size={16} />
-                {wikiIngesting
-                  ? 'Ingesting...'
-                  : wikiIngestPendingFiles.length
-                    ? 'Ingest selected files'
-                    : wikiIngestText.trim()
-                      ? 'Ingest pasted source'
-                      : 'Choose files'}
-              </button>
+              {!hasWikiIngestDraft ? (
+                <label
+                  htmlFor="case-wiki-inline-ingest-file-input"
+                  role="button"
+                  tabIndex={wikiIngesting ? -1 : 0}
+                  data-testid="case-wiki-inline-ingest-submit"
+                  style={{
+                    ...primaryButtonStyle,
+                    opacity: wikiIngesting ? 0.62 : 1,
+                    cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                    pointerEvents: wikiIngesting ? 'none' : 'auto',
+                  }}
+                  onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
+                  {...accentButtonHoverHandlers}
+                >
+                  <Upload size={16} />
+                  Choose files
+                </label>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="case-wiki-inline-ingest-submit"
+                  style={{
+                    ...primaryButtonStyle,
+                    opacity: wikiIngesting ? 0.62 : 1,
+                    cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                  }}
+                  onClick={() => void submitWikiIngestModal()}
+                  disabled={wikiIngesting}
+                  {...accentButtonHoverHandlers}
+                >
+                  <Upload size={16} />
+                  {wikiIngesting
+                    ? 'Ingesting...'
+                    : wikiIngestPendingFiles.length
+                      ? 'Ingest selected files'
+                      : 'Ingest pasted source'}
+                </button>
+              )}
             </div>
           </div>
         </div>
