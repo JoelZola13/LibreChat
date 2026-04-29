@@ -6324,6 +6324,17 @@ export default function CaseManagementPage() {
         setWikiIngestModalOpen(false);
       }
     };
+    const clearWikiIngestDraft = () => {
+      setWikiIngestPendingFiles([]);
+      setWikiIngestDragActive(false);
+      setWikiIngestText('');
+      setWikiIngestSourceName('');
+      setWikiIngestStatus('');
+      if (wikiIngestInputRef.current) {
+        wikiIngestInputRef.current.value = '';
+      }
+    };
+    const hasWikiIngestDraft = wikiIngestPendingFiles.length > 0 || Boolean(wikiIngestText.trim());
 
     return (
       <>
@@ -6354,12 +6365,10 @@ export default function CaseManagementPage() {
                 opacity: wikiIngesting ? 0.76 : 1,
               }}
               onClick={() => {
-                setWikiIngestPendingFiles([]);
-                setWikiIngestDragActive(false);
-                setWikiIngestText('');
-                setWikiIngestSourceName('');
-                setWikiIngestStatus('');
-                setWikiIngestModalOpen(true);
+                setWikiIngestModalOpen(false);
+                setWikiIngestStatus('Add files or paste source text in the Case Wiki ingest panel below.');
+                wikiIngestInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                wikiIngestInputRef.current?.focus();
               }}
               disabled={wikiIngesting}
               {...accentButtonHoverHandlers}
@@ -6375,6 +6384,183 @@ export default function CaseManagementPage() {
             <strong style={{ color: colors.text }}>Wiki ingestion:</strong> {wikiIngestStatus}
           </div>
         )}
+
+        <div
+          data-testid="case-wiki-inline-ingest-panel"
+          style={{
+            ...surfaceStyle,
+            marginTop: 12,
+            display: 'grid',
+            gap: 12,
+            borderColor: wikiIngestDragActive ? colors.accent : colors.border,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'start' }}>
+            <div>
+              <strong style={{ color: colors.text, fontSize: 15 }}>Ingest into Case Wiki</strong>
+              <p style={{ margin: '5px 0 0', color: colors.textSecondary, fontSize: 13, lineHeight: 1.45 }}>
+                Add files, drop sources here, or paste source text. The wiki will create source notes, documents, timeline entries, and graph records.
+              </p>
+            </div>
+            <span style={{ ...surfaceStyle, padding: '6px 9px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
+              {wikiIngestPendingFiles.length
+                ? `${wikiIngestPendingFiles.length} file${wikiIngestPendingFiles.length === 1 ? '' : 's'} ready`
+                : wikiIngestText.trim()
+                  ? 'Text source ready'
+                  : 'Waiting for source'}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 0.7fr) minmax(260px, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <label style={{ display: 'grid', gap: 8, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
+                Source files
+                <input
+                  ref={wikiIngestInputRef}
+                  id="case-wiki-inline-ingest-file-input"
+                  data-testid="case-wiki-inline-ingest-input"
+                  type="file"
+                  multiple
+                  disabled={wikiIngesting}
+                  aria-label="Choose files for Case Wiki ingestion"
+                  onChange={handleWikiIngestFileSelection}
+                  style={{
+                    ...glassButton,
+                    borderRadius: 8,
+                    padding: 10,
+                    color: colors.text,
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                />
+              </label>
+
+              <div
+                data-testid="case-wiki-inline-ingest-dropzone"
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setWikiIngestDragActive(true);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setWikiIngestDragActive(true);
+                }}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setWikiIngestDragActive(false);
+                }}
+                onDrop={handleWikiIngestDrop}
+                style={{
+                  ...surfaceStyle,
+                  display: 'grid',
+                  gap: 7,
+                  minHeight: 90,
+                  alignContent: 'center',
+                  borderStyle: 'dashed',
+                  borderColor: wikiIngestDragActive ? colors.accent : colors.border,
+                  background: wikiIngestDragActive ? colors.surfaceHover : surfaceStyle.background,
+                }}
+              >
+                <strong style={{ color: colors.text, fontSize: 13 }}>
+                  {wikiIngestPendingFiles.length
+                    ? `${wikiIngestPendingFiles.length} selected source${wikiIngestPendingFiles.length === 1 ? '' : 's'}`
+                    : 'Drop files here'}
+                </strong>
+                {wikiIngestPendingFiles.length > 0 ? (
+                  <div style={{ display: 'grid', gap: 5 }}>
+                    {wikiIngestPendingFiles.slice(0, 5).map((file) => (
+                      <span key={`${file.name}-${file.size}`} style={{ color: colors.textSecondary, fontSize: 12 }}>
+                        {file.name} · {Math.max(1, Math.round(file.size / 1024))} KB
+                      </span>
+                    ))}
+                    {wikiIngestPendingFiles.length > 5 && (
+                      <span style={{ color: colors.textMuted, fontSize: 12 }}>
+                        +{wikiIngestPendingFiles.length - 5} more
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span style={{ color: colors.textMuted, fontSize: 12 }}>PDFs, images, docs, spreadsheets, exports, and notes are accepted.</span>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 8 }}>
+              <label style={{ display: 'grid', gap: 6, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
+                Paste source text
+                <input
+                  data-testid="case-wiki-inline-source-name"
+                  type="text"
+                  value={wikiIngestSourceName}
+                  onChange={(event) => setWikiIngestSourceName(event.currentTarget.value)}
+                  placeholder="Optional source name"
+                  style={{
+                    ...glassButton,
+                    borderRadius: 8,
+                    color: colors.text,
+                    padding: '10px 12px',
+                  }}
+                />
+              </label>
+              <textarea
+                data-testid="case-wiki-inline-source-text"
+                value={wikiIngestText}
+                onChange={(event) => {
+                  setWikiIngestText(event.currentTarget.value);
+                  if (event.currentTarget.value.trim()) {
+                    setWikiIngestStatus('Pasted source text ready for Case Wiki ingestion.');
+                  }
+                }}
+                placeholder="Paste notes, copied PDF text, email text, intake details, or any other source content here."
+                rows={5}
+                style={{
+                  ...glassButton,
+                  borderRadius: 8,
+                  color: colors.text,
+                  lineHeight: 1.5,
+                  minHeight: 116,
+                  padding: 12,
+                  resize: 'vertical',
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: colors.textSecondary, fontSize: 12 }}>
+              {wikiIngesting ? 'Ingesting source material...' : hasWikiIngestDraft ? 'Ready to ingest into the wiki.' : 'Choose files, drop files, or paste text first.'}
+            </span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" style={buttonStyle} onClick={clearWikiIngestDraft} disabled={wikiIngesting} {...buttonHoverHandlers}>
+                Clear
+              </button>
+              <button
+                type="button"
+                data-testid="case-wiki-inline-ingest-submit"
+                style={{
+                  ...primaryButtonStyle,
+                  opacity: wikiIngesting ? 0.62 : 1,
+                  cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                }}
+                onClick={() => void submitWikiIngestModal()}
+                disabled={wikiIngesting}
+                {...accentButtonHoverHandlers}
+              >
+                <Upload size={16} />
+                {wikiIngesting
+                  ? 'Ingesting...'
+                  : wikiIngestPendingFiles.length
+                    ? 'Ingest selected files'
+                    : wikiIngestText.trim()
+                      ? 'Ingest pasted source'
+                      : 'Ingest source'}
+              </button>
+            </div>
+          </div>
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.34fr) minmax(0, 1fr)', gap: 16, marginTop: 16 }}>
           <aside style={{ ...surfaceStyle, display: 'grid', gap: 12, alignContent: 'start', maxHeight: 'min(72vh, 920px)', overflowY: 'auto' }}>
