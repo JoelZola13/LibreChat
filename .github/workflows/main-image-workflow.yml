@@ -2,6 +2,11 @@ name: Docker Compose Build Latest Main Image Tag (Manual Dispatch)
 
 on:
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Docker platforms to build for manual runs'
+        required: false
+        default: linux/amd64
 
 jobs:
   build:
@@ -80,7 +85,7 @@ jobs:
             ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:${{ env.LATEST_TAG }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:latest
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
           target: ${{ matrix.target }}
 
       - name: Build and push Docker images to GHCR
@@ -93,5 +98,5 @@ jobs:
           tags: |
             ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:${{ env.LATEST_TAG }}
             ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:latest
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
           target: ${{ matrix.target }}
