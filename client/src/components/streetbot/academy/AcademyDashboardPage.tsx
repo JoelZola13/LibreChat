@@ -15,7 +15,7 @@ import { AssignmentList } from "./AssignmentList";
 import { CourseMaterialsBrowser } from "./CourseMaterialsBrowser";
 import { CourseDiscussionsPanel } from "./CourseDiscussionsPanel";
 import { sbFetch } from "../shared/sbFetch";
-import { resolveLearningPathCourses } from "./academyLearningPaths";
+import { filterVisibleAcademyCourses, filterVisibleAcademyPrograms, resolveLearningPathCourses } from "./academyLearningPaths";
 import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyUserId } from "./useAcademyUserId";
 import { listSessions, type LiveSession } from "./api/live-sessions";
@@ -127,6 +127,7 @@ export default function AcademyDashboardPage() {
   const userId = useAcademyUserId();
   const location = useLocation();
   const { paths: learningPaths } = useAcademyLearningPaths();
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const { isMobile, isTablet, isDesktop } = useResponsive();
   const academyBasePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
@@ -207,8 +208,8 @@ export default function AcademyDashboardPage() {
   );
 
   const publishedCourses = useMemo(
-    () => courses.filter((course) => !course.state || course.state === "published"),
-    [courses],
+    () => filterVisibleAcademyCourses(courses.filter((course) => !course.state || course.state === "published"), visibleLearningPaths),
+    [courses, visibleLearningPaths],
   );
 
   const activeEnrollments = useMemo(
@@ -232,7 +233,7 @@ export default function AcademyDashboardPage() {
   );
 
   const pathSummaries = useMemo(() => {
-    return learningPaths.map((path) => {
+    return visibleLearningPaths.map((path) => {
       const includedCourses = resolveLearningPathCourses(path, publishedCourses);
       const completedCount = includedCourses.filter(
         (course) => (enrollmentByCourseId[course.id]?.progress_percent ?? 0) >= 100,
@@ -255,7 +256,7 @@ export default function AcademyDashboardPage() {
         nextCourse,
       };
     });
-  }, [enrollmentByCourseId, learningPaths, publishedCourses]);
+  }, [enrollmentByCourseId, publishedCourses, visibleLearningPaths]);
 
   const enrolledPathSummaries = useMemo(
     () =>

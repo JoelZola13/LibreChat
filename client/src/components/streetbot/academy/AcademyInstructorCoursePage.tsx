@@ -4,10 +4,14 @@ import {
   CalendarDays,
   ChevronDown,
   ClipboardCheck,
+  ExternalLink,
   FileText,
   Loader2,
+  Mail,
   MessageSquare,
+  Paperclip,
   Plus,
+  Star,
   Trash2,
   Users,
   Video,
@@ -25,6 +29,7 @@ import {
   type GradingQueueItem,
   type Submission,
 } from "./api/assignments";
+import { listEnrollmentApplications, type EnrollmentApplication } from "./api/enrollment-applications";
 import { getCourseMaterials, removeMaterialLink, type CourseMaterial } from "./api/course-materials";
 import {
   createCourseScheduleItem,
@@ -43,7 +48,7 @@ import { createSession, cancelSession, listSessions, type LiveSession } from "./
 import { useAcademyUserId } from "./useAcademyUserId";
 import { sbFetch } from "../shared/sbFetch";
 import type { Cohort } from "../lib/api/cohorts";
-import { fileToAcademyAsset } from "./academyFileAssets";
+import { fileToAcademyAsset, openAcademyAsset, type AcademyFileAsset } from "./academyFileAssets";
 
 type Course = {
   id: string;
@@ -56,7 +61,16 @@ type Course = {
   duration?: string | null;
 };
 
-type InstructorCourseTab = "schedule" | "discussions" | "sessions" | "attendance" | "grading" | "builder" | "materials";
+type InstructorCourseTab =
+  | "schedule"
+  | "discussions"
+  | "sessions"
+  | "attendance"
+  | "grading"
+  | "form-submissions"
+  | "feedback"
+  | "builder"
+  | "materials";
 
 type ScheduleFormState = {
   title: string;
@@ -84,6 +98,29 @@ type CalendarEntry = {
   label: string;
   title: string;
   subtitle: string;
+};
+
+type CourseReview = {
+  id: string;
+  user_id: string;
+  user_name?: string | null;
+  course_id: string;
+  rating: number;
+  review_text?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  workshop_feedback?: string | null;
+  rating_reason?: string | null;
+  other_feedback?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CourseReviewStats = {
+  average: number;
+  count: number;
+  distribution: Record<number, number>;
 };
 
 function combineLocalDateTime(date: string, time: string): string {
@@ -122,6 +159,20 @@ function dateKey(isoOrDate: string | Date): string {
   return value.toISOString().slice(0, 10);
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "Recently updated";
+  }
+
+  return new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function AcademyInstructorCoursePage() {
   const params = useParams();
   const courseId = params.courseId || "";
@@ -147,6 +198,13 @@ export default function AcademyInstructorCoursePage() {
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [attendanceSavingUserId, setAttendanceSavingUserId] = useState<string | null>(null);
   const [attendanceMessage, setAttendanceMessage] = useState<string | null>(null);
+  const [enrollmentApplications, setEnrollmentApplications] = useState<EnrollmentApplication[]>([]);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+  const [applicationsError, setApplicationsError] = useState<string | null>(null);
+  const [courseReviews, setCourseReviews] = useState<CourseReview[]>([]);
+  const [reviewStats, setReviewStats] = useState<CourseReviewStats | null>(null);
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
   const [scheduleSaving, setScheduleSaving] = useState(false);
@@ -278,6 +336,83 @@ export default function AcademyInstructorCoursePage() {
       }
     },
     [loadAttendance, openTab],
+  );
+
+  const loadEnrollmentFormSubmissions = useCallback(async function () {
+    if (courseId === "") {
+      setEnrollmentApplications([]);
+      return;
+    }
+
+    setLoadingApplications(true);
+    setApplicationsError(null);
+    try {
+      const applications = await listEnrollmentApplications({ courseId });
+      setEnrollmentApplications(applications);
+    } catch (error) {
+      setEnrollmentApplications([]);
+      setApplicationsError(error instanceof Error ? error.message : "Failed to load form submissions.");
+    } finally {
+      setLoadingApplications(false);
+    }
+  }, [courseId]);
+
+  useEffect(
+    function () {
+      if (openTab === "form-submissions") {
+        void loadEnrollmentFormSubmissions();
+      }
+    },
+    [loadEnrollmentFormSubmissions, openTab],
+  );
+
+  const loadCourseFeedback = useCallback(async function () {
+    if (courseId === "") {
+      setCourseReviews([]);
+      setReviewStats(null);
+      return;
+    }
+
+    setLoadingFeedback(true);
+    setFeedbackError(null);
+    try {
+      const [reviewsResponse, statsResponse] = await Promise.all([
+        sbFetch(`/api/academy/reviews/course/${encodeURIComponent(courseId)}`),
+        sbFetch(`/api/academy/reviews/course/${encodeURIComponent(courseId)}/stats`),
+      ]);
+
+      const reviewsData = reviewsResponse.ok ? await reviewsResponse.json() : [];
+      const statsData = statsResponse.ok ? await statsResponse.json() : null;
+
+      setCourseReviews(Array.isArray(reviewsData) ? reviewsData : []);
+      setReviewStats(
+        statsData && typeof statsData === "object"
+          ? {
+              average: Number(statsData.average || 0),
+              count: Number(statsData.count || 0),
+              distribution:
+                statsData.distribution && typeof statsData.distribution === "object"
+                  ? statsData.distribution
+                  : { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+            }
+          : null,
+      );
+    } catch (error) {
+      setCourseReviews([]);
+      setReviewStats(null);
+      setFeedbackError(error instanceof Error ? error.message : "Failed to load course feedback.");
+    } finally {
+      setLoadingFeedback(false);
+    }
+  }, [courseId]);
+
+  useEffect(
+    function () {
+      if (openTab === "feedback") {
+        void loadCourseFeedback();
+      }
+    },
+    [loadCourseFeedback, openTab],
   );
 
   const handleSelectSubmission = useCallback(async function (item: GradingQueueItem) {
@@ -654,6 +789,44 @@ export default function AcademyInstructorCoursePage() {
     [attendanceRows],
   );
 
+  const applicationSummary = useMemo(
+    function () {
+      const attachmentCount = enrollmentApplications.reduce(function (sum, application) {
+        return sum + application.sample_work_attachments.length;
+      }, 0);
+
+      return {
+        total: enrollmentApplications.length,
+        withAttachments: enrollmentApplications.filter(function (application) {
+          return application.sample_work_attachments.length > 0;
+        }).length,
+        attachmentCount,
+      };
+    },
+    [enrollmentApplications],
+  );
+
+  const feedbackSummary = useMemo(
+    function () {
+      const fiveStarCount = courseReviews.filter(function (review) {
+        return review.rating >= 5;
+      }).length;
+      const writtenCount = courseReviews.filter(function (review) {
+        return (
+          String(review.workshop_feedback || "").trim() !== "" ||
+          String(review.rating_reason || "").trim() !== "" ||
+          String(review.other_feedback || "").trim() !== "" ||
+          String(review.review_text || "").trim() !== ""
+        );
+      }).length;
+      return {
+        fiveStarCount,
+        writtenCount,
+      };
+    },
+    [courseReviews],
+  );
+
   const sectionTabs: Array<{ tab: InstructorCourseTab; label: string; description: string; icon: typeof CalendarDays }> = [
     {
       tab: "schedule",
@@ -684,6 +857,18 @@ export default function AcademyInstructorCoursePage() {
       label: "Grading & Feedback",
       description: "Review and grade submissions, give feedback, and track student progress.",
       icon: ClipboardCheck,
+    },
+    {
+      tab: "form-submissions",
+      label: "Form Submissions",
+      description: "Read the enrollment forms submitted by students joining this course.",
+      icon: FileText,
+    },
+    {
+      tab: "feedback",
+      label: "Course Feedback",
+      description: "See ratings, comments, and review trends from enrolled learners.",
+      icon: Star,
     },
     {
       tab: "builder",
@@ -1372,6 +1557,444 @@ export default function AcademyInstructorCoursePage() {
       );
     }
 
+    if (openTab === "form-submissions") {
+      return (
+        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
+                Form Submissions
+              </h2>
+              <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+                Review the enrollment forms submitted for this course. Each student submission stays connected to the class they enrolled in.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={function () {
+                void loadEnrollmentFormSubmissions();
+              }}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+              style={{ background: colors.cardBgStrong, color: colors.text, border: "1px solid " + colors.border }}
+            >
+              <Loader2 className={loadingApplications ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              Refresh
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            {[
+              { label: "Submitted Forms", value: applicationSummary.total },
+              { label: "With Attachments", value: applicationSummary.withAttachments },
+              { label: "Files Shared", value: applicationSummary.attachmentCount },
+            ].map(function (item) {
+              return (
+                <div
+                  key={item.label}
+                  className="rounded-[20px] border p-4"
+                  style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                >
+                  <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
+                    {item.value}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {applicationsError && (
+            <div className="mt-5 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>
+              {applicationsError}
+            </div>
+          )}
+
+          {loadingApplications ? (
+            <div className="mt-6 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: colors.textSecondary }}>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading submitted enrollment forms...
+            </div>
+          ) : enrollmentApplications.length > 0 ? (
+            <div className="mt-6 space-y-4">
+              {enrollmentApplications.map(function (application) {
+                const displayName =
+                  application.preferred_name ||
+                  application.full_name ||
+                  [application.first_name, application.last_name].filter(Boolean).join(" ") ||
+                  application.email ||
+                  application.user_id;
+
+                return (
+                  <div
+                    key={application.id}
+                    className="rounded-[24px] border p-5"
+                    style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                          {application.target_type === "learning_path" ? "Program enrollment" : "Course enrollment"}
+                        </p>
+                        <h3 className="mt-2 text-xl font-semibold" style={{ color: colors.text }}>
+                          {displayName}
+                        </h3>
+                        <div className="mt-2 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
+                          <span>Student ID: {application.user_id}</span>
+                          {application.email ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Mail className="h-4 w-4" />
+                              {application.email}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="text-right text-sm" style={{ color: colors.textSecondary }}>
+                        <p>{application.target_title || course.title}</p>
+                        <p className="mt-1" style={{ color: colors.textMuted }}>
+                          {formatDateTime(application.submitted_at || application.created_at)}
+                        </p>
+                        <p className="mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" style={{ background: "rgba(249,115,22,0.14)", color: colors.accent }}>
+                          {application.status || "submitted"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                            How they heard about the program
+                          </p>
+                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                            {application.heard_about || "No answer provided."}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                            Prior experience or interest
+                          </p>
+                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                            {application.prior_experience || "No answer provided."}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                            Interest areas
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {application.interest_areas.length > 0 ? (
+                              application.interest_areas.map(function (interest) {
+                                return (
+                                  <span
+                                    key={interest}
+                                    className="rounded-full px-3 py-1 text-xs font-medium"
+                                    style={{ background: colors.cardBg, color: colors.textSecondary, border: "1px solid " + colors.border }}
+                                  >
+                                    {interest}
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="text-sm" style={{ color: colors.textSecondary }}>
+                                No interests selected.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                            Future project
+                          </p>
+                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                            {application.future_project || "No answer provided."}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                            What they hope to gain
+                          </p>
+                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                            {application.program_goals || "No answer provided."}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                            Challenges they shared
+                          </p>
+                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                            {application.challenges || "No answer provided."}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {(application.past_project || application.general_comments || application.sample_work_attachments.length > 0) && (
+                      <div className="mt-5 grid gap-4 lg:grid-cols-[1fr,0.9fr]">
+                        <div className="space-y-4">
+                          {application.past_project ? (
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                                Past creative project
+                              </p>
+                              <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                                {application.past_project}
+                              </p>
+                            </div>
+                          ) : null}
+                          {application.general_comments ? (
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                                General comments
+                              </p>
+                              <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                                {application.general_comments}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                            Attachments
+                          </p>
+                          <div className="mt-2 space-y-2">
+                            {application.sample_work_attachments.length > 0 ? (
+                              application.sample_work_attachments.map(function (asset: AcademyFileAsset) {
+                                return (
+                                  <button
+                                    key={`${application.id}-${asset.filename}-${asset.uploadedAt}`}
+                                    type="button"
+                                    onClick={function () {
+                                      openAcademyAsset(asset);
+                                    }}
+                                    className="flex w-full items-center justify-between gap-3 rounded-[18px] border px-4 py-3 text-left text-sm"
+                                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.textSecondary }}
+                                  >
+                                    <span className="inline-flex min-w-0 items-center gap-2">
+                                      <Paperclip className="h-4 w-4 shrink-0" />
+                                      <span className="truncate">{asset.filename}</span>
+                                    </span>
+                                    <ExternalLink className="h-4 w-4 shrink-0" />
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <div className="rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: colors.border, background: colors.cardBg, color: colors.textSecondary }}>
+                                No attachments were uploaded with this form.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-6 rounded-[22px] border p-4 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+              No students have submitted an enrollment form for this course yet.
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    if (openTab === "feedback") {
+      return (
+        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
+                Course Feedback
+              </h2>
+              <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+                Track the overall course rating and read every review submitted by enrolled students for this class.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={function () {
+                void loadCourseFeedback();
+              }}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+              style={{ background: colors.cardBgStrong, color: colors.text, border: "1px solid " + colors.border }}
+            >
+              <Loader2 className={loadingFeedback ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              Refresh
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-4">
+            {[
+              { label: "Average Rating", value: reviewStats ? reviewStats.average.toFixed(1) : "0.0" },
+              { label: "Total Reviews", value: reviewStats?.count || 0 },
+              { label: "Five Star Reviews", value: feedbackSummary.fiveStarCount },
+              { label: "Written Comments", value: feedbackSummary.writtenCount },
+            ].map(function (item) {
+              return (
+                <div
+                  key={item.label}
+                  className="rounded-[20px] border p-4"
+                  style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                >
+                  <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
+                    {item.value}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {feedbackError && (
+            <div className="mt-5 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>
+              {feedbackError}
+            </div>
+          )}
+
+          {loadingFeedback ? (
+            <div className="mt-6 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: colors.textSecondary }}>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading course feedback...
+            </div>
+          ) : (
+            <>
+              <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+                <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                  Rating Distribution
+                </p>
+                <div className="mt-4 space-y-3">
+                  {[5, 4, 3, 2, 1].map(function (rating) {
+                    const count = reviewStats?.distribution?.[rating] || 0;
+                    const percentage = reviewStats?.count ? (count / reviewStats.count) * 100 : 0;
+                    return (
+                      <div key={rating} className="flex items-center gap-3">
+                        <div className="flex w-14 items-center gap-1 text-sm font-medium" style={{ color: colors.text }}>
+                          <span>{rating}</span>
+                          <Star className="h-4 w-4 fill-current" style={{ color: colors.accent }} />
+                        </div>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: colors.cardBg }}>
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${percentage}%`, background: colors.accent }}
+                          />
+                        </div>
+                        <span className="w-10 text-right text-sm" style={{ color: colors.textSecondary }}>
+                          {count}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                {courseReviews.length > 0 ? (
+                  courseReviews.map(function (review) {
+                    const reviewDisplayName =
+                      String(review.user_name || "").trim() ||
+                      [review.first_name, review.last_name].filter(Boolean).join(" ").trim() ||
+                      review.user_id;
+
+                    return (
+                      <div
+                        key={review.id}
+                        className="rounded-[24px] border p-5"
+                        style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div>
+                            <h3 className="text-lg font-semibold" style={{ color: colors.text }}>
+                              {review.user_name || review.user_id}
+                            </h3>
+                            <div className="mt-2 flex flex-wrap items-center gap-1">
+                              {Array.from({ length: 5 }).map(function (_, index) {
+                                const starValue = index + 1;
+                                return (
+                                  <Star
+                                    key={starValue}
+                                    className="h-4 w-4"
+                                    style={{
+                                      color: starValue <= review.rating ? colors.accent : colors.textMuted,
+                                      fill: starValue <= review.rating ? colors.accent : "transparent",
+                                    }}
+                                  />
+                                );
+                              })}
+                              <span className="ml-2 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                                {review.rating}/5
+                              </span>
+                            </div>
+                          </div>
+                        <p className="text-sm" style={{ color: colors.textMuted }}>
+                          {formatDateTime(review.created_at)}
+                        </p>
+                      </div>
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          <div className="rounded-[18px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
+                            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                              Contact
+                            </p>
+                            <p className="mt-2 text-sm font-medium" style={{ color: colors.text }}>
+                              {reviewDisplayName}
+                            </p>
+                            <p className="mt-1 text-sm" style={{ color: colors.textSecondary }}>
+                              {String(review.email || "").trim() || "No email shared"}
+                            </p>
+                          </div>
+
+                          <div className="rounded-[18px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
+                            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                              Why this rating
+                            </p>
+                            <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                              {String(review.rating_reason || "").trim() || "No rating reason was added."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-4">
+                          <div className="rounded-[18px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
+                            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                              What they liked or disliked
+                            </p>
+                            <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                              {String(review.workshop_feedback || review.review_text || "").trim() || "No workshop feedback was added."}
+                            </p>
+                          </div>
+
+                          <div className="rounded-[18px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
+                            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                              Any other feedback
+                            </p>
+                            <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                              {String(review.other_feedback || "").trim() || "No additional feedback was added."}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-[22px] border p-4 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+                    No course feedback has been submitted yet.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      );
+    }
+
     if (openTab === "builder") {
       return (
         <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
@@ -1644,7 +2267,7 @@ export default function AcademyInstructorCoursePage() {
             </section>
 
 
-<div className="mb-6 grid gap-2 md:grid-cols-2 xl:grid-cols-7">
+<div className="mb-6 grid gap-2 md:grid-cols-2 xl:grid-cols-9">
   {sectionTabs.map(function (item) {
     const isOpen = openTab === item.tab;
     return (

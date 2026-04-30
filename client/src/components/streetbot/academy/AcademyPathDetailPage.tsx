@@ -3,6 +3,8 @@ import { ArrowRight, CheckCircle2, Clock, Map, Target, Video } from "lucide-reac
 import { useLocation, useParams } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
 import {
+  filterVisibleAcademyCourses,
+  filterVisibleAcademyPrograms,
   getAcademyLearningPathFromCollection,
   getLearningPathDisplayCourseCount,
   getLearningPathDisplayCourseTitles,
@@ -33,7 +35,8 @@ export default function AcademyPathDetailPage() {
   const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
   const userId = useAcademyUserId();
   const { paths: learningPaths, loading: learningPathsLoading } = useAcademyLearningPaths();
-  const path = getAcademyLearningPathFromCollection(slug, learningPaths);
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
+  const path = getAcademyLearningPathFromCollection(slug, visibleLearningPaths);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
 
   const [courses, setCourses] = useState<Course[]>([]);
@@ -88,10 +91,14 @@ export default function AcademyPathDetailPage() {
     () => enrollments.filter((entry) => entry.status !== "dropped"),
     [enrollments],
   );
+  const visibleCourses = useMemo(
+    () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
+    [courses, visibleLearningPaths],
+  );
 
   const pathCourses = useMemo(() => {
-    return path ? resolveLearningPathCourses(path, courses) : [];
-  }, [courses, path]);
+    return path ? resolveLearningPathCourses(path, visibleCourses) : [];
+  }, [path, visibleCourses]);
 
   const nextCourse = useMemo(() => {
     for (const course of pathCourses) {
@@ -120,15 +127,15 @@ export default function AcademyPathDetailPage() {
     if (!path) {
       return "0 weeks";
     }
-    return getLearningPathDurationLabel(path, courses);
-  }, [courses, path]);
+    return getLearningPathDurationLabel(path, visibleCourses);
+  }, [path, visibleCourses]);
 
   const pathOverviewParagraphs = useMemo(() => {
     if (!path) {
       return [];
     }
 
-    const sampleCourses = getLearningPathDisplayCourseTitles(path, courses).slice(0, 3).join(", ");
+    const sampleCourses = getLearningPathDisplayCourseTitles(path, visibleCourses).slice(0, 3).join(", ");
 
     return [
       `${path.title} is designed as a guided program, not just a list of classes. It gives learners a clear order to follow, a manageable pace, and a focused outcome at the end of the plan.`,
@@ -136,7 +143,7 @@ export default function AcademyPathDetailPage() {
         ? `Inside this path, learners move through courses like ${sampleCourses}. The full program is built for ${path.level.toLowerCase()} learners and can be joined ${path.deliveryMode.toLowerCase()}.`
         : `This plan is built for ${path.level.toLowerCase()} learners and can be joined ${path.deliveryMode.toLowerCase()}.`,
     ];
-  }, [path, pathCourses]);
+  }, [path, visibleCourses]);
 
   const nextStepLabel = useMemo(() => {
     if (nextCourse?.title) {
@@ -147,8 +154,8 @@ export default function AcademyPathDetailPage() {
       return "Choose a course";
     }
 
-    return getLearningPathDisplayCourseTitles(path, courses)[0] ?? "Choose a course";
-  }, [courses, nextCourse, path]);
+    return getLearningPathDisplayCourseTitles(path, visibleCourses)[0] ?? "Choose a course";
+  }, [nextCourse, path, visibleCourses]);
 
   if (!path && learningPathsLoading) {
     return (
@@ -339,7 +346,7 @@ export default function AcademyPathDetailPage() {
                 </article>
               );
                 })
-              : getLearningPathDisplayCourseTitles(path, courses).map((courseTitle, index) => (
+              : getLearningPathDisplayCourseTitles(path, visibleCourses).map((courseTitle, index) => (
                 <article
                   key={`${path.slug}-${courseTitle}-${index}`}
                   className="rounded-[24px] border p-5"

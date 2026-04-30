@@ -15,6 +15,12 @@ import {
   Video,
 } from "lucide-react";
 import { useAcademyOverviewData, type AcademyOverviewCertificate } from "../academy/useAcademyOverviewData";
+import {
+  filterVisibleAcademyCourses,
+  filterVisibleAcademyPrograms,
+  getLearningPathCourseMap,
+} from "../academy/academyLearningPaths";
+import { useAcademySavedItems } from "../academy/useAcademySavedItems";
 import { getAcademyRoleForProfile, getInstructorNameForProfile, type AcademyProfileRole } from "./academyStreetProfiles";
 
 type StreetProfileAcademyTabProps = {
@@ -274,6 +280,7 @@ export default function StreetProfileAcademyTab({
   colors,
 }: StreetProfileAcademyTabProps) {
   const location = useLocation();
+  const { savedPaths, savedCourses } = useAcademySavedItems();
   const academyRole = getAcademyRoleForProfile(profile);
   const instructorName = getInstructorNameForProfile(profile);
   const {
@@ -305,6 +312,15 @@ export default function StreetProfileAcademyTab({
   const borderColor = colors.border ?? (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)");
   const surface = isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.82)";
   const surfaceStrong = isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.94)";
+  const visiblePaths = useMemo(() => filterVisibleAcademyPrograms(paths), [paths]);
+  const visiblePublishedCourses = useMemo(
+    () => filterVisibleAcademyCourses(publishedCourses, visiblePaths),
+    [publishedCourses, visiblePaths],
+  );
+  const learningPathCourseMap = useMemo(
+    () => getLearningPathCourseMap(visiblePublishedCourses, visiblePaths),
+    [visiblePaths, visiblePublishedCourses],
+  );
 
   const currentPath = useMemo(() => {
     const inFlight = enrolledPathSummaries
@@ -339,8 +355,8 @@ export default function StreetProfileAcademyTab({
 
   const pathById = useMemo(
     () => {
-      const map = new Map<string, (typeof paths)[number]>();
-      paths.forEach((path) => {
+      const map = new Map<string, (typeof visiblePaths)[number]>();
+      visiblePaths.forEach((path) => {
         map.set(path.slug, path);
         if (path.id) {
           map.set(path.id, path);
@@ -348,13 +364,74 @@ export default function StreetProfileAcademyTab({
       });
       return map;
     },
-    [paths],
+    [visiblePaths],
   );
 
   const courseById = useMemo(
-    () => new Map(publishedCourses.map((course) => [course.id, course])),
-    [publishedCourses],
+    () => new Map(visiblePublishedCourses.map((course) => [course.id, course])),
+    [visiblePublishedCourses],
   );
+
+  const savedProgramItems = useMemo(
+    () =>
+      visiblePaths
+        .filter((path) => savedPaths.includes(path.slug))
+        .map((path) => {
+          const includedCourses = learningPathCourseMap.get(path.slug) || [];
+          return {
+            id: `saved-program-${path.slug}`,
+            title: path.title,
+            detail: `${includedCourses.length || path.courses} courses`,
+            badge: "Program",
+            href: `/academy/paths/${path.slug}`,
+          } satisfies ListItem;
+        }),
+    [learningPathCourseMap, savedPaths, visiblePaths],
+  );
+
+  const savedCourseItems = useMemo(
+    () =>
+      visiblePublishedCourses
+        .filter((course) => savedCourses.includes(course.id))
+        .map((course) => ({
+          id: `saved-course-${course.id}`,
+          title: course.title,
+          detail: course.category || "Saved course",
+          badge: "Course",
+          href: `/academy/courses/${course.id}`,
+        }) satisfies ListItem),
+    [savedCourses, visiblePublishedCourses],
+  );
+
+  const savedAcademyItems = useMemo(
+    () => [...savedProgramItems, ...savedCourseItems].slice(0, 4),
+    [savedCourseItems, savedProgramItems],
+  );
+
+  const savedSection = canEditProfile ? (
+    <SectionCard
+      title="Saved"
+      description="Courses and programs I've saved in Academy so I can come back to them later."
+      href="/academy/saved"
+      footerLabel="Open saved in Academy"
+      colors={colors}
+      isDark={isDark}
+    >
+      {savedAcademyItems.length > 0 ? (
+        <ListRows
+          items={savedAcademyItems}
+          colors={colors}
+          isDark={isDark}
+          icon={<BookOpen size={16} />}
+        />
+      ) : (
+        <EmptyMessage
+          message="Saved courses and programs from Academy will appear here once you bookmark them."
+          colors={colors}
+        />
+      )}
+    </SectionCard>
+  ) : null;
 
   const achievementItems = useMemo(() => {
     const certificateItems = sortByNewest(certificates, certificateSortDate).map((certificate) => {
@@ -881,6 +958,8 @@ export default function StreetProfileAcademyTab({
                 ))}
               </div>
             </SectionCard>
+
+            {savedSection}
           </>
         ) : (
           <>
@@ -976,6 +1055,8 @@ export default function StreetProfileAcademyTab({
                 <EmptyMessage message="Certificates and completed programs will appear here as progress turns into milestones." colors={colors} />
               )}
             </SectionCard>
+
+            {savedSection}
 
             <SectionCard
               title="Activity"

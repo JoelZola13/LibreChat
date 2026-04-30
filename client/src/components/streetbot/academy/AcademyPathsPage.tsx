@@ -4,7 +4,9 @@ import { useLocation } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
 import { getCourseCardArt, getLearningPathCardArt } from "./academyCardArt";
 import {
-  academyGoalOptions,
+  buildAcademyGoalOptions,
+  filterVisibleAcademyCourses,
+  filterVisibleAcademyPrograms,
   getAcademyGoalOption,
   getLearningPathDisplayCourseCount,
   getLearningPathDisplayCourseTitles,
@@ -43,7 +45,7 @@ export default function AcademyPathsPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedGoal, setSelectedGoal] = useState("digital-confidence");
+  const [selectedGoal, setSelectedGoal] = useState("media-training");
   const { isPathSaved, togglePathSaved } = useAcademySavedItems();
 
   const colors = useMemo(
@@ -61,18 +63,33 @@ export default function AcademyPathsPage() {
     [isDark],
   );
 
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
+  const goalOptions = useMemo(() => buildAcademyGoalOptions(visibleLearningPaths), [visibleLearningPaths]);
+
   useEffect(() => {
     const storedGoal = localStorage.getItem(GOAL_STORAGE_KEY);
-    const legacyGoalMap: Record<string, string> = {
-      "job-ready": "job-search",
-      "digital-basics": "digital-confidence",
-      "housing-stability": "housing-support",
-    };
-    const normalizedGoal = legacyGoalMap[storedGoal ?? ""] ?? storedGoal;
-    if (normalizedGoal && academyGoalOptions.some((goal) => goal.id === normalizedGoal)) {
-      setSelectedGoal(normalizedGoal);
+    if (storedGoal && goalOptions.some((goal) => goal.id === storedGoal)) {
+      setSelectedGoal(storedGoal);
+      return;
     }
-  }, []);
+    if (goalOptions[0]) {
+      setSelectedGoal(goalOptions[0].id);
+    }
+  }, [goalOptions]);
+
+  const visibleCourses = useMemo(
+    () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
+    [courses, visibleLearningPaths],
+  );
+
+  useEffect(() => {
+    if (selectedGoal && goalOptions.some((goal) => goal.id === selectedGoal)) {
+      return;
+    }
+    if (goalOptions[0]) {
+      setSelectedGoal(goalOptions[0].id);
+    }
+  }, [goalOptions, selectedGoal]);
 
   useEffect(() => {
     localStorage.setItem(GOAL_STORAGE_KEY, selectedGoal);
@@ -109,13 +126,13 @@ export default function AcademyPathsPage() {
   );
 
   const selectedGoalOption = useMemo(
-    () => getAcademyGoalOption(selectedGoal) ?? academyGoalOptions[0],
-    [selectedGoal],
+    () => goalOptions.find((goal) => goal.id === selectedGoal) ?? getAcademyGoalOption(selectedGoal) ?? goalOptions[0],
+    [goalOptions, selectedGoal],
   );
 
   const pathSummaries = useMemo(() => {
-    return learningPaths.map((path) => {
-      const includedCourses = resolveLearningPathCourses(path, courses);
+    return visibleLearningPaths.map((path) => {
+      const includedCourses = resolveLearningPathCourses(path, visibleCourses);
       const enrolledCourses = includedCourses.filter((course) =>
         activeEnrollments.some((entry) => entry.course_id === course.id),
       ).length;
@@ -132,7 +149,7 @@ export default function AcademyPathsPage() {
         progress,
       };
     });
-  }, [activeEnrollments, courses, learningPaths]);
+  }, [activeEnrollments, visibleCourses, visibleLearningPaths]);
 
   const generatedPathSummaries = useMemo(
     () => pathSummaries.filter((summary) => summary.path.source === "generated"),
@@ -197,8 +214,8 @@ export default function AcademyPathsPage() {
       return [];
     }
 
-    return getLearningPathDisplayCourseTitles(recommendedPath.path, courses).slice(0, 4);
-  }, [courses, recommendedPath]);
+    return getLearningPathDisplayCourseTitles(recommendedPath.path, visibleCourses).slice(0, 4);
+  }, [recommendedPath, visibleCourses]);
 
   const tabStyle = (active: boolean) => ({
     padding: "10px 18px",
@@ -275,7 +292,7 @@ export default function AcademyPathsPage() {
               Tell us your goal and we&apos;ll point you to the best path and first courses to take.
             </p>
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {academyGoalOptions.map((goal) => {
+              {goalOptions.map((goal) => {
                 const isActive = selectedGoal === goal.id;
                 return (
                   <button
@@ -359,11 +376,11 @@ export default function AcademyPathsPage() {
             <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
               <span className="inline-flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
-                {recommendedPath ? getLearningPathDisplayCourseCount(recommendedPath.path, courses) : 0} courses
+                {recommendedPath ? getLearningPathDisplayCourseCount(recommendedPath.path, visibleCourses) : 0} courses
               </span>
               <span className="inline-flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                {recommendedPath ? getLearningPathDurationLabel(recommendedPath.path, courses) : "0 weeks"}
+                {recommendedPath ? getLearningPathDurationLabel(recommendedPath.path, visibleCourses) : "0 weeks"}
               </span>
               <span className="inline-flex items-center gap-2">
                 <Target className="h-4 w-4" />
@@ -496,7 +513,7 @@ export default function AcademyPathsPage() {
               )}
             </div>
             <p className="text-sm" style={{ color: colors.textMuted }}>
-              {loading || learningPathsLoading ? "Loading..." : `${pathSummaries.length} paths available`}
+              {loading || learningPathsLoading ? "Loading..." : `${pathSummaries.length} programs available`}
             </p>
           </div>
 
@@ -569,8 +586,8 @@ export default function AcademyPathsPage() {
 
                   <div className="mt-4 flex flex-wrap gap-3 text-xs" style={{ color: colors.textMuted }}>
                     <span>{summary.path.level}</span>
-                    <span>{getLearningPathDurationLabel(summary.path, courses)}</span>
-                    <span>{getLearningPathDisplayCourseCount(summary.path, courses)} courses</span>
+                    <span>{getLearningPathDurationLabel(summary.path, visibleCourses)}</span>
+                    <span>{getLearningPathDisplayCourseCount(summary.path, visibleCourses)} courses</span>
                   </div>
 
                   <div className="mt-5">
@@ -578,7 +595,7 @@ export default function AcademyPathsPage() {
                       Included courses
                     </p>
                     <div className="space-y-2">
-                      {getLearningPathDisplayCourseTitles(summary.path, courses).slice(0, 3).map((courseTitle, index) => (
+                      {getLearningPathDisplayCourseTitles(summary.path, visibleCourses).slice(0, 3).map((courseTitle, index) => (
                         <div
                           key={`${summary.path.slug}-${courseTitle}-${index}`}
                           className="rounded-2xl border px-4 py-3 text-sm"

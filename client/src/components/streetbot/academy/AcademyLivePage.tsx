@@ -10,7 +10,7 @@ import {
 } from "./api/live-sessions";
 import { useAcademyUserId } from "./useAcademyUserId";
 import { sbFetch } from "../shared/sbFetch";
-import { getLearningPathCourseMap } from "./academyLearningPaths";
+import { filterVisibleAcademyCourses, filterVisibleAcademyPrograms, getLearningPathCourseMap } from "./academyLearningPaths";
 import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyEnrollmentAccess } from "./useAcademyEnrollmentAccess";
 
@@ -52,6 +52,7 @@ export default function AcademyLivePage() {
   const location = useLocation();
   const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
   const { paths: learningPaths } = useAcademyLearningPaths();
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const { hasEnrollment, loading: accessLoading } = useAcademyEnrollmentAccess();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
@@ -112,15 +113,22 @@ export default function AcademyLivePage() {
   const courseTitleById = useMemo(
     () =>
       Object.fromEntries(
-        courses.map((course) => [course.id, course.title]),
+        filterVisibleAcademyCourses(courses, visibleLearningPaths).map((course) => [course.id, course.title]),
       ),
-    [courses],
+    [courses, visibleLearningPaths],
   );
 
-  const coursePathMap = useMemo(() => getLearningPathCourseMap(courses, learningPaths), [courses, learningPaths]);
+  const visibleCourses = useMemo(
+    () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
+    [courses, visibleLearningPaths],
+  );
+  const coursePathMap = useMemo(
+    () => getLearningPathCourseMap(visibleCourses, visibleLearningPaths),
+    [visibleCourses, visibleLearningPaths],
+  );
 
   const recommendedPath = useMemo(() => {
-    const rankedPaths = learningPaths
+    const rankedPaths = visibleLearningPaths
       .map((path) => {
         const matchedEnrollments = enrollments.filter((enrollment) =>
           (coursePathMap.get(enrollment.course_id) ?? []).some((linkedPath) => linkedPath.slug === path.slug),
@@ -141,10 +149,10 @@ export default function AcademyLivePage() {
 
     return (
       rankedPaths.find((entry) => entry.matchedCount > 0)?.path ??
-      learningPaths.find((path) => path.slug === "digital-basics") ??
-      learningPaths[0]
+      visibleLearningPaths.find((path) => path.slug === "street-voices-media-training") ??
+      visibleLearningPaths[0]
     );
-  }, [coursePathMap, enrollments, learningPaths]);
+  }, [coursePathMap, enrollments, visibleLearningPaths]);
 
   const enrolledCourseIds = useMemo(
     () => new Set(enrollments.filter((entry) => entry.status !== "dropped").map((entry) => entry.course_id)),
@@ -157,13 +165,13 @@ export default function AcademyLivePage() {
     }
 
     const fallbackIds = new Set<string>();
-    courses.forEach((course) => {
+    visibleCourses.forEach((course) => {
       if ((coursePathMap.get(course.id) ?? []).some((path) => path.slug === recommendedPath?.slug)) {
         fallbackIds.add(course.id);
       }
     });
     return fallbackIds;
-  }, [coursePathMap, courses, enrolledCourseIds, recommendedPath]);
+  }, [coursePathMap, enrolledCourseIds, recommendedPath, visibleCourses]);
 
   const liveNow = useMemo(
     () => sessions.filter((session) => session.status === "live"),

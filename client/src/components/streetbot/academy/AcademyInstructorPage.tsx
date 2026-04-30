@@ -8,7 +8,7 @@ import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { sbFetch } from "../shared/sbFetch";
 import type { Cohort } from "../lib/api/cohorts";
 import { getCourseCardArt, getLearningPathCardArt } from "./academyCardArt";
-import { getLearningPathDurationLabel } from "./academyLearningPaths";
+import { filterVisibleAcademyCourses, filterVisibleAcademyPrograms, getLearningPathDurationLabel } from "./academyLearningPaths";
 
 type Course = {
   id: string;
@@ -83,6 +83,7 @@ export default function AcademyInstructorPage() {
   const navigate = useNavigate();
   const instructorId = useAcademyUserId();
   const { paths: learningPaths, refresh: refreshLearningPaths } = useAcademyLearningPaths();
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const activeTab = getInstructorTab(location.pathname);
   const basePath = location.pathname.startsWith("/learning") ? "/learning/instructor" : "/academy/instructor";
@@ -230,7 +231,7 @@ export default function AcademyInstructorPage() {
       const scheduleNoteTags = normalizeScheduleNotes(genScheduleNotes)
         ? [`schedule_notes:${normalizeScheduleNotes(genScheduleNotes)}`]
         : [];
-      const existingCourse = editingCourseId ? allCourses.find((course) => course.id === editingCourseId) ?? null : null;
+      const existingCourse = editingCourseId ? visibleAllCourses.find((course) => course.id === editingCourseId) ?? null : null;
       const extraExistingTags = Array.isArray(existingCourse?.tags)
         ? existingCourse.tags.filter((tag) => !isManagedCourseTag(tag))
         : [];
@@ -495,24 +496,34 @@ export default function AcademyInstructorPage() {
     }, {});
   }, [cohorts]);
 
+  const visibleInstructorCourses = useMemo(
+    () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
+    [courses, visibleLearningPaths],
+  );
+
+  const visibleAllCourses = useMemo(
+    () => filterVisibleAcademyCourses(allCourses, visibleLearningPaths),
+    [allCourses, visibleLearningPaths],
+  );
+
   const availablePathCourses = useMemo(
-    () => allCourses.filter((course) => !course.state || course.state === "published"),
-    [allCourses],
+    () => visibleAllCourses.filter((course) => !course.state || course.state === "published"),
+    [visibleAllCourses],
   );
 
   const generatedPaths = useMemo(
-    () => learningPaths.filter((path) => path.source === "generated"),
-    [learningPaths],
+    () => visibleLearningPaths.filter((path) => path.source === "generated"),
+    [visibleLearningPaths],
   );
 
   const certificateCourseTargets = useMemo(
-    () => courses.filter((course) => !course.state || course.state === "published"),
-    [courses],
+    () => visibleInstructorCourses.filter((course) => !course.state || course.state === "published"),
+    [visibleInstructorCourses],
   );
 
   const certificatePathTargets = useMemo(
-    () => learningPaths,
-    [learningPaths],
+    () => visibleLearningPaths,
+    [visibleLearningPaths],
   );
 
   const selectedCertificateCourse = useMemo(
@@ -812,9 +823,9 @@ export default function AcademyInstructorPage() {
             Loading instructor courses...
           </div>
         </div>
-      ) : courses.length > 0 ? (
+      ) : visibleInstructorCourses.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {courses.map((course) => {
+          {visibleInstructorCourses.map((course) => {
             const visual = getCourseCardArt(course);
             return (
               <a
@@ -1147,7 +1158,7 @@ export default function AcademyInstructorPage() {
             </p>
           </div>
           <span className="text-sm" style={{ color: colors.textMuted }}>
-            {allCourses.length} total
+            {visibleAllCourses.length} total
           </span>
         </div>
 
@@ -1158,9 +1169,9 @@ export default function AcademyInstructorPage() {
               Loading Academy courses...
             </span>
           </div>
-        ) : allCourses.length > 0 ? (
+        ) : visibleAllCourses.length > 0 ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {allCourses.map((course) => {
+            {visibleAllCourses.map((course) => {
               const visual = getCourseCardArt(course);
               const isEditing = editingCourseId === course.id;
               const isPendingDelete = pendingDeleteCourseId === course.id;
@@ -1477,7 +1488,7 @@ export default function AcademyInstructorPage() {
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium" style={{ color: colors.textMuted }}>
                     <span>{path.courses} courses</span>
-                    <span>{getLearningPathDurationLabel(path, allCourses)}</span>
+                    <span>{getLearningPathDurationLabel(path, visibleAllCourses)}</span>
                     <span>{path.level}</span>
                   </div>
 
@@ -1827,9 +1838,9 @@ export default function AcademyInstructorPage() {
             Loading Academy courses...
           </div>
         </div>
-      ) : allCourses.length > 0 ? (
+      ) : visibleAllCourses.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {allCourses.map((course) => {
+          {visibleAllCourses.map((course) => {
             const isMine = course.instructor_id === instructorId;
             const assignedElsewhere = Boolean(course.instructor_id) && !isMine;
             const isClaiming = claimingCourseId === course.id;

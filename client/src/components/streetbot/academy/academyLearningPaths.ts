@@ -1,4 +1,4 @@
-import { Briefcase, Compass, Home, Laptop, type LucideIcon, Mic, PenTool, ShieldCheck } from "lucide-react";
+import { Compass, type LucideIcon, Mic } from "lucide-react";
 
 export type AcademyLearningPath = {
   id?: string;
@@ -74,105 +74,6 @@ export const academyLearningPaths: AcademyLearningPath[] = [
       "Introduction to Podcasting",
     ],
   },
-  {
-    slug: "job-ready",
-    title: "Job Ready",
-    description: "Complete path to employment readiness and interview confidence.",
-    courses: 4,
-    hours: 40,
-    level: "Beginner to Intermediate",
-    deliveryMode: "In person and live stream",
-    color: "#10B981",
-    icon: Briefcase,
-    requirements: [
-      "No previous experience required",
-      "Ready to practice resumes, interviews, and communication",
-      "Able to join live or in-person support sessions",
-    ],
-    whatYoullLearn: [
-      "How to tell your story with confidence",
-      "How to build job-ready application materials",
-      "How to prepare for interviews and workplace communication",
-    ],
-    milestones: [
-      "Build a clear professional story",
-      "Create your resume and application materials",
-      "Practice interviews and workplace communication",
-      "Complete a portfolio-ready capstone",
-    ],
-    outcomes: [
-      "Job search confidence",
-      "Application readiness",
-      "Interview preparation",
-    ],
-    preferredCategories: ["business", "marketing", "development"],
-  },
-  {
-    slug: "digital-basics",
-    title: "Digital Basics",
-    description: "Essential computer and internet skills for everyday work and life.",
-    courses: 4,
-    hours: 24,
-    level: "Beginner",
-    deliveryMode: "In person and live stream",
-    color: "#3B82F6",
-    icon: Laptop,
-    requirements: [
-      "No previous digital training required",
-      "Phone, tablet, or computer access helps",
-      "Willingness to practice simple weekly tasks",
-    ],
-    whatYoullLearn: [
-      "How to use devices, browsers, and online tools",
-      "How to work with files, forms, email, and collaboration tools",
-      "How to use digital skills safely in everyday life",
-    ],
-    milestones: [
-      "Master device and browser basics",
-      "Learn files, forms, and online tools",
-      "Practice email, collaboration, and research",
-      "Apply digital skills in daily workflows",
-    ],
-    outcomes: [
-      "Digital confidence",
-      "Safer online habits",
-      "Better everyday workflow skills",
-    ],
-    preferredCategories: ["technology", "development", "design"],
-  },
-  {
-    slug: "housing-stability",
-    title: "Housing Stability",
-    description: "Practical learning track for housing search, support, and retention.",
-    courses: 4,
-    hours: 32,
-    level: "Beginner",
-    deliveryMode: "In person and live stream",
-    color: "#8B5CF6",
-    icon: Home,
-    requirements: [
-      "Open to learners at any stage of their housing journey",
-      "Bring your current questions or documents if you have them",
-      "Able to join live or in-person support sessions",
-    ],
-    whatYoullLearn: [
-      "How to organize a housing search step by step",
-      "How to prepare applications and communicate clearly",
-      "How to build long-term routines for housing stability",
-    ],
-    milestones: [
-      "Understand the housing search process",
-      "Organize documents and application steps",
-      "Learn landlord and tenant communication",
-      "Build long-term stability habits",
-    ],
-    outcomes: [
-      "Housing navigation confidence",
-      "Prepared application materials",
-      "Long-term stability planning",
-    ],
-    preferredCategories: ["business", "marketing", "technology"],
-  },
 ];
 
 export const academyGoalOptions: AcademyGoalOption[] = [
@@ -185,70 +86,133 @@ export const academyGoalOptions: AcademyGoalOption[] = [
     recommendedPathSlugs: ["street-voices-media-training"],
     preferredCourseKeywords: ["media", "podcast", "photo", "video", "storytelling", "networking"],
   },
-  {
-    id: "job-search",
-    title: "Get Job Ready",
-    description: "Build confidence for resumes, interviews, and workplace communication.",
-    icon: Briefcase,
-    color: "#10B981",
-    recommendedPathSlugs: ["job-ready"],
-    preferredCourseKeywords: ["job", "career", "interview", "resume", "employment", "workplace"],
-  },
-  {
-    id: "digital-confidence",
-    title: "Build Digital Skills",
-    description: "Learn the online tools and computer basics you need every day.",
-    icon: Laptop,
-    color: "#3B82F6",
-    recommendedPathSlugs: ["digital-basics"],
-    preferredCourseKeywords: ["digital", "technology", "computer", "internet", "email", "online"],
-  },
-  {
-    id: "housing-support",
-    title: "Support Housing Goals",
-    description: "Get practical help with housing search, documents, and stability.",
-    icon: Home,
-    color: "#8B5CF6",
-    recommendedPathSlugs: ["housing-stability"],
-    preferredCourseKeywords: ["housing", "tenant", "stability", "support", "documents", "application"],
-  },
-  {
-    id: "communication",
-    title: "Improve Communication",
-    description: "Practice speaking up, presenting yourself, and communicating clearly.",
-    icon: Mic,
-    color: "#F97316",
-    recommendedPathSlugs: ["job-ready", "digital-basics"],
-    preferredCourseKeywords: ["communication", "speaking", "confidence", "presentation", "interview"],
-  },
-  {
-    id: "creative-growth",
-    title: "Grow Creative Skills",
-    description: "Build skills for creative work, portfolios, and self-expression.",
-    icon: PenTool,
-    color: "#EC4899",
-    recommendedPathSlugs: ["job-ready", "digital-basics"],
-    preferredCourseKeywords: ["creative", "design", "portfolio", "content", "marketing", "media"],
-  },
-  {
-    id: "life-stability",
-    title: "Build Everyday Confidence",
-    description: "Start with the skills that make daily life and next steps feel easier.",
-    icon: ShieldCheck,
-    color: "#14B8A6",
-    recommendedPathSlugs: ["digital-basics", "housing-stability"],
-    preferredCourseKeywords: ["forms", "documents", "support", "digital", "housing", "community"],
-  },
-  {
-    id: "explore-options",
-    title: "Explore My Options",
-    description: "See a balanced recommendation if you are still deciding where to begin.",
-    icon: Compass,
-    color: "#FACC15",
-    recommendedPathSlugs: ["digital-basics", "job-ready", "housing-stability"],
-    preferredCourseKeywords: ["beginner", "digital", "confidence", "support", "job"],
-  },
 ];
+
+const HIDDEN_SAMPLE_PROGRAM_SLUGS = new Set([
+  "job-ready",
+  "digital-basics",
+  "housing-stability",
+  "gardening",
+  "advocacy-confidence-path",
+  "job-ready-communication-path",
+  "digital-restart-path",
+  "community-support-facilitation-path",
+]);
+
+const HIDDEN_SAMPLE_PROGRAM_TITLES = new Set([
+  "job ready",
+  "digital basics",
+  "housing stability",
+  "gardening",
+  "advocacy confidence path",
+  "job ready communication path",
+  "digital restart path",
+  "community support facilitation path",
+]);
+
+const HIDDEN_SAMPLE_COURSE_TITLES = new Set([
+  "qa edited course",
+  "test",
+  "speaking up with confidence",
+  "navigating systems",
+  "know your rights",
+  "ethics and boundaries",
+  "sharing your story",
+  "resource navigation",
+  "crisis intervention basics",
+  "active listening skills",
+  "introduction to peer support",
+  "navigating benefits",
+  "understanding credit",
+  "banking 101",
+  "budgeting basics",
+  "maintaining your home",
+  "budgeting for housing",
+  "know your rights as a tenant",
+  "finding housing",
+  "online job search",
+  "smartphone skills",
+  "email essentials",
+  "getting started with computers",
+  "workplace communication",
+  "interview skills mastery",
+  "resume writing workshop",
+  "computer basics for beginners",
+  "digital marketing fundamentals",
+  "graphic design essentials",
+  "entrepreneurship 101",
+  "web development bootcamp",
+]);
+
+const HIDDEN_SAMPLE_COURSE_PATTERNS = [
+  /\bqa\b/i,
+  /\btest\b/i,
+  /\bdemo\b/i,
+  /\bsample\b/i,
+];
+
+function normalizeCatalogText(value?: string | null) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isVisibleAcademyProgram(path: AcademyLearningPath) {
+  const slug = normalizeCatalogText(path.slug);
+  const title = normalizeCatalogText(path.title);
+  return !HIDDEN_SAMPLE_PROGRAM_SLUGS.has(slug) && !HIDDEN_SAMPLE_PROGRAM_TITLES.has(title);
+}
+
+export function filterVisibleAcademyPrograms(paths: AcademyLearningPath[]) {
+  return paths.filter(isVisibleAcademyProgram);
+}
+
+export function isVisibleAcademyCourse<
+  T extends { id: string; title: string }
+>(course: T, paths: AcademyLearningPath[]) {
+  const normalizedTitle = normalizeCatalogText(course.title);
+  if (HIDDEN_SAMPLE_COURSE_TITLES.has(normalizedTitle)) {
+    return false;
+  }
+  if (HIDDEN_SAMPLE_COURSE_PATTERNS.some((pattern) => pattern.test(course.title))) {
+    return false;
+  }
+
+  void paths;
+  return true;
+}
+
+export function filterVisibleAcademyCourses<
+  T extends { id: string; title: string }
+>(courses: T[], paths: AcademyLearningPath[]) {
+  return courses.filter((course) => isVisibleAcademyCourse(course, paths));
+}
+
+export function buildAcademyGoalOptions(paths: AcademyLearningPath[]) {
+  const visiblePaths = filterVisibleAcademyPrograms(paths);
+  if (visiblePaths.length === 0) {
+    return academyGoalOptions;
+  }
+
+  return visiblePaths.map((path) => {
+    const preferredCategories = Array.isArray(path.preferredCategories) ? path.preferredCategories : [];
+
+    return {
+      id: path.slug,
+      title: path.title,
+      description:
+        path.description || `Explore the ${path.title} program and its recommended first courses.`,
+      icon: path.icon || Mic,
+      color: path.color || "#A855F7",
+      recommendedPathSlugs: [path.slug],
+      preferredCourseKeywords:
+        preferredCategories.length > 0
+          ? preferredCategories
+          : getLearningPathDisplayCourseTitles(path, []).map((title) => title.toLowerCase()),
+    };
+  });
+}
 
 type PathCourseLike = {
   id: string;
@@ -316,6 +280,8 @@ export function getAcademyGoalOption(id?: string) {
 export function resolveLearningPathCourses<
   T extends { id: string; title: string; category?: string | null; description?: string | null }
 >(path: AcademyLearningPath, courses: T[]): T[] {
+  const preferredCategories = Array.isArray(path.preferredCategories) ? path.preferredCategories : [];
+
   if (Array.isArray(path.courseIds) && path.courseIds.length > 0) {
     const courseById = new Map(courses.map((course) => [course.id, course]));
     return path.courseIds
@@ -323,9 +289,17 @@ export function resolveLearningPathCourses<
       .filter((course): course is T => Boolean(course));
   }
 
+  if (Array.isArray(path.courseTitles) && path.courseTitles.length > 0) {
+    const normalizedCourseTitles = new Set(path.courseTitles.map((title) => normalizeCatalogText(title)));
+    const matchedByTitle = courses.filter((course) => normalizedCourseTitles.has(normalizeCatalogText(course.title)));
+    if (matchedByTitle.length > 0) {
+      return matchedByTitle;
+    }
+  }
+
   const preferredMatches = courses.filter((course) => {
     const haystack = `${course.title} ${course.category ?? ""} ${course.description ?? ""}`.toLowerCase();
-    return path.preferredCategories.some((keyword) => haystack.includes(keyword.toLowerCase()));
+    return preferredCategories.some((keyword) => haystack.includes(keyword.toLowerCase()));
   });
 
   const uniqueMatches = Array.from(

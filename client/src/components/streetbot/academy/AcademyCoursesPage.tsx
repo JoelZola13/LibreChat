@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ArrowLeft, ArrowRight, Clock, Heart, Search } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
-import { getLearningPathCourseMap } from "./academyLearningPaths";
+import { filterVisibleAcademyCourses, filterVisibleAcademyPrograms, getLearningPathCourseMap } from "./academyLearningPaths";
 import { getCourseCardArt } from "./academyCardArt";
 import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyUserId } from "./useAcademyUserId";
@@ -42,6 +42,7 @@ export default function AcademyCoursesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("All");
   const { isCourseSaved, toggleCourseSaved } = useAcademySavedItems();
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
 
   const colors = useMemo(
     () => ({
@@ -87,14 +88,21 @@ export default function AcademyCoursesPage() {
     () => enrollments.filter((enrollment) => enrollment.status !== "dropped"),
     [enrollments],
   );
+  const visibleCourses = useMemo(
+    () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
+    [courses, visibleLearningPaths],
+  );
   const enrolledCourseIds = useMemo(
     () => new Set(activeEnrollments.map((enrollment) => enrollment.course_id)),
     [activeEnrollments],
   );
-  const coursePathMap = useMemo(() => getLearningPathCourseMap(courses, learningPaths), [courses, learningPaths]);
+  const coursePathMap = useMemo(
+    () => getLearningPathCourseMap(visibleCourses, visibleLearningPaths),
+    [visibleCourses, visibleLearningPaths],
+  );
 
   const filteredCourses = useMemo(() => {
-    return courses.filter((course) => {
+    return visibleCourses.filter((course) => {
       if (course.state && course.state !== "published") {
         return false;
       }
@@ -113,7 +121,7 @@ export default function AcademyCoursesPage() {
       const haystack = `${course.title} ${course.description ?? ""}`.toLowerCase();
       return haystack.includes(searchQuery.toLowerCase());
     });
-  }, [courses, searchQuery, selectedLevel]);
+  }, [searchQuery, selectedLevel, visibleCourses]);
 
   const tabStyle = (active: boolean) => ({
     padding: "10px 18px",

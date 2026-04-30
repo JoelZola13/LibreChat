@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, useParams } from 'react-router-dom';
 import {
   Login,
   VerifyEmail,
@@ -150,6 +150,11 @@ const guardedSbPage = (
   </RoleGuard>
 );
 
+const CreativeAcademyRedirect = () => {
+  const { username } = useParams<{ username?: string }>();
+  return <Navigate to={username ? `/creatives/${username}?tab=academy` : '/profile?tab=academy'} replace />;
+};
+
 const AuthLayout = () => (
   <AuthContextProvider>
     <Outlet />
@@ -272,6 +277,7 @@ export const router = createBrowserRouter(
             // Street Bot Pro pages — shared across both variants
             { path: 'profile', element: guardedSbPage('profile', ProfilePage) },
             { path: 'profile/*', element: guardedSbPage('profile', ProfilePage) },
+            { path: 'creatives/:username/academy', element: <CreativeAcademyRedirect /> },
             { path: 'creatives/:username/academy/:section', element: guardedSbPage('profile', StreetProfileAcademySectionPage) },
             { path: 'creatives/:username', element: guardedSbPage('profile', CreativeProfilePage) },
             { path: 'creatives/:username/book', element: guardedSbPage('profile', BookingPage) },

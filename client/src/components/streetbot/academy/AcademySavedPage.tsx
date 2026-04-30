@@ -4,6 +4,8 @@ import { useLocation } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
 import { getCourseCardArt, getLearningPathCardArt } from "./academyCardArt";
 import {
+  filterVisibleAcademyCourses,
+  filterVisibleAcademyPrograms,
   getLearningPathDisplayCourseCount,
   getLearningPathDisplayCourseTitles,
   getLearningPathDurationLabel,
@@ -36,6 +38,7 @@ export default function AcademySavedPage() {
   const location = useLocation();
   const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
   const { paths: learningPaths } = useAcademyLearningPaths();
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -87,16 +90,20 @@ export default function AcademySavedPage() {
     () => enrollments.filter((entry) => entry.status !== "dropped"),
     [enrollments],
   );
+  const visibleCourses = useMemo(
+    () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
+    [courses, visibleLearningPaths],
+  );
   const enrolledCourseIds = useMemo(
     () => new Set(activeEnrollments.map((entry) => entry.course_id)),
     [activeEnrollments],
   );
 
   const savedPathSummaries = useMemo(() => {
-    return learningPaths
+    return visibleLearningPaths
       .filter((path) => savedPaths.includes(path.slug))
       .map((path) => {
-        const includedCourses = resolveLearningPathCourses(path, courses);
+        const includedCourses = resolveLearningPathCourses(path, visibleCourses);
         const totalProgress = includedCourses.reduce((sum, course) => {
           const enrollment = activeEnrollments.find((entry) => entry.course_id === course.id);
           return sum + (enrollment?.progress_percent ?? 0);
@@ -109,13 +116,13 @@ export default function AcademySavedPage() {
           progress,
         };
       });
-  }, [activeEnrollments, courses, learningPaths, savedPaths]);
+  }, [activeEnrollments, savedPaths, visibleCourses, visibleLearningPaths]);
 
   const savedCourseCards = useMemo(() => {
-    return courses.filter(
+    return visibleCourses.filter(
       (course) => (!course.state || course.state === "published") && savedCourses.includes(course.id),
     );
-  }, [courses, savedCourses]);
+  }, [savedCourses, visibleCourses]);
 
   const tabStyle = (active: boolean) => ({
     padding: "10px 18px",

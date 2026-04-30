@@ -1,30 +1,22 @@
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Star,
-  MessageSquare,
-  User,
-  Edit2,
-  Trash2,
-  Send,
-  ThumbsUp,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Loader2, Mail, MessageSquare, Star } from "lucide-react";
 import { sbFetch } from "../shared/sbFetch";
 
 type Review = {
   id: string;
   user_id: string;
+  user_name?: string | null;
   course_id: string;
   rating: number;
   review_text?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  workshop_feedback?: string | null;
+  rating_reason?: string | null;
+  other_feedback?: string | null;
   created_at: string;
   updated_at: string;
-};
-
-type RatingStats = {
-  average: number;
-  count: number;
-  distribution: Record<number, number>;
 };
 
 type CourseReviewsProps = {
@@ -34,411 +26,357 @@ type CourseReviewsProps = {
   canWriteReview?: boolean;
 };
 
-function StarRating({
+type ReviewFormState = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  workshopFeedback: string;
+  rating: number;
+  ratingReason: string;
+  otherFeedback: string;
+};
+
+const EMPTY_FORM: ReviewFormState = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  workshopFeedback: "",
+  rating: 5,
+  ratingReason: "",
+  otherFeedback: "",
+};
+
+function StarPicker({
   rating,
-  onRate,
-  size = "md",
-  interactive = false,
+  onChange,
 }: {
   rating: number;
-  onRate?: (rating: number) => void;
-  size?: "sm" | "md" | "lg";
-  interactive?: boolean;
+  onChange: (value: number) => void;
 }) {
   const [hoverRating, setHoverRating] = useState(0);
 
-  const sizeClasses = {
-    sm: "w-4 h-4",
-    md: "w-5 h-5",
-    lg: "w-8 h-8",
-  };
-
   return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button
-          key={star}
-          type="button"
-          onClick={() => interactive && onRate?.(star)}
-          onMouseEnter={() => interactive && setHoverRating(star)}
-          onMouseLeave={() => interactive && setHoverRating(0)}
-          className={`${interactive ? "cursor-pointer" : "cursor-default"}`}
-          disabled={!interactive}
-        >
-          <Star
-            className={`${sizeClasses[size]} transition-colors ${
-              star <= (hoverRating || rating)
-                ? "fill-yellow-400 text-yellow-400"
-                : "text-gray-600"
-            }`}
-          />
-        </button>
-      ))}
+    <div className="flex items-center gap-2">
+      {Array.from({ length: 5 }).map((_, index) => {
+        const starValue = index + 1;
+        const activeValue = hoverRating || rating;
+        const isActive = starValue <= activeValue;
+
+        return (
+          <button
+            key={starValue}
+            type="button"
+            onClick={() => onChange(starValue)}
+            onMouseEnter={() => setHoverRating(starValue)}
+            onMouseLeave={() => setHoverRating(0)}
+            className="transition-transform duration-150 hover:-translate-y-0.5"
+            aria-label={`Rate ${starValue} out of 5`}
+          >
+            <Star
+              className="h-7 w-7"
+              style={{
+                color: isActive ? "#FFD600" : "rgba(255,255,255,0.28)",
+                fill: isActive ? "#FFD600" : "transparent",
+              }}
+            />
+          </button>
+        );
+      })}
+      <span className="ml-2 text-sm font-medium text-gray-300">{rating}/5</span>
     </div>
   );
 }
 
-export function CourseReviews({ courseId, userId, courseName, canWriteReview = true }: CourseReviewsProps) {
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [stats, setStats] = useState<RatingStats | null>(null);
-  const [userReview, setUserReview] = useState<Review | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ rating: 5, review_text: "" });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingReview, setEditingReview] = useState<Review | null>(null);
-
-  const loadData = async () => {
-    try {
-      const [reviewsResp, statsResp, userReviewResp] = await Promise.all([
-        sbFetch(`/api/academy/reviews/course/${courseId}`),
-        sbFetch(`/api/academy/reviews/course/${courseId}/stats`),
-        sbFetch(`/api/academy/reviews/user/${userId}/course/${courseId}`),
-      ]);
-
-      if (reviewsResp.ok) {
-        const data = await reviewsResp.json();
-        setReviews(Array.isArray(data) ? data : []);
-      }
-
-      if (statsResp.ok) {
-        const data = await statsResp.json();
-        setStats(data);
-      }
-
-      if (userReviewResp.ok) {
-        const data = await userReviewResp.json();
-        if (data) {
-          setUserReview(data);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to load reviews:", e);
-    } finally {
-      setIsLoading(false);
-    }
+function mapReviewToForm(review: Review): ReviewFormState {
+  return {
+    firstName: review.first_name || "",
+    lastName: review.last_name || "",
+    email: review.email || "",
+    workshopFeedback: review.workshop_feedback || review.review_text || "",
+    rating: Number(review.rating || 5),
+    ratingReason: review.rating_reason || "",
+    otherFeedback: review.other_feedback || "",
   };
+}
+
+export function CourseReviews({ courseId, userId, courseName, canWriteReview = true }: CourseReviewsProps) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [userReview, setUserReview] = useState<Review | null>(null);
+  const [formData, setFormData] = useState<ReviewFormState>(EMPTY_FORM);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+
+  const colors = useMemo(
+    () => ({
+      cardBg: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.62)",
+      cardBgStrong: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.78)",
+      border: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)",
+      text: isDark ? "#fff" : "#111",
+      textSecondary: isDark ? "rgba(255,255,255,0.72)" : "#4b5563",
+      textMuted: isDark ? "rgba(255,255,255,0.5)" : "#6b7280",
+      accent: "#FFD600",
+    }),
+    [isDark],
+  );
 
   useEffect(() => {
-    loadData();
+    async function loadReview() {
+      setIsLoading(true);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+
+      try {
+        const response = await sbFetch(`/api/academy/reviews/user/${userId}/course/${courseId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to load course feedback form (${response.status})`);
+        }
+
+        const data = await response.json();
+        if (data) {
+          setUserReview(data);
+          setFormData(mapReviewToForm(data));
+        } else {
+          setUserReview(null);
+          setFormData(EMPTY_FORM);
+        }
+      } catch (error) {
+        console.error("Failed to load course review form:", error);
+        setErrorMessage(error instanceof Error ? error.message : "Unable to load this feedback form right now.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    void loadReview();
   }, [courseId, userId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setIsSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
     try {
-      const endpoint = editingReview
-        ? `/api/academy/reviews/${editingReview.id}`
-        : `/api/academy/reviews`;
-      const method = editingReview ? "PATCH" : "POST";
+      const endpoint = userReview ? `/api/academy/reviews/${userReview.id}` : "/api/academy/reviews";
+      const method = userReview ? "PATCH" : "POST";
+      const body = {
+        user_id: userId,
+        course_id: courseId,
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim(),
+        email: formData.email.trim(),
+        workshop_feedback: formData.workshopFeedback.trim() || null,
+        rating: formData.rating,
+        rating_reason: formData.ratingReason.trim() || null,
+        other_feedback: formData.otherFeedback.trim() || null,
+        review_text: formData.workshopFeedback.trim() || null,
+      };
 
-      const body = editingReview
-        ? { rating: formData.rating, review_text: formData.review_text || null }
-        : {
-            user_id: userId,
-            course_id: courseId,
-            rating: formData.rating,
-            review_text: formData.review_text || null,
-          };
-
-      const resp = await sbFetch(endpoint, {
+      const response = await sbFetch(endpoint, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
-      if (resp.ok) {
-        setShowForm(false);
-        setEditingReview(null);
-        setFormData({ rating: 5, review_text: "" });
-        loadData();
+      if (!response.ok) {
+        throw new Error(`Failed to save course feedback (${response.status})`);
       }
-    } catch (e) {
-      console.error("Failed to submit review:", e);
+
+      const data = await response.json();
+      setUserReview(data);
+      setFormData(mapReviewToForm(data));
+      setSuccessMessage(
+        userReview
+          ? "Your course feedback has been updated."
+          : "Your course feedback has been submitted and shared with the instructor.",
+      );
+    } catch (error) {
+      console.error("Failed to submit course feedback:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Unable to submit your feedback right now.");
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
 
-  const handleDelete = async (reviewId: string) => {
-    if (!confirm("Are you sure you want to delete your review?")) return;
-
-    try {
-      const resp = await sbFetch(`/api/academy/reviews/${reviewId}`, {
-        method: "DELETE",
-      });
-
-      if (resp.ok) {
-        setUserReview(null);
-        loadData();
-      }
-    } catch (e) {
-      console.error("Failed to delete review:", e);
-    }
-  };
-
-  const handleEdit = (review: Review) => {
-    setEditingReview(review);
-    setFormData({
-      rating: review.rating,
-      review_text: review.review_text || "",
-    });
-    setShowForm(true);
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+  function updateField<Key extends keyof ReviewFormState>(key: Key, value: ReviewFormState[Key]) {
+    setFormData((current) => ({ ...current, [key]: value }));
+  }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-8 h-8 border-3 border-yellow-400 border-t-transparent rounded-full"
-        />
+      <div className="flex items-center gap-3 rounded-[24px] border px-5 py-4" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading feedback form...
+      </div>
+    );
+  }
+
+  if (!canWriteReview) {
+    return (
+      <div className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+        <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: "rgba(255,214,0,0.12)", color: colors.accent }}>
+          <MessageSquare className="h-5 w-5" />
+        </div>
+        <h3 className="mt-4 text-lg font-semibold" style={{ color: colors.text }}>
+          Enroll to leave feedback
+        </h3>
+        <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+          Once you enroll in {courseName || "this course"}, you can fill out the review form and send your workshop feedback directly to the instructor workspace.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* Rating Summary */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6">
-        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-yellow-400" />
-          Reviews & Ratings
-        </h3>
-
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Overall Rating */}
-          <div className="text-center md:border-r md:border-gray-800 md:pr-8">
-            <div className="text-5xl font-bold text-yellow-400 mb-2">
-              {stats?.average ? stats.average.toFixed(1) : "0.0"}
-            </div>
-            <StarRating rating={Math.round(stats?.average || 0)} size="md" />
-            <p className="text-gray-500 text-sm mt-2">
-              {stats?.count || 0} {stats?.count === 1 ? "review" : "reviews"}
+    <div className="space-y-5">
+      <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+              Student feedback
+            </p>
+            <h3 className="mt-2 text-lg font-semibold" style={{ color: colors.text }}>
+              Share your workshop experience
+            </h3>
+            <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+              Your submitted feedback goes straight to the instructor course workspace under Course Feedback.
             </p>
           </div>
-
-          {/* Rating Distribution */}
-          <div className="flex-1 space-y-2">
-            {[5, 4, 3, 2, 1].map((star) => {
-              const count = stats?.distribution?.[star] || 0;
-              const percentage =
-                stats?.count && stats.count > 0
-                  ? (count / stats.count) * 100
-                  : 0;
-
-              return (
-                <div key={star} className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 w-20">
-                    <span className="text-sm text-gray-400">{star}</span>
-                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  </div>
-                  <div className="flex-1 bg-gray-800 rounded-full h-2">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${percentage}%` }}
-                      transition={{ duration: 0.5 }}
-                      className="bg-yellow-400 h-2 rounded-full"
-                    />
-                  </div>
-                  <span className="text-sm text-gray-500 w-12 text-right">
-                    {count}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          {userReview ? (
+            <div className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold" style={{ background: "rgba(16,185,129,0.12)", color: "#34D399" }}>
+              <CheckCircle2 className="h-4 w-4" />
+              Feedback saved
+            </div>
+          ) : null}
         </div>
-
-        {/* Write Review Button */}
-        {!userReview && !showForm && canWriteReview && (
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setShowForm(true)}
-            className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:bg-yellow-300 transition-colors"
-          >
-            <Edit2 className="w-5 h-5" />
-            Write a Review
-          </motion.button>
-        )}
-
-        {!canWriteReview && (
-          <div className="mt-6 rounded-xl border border-gray-800 bg-black/20 px-4 py-3 text-sm text-gray-400">
-            Enroll in this course to leave your own rating and quick review.
-          </div>
-        )}
       </div>
 
-      {/* Review Form */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <form
-              onSubmit={handleSubmit}
-              className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6 space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-lg">
-                  {editingReview ? "Edit Your Review" : "Write a Review"}
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingReview(null);
-                    setFormData({ rating: 5, review_text: "" });
-                  }}
-                  className="text-gray-500 hover:text-white"
-                >
-                  Cancel
-                </button>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">
-                  Your Rating
-                </label>
-                <StarRating
-                  rating={formData.rating}
-                  onRate={(rating) => setFormData({ ...formData, rating })}
-                  size="lg"
-                  interactive
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">
-                  Your Review (optional)
-                </label>
-                <textarea
-                  value={formData.review_text}
-                  onChange={(e) =>
-                    setFormData({ ...formData, review_text: e.target.value })
-                  }
-                  placeholder={`Share your experience with ${courseName || "this course"}...`}
-                  rows={4}
-                  className="w-full px-4 py-3 bg-black/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400/50 resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:bg-yellow-300 disabled:opacity-50 transition-colors"
-              >
-                {isSubmitting ? (
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="w-5 h-5 border-2 border-black border-t-transparent rounded-full"
-                  />
-                ) : (
-                  <>
-                    <Send className="w-5 h-5" />
-                    {editingReview ? "Update Review" : "Submit Review"}
-                  </>
-                )}
-              </button>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* User's Review (if exists and form not showing) */}
-      {userReview && !showForm && (
-        <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-2xl p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center">
-                <User className="w-5 h-5 text-black" />
-              </div>
-              <div>
-                <p className="font-medium">Your Review</p>
-                <p className="text-xs text-gray-500">{formatDate(userReview.created_at)}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleEdit(userReview)}
-                className="p-2 text-gray-400 hover:text-yellow-400 transition-colors"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleDelete(userReview.id)}
-                className="p-2 text-gray-400 hover:text-red-400 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <StarRating rating={userReview.rating} size="sm" />
-          {userReview.review_text && (
-            <p className="mt-3 text-gray-300">{userReview.review_text}</p>
-          )}
+      {errorMessage ? (
+        <div className="rounded-[20px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>
+          {errorMessage}
         </div>
-      )}
+      ) : null}
 
-      {/* Other Reviews */}
-      <div className="space-y-4">
-        {reviews
-          .filter((r) => r.user_id !== userId)
-          .map((review, index) => (
-            <motion.div
-              key={review.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="bg-gray-900/30 border border-gray-800 rounded-xl p-5"
-            >
-              <div className="flex items-start gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center">
-                  <User className="w-5 h-5 text-gray-500" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-gray-300">
-                      User {review.user_id.slice(-4)}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      {formatDate(review.created_at)}
-                    </p>
-                  </div>
-                  <StarRating rating={review.rating} size="sm" />
-                </div>
-              </div>
-              {review.review_text && (
-                <p className="text-gray-400 ml-13">{review.review_text}</p>
-              )}
-            </motion.div>
-          ))}
+      {successMessage ? (
+        <div className="rounded-[20px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(16,185,129,0.35)", background: "rgba(16,185,129,0.08)", color: "#34D399" }}>
+          {successMessage}
+        </div>
+      ) : null}
 
-        {reviews.filter((r) => r.user_id !== userId).length === 0 &&
-          !userReview && (
-            <div className="text-center py-12 bg-gray-900/30 rounded-xl border border-gray-800">
-              <MessageSquare className="w-12 h-12 text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500">No reviews yet</p>
-              <p className="text-gray-600 text-sm">Be the first to review this course!</p>
-            </div>
-          )}
-      </div>
+      <form onSubmit={handleSubmit} className="grid gap-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-2">
+            <span className="text-sm font-medium" style={{ color: colors.text }}>
+              First name
+            </span>
+            <input
+              value={formData.firstName}
+              onChange={(event) => updateField("firstName", event.target.value)}
+              required
+              className="rounded-[18px] border px-4 py-3 text-sm outline-none"
+              style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+            />
+          </label>
+
+          <label className="grid gap-2">
+            <span className="text-sm font-medium" style={{ color: colors.text }}>
+              Last name
+            </span>
+            <input
+              value={formData.lastName}
+              onChange={(event) => updateField("lastName", event.target.value)}
+              required
+              className="rounded-[18px] border px-4 py-3 text-sm outline-none"
+              style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+            />
+          </label>
+        </div>
+
+        <label className="grid gap-2">
+          <span className="text-sm font-medium" style={{ color: colors.text }}>
+            Email
+          </span>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: colors.textMuted }} />
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(event) => updateField("email", event.target.value)}
+              required
+              className="w-full rounded-[18px] border py-3 pl-11 pr-4 text-sm outline-none"
+              style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+            />
+          </div>
+        </label>
+
+        <label className="grid gap-2">
+          <span className="text-sm font-medium" style={{ color: colors.text }}>
+            What did you like or dislike about the workshop
+          </span>
+          <textarea
+            value={formData.workshopFeedback}
+            onChange={(event) => updateField("workshopFeedback", event.target.value)}
+            rows={5}
+            required
+            className="rounded-[18px] border px-4 py-3 text-sm outline-none"
+            style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text, resize: "vertical" }}
+          />
+        </label>
+
+        <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+          <span className="text-sm font-medium" style={{ color: colors.text }}>
+            How would you rate this program
+          </span>
+          <div className="mt-3">
+            <StarPicker rating={formData.rating} onChange={(value) => updateField("rating", value)} />
+          </div>
+
+          <label className="mt-5 grid gap-2">
+            <span className="text-sm font-medium" style={{ color: colors.text }}>
+              Why?
+            </span>
+            <textarea
+              value={formData.ratingReason}
+              onChange={(event) => updateField("ratingReason", event.target.value)}
+              rows={4}
+              required
+              className="rounded-[18px] border px-4 py-3 text-sm outline-none"
+              style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text, resize: "vertical" }}
+            />
+          </label>
+        </div>
+
+        <label className="grid gap-2">
+          <span className="text-sm font-medium" style={{ color: colors.text }}>
+            Any other feedback
+          </span>
+          <textarea
+            value={formData.otherFeedback}
+            onChange={(event) => updateField("otherFeedback", event.target.value)}
+            rows={4}
+            className="rounded-[18px] border px-4 py-3 text-sm outline-none"
+            style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text, resize: "vertical" }}
+          />
+        </label>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs" style={{ color: colors.textMuted }}>
+            Enrolled learners can update their feedback anytime.
+          </p>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ background: colors.accent, color: "#000" }}
+          >
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+            {userReview ? "Update Feedback" : "Submit Feedback"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

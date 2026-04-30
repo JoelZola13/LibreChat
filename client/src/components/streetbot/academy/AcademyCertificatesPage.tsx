@@ -14,7 +14,7 @@ import type { ContextType } from "~/common";
 import { NAV_WIDTH } from "~/components/Nav";
 import { DashboardSkeleton } from ".";
 import { sbFetch } from "../shared/sbFetch";
-import { getLearningPathDurationLabel, resolveLearningPathCourses } from "./academyLearningPaths";
+import { filterVisibleAcademyCourses, filterVisibleAcademyPrograms, getLearningPathDurationLabel, resolveLearningPathCourses } from "./academyLearningPaths";
 import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyUserId } from "./useAcademyUserId";
 
@@ -128,6 +128,7 @@ export default function AcademyCertificatesPage() {
   const userId = useAcademyUserId();
   const location = useLocation();
   const { paths: learningPaths } = useAcademyLearningPaths();
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const { isMobile, isTablet, isDesktop } = useResponsive();
   const outletContext = useOutletContext<ContextType | undefined>();
@@ -243,8 +244,8 @@ export default function AcademyCertificatesPage() {
   );
 
   const publishedCourses = useMemo(
-    () => courses.filter((course) => !course.state || course.state === "published"),
-    [courses],
+    () => filterVisibleAcademyCourses(courses.filter((course) => !course.state || course.state === "published"), visibleLearningPaths),
+    [courses, visibleLearningPaths],
   );
 
   const activeEnrollments = useMemo(
@@ -293,7 +294,7 @@ export default function AcademyCertificatesPage() {
   );
 
   const completedPathSummaries = useMemo(() => {
-    return learningPaths
+    return visibleLearningPaths
       .map((path) => {
         const includedCourses = resolveLearningPathCourses(path, publishedCourses);
         const isComplete =
@@ -309,7 +310,7 @@ export default function AcademyCertificatesPage() {
         };
       })
       .filter((summary) => summary.isComplete);
-  }, [completedCourseIds, enrolledCourseIds, learningPaths, publishedCourses]);
+  }, [completedCourseIds, enrolledCourseIds, publishedCourses, visibleLearningPaths]);
 
   const dashboardStats = useMemo(
     () => [
@@ -644,7 +645,7 @@ export default function AcademyCertificatesPage() {
                         const targetType = certificate.target_type || (certificate.learning_path_id ? "learning_path" : "course");
                         const course = certificate.course_id ? courseById.get(certificate.course_id) : null;
                         const path = targetType === "learning_path"
-                          ? learningPaths.find(
+                          ? visibleLearningPaths.find(
                               (item) => item.slug === certificate.target_id || item.id === certificate.target_id,
                             ) ?? null
                           : null;
@@ -822,7 +823,7 @@ export default function AcademyCertificatesPage() {
                               {summary.path.title}
                             </p>
                             <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
-                              {getLearningPathDurationLabel(summary.path, courses)} · {summary.path.deliveryMode}
+                              {getLearningPathDurationLabel(summary.path, visibleCourses)} · {summary.path.deliveryMode}
                             </p>
                           </div>
                           <span
@@ -847,3 +848,7 @@ export default function AcademyCertificatesPage() {
     </UnifiedLayout>
   );
 }
+  const visibleCourses = useMemo(
+    () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
+    [courses, visibleLearningPaths],
+  );

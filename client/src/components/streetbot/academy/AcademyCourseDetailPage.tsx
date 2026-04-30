@@ -4,6 +4,7 @@ import { useLocation, useParams } from "react-router-dom";
 import { findAcademyStreetProfileByInstructorName } from "../profile/academyStreetProfiles";
 import { sbFetch } from "../shared/sbFetch";
 import { useAcademyUserId } from "./useAcademyUserId";
+import { CourseReviews } from "./CourseReviews";
 import {
   formatCourseLevel,
   getCourseCohortMeta,
@@ -60,7 +61,6 @@ type Enrollment = {
 };
 
 export default function AcademyCourseDetailPage() {
-  const reviewFormSrc = "https://airtable.com/embed/appBQoHCfq4nfspKj/pagqRRLsxVpfnq7or/form";
   const sampleCourseFlyers = [
     {
       src: "/assets/academy-flyers/course-flyer-front-apr2026.png",
@@ -455,37 +455,16 @@ export default function AcademyCourseDetailPage() {
             <div>
               <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Course Review Form</h2>
               <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                Enrolled students can submit course feedback here.
+                Enrolled students can rate the course and share feedback here.
               </p>
             </div>
           </div>
-          {enrollment ? (
-            <div className="overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
-              <iframe
-                title={`${course.title} review form`}
-                src={reviewFormSrc}
-                width="100%"
-                height="533"
-                frameBorder="0"
-                loading="lazy"
-                style={{ background: "transparent", border: "none", display: "block" }}
-              />
-            </div>
-          ) : (
-            <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
-              <p className="text-sm leading-7" style={{ color: colors.textSecondary }}>
-                Enroll in this course to unlock the review form and share your feedback after you start learning.
-              </p>
-              <a
-                href={`${basePath}/courses/${course.id}/enroll`}
-                className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
-                style={{ background: colors.accent, color: "#000" }}
-              >
-                Enroll Now
-                <ChevronRight className="h-4 w-4" />
-              </a>
-            </div>
-          )}
+          <CourseReviews
+            courseId={course.id}
+            userId={userId}
+            courseName={course.title}
+            canWriteReview={Boolean(enrollment)}
+          />
         </section>
 
         <section className="mt-8 rounded-[28px] border p-6 md:p-8" style={{ borderColor: colors.border, background: colors.cardBg }}>

@@ -24,7 +24,8 @@ import { CourseMaterialsBrowser } from "./CourseMaterialsBrowser";
 import { ForumsPanel } from "./ForumsPanel";
 import { sbFetch } from "../shared/sbFetch";
 import { ensureStreetProfileForAcademyUser } from "../profile/academyProfileSync";
-import { resolveLearningPathCourses } from "./academyLearningPaths";
+import { findAcademyStreetProfileByUserId } from "../profile/academyStreetProfiles";
+import { filterVisibleAcademyCourses, filterVisibleAcademyPrograms, resolveLearningPathCourses } from "./academyLearningPaths";
 import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyUserId } from "./useAcademyUserId";
 import { listSessions, type LiveSession } from "./api/live-sessions";
@@ -100,6 +101,14 @@ function formatCountdown(isoDate: string) {
   return `Starts in ${totalDays}d ${totalHours % 24}h`;
 }
 
+function toProfileSlug(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 type Course = {
   id: string;
   title: string;
@@ -153,6 +162,7 @@ export default function AcademyClient() {
   const userId = useAcademyUserId();
   const location = useLocation();
   const { paths: learningPaths } = useAcademyLearningPaths();
+  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const { isMobile, isTablet, isDesktop } = useResponsive();
   const sidebar = useResponsiveSidebar();
@@ -182,6 +192,21 @@ export default function AcademyClient() {
       setUserName(storedName);
     }
   }, []);
+
+  const profileHref = useMemo(() => {
+    const streetProfile = findAcademyStreetProfileByUserId(userId);
+    const username =
+      streetProfile?.username ||
+      toProfileSlug(user?.username) ||
+      toProfileSlug(userName) ||
+      toProfileSlug(user?.name);
+
+    if (username) {
+      return `/creatives/${username}?tab=academy`;
+    }
+
+    return "/profile?tab=academy";
+  }, [user?.name, user?.username, userId, userName]);
 
   useEffect(() => {
     let isMounted = true;
@@ -240,8 +265,8 @@ export default function AcademyClient() {
   );
 
   const publishedCourses = useMemo(
-    () => courses.filter((course) => !course.state || course.state === "published"),
-    [courses],
+    () => filterVisibleAcademyCourses(courses.filter((course) => !course.state || course.state === "published"), visibleLearningPaths),
+    [courses, visibleLearningPaths],
   );
 
   const activeEnrollments = useMemo(
@@ -281,7 +306,7 @@ export default function AcademyClient() {
   );
 
   const pathSummaries = useMemo(() => {
-    return learningPaths.map((path) => {
+    return visibleLearningPaths.map((path) => {
       const includedCourses = resolveLearningPathCourses(path, publishedCourses);
       const completedCount = includedCourses.filter(
         (course) => (enrollmentByCourseId[course.id]?.progress_percent ?? 0) >= 100,
@@ -304,7 +329,7 @@ export default function AcademyClient() {
         nextCourse,
       };
     });
-  }, [enrollmentByCourseId, learningPaths, publishedCourses]);
+  }, [enrollmentByCourseId, publishedCourses, visibleLearningPaths]);
 
   const enrolledPathSummaries = useMemo(
     () =>
@@ -321,7 +346,7 @@ export default function AcademyClient() {
 
     return (
       inProgressPath ??
-      pathSummaries.find((summary) => summary.path.slug === "digital-basics") ??
+      pathSummaries.find((summary) => summary.path.slug === "street-voices-media-training") ??
       pathSummaries[0] ??
       null
     );
@@ -482,6 +507,11 @@ export default function AcademyClient() {
         ]
       : []),
   ];
+
+  const resolvedProfileName = userName || String((user as { name?: string | null } | null)?.name || "").trim() || "User";
+  const profileFirstName = resolvedProfileName.trim().split(/\s+/).filter(Boolean)[0] || "User";
+  const profileLabel = resolvedProfileName || "User";
+  const profileInitial = profileFirstName.charAt(0).toUpperCase() || "U";
 
   const workshopFlyers = [
     {
@@ -665,14 +695,37 @@ export default function AcademyClient() {
               })}
             </div>
 
-            <div className="justify-self-end text-right">
-              <a
-                href={`${academyBasePath}/instructor`}
-                className="inline-flex text-sm font-medium"
-                style={{ color: "#C084FC" }}
-              >
-                Instructor Workspace
-              </a>
+            <div className="justify-self-end">
+              <div className="flex items-center gap-5">
+                <a
+                  href={profileHref}
+                  aria-label={`${profileLabel} Academy profile`}
+                  title={profileLabel}
+                  className="group inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-transparent transition-all duration-200 hover:-translate-y-0.5 hover:border-white/10 hover:bg-white/10 hover:shadow-[0_16px_28px_rgba(0,0,0,0.28)]"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid transparent",
+                  }}
+                >
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all duration-200 group-hover:scale-[0.98]"
+                    style={{
+                      color: "#fff",
+                      background: "linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)",
+                      boxShadow: "0 10px 22px rgba(109, 40, 217, 0.26)",
+                    }}
+                  >
+                    {profileInitial}
+                  </span>
+                </a>
+                <a
+                  href={`${academyBasePath}/instructor`}
+                  className="inline-flex text-sm font-medium"
+                  style={{ color: "#C084FC" }}
+                >
+                  Instructor Workspace
+                </a>
+              </div>
             </div>
           </div>
         </div>
