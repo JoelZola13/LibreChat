@@ -3840,6 +3840,7 @@ export default function CaseManagementPage() {
     if (typeof window === 'undefined') return 'client:client-001';
     return new URLSearchParams(window.location.search).get('page') ?? 'client:client-001';
   });
+  const [wikiIndexSearchQuery, setWikiIndexSearchQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [riskFilter, setRiskFilter] = useState<'all' | RiskLevel>(savedDraft?.riskFilter ?? 'all');
   const [workerFilter, setWorkerFilter] = useState(savedDraft?.workerFilter ?? 'all');
@@ -6367,6 +6368,67 @@ export default function CaseManagementPage() {
         ingestionId: ingestion.id,
       })),
     ];
+    const wikiIndexQuery = normalize(wikiIndexSearchQuery);
+    const wikiPageSearchHaystack = (page: WikiPage) => {
+      const pageClient = page.clientId
+        ? clientRecords.find((client) => client.id === page.clientId)
+        : null;
+      const pageCase = page.caseId
+        ? caseRecords.find((caseItem) => caseItem.id === page.caseId)
+        : null;
+      const pageOrganization = page.organizationName
+        ? organizationRecords.find((organization) => organization.name === page.organizationName)
+        : null;
+      const pageWorkflow = page.caseTypeName
+        ? caseTypeRecords.find((caseType) => caseType.name === page.caseTypeName)
+        : null;
+      const pageIngestion = page.ingestionId
+        ? wikiIngestionRecords.find((ingestion) => ingestion.id === page.ingestionId)
+        : null;
+
+      return [
+        page.kind,
+        page.title,
+        page.subtitle,
+        page.summary,
+        page.clientId,
+        page.caseId,
+        page.organizationName,
+        page.caseTypeName,
+        page.ingestionId,
+        pageClient?.fullName,
+        pageClient?.preferredName,
+        pageClient?.alias,
+        pageClient?.clientId,
+        pageClient?.assignedWorker,
+        pageClient?.serviceHistory,
+        pageClient?.riskFlags.join(' '),
+        pageCase?.caseId,
+        pageCase?.title,
+        pageCase?.summary,
+        pageCase?.assignedStaff,
+        pageCase?.nextAction,
+        pageCase?.tags.join(' '),
+        pageOrganization?.name,
+        pageOrganization?.serviceCategories.join(' '),
+        pageOrganization?.eligibility,
+        pageOrganization?.notes,
+        pageWorkflow?.name,
+        pageWorkflow?.workflow.join(' '),
+        pageWorkflow?.successCriteria,
+        pageIngestion?.fileName,
+        pageIngestion?.summary,
+        pageIngestion?.textPreview,
+        pageIngestion?.entities.join(' '),
+        pageIngestion?.graphStatus,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+    };
+    const visibleWikiPages = wikiIndexQuery
+      ? wikiPages.filter((page) => wikiPageSearchHaystack(page).includes(wikiIndexQuery))
+      : wikiPages;
     const selectedPage = wikiPages.find((page) => page.id === selectedWikiPageId) ?? wikiPages[0];
     const selectedIngestion = selectedPage?.ingestionId
       ? wikiIngestionRecords.find((ingestion) => ingestion.id === selectedPage.ingestionId)
@@ -6427,11 +6489,11 @@ export default function CaseManagementPage() {
 	    const timelineStart = linkedTimelineDates.length ? new Date(Math.min(...linkedTimelineDates)).toISOString() : null;
 	    const timelineEnd = linkedTimelineDates.length ? new Date(Math.max(...linkedTimelineDates)).toISOString() : null;
     const pageGroups = [
-      ['Clients', wikiPages.filter((page) => page.kind === 'Client')],
-      ['Cases', wikiPages.filter((page) => page.kind === 'Case')],
-      ['Services', wikiPages.filter((page) => page.kind === 'Service')],
-      ['Workflows', wikiPages.filter((page) => page.kind === 'Workflow')],
-      ['Ingested files', wikiPages.filter((page) => page.kind === 'Ingested file')],
+      ['Clients', visibleWikiPages.filter((page) => page.kind === 'Client')],
+      ['Cases', visibleWikiPages.filter((page) => page.kind === 'Case')],
+      ['Services', visibleWikiPages.filter((page) => page.kind === 'Service')],
+      ['Workflows', visibleWikiPages.filter((page) => page.kind === 'Workflow')],
+      ['Ingested files', visibleWikiPages.filter((page) => page.kind === 'Ingested file')],
     ] as const;
     const selectedPageLiveHref = selectedPageClient
       ? profilePathForName(selectedPageClient.fullName)
@@ -7012,39 +7074,123 @@ export default function CaseManagementPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.34fr) minmax(0, 1fr)', gap: 16, marginTop: 16 }}>
           <aside style={{ ...surfaceStyle, display: 'grid', gap: 12, alignContent: 'start', maxHeight: 'min(72vh, 920px)', overflowY: 'auto' }}>
             <strong style={{ color: colors.text }}>Wiki index</strong>
-            {pageGroups.map(([groupLabel, pages]) => (
-              <div key={groupLabel} style={{ display: 'grid', gap: 6 }}>
-                <span style={{ color: colors.textMuted, fontSize: 11, fontWeight: 800, letterSpacing: 0.2, textTransform: 'uppercase' }}>
-                  {groupLabel}
-                </span>
-                {pages.map((page) => (
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ color: colors.textMuted, fontSize: 11, fontWeight: 800, textTransform: 'uppercase' }}>
+                Search wiki index
+              </span>
+              <span
+                style={{
+                  ...glassButton,
+                  alignItems: 'center',
+                  borderRadius: 8,
+                  display: 'flex',
+                  gap: 8,
+                  padding: '9px 10px',
+                }}
+              >
+                <Search size={15} color={colors.textMuted} />
+                <input
+                  data-testid="case-wiki-index-search"
+                  type="search"
+                  value={wikiIndexSearchQuery}
+                  onChange={(event) => setWikiIndexSearchQuery(event.currentTarget.value)}
+                  placeholder="Search clients, cases, services, notes"
+                  style={{
+                    background: 'transparent',
+                    border: 0,
+                    color: colors.text,
+                    flex: 1,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    minWidth: 0,
+                    outline: 'none',
+                  }}
+                />
+                {wikiIndexSearchQuery && (
                   <button
                     type="button"
-                    key={page.id}
-                    onClick={() => {
-                      setSelectedWikiPageId(page.id);
-                      if (typeof window !== 'undefined') {
-                        const params = new URLSearchParams(window.location.search);
-                        params.set('page', page.id);
-                        window.history.replaceState(null, '', `/case-management/knowledge?${params.toString()}`);
-                      }
-                    }}
+                    aria-label="Clear wiki index search"
+                    onClick={() => setWikiIndexSearchQuery('')}
                     style={{
-                      border: `1px solid ${page.id === selectedPage?.id ? colors.accent : colors.border}`,
-                      background: page.id === selectedPage?.id ? colors.surfaceHover : 'transparent',
+                      alignItems: 'center',
+                      background: 'transparent',
+                      border: `1px solid ${colors.border}`,
                       borderRadius: 8,
-                      color: colors.text,
-                      padding: 10,
-                      textAlign: 'left',
+                      color: colors.textMuted,
                       cursor: 'pointer',
+                      display: 'inline-flex',
+                      flex: '0 0 auto',
+                      justifyContent: 'center',
+                      minHeight: 28,
+                      padding: 0,
+                      width: 28,
                     }}
                   >
-                    <strong style={{ display: 'block', fontSize: 13 }}>{page.title}</strong>
-                    <span style={{ display: 'block', marginTop: 4, color: colors.textMuted, fontSize: 12 }}>{page.subtitle}</span>
+                    <X size={14} />
                   </button>
-                ))}
+                )}
+              </span>
+            </label>
+            <span style={{ color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
+              {wikiIndexQuery
+                ? `${visibleWikiPages.length} of ${wikiPages.length} pages`
+                : `${wikiPages.length} pages`}
+            </span>
+            {visibleWikiPages.length === 0 ? (
+              <div
+                style={{
+                  ...glassButton,
+                  borderRadius: 8,
+                  color: colors.textSecondary,
+                  display: 'grid',
+                  gap: 6,
+                  padding: 12,
+                }}
+              >
+                <strong style={{ color: colors.text, fontSize: 13 }}>No wiki pages found</strong>
+                <span style={{ fontSize: 12 }}>
+                  Try a client name, service, case ID, worker, or source note keyword.
+                </span>
               </div>
-            ))}
+            ) : (
+              pageGroups.map(([groupLabel, pages]) =>
+                pages.length ? (
+                  <div key={groupLabel} style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ color: colors.textMuted, fontSize: 11, fontWeight: 800, textTransform: 'uppercase' }}>
+                      {groupLabel}
+                    </span>
+                    {pages.map((page) => (
+                      <button
+                        type="button"
+                        key={page.id}
+                        onClick={() => {
+                          setSelectedWikiPageId(page.id);
+                          if (typeof window !== 'undefined') {
+                            const params = new URLSearchParams(window.location.search);
+                            params.set('page', page.id);
+                            window.history.replaceState(null, '', `/case-management/knowledge?${params.toString()}`);
+                          }
+                        }}
+                        style={{
+                          border: `1px solid ${page.id === selectedPage?.id ? colors.accent : colors.border}`,
+                          background: page.id === selectedPage?.id ? colors.surfaceHover : 'transparent',
+                          borderRadius: 8,
+                          color: colors.text,
+                          padding: 10,
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <strong style={{ display: 'block', fontSize: 13 }}>{page.title}</strong>
+                        <span style={{ display: 'block', marginTop: 4, color: colors.textMuted, fontSize: 12 }}>
+                          {page.subtitle}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null,
+              )
+            )}
           </aside>
 
           <article style={{ ...surfaceStyle, background: isDark ? 'rgba(255,255,255,0.92)' : '#fff', color: '#111827' }}>
