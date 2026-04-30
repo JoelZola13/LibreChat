@@ -462,11 +462,11 @@ export default function AcademyCertificatesPage() {
 
           <div className="w-10 min-w-[140px] text-right md:w-auto">
             <a
-              href={`${academyBasePath}/instructor`}
+              href={`${academyBasePath}/dashboard/instructor`}
               className="hidden text-sm font-medium md:inline-flex"
               style={{ color: "#C084FC" }}
             >
-              Instructor Workspace
+              Instructor Dashboard
             </a>
           </div>
         </div>
@@ -823,7 +823,7 @@ export default function AcademyCertificatesPage() {
                               {summary.path.title}
                             </p>
                             <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
-                              {getLearningPathDurationLabel(summary.path, visibleCourses)} · {summary.path.deliveryMode}
+                              {getLearningPathDurationLabel(summary.path, publishedCourses)} · {summary.path.deliveryMode}
                             </p>
                           </div>
                           <span
@@ -848,7 +848,3 @@ export default function AcademyCertificatesPage() {
     </UnifiedLayout>
   );
 }
-  const visibleCourses = useMemo(
-    () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
-    [courses, visibleLearningPaths],
-  );

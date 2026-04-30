@@ -78,7 +78,11 @@ function getInstructorTab(pathname: string): InstructorTab {
   return "schedule";
 }
 
-export default function AcademyInstructorPage() {
+type AcademyInstructorPageProps = {
+  embedded?: boolean;
+};
+
+export default function AcademyInstructorPage({ embedded = false }: AcademyInstructorPageProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const instructorId = useAcademyUserId();
@@ -86,7 +90,14 @@ export default function AcademyInstructorPage() {
   const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const activeTab = getInstructorTab(location.pathname);
-  const basePath = location.pathname.startsWith("/learning") ? "/learning/instructor" : "/academy/instructor";
+  const usesDashboardRoute = location.pathname.includes("/dashboard/instructor");
+  const basePath = location.pathname.startsWith("/learning")
+    ? usesDashboardRoute
+      ? "/learning/dashboard/instructor"
+      : "/learning/instructor"
+    : usesDashboardRoute
+      ? "/academy/dashboard/instructor"
+      : "/academy/instructor";
   const academyRootPath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
 
   const [courses, setCourses] = useState<Course[]>([]);
@@ -1953,9 +1964,9 @@ export default function AcademyInstructorPage() {
     return renderScheduleTab();
   };
 
-  return (
-    <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 40px" }}>
-      <div style={{ maxWidth: 1240, margin: "0 auto" }}>
+  const pageContent = (
+    <>
+      {!embedded && (
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <a href={academyRootPath} className="text-sm font-medium hover:opacity-80" style={{ color: colors.textSecondary }}>
             Academy
@@ -1965,50 +1976,60 @@ export default function AcademyInstructorPage() {
             Instructor
           </span>
         </div>
+      )}
 
-        <section className="mb-6 rounded-[28px] border p-6 md:p-8" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div
-                className="mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]"
-                style={{ background: "rgba(249,115,22,0.16)", color: colors.accent }}
-              >
-                <BookOpen className="h-3.5 w-3.5" />
-                Instructor Workspace
-              </div>
-              <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
-                Instructor Workspace
-              </h1>
-              <p className="mt-3 max-w-2xl text-base" style={{ color: colors.textSecondary }}>
-                Create, manage, and lead your courses from one place. Build learning experiences, run live sessions, and support your students every step of the way.
-              </p>
-              <p className="mt-3 text-sm font-medium" style={{ color: colors.textMuted }}>
-                Everything you need to guide learners from start to completion — all in one place.
-              </p>
+      <section className="mb-6 rounded-[28px] border p-6 md:p-8" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <div
+              className="mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]"
+              style={{ background: "rgba(249,115,22,0.16)", color: colors.accent }}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              {embedded ? "Instructor Dashboard" : "Instructor Workspace"}
             </div>
-
-            <div className="flex flex-wrap gap-2 lg:max-w-[430px] lg:justify-end">
-              {topTabs.map((item) => (
-                <a
-                  key={item.tab}
-                  href={item.href}
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap"
-                  style={{
-                    background: activeTab === item.tab ? colors.accent : colors.cardBg,
-                    color: activeTab === item.tab ? "#fff" : colors.text,
-                    border: `1px solid ${activeTab === item.tab ? colors.accent : colors.border}`,
-                  }}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </a>
-              ))}
-            </div>
+            <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
+              {embedded ? "Instructor Dashboard" : "Instructor Workspace"}
+            </h1>
+            <p className="mt-3 max-w-2xl text-base" style={{ color: colors.textSecondary }}>
+              Create, manage, and lead your courses from one place. Build learning experiences, run live sessions, and support your students every step of the way.
+            </p>
+            <p className="mt-3 text-sm font-medium" style={{ color: colors.textMuted }}>
+              Everything you need to guide learners from start to completion — all in one place.
+            </p>
           </div>
-        </section>
 
-        {renderTabContent()}
-      </div>
+          <div className="flex flex-wrap gap-2 lg:max-w-[430px] lg:justify-end">
+            {topTabs.map((item) => (
+              <a
+                key={item.tab}
+                href={item.href}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap"
+                style={{
+                  background: activeTab === item.tab ? colors.accent : colors.cardBg,
+                  color: activeTab === item.tab ? "#fff" : colors.text,
+                  border: `1px solid ${activeTab === item.tab ? colors.accent : colors.border}`,
+                }}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {renderTabContent()}
+    </>
+  );
+
+  if (embedded) {
+    return <div>{pageContent}</div>;
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 40px" }}>
+      <div style={{ maxWidth: 1240, margin: "0 auto" }}>{pageContent}</div>
     </div>
   );
 }

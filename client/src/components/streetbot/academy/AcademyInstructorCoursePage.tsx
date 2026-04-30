@@ -179,7 +179,14 @@ export default function AcademyInstructorCoursePage() {
   const location = useLocation();
   const instructorId = useAcademyUserId();
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
-  const basePath = location.pathname.startsWith("/learning") ? "/learning/instructor" : "/academy/instructor";
+  const usesDashboardRoute = location.pathname.includes("/dashboard/instructor");
+  const basePath = location.pathname.startsWith("/learning")
+    ? usesDashboardRoute
+      ? "/learning/dashboard/instructor"
+      : "/learning/instructor"
+    : usesDashboardRoute
+      ? "/academy/dashboard/instructor"
+      : "/academy/instructor";
   const academyRootPath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
 
   const [course, setCourse] = useState<Course | null>(null);
@@ -2221,7 +2228,7 @@ export default function AcademyInstructorCoursePage() {
           course.instructor_id !== instructorId ? (
             <section className="rounded-[28px] border p-8" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
               <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                Instructor Workspace
+                Instructor Dashboard
               </p>
               <h1 className="mt-3 text-2xl font-semibold md:text-3xl" style={{ color: colors.text }}>
                 This course is no longer in your workspace
@@ -2246,7 +2253,7 @@ export default function AcademyInstructorCoursePage() {
                 </a>
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                    Instructor Course Workspace
+                    Instructor Course Dashboard
                   </p>
                   <h1 className="mt-2 text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
                     {course.title}

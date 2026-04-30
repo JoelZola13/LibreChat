@@ -614,7 +614,7 @@ export default function StreetProfileAcademyTab({
   const primaryHref =
     effectiveRole === "instructor"
       ? canEditProfile
-        ? "/academy/instructor"
+        ? "/academy/dashboard/instructor"
         : instructorCourses[0]
           ? `/academy/courses/${instructorCourses[0].id}`
           : "/academy/courses"

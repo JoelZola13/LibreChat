@@ -267,7 +267,7 @@ export default function AcademySavedPage() {
                       className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                       style={{ background: summary.path.color, color: "#fff" }}
                     >
-                      {summary.includedCourses.length > 0 ? "Enroll Now" : "View Program"}
+                      {summary.includedCourses.length > 0 ? "Sign up Now" : "View Program"}
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   </div>
@@ -361,7 +361,7 @@ export default function AcademySavedPage() {
                       className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                       style={{ background: colors.accent, color: "#000" }}
                     >
-                      {enrolledCourseIds.has(course.id) ? "Open Course" : "Enroll Now"}
+                      Sign up Now
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   </div>

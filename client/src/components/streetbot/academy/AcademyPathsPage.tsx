@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Clock, Heart, Sparkles, Target } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Clock, Heart, Sparkles } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { sbFetch } from "../shared/sbFetch";
 import { getCourseCardArt, getLearningPathCardArt } from "./academyCardArt";
 import {
-  buildAcademyGoalOptions,
   filterVisibleAcademyCourses,
   filterVisibleAcademyPrograms,
-  getAcademyGoalOption,
   getLearningPathDisplayCourseCount,
   getLearningPathDisplayCourseTitles,
   getLearningPathDurationLabel,
@@ -34,18 +32,14 @@ type Enrollment = {
   status: "active" | "completed" | "dropped";
 };
 
-const GOAL_STORAGE_KEY = "streetvoices-academy-goal";
-
 export default function AcademyPathsPage() {
   const userId = useAcademyUserId();
   const location = useLocation();
   const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
-  const { paths: learningPaths, loading: learningPathsLoading } = useAcademyLearningPaths();
+  const { paths: learningPaths } = useAcademyLearningPaths();
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedGoal, setSelectedGoal] = useState("media-training");
   const { isPathSaved, togglePathSaved } = useAcademySavedItems();
 
   const colors = useMemo(
@@ -64,18 +58,6 @@ export default function AcademyPathsPage() {
   );
 
   const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
-  const goalOptions = useMemo(() => buildAcademyGoalOptions(visibleLearningPaths), [visibleLearningPaths]);
-
-  useEffect(() => {
-    const storedGoal = localStorage.getItem(GOAL_STORAGE_KEY);
-    if (storedGoal && goalOptions.some((goal) => goal.id === storedGoal)) {
-      setSelectedGoal(storedGoal);
-      return;
-    }
-    if (goalOptions[0]) {
-      setSelectedGoal(goalOptions[0].id);
-    }
-  }, [goalOptions]);
 
   const visibleCourses = useMemo(
     () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
@@ -83,37 +65,20 @@ export default function AcademyPathsPage() {
   );
 
   useEffect(() => {
-    if (selectedGoal && goalOptions.some((goal) => goal.id === selectedGoal)) {
-      return;
-    }
-    if (goalOptions[0]) {
-      setSelectedGoal(goalOptions[0].id);
-    }
-  }, [goalOptions, selectedGoal]);
-
-  useEffect(() => {
-    localStorage.setItem(GOAL_STORAGE_KEY, selectedGoal);
-  }, [selectedGoal]);
-
-  useEffect(() => {
     async function load() {
-      try {
-        const [coursesResp, enrollmentsResp] = await Promise.all([
-          sbFetch("/api/academy/courses"),
-          sbFetch(`/api/academy/enrollments?user_id=${encodeURIComponent(userId)}`),
-        ]);
+      const [coursesResp, enrollmentsResp] = await Promise.all([
+        sbFetch("/api/academy/courses"),
+        sbFetch(`/api/academy/enrollments?user_id=${encodeURIComponent(userId)}`),
+      ]);
 
-        if (coursesResp.ok) {
-          const courseData = await coursesResp.json();
-          setCourses(Array.isArray(courseData) ? courseData : []);
-        }
+      if (coursesResp.ok) {
+        const courseData = await coursesResp.json();
+        setCourses(Array.isArray(courseData) ? courseData : []);
+      }
 
-        if (enrollmentsResp.ok) {
-          const enrollmentData = await enrollmentsResp.json();
-          setEnrollments(Array.isArray(enrollmentData) ? enrollmentData : []);
-        }
-      } finally {
-        setLoading(false);
+      if (enrollmentsResp.ok) {
+        const enrollmentData = await enrollmentsResp.json();
+        setEnrollments(Array.isArray(enrollmentData) ? enrollmentData : []);
       }
     }
 
@@ -123,11 +88,6 @@ export default function AcademyPathsPage() {
   const activeEnrollments = useMemo(
     () => enrollments.filter((enrollment) => enrollment.status !== "dropped"),
     [enrollments],
-  );
-
-  const selectedGoalOption = useMemo(
-    () => goalOptions.find((goal) => goal.id === selectedGoal) ?? getAcademyGoalOption(selectedGoal) ?? goalOptions[0],
-    [goalOptions, selectedGoal],
   );
 
   const pathSummaries = useMemo(() => {
@@ -151,12 +111,7 @@ export default function AcademyPathsPage() {
     });
   }, [activeEnrollments, visibleCourses, visibleLearningPaths]);
 
-  const generatedPathSummaries = useMemo(
-    () => pathSummaries.filter((summary) => summary.path.source === "generated"),
-    [pathSummaries],
-  );
-
-  const orderedPathSummaries = useMemo(() => {
+  const featuredPathSummaries = useMemo(() => {
     return [...pathSummaries].sort((left, right) => {
       const leftGenerated = left.path.source === "generated" ? 1 : 0;
       const rightGenerated = right.path.source === "generated" ? 1 : 0;
@@ -166,56 +121,6 @@ export default function AcademyPathsPage() {
       return left.path.title.localeCompare(right.path.title);
     });
   }, [pathSummaries]);
-
-  const recommendedPaths = useMemo(() => {
-    const slugs = selectedGoalOption?.recommendedPathSlugs ?? [];
-    const summaries = slugs
-      .map((slug) => pathSummaries.find((summary) => summary.path.slug === slug) ?? null)
-      .filter((summary): summary is (typeof pathSummaries)[number] => summary !== null);
-
-    return summaries.length > 0 ? summaries : pathSummaries.slice(0, 2);
-  }, [pathSummaries, selectedGoalOption]);
-
-  const recommendedPath = recommendedPaths[0] ?? null;
-  const recommendedPathVisual = recommendedPath ? getLearningPathCardArt(recommendedPath.path) : null;
-  const recommendedPathHasLinkedCourses = (recommendedPath?.includedCourses.length ?? 0) > 0;
-
-  const recommendedCourses = useMemo(() => {
-    if (!selectedGoalOption) {
-      return recommendedPath?.includedCourses.slice(0, 4) ?? [];
-    }
-
-    const keywordMatches = new Map<string, number>();
-    const pathCoursePool = recommendedPaths.flatMap((summary) => summary.includedCourses);
-    const uniqueCourses = Array.from(new Map(pathCoursePool.map((course) => [course.id, course])).values());
-
-    for (const course of uniqueCourses) {
-      const haystack = `${course.title} ${course.category ?? ""} ${course.description ?? ""} ${course.level ?? ""}`.toLowerCase();
-      const score = selectedGoalOption.preferredCourseKeywords.reduce(
-        (total, keyword) => total + (haystack.includes(keyword.toLowerCase()) ? 1 : 0),
-        0,
-      );
-      keywordMatches.set(course.id, score);
-    }
-
-    return [...uniqueCourses]
-      .sort((left, right) => {
-        const scoreDelta = (keywordMatches.get(right.id) ?? 0) - (keywordMatches.get(left.id) ?? 0);
-        if (scoreDelta !== 0) {
-          return scoreDelta;
-        }
-        return left.title.localeCompare(right.title);
-      })
-      .slice(0, 4);
-  }, [recommendedPath, recommendedPaths, selectedGoalOption]);
-
-  const recommendedCourseTitles = useMemo(() => {
-    if (!recommendedPath) {
-      return [];
-    }
-
-    return getLearningPathDisplayCourseTitles(recommendedPath.path, visibleCourses).slice(0, 4);
-  }, [recommendedPath, visibleCourses]);
 
   const tabStyle = (active: boolean) => ({
     padding: "10px 18px",
@@ -283,243 +188,12 @@ export default function AcademyPathsPage() {
           </div>
         </div>
 
-        <section className="grid gap-6 lg:grid-cols-[1.05fr,0.95fr]">
-          <div className="rounded-[28px] border p-6 md:p-7" style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}>
-            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
-              Not sure where to start?
-            </h2>
-            <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-              Tell us your goal and we&apos;ll point you to the best path and first courses to take.
-            </p>
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {goalOptions.map((goal) => {
-                const isActive = selectedGoal === goal.id;
-                return (
-                  <button
-                    key={goal.id}
-                    onClick={() => setSelectedGoal(goal.id)}
-                    className="rounded-[20px] border p-4 text-left transition-colors"
-                    style={{
-                      borderColor: isActive ? goal.color : colors.border,
-                      background: isActive ? `${goal.color}16` : colors.cardBgStrong,
-                    }}
-                  >
-                    <goal.icon className="h-5 w-5" style={{ color: goal.color }} />
-                    <p className="mt-3 text-sm font-semibold" style={{ color: colors.text }}>
-                      {goal.title}
-                    </p>
-                    <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
-                      {goal.description}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border p-6 md:p-7" style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}>
-            {recommendedPathVisual && (
-              <div className="relative mb-5 overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border }}>
-                <img
-                  src={recommendedPathVisual.src}
-                  alt={recommendedPath?.path.title ?? "Program"}
-                  className="h-[210px] w-full object-cover"
-                  onError={(event) => {
-                    if (event.currentTarget.dataset.fallbackApplied === "true") {
-                      return;
-                    }
-                    event.currentTarget.dataset.fallbackApplied = "true";
-                    event.currentTarget.src = recommendedPathVisual.fallbackSrc;
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-                <div className="absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: "rgba(15,23,42,0.65)", color: recommendedPathVisual.accent }}>
-                  {recommendedPathVisual.eyebrow}
-                </div>
-              </div>
-            )}
-            <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-              Suggested plan
-            </p>
-            <div className="mt-3 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold" style={{ color: colors.text }}>
-                  {recommendedPath?.path.title ?? "Program"}
-                </h2>
-                <p className="mt-3 text-sm" style={{ color: colors.textSecondary }}>
-                  {recommendedPath?.path.description ?? "Pick a path to see a full plan of courses."}
-                </p>
-                {selectedGoalOption && (
-                  <p className="mt-2 text-xs font-medium" style={{ color: colors.textMuted }}>
-                    Based on your goal: {selectedGoalOption.title}
-                  </p>
-                )}
-              </div>
-              {recommendedPath && (
-                <button
-                  onClick={() => togglePathSaved(recommendedPath.path.slug)}
-                  className="rounded-full p-2"
-                  style={{ background: `${recommendedPath.path.color}18`, border: `1px solid ${colors.border}` }}
-                  aria-label="Save program"
-                >
-                  <Heart
-                    className="h-4 w-4"
-                    style={{
-                      color: recommendedPath.path.color,
-                      fill: isPathSaved(recommendedPath.path.slug) ? recommendedPath.path.color : "transparent",
-                    }}
-                  />
-                </button>
-              )}
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
-              <span className="inline-flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                {recommendedPath ? getLearningPathDisplayCourseCount(recommendedPath.path, visibleCourses) : 0} courses
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                {recommendedPath ? getLearningPathDurationLabel(recommendedPath.path, visibleCourses) : "0 weeks"}
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                {recommendedPath?.path.level ?? "Beginner"}
-              </span>
-            </div>
-
-            {recommendedPaths.length > 1 && (
-              <div className="mt-5 flex flex-wrap gap-2">
-                {recommendedPaths.slice(1).map((summary) => (
-                  <span
-                    key={summary.path.slug}
-                    className="rounded-full px-3 py-1 text-xs font-medium"
-                    style={{ background: colors.cardBgStrong, color: colors.textSecondary, border: `1px solid ${colors.border}` }}
-                  >
-                    Also fits: {summary.path.title}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                Recommended Courses
-              </p>
-              <div className="space-y-2">
-                {recommendedCourses.length > 0
-                  ? recommendedCourses.map((course) => {
-                  const visual = getCourseCardArt(course);
-                  return (
-                  <div
-                    key={course.id}
-                    className="rounded-2xl border px-4 py-3"
-                    style={{ borderColor: colors.border, background: colors.cardBgStrong }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <img
-                        src={visual.src}
-                        alt={course.title}
-                        className="h-16 w-20 rounded-2xl object-cover"
-                        onError={(event) => {
-                          if (event.currentTarget.dataset.fallbackApplied === "true") {
-                            return;
-                          }
-                          event.currentTarget.dataset.fallbackApplied = "true";
-                          event.currentTarget.src = visual.fallbackSrc;
-                        }}
-                      />
-                      <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold" style={{ color: colors.text }}>
-                            {course.title}
-                          </p>
-                          <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
-                            {course.level || "Beginner"}{course.duration ? ` · ${course.duration}` : ""}
-                          </p>
-                        </div>
-                        <a
-                          href={`${basePath}/courses/${course.id}`}
-                          className="text-xs font-semibold"
-                          style={{ color: colors.accent }}
-                        >
-                          Learn More
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                  );
-                    })
-                  : recommendedCourseTitles.map((title, index) => (
-                  <div
-                    key={title}
-                    className="rounded-2xl border px-4 py-3"
-                    style={{ borderColor: colors.border, background: colors.cardBgStrong }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold" style={{ color: colors.text }}>
-                          {title}
-                        </p>
-                        <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
-                          Included in {recommendedPath?.path.title ?? "this program"}
-                        </p>
-                      </div>
-                      <span className="text-xs font-semibold" style={{ color: colors.accent }}>
-                        Step {index + 1}
-                      </span>
-                    </div>
-                  </div>
-                    ))}
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={recommendedPath ? `${basePath}/paths/${recommendedPath.path.slug}` : `${basePath}/paths`}
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-                style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
-              >
-                Learn More
-              </a>
-              <a
-                href={
-                  recommendedPath
-                    ? recommendedPathHasLinkedCourses
-                      ? `${basePath}/paths/${recommendedPath.path.slug}/enroll`
-                      : `${basePath}/paths/${recommendedPath.path.slug}`
-                    : `${basePath}/paths`
-                }
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-                style={{ background: colors.accent, color: "#000" }}
-              >
-                {recommendedPathHasLinkedCourses ? "Enroll Now" : "View Program"}
-                <ArrowRight className="h-4 w-4" />
-              </a>
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-10">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
-                Programs
-              </h2>
-              {generatedPathSummaries.length > 0 && (
-                <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                  New instructor-created programs appear first below so learners can open them right away.
-                </p>
-              )}
-            </div>
-            <p className="text-sm" style={{ color: colors.textMuted }}>
-              {loading || learningPathsLoading ? "Loading..." : `${pathSummaries.length} programs available`}
-            </p>
-          </div>
-
-          <div className="grid gap-5 xl:grid-cols-3">
-            {orderedPathSummaries.map((summary) => {
+        <section className="mt-2">
+          <div className="grid gap-6 xl:grid-cols-2">
+            {featuredPathSummaries.map((summary) => {
               const visual = getLearningPathCardArt(summary.path);
+              const featuredCourses = summary.includedCourses.slice(0, 4);
+              const fallbackCourseTitles = getLearningPathDisplayCourseTitles(summary.path, visibleCourses).slice(0, 4);
 
               return (
                 <article
@@ -547,20 +221,12 @@ export default function AcademyPathsPage() {
                   </div>
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div>
-                      <div
-                        className="flex h-12 w-12 items-center justify-center rounded-xl"
-                        style={{ background: `${summary.path.color}18` }}
-                      >
-                        <summary.path.icon className="h-6 w-6" style={{ color: summary.path.color }} />
-                      </div>
-                      {summary.path.source === "generated" && (
-                        <span
-                          className="mt-3 inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
-                          style={{ background: `${summary.path.color}18`, color: summary.path.color }}
-                        >
-                          New Path
-                        </span>
-                      )}
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: summary.path.color }}>
+                        {summary.path.level}
+                      </p>
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                        New Program
+                      </p>
                     </div>
                     <button
                       onClick={() => togglePathSaved(summary.path.slug)}
@@ -583,44 +249,95 @@ export default function AcademyPathsPage() {
                   <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
                     {summary.path.description}
                   </p>
+                  <p className="mt-3 text-xs font-medium" style={{ color: colors.textMuted }}>
+                    Based on your goal: {summary.path.title}
+                  </p>
 
-                  <div className="mt-4 flex flex-wrap gap-3 text-xs" style={{ color: colors.textMuted }}>
+                  <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
+                    <span className="inline-flex items-center gap-2">
+                      <BookOpen className="h-4 w-4" />
+                      {getLearningPathDisplayCourseCount(summary.path, visibleCourses)} courses
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      {getLearningPathDurationLabel(summary.path, visibleCourses)}
+                    </span>
                     <span>{summary.path.level}</span>
-                    <span>{getLearningPathDurationLabel(summary.path, visibleCourses)}</span>
-                    <span>{getLearningPathDisplayCourseCount(summary.path, visibleCourses)} courses</span>
                   </div>
 
                   <div className="mt-5">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                      Included courses
+                      Recommended Courses
                     </p>
                     <div className="space-y-2">
-                      {getLearningPathDisplayCourseTitles(summary.path, visibleCourses).slice(0, 3).map((courseTitle, index) => (
-                        <div
-                          key={`${summary.path.slug}-${courseTitle}-${index}`}
-                          className="rounded-2xl border px-4 py-3 text-sm"
-                          style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.text }}
-                        >
-                          {courseTitle}
-                        </div>
-                      ))}
+                      {featuredCourses.length > 0
+                        ? featuredCourses.map((course) => {
+                            const courseVisual = getCourseCardArt(course);
+
+                            return (
+                              <div
+                                key={course.id}
+                                className="rounded-2xl border px-4 py-3"
+                                style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <img
+                                    src={courseVisual.src}
+                                    alt={course.title}
+                                    className="h-16 w-20 rounded-2xl object-cover"
+                                    onError={(event) => {
+                                      if (event.currentTarget.dataset.fallbackApplied === "true") {
+                                        return;
+                                      }
+                                      event.currentTarget.dataset.fallbackApplied = "true";
+                                      event.currentTarget.src = courseVisual.fallbackSrc;
+                                    }}
+                                  />
+                                  <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                                        {course.title}
+                                      </p>
+                                      <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
+                                        {(course.level || "Beginner").toLowerCase()}
+                                        {course.duration ? ` · ${course.duration}` : ""}
+                                      </p>
+                                    </div>
+                                    <a
+                                      href={`${basePath}/courses/${course.id}`}
+                                      className="text-xs font-semibold"
+                                      style={{ color: colors.accent }}
+                                    >
+                                      Learn More
+                                    </a>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        : fallbackCourseTitles.map((courseTitle, index) => (
+                            <div
+                              key={`${summary.path.slug}-${courseTitle}-${index}`}
+                              className="rounded-2xl border px-4 py-3 text-sm"
+                              style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.text }}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                                    {courseTitle}
+                                  </p>
+                                  <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
+                                    Included in {summary.path.title}
+                                  </p>
+                                </div>
+                                <span className="text-xs font-semibold" style={{ color: colors.accent }}>
+                                  Step {index + 1}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
                     </div>
                   </div>
-
-                  {summary.progress > 0 && (
-                    <div className="mt-5">
-                      <div className="mb-2 flex items-center justify-between text-xs">
-                        <span style={{ color: colors.textSecondary }}>Progress</span>
-                        <span style={{ color: summary.path.color }}>{summary.progress}%</span>
-                      </div>
-                      <div className="h-2 w-full rounded-full" style={{ background: "rgba(255,255,255,0.12)" }}>
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${summary.progress}%`, background: summary.path.color }}
-                        />
-                      </div>
-                    </div>
-                  )}
 
                   <div className="mt-6 flex flex-wrap gap-3">
                     <a
@@ -639,11 +356,7 @@ export default function AcademyPathsPage() {
                       className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                       style={{ background: summary.path.color, color: "#fff" }}
                     >
-                      {summary.enrolledCourses > 0
-                        ? "Continue"
-                        : summary.includedCourses.length > 0
-                          ? "Enroll Now"
-                          : "View Program"}
+                      {summary.includedCourses.length > 0 ? "Sign up Now" : "View Program"}
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   </div>

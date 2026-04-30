@@ -24,7 +24,7 @@ import { CourseMaterialsBrowser } from "./CourseMaterialsBrowser";
 import { ForumsPanel } from "./ForumsPanel";
 import { sbFetch } from "../shared/sbFetch";
 import { ensureStreetProfileForAcademyUser } from "../profile/academyProfileSync";
-import { findAcademyStreetProfileByUserId } from "../profile/academyStreetProfiles";
+import { findAcademyStreetProfileByUserId, getAcademyRoleForProfile } from "../profile/academyStreetProfiles";
 import { filterVisibleAcademyCourses, filterVisibleAcademyPrograms, resolveLearningPathCourses } from "./academyLearningPaths";
 import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyUserId } from "./useAcademyUserId";
@@ -274,6 +274,18 @@ export default function AcademyClient() {
     [enrollments],
   );
 
+  const academyRole = useMemo(
+    () =>
+      getAcademyRoleForProfile({
+        user_id: userId,
+        username: String((user as { username?: string | null } | null)?.username || ""),
+        primary_roles: Array.isArray((user as { primary_roles?: string[] } | null)?.primary_roles)
+          ? (user as { primary_roles?: string[] }).primary_roles
+          : [],
+      }),
+    [user, userId],
+  );
+
   useEffect(() => {
     if (!userId || activeEnrollments.length === 0) {
       return;
@@ -287,6 +299,7 @@ export default function AcademyClient() {
     });
   }, [activeEnrollments.length, user, userId]);
 
+  const isInstructor = academyRole === "instructor";
   const hasEnrollment = activeEnrollments.length > 0;
   const dashboardPaddingLeft = isDesktop && isDashboardRoute ? dashboardBasePaddingLeft : pagePaddingX;
   const showDesktopAcademySidebar = isDashboardRoute && isDesktop;
@@ -500,10 +513,10 @@ export default function AcademyClient() {
     { href: `${academyBasePath}`, label: "Home", icon: Compass },
     { href: `${academyBasePath}/paths`, label: "Programs", icon: Target },
     { href: `${academyBasePath}/courses`, label: "Courses", icon: BookOpen },
-    ...(hasEnrollment
+    ...(hasEnrollment || isInstructor
       ? [
           { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-          { href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award },
+          ...(hasEnrollment ? [{ href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award }] : []),
         ]
       : []),
   ];
@@ -658,8 +671,11 @@ export default function AcademyClient() {
                   <a
                     key={item.href}
                     href={item.href}
-                    className="whitespace-nowrap text-sm transition-colors"
-                    style={{ color: isActive ? colors.text : colors.textSecondary }}
+                    className="inline-flex whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-[0_10px_20px_rgba(0,0,0,0.18)]"
+                    style={{
+                      color: isActive ? colors.text : colors.textSecondary,
+                      background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                    }}
                   >
                     {item.label}
                   </a>
@@ -667,7 +683,29 @@ export default function AcademyClient() {
               })}
             </div>
 
-            <div className="w-10" />
+            <div className="w-10 flex justify-end">
+              <a
+                href={profileHref}
+                aria-label={`${profileLabel} Academy profile`}
+                title={profileLabel}
+                className="group inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-transparent transition-all duration-200 hover:-translate-y-0.5 hover:border-white/10 hover:bg-white/10"
+                style={{
+                  background: "transparent",
+                  border: "1px solid transparent",
+                }}
+              >
+                <span
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all duration-200 group-hover:scale-[0.98]"
+                  style={{
+                    color: "#fff",
+                    background: "linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)",
+                    boxShadow: "0 10px 22px rgba(109, 40, 217, 0.26)",
+                  }}
+                >
+                  {profileInitial}
+                </span>
+              </a>
+            </div>
           </div>
 
           <div className="hidden h-full items-center md:grid md:grid-cols-[1fr_auto_1fr]">
@@ -686,8 +724,11 @@ export default function AcademyClient() {
                   <a
                     key={item.href}
                     href={item.href}
-                    className="whitespace-nowrap transition-colors"
-                    style={{ color: isActive ? colors.text : colors.textSecondary }}
+                    className="inline-flex whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
+                    style={{
+                      color: isActive ? colors.text : colors.textSecondary,
+                      background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                    }}
                   >
                     {item.label}
                   </a>
@@ -696,36 +737,27 @@ export default function AcademyClient() {
             </div>
 
             <div className="justify-self-end">
-              <div className="flex items-center gap-5">
-                <a
-                  href={profileHref}
-                  aria-label={`${profileLabel} Academy profile`}
-                  title={profileLabel}
-                  className="group inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-transparent transition-all duration-200 hover:-translate-y-0.5 hover:border-white/10 hover:bg-white/10 hover:shadow-[0_16px_28px_rgba(0,0,0,0.28)]"
+              <a
+                href={profileHref}
+                aria-label={`${profileLabel} Academy profile`}
+                title={profileLabel}
+                className="group inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-transparent transition-all duration-200 hover:-translate-y-0.5 hover:border-white/10 hover:bg-white/10 hover:shadow-[0_16px_28px_rgba(0,0,0,0.28)]"
+                style={{
+                  background: "transparent",
+                  border: "1px solid transparent",
+                }}
+              >
+                <span
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all duration-200 group-hover:scale-[0.98]"
                   style={{
-                    background: "transparent",
-                    border: "1px solid transparent",
+                    color: "#fff",
+                    background: "linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)",
+                    boxShadow: "0 10px 22px rgba(109, 40, 217, 0.26)",
                   }}
                 >
-                  <span
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all duration-200 group-hover:scale-[0.98]"
-                    style={{
-                      color: "#fff",
-                      background: "linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)",
-                      boxShadow: "0 10px 22px rgba(109, 40, 217, 0.26)",
-                    }}
-                  >
-                    {profileInitial}
-                  </span>
-                </a>
-                <a
-                  href={`${academyBasePath}/instructor`}
-                  className="inline-flex text-sm font-medium"
-                  style={{ color: "#C084FC" }}
-                >
-                  Instructor Workspace
-                </a>
-              </div>
+                  {profileInitial}
+                </span>
+              </a>
             </div>
           </div>
         </div>

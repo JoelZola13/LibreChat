@@ -234,7 +234,7 @@ export default function AcademyPathDetailPage() {
                     className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                     style={{ background: path.color, color: "#fff" }}
                   >
-                    Enroll Now
+                    Sign up Now
                     <ArrowRight className="h-4 w-4" />
                   </a>
                 ) : (
@@ -339,7 +339,7 @@ export default function AcademyPathDetailPage() {
                       className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                       style={{ background: path.color, color: "#fff" }}
                     >
-                      {enrollment ? "Open Course" : "Enroll Now"}
+                      {enrollment ? "Open Course" : "Sign up Now"}
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   </div>

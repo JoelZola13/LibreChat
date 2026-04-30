@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate, Outlet, useParams } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, useLocation, useParams } from 'react-router-dom';
 import {
   Login,
   VerifyEmail,
@@ -76,9 +76,6 @@ const AcademyDashboardPage = lazy(
 const AcademyCertificatesPage = lazy(
   () => import('~/components/streetbot/academy/AcademyCertificatesPage'),
 );
-const AcademyInstructorPage = lazy(
-  () => import('~/components/streetbot/academy/AcademyInstructorPage'),
-);
 const AcademyInstructorCoursePage = lazy(
   () => import('~/components/streetbot/academy/AcademyInstructorCoursePage'),
 );
@@ -124,6 +121,14 @@ const SBPageFallback = () => (
     Loading...
   </div>
 );
+
+function AcademyInstructorDashboardRedirect({ basePath }: { basePath: '/academy' | '/learning' }) {
+  const location = useLocation();
+  const fromPrefix = `${basePath}/instructor`;
+  const suffix = location.pathname.startsWith(fromPrefix) ? location.pathname.slice(fromPrefix.length) : '';
+  const target = `${basePath}/dashboard/instructor${suffix}${location.search}${location.hash}`;
+  return <Navigate to={target} replace />;
+}
 
 const sbPage = (Component: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<SBPageFallback />}>
@@ -351,14 +356,17 @@ export const router = createBrowserRouter(
                   { path: 'academy/saved', element: sbPage(AcademySavedPage) },
                   { path: 'academy/live-sessions', element: sbPage(AcademyLivePage) },
                   { path: 'academy/live-sessions/:sessionId', element: sbPage(AcademyLiveSessionDetailPage) },
+                  { path: 'academy/dashboard/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
+                  { path: 'academy/dashboard/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'academy/dashboard/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
                   { path: 'academy/dashboard', element: sbPage(AcademyDashboardPage) },
                   { path: 'academy/dashboard/*', element: sbPage(AcademyDashboardPage) },
                   { path: 'academy/certificates', element: sbPage(AcademyCertificatesPage) },
-                  { path: 'academy/instructor', element: sbPage(AcademyInstructorPage) },
+                  { path: 'academy/instructor', element: <AcademyInstructorDashboardRedirect basePath="/academy" /> },
                   { path: 'academy/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
                   { path: 'academy/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
                   { path: 'academy/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
-                  { path: 'academy/instructor/*', element: sbPage(AcademyInstructorPage) },
+                  { path: 'academy/instructor/*', element: <AcademyInstructorDashboardRedirect basePath="/academy" /> },
                   { path: 'learning/courses', element: sbPage(AcademyCoursesPage) },
                   { path: 'learning/courses/:courseId', element: sbPage(AcademyCourseDetailPage) },
                   { path: 'learning/courses/:courseId/enroll', element: sbPage(AcademyEnrollmentPage) },
@@ -368,14 +376,17 @@ export const router = createBrowserRouter(
                   { path: 'learning/saved', element: sbPage(AcademySavedPage) },
                   { path: 'learning/live-sessions', element: sbPage(AcademyLivePage) },
                   { path: 'learning/live-sessions/:sessionId', element: sbPage(AcademyLiveSessionDetailPage) },
+                  { path: 'learning/dashboard/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
+                  { path: 'learning/dashboard/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'learning/dashboard/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
                   { path: 'learning/dashboard', element: sbPage(AcademyDashboardPage) },
                   { path: 'learning/dashboard/*', element: sbPage(AcademyDashboardPage) },
                   { path: 'learning/certificates', element: sbPage(AcademyCertificatesPage) },
-                  { path: 'learning/instructor', element: sbPage(AcademyInstructorPage) },
+                  { path: 'learning/instructor', element: <AcademyInstructorDashboardRedirect basePath="/learning" /> },
                   { path: 'learning/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
                   { path: 'learning/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
                   { path: 'learning/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
-                  { path: 'learning/instructor/*', element: sbPage(AcademyInstructorPage) },
+                  { path: 'learning/instructor/*', element: <AcademyInstructorDashboardRedirect basePath="/learning" /> },
                   { path: 'academy', element: sbPage(AcademyPage) },
                   { path: 'academy/*', element: sbPage(AcademyPage) },
                   { path: 'learning', element: sbPage(AcademyPage) },

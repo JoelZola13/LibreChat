@@ -350,7 +350,7 @@ export default function AcademyCourseDetailPage() {
                     className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
                     style={{ background: colors.accent, color: "#000", border: "none" }}
                   >
-                    Enroll Now
+                    Sign up Now
                     <ChevronRight className="h-4 w-4" />
                   </a>
                 )}
@@ -543,7 +543,7 @@ export default function AcademyCourseDetailPage() {
                 <p className="mt-2 text-sm leading-7" style={{ color: colors.textSecondary }}>
                   {enrollment
                     ? "If you leave this course, it will be removed from your student dashboard and you will no longer see its live sessions, materials, assignments, or instructor discussion."
-                    : "You are not enrolled in this course right now. If you want access again, use the Enroll Now button above."}
+                    : "You are not enrolled in this course right now. If you want access again, use the Sign up Now button above."}
                 </p>
               </div>
 

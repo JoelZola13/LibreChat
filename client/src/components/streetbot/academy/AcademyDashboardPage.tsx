@@ -11,6 +11,7 @@ import {
   Target,
 } from "lucide-react";
 import { DashboardSkeleton } from ".";
+import AcademyInstructorPage from "./AcademyInstructorPage";
 import { AssignmentList } from "./AssignmentList";
 import { CourseMaterialsBrowser } from "./CourseMaterialsBrowser";
 import { CourseDiscussionsPanel } from "./CourseDiscussionsPanel";
@@ -20,6 +21,8 @@ import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
 import { useAcademyUserId } from "./useAcademyUserId";
 import { listSessions, type LiveSession } from "./api/live-sessions";
 import { listCourseScheduleItems, type CourseScheduleItem } from "./api/course-schedule";
+import { getAcademyRoleForProfile } from "../profile/academyStreetProfiles";
+import { useAuthContext } from "~/hooks/AuthContext";
 
 type Course = {
   id: string;
@@ -124,6 +127,7 @@ async function fetchCourses(): Promise<Course[]> {
 }
 
 export default function AcademyDashboardPage() {
+  const { user } = useAuthContext();
   const userId = useAcademyUserId();
   const location = useLocation();
   const { paths: learningPaths } = useAcademyLearningPaths();
@@ -217,6 +221,21 @@ export default function AcademyDashboardPage() {
     [enrollments],
   );
 
+  const academyRole = useMemo(
+    () =>
+      getAcademyRoleForProfile({
+        user_id: userId,
+        username: String((user as { username?: string | null } | null)?.username || ""),
+        primary_roles: Array.isArray((user as { primary_roles?: string[] } | null)?.primary_roles)
+          ? (user as { primary_roles?: string[] }).primary_roles
+          : [],
+      }),
+    [user, userId],
+  );
+
+  const isInstructor = academyRole === "instructor";
+  const isInstructorViewRoute = location.pathname.includes("/dashboard/instructor");
+  const activeDashboardView = isInstructorViewRoute || (isInstructor && activeEnrollments.length === 0) ? "instructor" : "student";
   const hasEnrollment = activeEnrollments.length > 0;
 
   const enrollmentByCourseId = useMemo(
@@ -454,13 +473,19 @@ export default function AcademyDashboardPage() {
     { href: `${academyBasePath}`, label: "Home", icon: Compass },
     { href: `${academyBasePath}/paths`, label: "Programs", icon: Target },
     { href: `${academyBasePath}/courses`, label: "Courses", icon: BookOpen },
-    ...(hasEnrollment
+    ...(hasEnrollment || isInstructor
       ? [
           { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-          { href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award },
+          ...(hasEnrollment ? [{ href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award }] : []),
         ]
       : []),
   ];
+
+  const dashboardViewTabs =
+    isInstructor ? [
+      { href: `${academyBasePath}/dashboard`, label: "Student Dashboard", active: activeDashboardView === "student" },
+      { href: `${academyBasePath}/dashboard/instructor`, label: "Instructor Dashboard", active: activeDashboardView === "instructor" },
+    ] : [];
 
   const backgroundOrbs = (
     <>
@@ -540,7 +565,7 @@ export default function AcademyDashboardPage() {
           <div className="flex h-16 items-center justify-between gap-4">
             <div className="hidden min-w-[140px] md:block">
               <span className="text-sm font-semibold" style={{ color: colors.text }}>
-                Student Dashboard
+                {activeDashboardView === "instructor" ? "Instructor Dashboard" : "Student Dashboard"}
               </span>
             </div>
 
@@ -583,13 +608,24 @@ export default function AcademyDashboardPage() {
             </div>
 
             <div className="w-10 min-w-[140px] text-right md:w-auto">
-              <a
-                href={`${academyBasePath}/instructor`}
-                className="hidden text-sm font-medium md:inline-flex"
-                style={{ color: "#C084FC" }}
-              >
-                Instructor Workspace
-              </a>
+              {isInstructor ? (
+                <div className="hidden items-center gap-2 md:inline-flex">
+                  {dashboardViewTabs.map((item) => (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      className="rounded-full px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        background: item.active ? colors.accent : colors.surface,
+                        color: item.active ? "#000" : colors.textSecondary,
+                        border: `1px solid ${item.active ? colors.accent : colors.border}`,
+                      }}
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -610,7 +646,67 @@ export default function AcademyDashboardPage() {
         }}
       >
         <div className="w-full min-w-0" style={{ maxWidth: contentMaxWidth, margin: "0 auto" }}>
-          {loading ? (
+          {isInstructor && (
+            <section className="mb-6">
+              <div
+                className="inline-flex flex-wrap items-center gap-2 rounded-full border p-1"
+                style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+              >
+                {dashboardViewTabs.map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className="rounded-full px-4 py-2 text-sm font-semibold transition-colors"
+                    style={{
+                      background: item.active ? colors.accent : "transparent",
+                      color: item.active ? "#000" : colors.textSecondary,
+                    }}
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {activeDashboardView === "instructor" ? (
+            isInstructor ? (
+              <AcademyInstructorPage embedded />
+            ) : (
+              <section>
+                <div
+                  className="rounded-[28px] border p-8 text-center md:p-10"
+                  style={{
+                    borderColor: colors.border,
+                    background: colors.cardBg,
+                    backdropFilter: "blur(24px)",
+                    boxShadow: colors.glassShadow,
+                  }}
+                >
+                  <div
+                    className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
+                    style={{ background: "rgba(249,115,22,0.12)" }}
+                  >
+                    <LayoutDashboard className="h-7 w-7" style={{ color: "#F97316" }} />
+                  </div>
+                  <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
+                    Instructor dashboard not available
+                  </h1>
+                  <p className="mx-auto mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
+                    This Academy account is not set up as an instructor yet. Switch back to the student dashboard or contact an admin if that should change.
+                  </p>
+                  <a
+                    href={`${academyBasePath}/dashboard`}
+                    className="mt-6 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+                    style={{ background: colors.accent, color: "#000" }}
+                  >
+                    Open Student Dashboard
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                </div>
+              </section>
+            )
+          ) : loading ? (
             <DashboardSkeleton />
           ) : !hasEnrollment ? (
             <section>

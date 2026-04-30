@@ -32,7 +32,7 @@ export function AcademySidebar({
     {
       title: "Instructor",
       items: [
-        { href: `${basePath}/instructor`, label: "Instructor", icon: ClipboardCheck, color: "#F97316" },
+        { href: `${basePath}/dashboard/instructor`, label: "Instructor", icon: ClipboardCheck, color: "#F97316" },
       ],
     },
   ];
