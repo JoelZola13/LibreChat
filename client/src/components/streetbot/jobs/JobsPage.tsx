@@ -116,6 +116,7 @@ const ORGANIZATION_LOGOS: Record<string, string> = {
   "Regent Park Arts Collective": "/job-logos/regent-park-arts.svg",
   "Safe Haven Community Center": "/job-logos/safe-haven.svg",
   "Social Planning Council": "/job-logos/social-planning.svg",
+  "Street Voices": "/job-logos/street-voices.svg",
   "Street Voices Community Services": "/job-logos/street-voices.svg",
   "TechForGood Initiative": "/job-logos/techforgood.svg",
   "The Stop Community Food Centre": "/job-logos/the-stop.svg",
