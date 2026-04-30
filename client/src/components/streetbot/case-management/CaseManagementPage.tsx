@@ -6354,26 +6354,25 @@ export default function CaseManagementPage() {
             <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
               {wikiIngestionRecords.length} ingested files
             </span>
-            <label
-              htmlFor="case-wiki-inline-ingest-file-input"
-              role="button"
-              tabIndex={wikiIngesting ? -1 : 0}
+            <button
+              type="button"
               data-testid="case-wiki-ingest-button"
               style={{
                 ...primaryButtonStyle,
                 cursor: wikiIngesting ? 'not-allowed' : 'pointer',
                 opacity: wikiIngesting ? 0.76 : 1,
-                pointerEvents: wikiIngesting ? 'none' : 'auto',
               }}
               onClick={() => {
-                setWikiIngestStatus('Add files or paste source text in the Case Wiki ingest panel below.');
+                setWikiIngestStatus('Use the native file chooser in the Source files field below, or paste source text.');
                 wikiIngestInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                wikiIngestInputRef.current?.focus();
               }}
+              disabled={wikiIngesting}
               {...accentButtonHoverHandlers}
             >
               <Upload size={16} />
               {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
-            </label>
+            </button>
           </div>
         </div>
 
@@ -6413,23 +6412,6 @@ export default function CaseManagementPage() {
             <div style={{ display: 'grid', gap: 10 }}>
               <div style={{ display: 'grid', gap: 8, color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
                 Source files
-                <input
-                  ref={wikiIngestInputRef}
-                  id="case-wiki-inline-ingest-file-input"
-                  data-testid="case-wiki-inline-ingest-input"
-                  type="file"
-                  multiple
-                  disabled={wikiIngesting}
-                  aria-label="Choose files for Case Wiki ingestion"
-                  onChange={handleWikiIngestFileSelection}
-                  style={{
-                    position: 'absolute',
-                    width: 1,
-                    height: 1,
-                    opacity: 0,
-                    pointerEvents: 'none',
-                  }}
-                />
                 <div
                   style={{
                     ...glassButton,
@@ -6442,29 +6424,30 @@ export default function CaseManagementPage() {
                     flexWrap: 'wrap',
                   }}
                 >
+                  <input
+                    ref={wikiIngestInputRef}
+                    id="case-wiki-inline-ingest-file-input"
+                    data-testid="case-wiki-inline-ingest-input"
+                    type="file"
+                    multiple
+                    disabled={wikiIngesting}
+                    aria-label="Choose files for Case Wiki ingestion"
+                    onChange={handleWikiIngestFileSelection}
+                    onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
+                    style={{
+                      color: colors.text,
+                      cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                      flex: '1 1 260px',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      maxWidth: '100%',
+                    }}
+                  />
                   <span style={{ color: colors.textSecondary, fontSize: 13, fontWeight: 800 }}>
                     {wikiIngestPendingFiles.length
                       ? `${wikiIngestPendingFiles.length} selected source${wikiIngestPendingFiles.length === 1 ? '' : 's'}`
                       : 'No files selected yet'}
                   </span>
-                  <label
-                    htmlFor="case-wiki-inline-ingest-file-input"
-                    role="button"
-                    tabIndex={wikiIngesting ? -1 : 0}
-                    data-testid="case-wiki-inline-file-picker"
-                    style={{
-                      ...buttonStyle,
-                      padding: '8px 10px',
-                      cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                      opacity: wikiIngesting ? 0.62 : 1,
-                      pointerEvents: wikiIngesting ? 'none' : 'auto',
-                    }}
-                    onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
-                    {...buttonHoverHandlers}
-                  >
-                    <Upload size={15} />
-                    Choose files
-                  </label>
                 </div>
               </div>
 
@@ -6571,23 +6554,20 @@ export default function CaseManagementPage() {
                 Clear
               </button>
               {!hasWikiIngestDraft ? (
-                <label
-                  htmlFor="case-wiki-inline-ingest-file-input"
-                  role="button"
-                  tabIndex={wikiIngesting ? -1 : 0}
-                  data-testid="case-wiki-inline-ingest-submit"
+                <span
                   style={{
-                    ...primaryButtonStyle,
-                    opacity: wikiIngesting ? 0.62 : 1,
-                    cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                    pointerEvents: wikiIngesting ? 'none' : 'auto',
+                    ...surfaceStyle,
+                    alignItems: 'center',
+                    color: colors.textSecondary,
+                    display: 'inline-flex',
+                    fontSize: 13,
+                    fontWeight: 900,
+                    minHeight: 40,
+                    padding: '0 12px',
                   }}
-                  onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
-                  {...accentButtonHoverHandlers}
                 >
-                  <Upload size={16} />
-                  Choose files
-                </label>
+                  Select a file above or paste text
+                </span>
               ) : (
                 <button
                   type="button"
