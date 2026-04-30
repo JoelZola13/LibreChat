@@ -1,17 +1,23 @@
 const crypto = require('crypto');
+const { execFile } = require('child_process');
 const fs = require('fs/promises');
 const path = require('path');
+const { promisify } = require('util');
 const fetch = require('node-fetch');
 
 const MAX_TEXT_CHARS = 180000;
 const PREVIEW_CHARS = 3200;
+const EXEC_BUFFER = 8 * 1024 * 1024;
+const execFileAsync = promisify(execFile);
 
 const TEXT_EXTENSIONS = new Set([
   '.csv',
   '.css',
+  '.eml',
   '.env',
   '.htm',
   '.html',
+  '.ics',
   '.ini',
   '.js',
   '.json',
@@ -26,12 +32,125 @@ const TEXT_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
   '.txt',
+  '.vcf',
   '.xml',
   '.yaml',
   '.yml',
 ]);
 
+const PDF_EXTENSIONS = new Set(['.pdf']);
+const OFFICE_XML_EXTENSIONS = new Set(['.docx', '.pptx', '.xlsx']);
+const OCR_EXTENSIONS = new Set(['.avif', '.bmp', '.gif', '.heic', '.jpeg', '.jpg', '.png', '.tif', '.tiff', '.webp']);
+const PRIVACY_LEVELS = new Set(['case-team', 'private', 'personal', 'public']);
+const REDACTION_MODES = new Set(['standard', 'strict', 'none']);
+
 const normalizeWhitespace = (value = '') => value.replace(/\u0000/g, '').replace(/[ \t]+\n/g, '\n').trim();
+
+const normalizeWikiIngestContext = (context = {}) => {
+  const privacyLevel = PRIVACY_LEVELS.has(context.privacyLevel) ? context.privacyLevel : 'case-team';
+  const redactionMode = REDACTION_MODES.has(context.redactionMode) ? context.redactionMode : 'standard';
+  return {
+    ...context,
+    privacyLevel,
+    redactionMode,
+    retentionPolicy: typeof context.retentionPolicy === 'string' && context.retentionPolicy ? context.retentionPolicy : 'keep-source',
+    reviewBeforeGraphWrite: context.reviewBeforeGraphWrite === true || context.reviewBeforeGraphWrite === 'true',
+  };
+};
+
+const redactSensitiveText = (text = '', mode = 'standard') => {
+  if (!text || mode === 'none') return text;
+  let redacted = text
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email redacted]')
+    .replace(/\b(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/g, '[phone redacted]')
+    .replace(/\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g, '[identifier redacted]')
+    .replace(/\b(?:\d[ -]*?){13,16}\b/g, '[card redacted]');
+
+  if (mode === 'strict') {
+    redacted = redacted
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '[date redacted]')
+      .replace(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\b/gi, '[date redacted]');
+  }
+
+  return redacted;
+};
+
+const runExtractor = async (command, args) => {
+  try {
+    const { stdout } = await execFileAsync(command, args, { maxBuffer: EXEC_BUFFER });
+    return { ok: true, stdout };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+};
+
+const xmlToText = (xml = '') =>
+  normalizeWhitespace(
+    xml
+      .replace(/<w:tab\/>/g, '\t')
+      .replace(/<w:br\/>/g, '\n')
+      .replace(/<\/(?:w:p|a:p|row|c|si)>/g, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'"),
+  );
+
+const stripRtf = (text = '') =>
+  normalizeWhitespace(
+    text
+      .replace(/\\'[0-9a-f]{2}/gi, ' ')
+      .replace(/\\[a-z]+-?\d* ?/gi, ' ')
+      .replace(/[{}]/g, ' '),
+  );
+
+const parseCsvPreview = (text = '') => {
+  const lines = normalizeWhitespace(text)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return null;
+  const delimiter = [',', '\t', ';', '|'].sort((left, right) => lines[0].split(right).length - lines[0].split(left).length)[0];
+  const splitLine = (line) => {
+    const cells = [];
+    let current = '';
+    let quoted = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+      if (char === '"' && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = !quoted;
+      } else if (char === delimiter && !quoted) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  };
+  const headers = splitLine(lines[0]).filter(Boolean);
+  const rows = lines.slice(1, 21).map(splitLine);
+  const tableText = [
+    `CSV table with ${Math.max(0, lines.length - 1)} rows and ${headers.length || rows[0]?.length || 0} columns.`,
+    headers.length ? `Headers: ${headers.join(', ')}.` : '',
+    ...rows.slice(0, 5).map((row, index) => `Row ${index + 1}: ${row.join(' | ')}`),
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return {
+    delimiter: delimiter === '\t' ? 'tab' : delimiter,
+    rowCount: Math.max(0, lines.length - 1),
+    columnCount: headers.length || rows[0]?.length || 0,
+    headers,
+    tableText,
+  };
+};
 
 const summarize = (text, fallback) => {
   const normalized = normalizeWhitespace(text);
@@ -58,7 +177,111 @@ const isTextLikeFile = (file) => {
   );
 };
 
-const extractTextFromFile = async (file) => {
+const extractPdfText = async (file) => {
+  const extracted = await runExtractor('pdftotext', [file.path, '-']);
+  if (extracted.ok) {
+    const text = normalizeWhitespace(extracted.stdout).slice(0, MAX_TEXT_CHARS);
+    if (text) {
+      return {
+        method: 'pdftotext',
+        status: 'ready',
+        text,
+        warning: text.length >= MAX_TEXT_CHARS ? 'PDF text was truncated for the first wiki pass.' : '',
+      };
+    }
+  }
+
+  const buffer = await fs.readFile(file.path);
+  const fallbackText = normalizeWhitespace(
+    buffer
+      .toString('latin1')
+      .match(/\((?:\\.|[^\\)]){8,}\)/g)
+      ?.map((match) => match.slice(1, -1).replace(/\\([()\\])/g, '$1'))
+      .join('\n') || '',
+  ).slice(0, MAX_TEXT_CHARS);
+
+  if (fallbackText.length > 80) {
+    return {
+      method: 'pdf literal text fallback',
+      status: 'ready',
+      text: fallbackText,
+      warning: 'Used a basic PDF literal-text fallback. Install pdftotext for stronger PDF extraction.',
+    };
+  }
+
+  return {
+    method: '.pdf metadata',
+    status: 'metadata-only',
+    text: '',
+    warning: extracted.ok
+      ? 'No embedded PDF text was found. OCR is needed for scanned pages.'
+      : `PDF parser unavailable (${extracted.error}). Install pdftotext for full PDF extraction.`,
+  };
+};
+
+const extractOfficeOpenXmlText = async (file, extension) => {
+  const entriesByExtension = {
+    '.docx': ['word/document.xml'],
+    '.pptx': ['ppt/slides/*.xml'],
+    '.xlsx': ['xl/sharedStrings.xml', 'xl/worksheets/*.xml'],
+  };
+  const entries = entriesByExtension[extension] || [];
+  const chunks = [];
+  const warnings = [];
+
+  for (const entry of entries) {
+    const extracted = await runExtractor('unzip', ['-p', file.path, entry]);
+    if (extracted.ok && extracted.stdout) {
+      chunks.push(xmlToText(extracted.stdout));
+    } else if (!extracted.ok) {
+      warnings.push(extracted.error);
+    }
+  }
+
+  const text = normalizeWhitespace(chunks.join('\n')).slice(0, MAX_TEXT_CHARS);
+  if (text) {
+    return {
+      method: `${extension} OpenXML`,
+      status: 'ready',
+      text,
+      warning: text.length >= MAX_TEXT_CHARS ? 'Office document text was truncated for the first wiki pass.' : '',
+    };
+  }
+
+  return {
+    method: `${extension} metadata`,
+    status: 'metadata-only',
+    text: '',
+    warning: warnings.length
+      ? `Office parser could not read the document (${warnings[0]}).`
+      : 'Office document text extraction found no readable text.',
+  };
+};
+
+const extractImageText = async (file, extension) => {
+  const extracted = await runExtractor('tesseract', [file.path, 'stdout']);
+  if (extracted.ok) {
+    const text = normalizeWhitespace(extracted.stdout).slice(0, MAX_TEXT_CHARS);
+    if (text) {
+      return {
+        method: 'tesseract OCR',
+        status: 'ready',
+        text,
+        warning: text.length >= MAX_TEXT_CHARS ? 'OCR text was truncated for the first wiki pass.' : '',
+      };
+    }
+  }
+  return {
+    method: `${extension || 'image'} metadata`,
+    status: 'metadata-only',
+    text: '',
+    warning: extracted.ok
+      ? 'OCR found no readable text in this image.'
+      : `OCR parser unavailable (${extracted.error}). Install tesseract for image and scan extraction.`,
+  };
+};
+
+const extractTextFromFile = async (file, context = {}) => {
   const extension = path.extname(file.originalname || '').toLowerCase();
   const baseExtraction = {
     method: 'metadata',
@@ -69,22 +292,55 @@ const extractTextFromFile = async (file) => {
     warning: 'Binary extraction is queued. The file is stored, graphed, and represented as a wiki source record.',
   };
 
-  if (!isTextLikeFile(file)) {
-    return {
+  let extraction;
+  let tableSummary = null;
+
+  if (PDF_EXTENSIONS.has(extension)) {
+    extraction = await extractPdfText(file);
+  } else if (OFFICE_XML_EXTENSIONS.has(extension)) {
+    extraction = await extractOfficeOpenXmlText(file, extension);
+  } else if (OCR_EXTENSIONS.has(extension)) {
+    extraction = await extractImageText(file, extension);
+  } else if (!isTextLikeFile(file)) {
+    extraction = {
       ...baseExtraction,
       method: `${extension || file.mimetype || 'binary'} metadata`,
     };
+  } else {
+    const buffer = await fs.readFile(file.path);
+    let text = normalizeWhitespace(buffer.toString('utf8')).slice(0, MAX_TEXT_CHARS);
+    if (extension === '.rtf') {
+      text = stripRtf(text).slice(0, MAX_TEXT_CHARS);
+    }
+    if (extension === '.csv') {
+      tableSummary = parseCsvPreview(text);
+      if (tableSummary) {
+        text = `${tableSummary.tableText}\n\n${text}`.slice(0, MAX_TEXT_CHARS);
+      }
+    }
+    extraction = {
+      method: extension === '.csv' ? 'csv text table parser' : 'utf8 text',
+      status: text ? 'ready' : 'metadata-only',
+      text,
+      warning: text.length >= MAX_TEXT_CHARS ? 'Text was truncated for the first wiki pass.' : '',
+    };
   }
 
-  const buffer = await fs.readFile(file.path);
-  const text = normalizeWhitespace(buffer.toString('utf8')).slice(0, MAX_TEXT_CHARS);
+  const redactedText = redactSensitiveText(extraction.text, context.redactionMode);
   return {
-    method: 'utf8 text',
-    status: text ? 'ready' : 'metadata-only',
-    text,
-    textPreview: text.slice(0, PREVIEW_CHARS),
-    textBytes: Buffer.byteLength(text, 'utf8'),
-    warning: text.length >= MAX_TEXT_CHARS ? 'Text was truncated for the first wiki pass.' : '',
+    ...baseExtraction,
+    ...extraction,
+    text: redactedText,
+    textPreview: redactedText.slice(0, PREVIEW_CHARS),
+    textBytes: Buffer.byteLength(redactedText, 'utf8'),
+    rawTextBytes: Buffer.byteLength(extraction.text || '', 'utf8'),
+    warning: extraction.warning || '',
+    tableSummary,
+    privacy: {
+      privacyLevel: context.privacyLevel,
+      redactionMode: context.redactionMode,
+      redacted: context.redactionMode !== 'none' && redactedText !== extraction.text,
+    },
   };
 };
 
@@ -168,6 +424,10 @@ const buildGraph = ({ fileId, wikiPageId, file, extraction, context, entities, s
         size: file.size || 0,
         sha256,
         extractionStatus: extraction.status,
+        extractionMethod: extraction.method,
+        privacyLevel: context.privacyLevel,
+        redactionMode: context.redactionMode,
+        retentionPolicy: context.retentionPolicy,
       },
     },
     {
@@ -177,6 +437,7 @@ const buildGraph = ({ fileId, wikiPageId, file, extraction, context, entities, s
         title: `Ingested source: ${file.originalname}`,
         source: file.originalname,
         generatedBy: 'Case Wiki ingestion',
+        privacyLevel: context.privacyLevel,
       },
     },
   ];
@@ -185,7 +446,7 @@ const buildGraph = ({ fileId, wikiPageId, file, extraction, context, entities, s
       from: `file:${fileId}`,
       to: `wiki:${wikiPageId}`,
       kind: 'GENERATED_WIKI_PAGE',
-      props: { extractionStatus: extraction.status },
+      props: { extractionStatus: extraction.status, privacyLevel: context.privacyLevel },
     },
   ];
 
@@ -280,28 +541,49 @@ const writeToNeo4j = async (graph) => {
   }
 };
 
-const buildCaseWikiUpload = async ({ file, userId, context }) => {
+const summarizeGraph = (graph) => {
+  const nodeKinds = graph.nodes.reduce((acc, node) => {
+    acc[node.kind] = (acc[node.kind] || 0) + 1;
+    return acc;
+  }, {});
+  const edgeKinds = graph.edges.reduce((acc, edge) => {
+    acc[edge.kind] = (acc[edge.kind] || 0) + 1;
+    return acc;
+  }, {});
+  return { nodeKinds, edgeKinds };
+};
+
+const buildCaseWikiUpload = async ({ file, userId, context, writeGraph = true }) => {
+  const normalizedContext = normalizeWikiIngestContext(context);
   const createdAt = new Date().toISOString();
   const fileId = crypto.randomUUID();
   const ingestionId = `wiki-ingest-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
   const wikiPageId = `ingest:${fileId}`;
   const sha256 = await sha256File(file.path);
-  const extraction = await extractTextFromFile(file);
-  const entities = extractEntities(extraction.textPreview || extraction.text, file.originalname, context);
+  const extraction = await extractTextFromFile(file, normalizedContext);
+  const entities = extractEntities(extraction.textPreview || extraction.text, file.originalname, normalizedContext);
   const sections = buildSections(extraction.textPreview || extraction.text, file.originalname, extraction);
   const summary = summarize(
     extraction.textPreview || extraction.text,
     `${file.originalname} was uploaded into the Case Wiki and linked to the selected case-management context.`,
   );
-  const graph = buildGraph({ fileId, wikiPageId, file, extraction, context, entities, sha256 });
-  const neo4j = await writeToNeo4j(graph);
+  const graph = buildGraph({ fileId, wikiPageId, file, extraction, context: normalizedContext, entities, sha256 });
+  const graphSummary = summarizeGraph(graph);
+  const neo4j = writeGraph
+    ? await writeToNeo4j(graph)
+    : {
+        status: 'preview',
+        message: 'Graph preview generated without writing to Neo4j',
+        nodeCount: graph.nodes.length,
+        edgeCount: graph.edges.length,
+      };
   const title = `Ingested source: ${file.originalname}`;
 
   const noteId = `note-ingest-${fileId}`;
   const documentId = `doc-ingest-${fileId}`;
   const timelineId = `timeline-ingest-${fileId}`;
-  const linkedClientId = context.clientId || '';
-  const linkedCaseId = context.caseId || '';
+  const linkedClientId = normalizedContext.clientId || '';
+  const linkedCaseId = normalizedContext.caseId || '';
 
   return {
     ingestionId,
@@ -314,14 +596,22 @@ const buildCaseWikiUpload = async ({ file, userId, context }) => {
     path: file.path,
     linkedClientId,
     linkedCaseId,
-    linkedServiceName: context.serviceName || '',
-    sourcePageId: context.pageId || '',
+    linkedServiceName: normalizedContext.serviceName || '',
+    sourcePageId: normalizedContext.pageId || '',
+    privacy: {
+      privacyLevel: normalizedContext.privacyLevel,
+      redactionMode: normalizedContext.redactionMode,
+      retentionPolicy: normalizedContext.retentionPolicy,
+    },
     extraction: {
       method: extraction.method,
       status: extraction.status,
       textPreview: extraction.textPreview,
       textBytes: extraction.textBytes,
+      rawTextBytes: extraction.rawTextBytes,
       warning: extraction.warning,
+      tableSummary: extraction.tableSummary,
+      privacy: extraction.privacy,
     },
     wikiPage: {
       id: wikiPageId,
@@ -346,9 +636,9 @@ const buildCaseWikiUpload = async ({ file, userId, context }) => {
         structuredFields: ['Uploaded source file', `Extraction: ${extraction.status}`, `Neo4j: ${neo4j.status}`],
         attachments: [file.originalname],
         followUpRequired: extraction.status !== 'ready' || neo4j.status !== 'written',
-        visibility: 'team',
+        visibility: normalizedContext.privacyLevel === 'private' || normalizedContext.privacyLevel === 'personal' ? 'private' : 'team',
         aiSummary: `Generated wiki source page from ${file.originalname}.`,
-        aiTags: ['wiki ingestion', 'source file', extraction.status],
+        aiTags: ['wiki ingestion', 'source file', extraction.status, normalizedContext.privacyLevel],
       },
       document: {
         id: documentId,
@@ -358,7 +648,7 @@ const buildCaseWikiUpload = async ({ file, userId, context }) => {
         type: path.extname(file.originalname || '').replace('.', '').toUpperCase() || file.mimetype || 'FILE',
         tag: 'Case Wiki source',
         uploadedAt: createdAt,
-        permission: 'team',
+        permission: normalizedContext.privacyLevel === 'private' || normalizedContext.privacyLevel === 'personal' ? 'private' : 'team',
         searchableText: extraction.textPreview || extraction.warning,
       },
       timeline: {
@@ -385,13 +675,20 @@ const buildCaseWikiUpload = async ({ file, userId, context }) => {
         edgeCount: graph.edges.length,
         linkedClientId,
         linkedCaseId,
-        linkedServiceName: context.serviceName || '',
+        linkedServiceName: normalizedContext.serviceName || '',
         pageId: wikiPageId,
         title,
         summary,
         textPreview: extraction.textPreview,
         sections,
         entities,
+        privacyLevel: normalizedContext.privacyLevel,
+        redactionMode: normalizedContext.redactionMode,
+        retentionPolicy: normalizedContext.retentionPolicy,
+        parserWarning: extraction.warning,
+        tableSummary: extraction.tableSummary,
+        graphSummary,
+        graphPreview: graph,
         sourceFileId: fileId,
         noteId,
         documentId,
@@ -399,6 +696,7 @@ const buildCaseWikiUpload = async ({ file, userId, context }) => {
       },
     },
     graph,
+    graphSummary,
     neo4j,
     createdAt,
     userId,
@@ -407,4 +705,5 @@ const buildCaseWikiUpload = async ({ file, userId, context }) => {
 
 module.exports = {
   buildCaseWikiUpload,
+  normalizeWikiIngestContext,
 };

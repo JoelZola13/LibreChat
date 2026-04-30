@@ -297,10 +297,85 @@ interface WikiIngestionRecord {
   textPreview: string;
   sections: Array<{ heading: string; body: string }>;
   entities: string[];
+  privacyLevel?: WikiPrivacyLevel;
+  redactionMode?: WikiRedactionMode;
+  retentionPolicy?: WikiRetentionPolicy;
+  parserWarning?: string;
+  tableSummary?: {
+    rowCount?: number;
+    columnCount?: number;
+    headers?: string[];
+  } | null;
+  graphSummary?: WikiGraphSummary;
+  graphPreview?: WikiGraphPreview;
   sourceFileId?: string;
   noteId?: string;
   documentId?: string;
   timelineId?: string;
+}
+
+type WikiPrivacyLevel = 'case-team' | 'private' | 'personal' | 'public';
+type WikiRedactionMode = 'standard' | 'strict' | 'none';
+type WikiRetentionPolicy = 'keep-source' | 'review-source';
+
+interface WikiGraphSummary {
+  nodeKinds?: Record<string, number>;
+  edgeKinds?: Record<string, number>;
+}
+
+interface WikiGraphPreview {
+  nodes?: Array<{ id: string; kind: string; props?: Record<string, unknown> }>;
+  edges?: Array<{ from: string; to: string; kind: string; props?: Record<string, unknown> }>;
+}
+
+interface WikiGraphPreviewRecord {
+  id: string;
+  fileName: string;
+  extractionStatus: string;
+  extractionMethod: string;
+  parserWarning?: string;
+  privacyLevel?: WikiPrivacyLevel;
+  redactionMode?: WikiRedactionMode;
+  retentionPolicy?: WikiRetentionPolicy;
+  nodeCount: number;
+  edgeCount: number;
+  graphSummary?: WikiGraphSummary;
+  graphPreview?: WikiGraphPreview;
+  textPreview?: string;
+  tableSummary?: WikiIngestionRecord['tableSummary'];
+  entities?: string[];
+}
+
+interface WikiBulkJobItem {
+  itemId: string;
+  fileName: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  error?: string;
+  pageId?: string;
+  fileId?: string;
+  neo4jStatus?: string;
+  size?: number;
+  mimeType?: string;
+}
+
+interface WikiBulkJobState {
+  jobId: string;
+  status: 'queued' | 'processing' | 'paused' | 'completed' | 'completed_with_errors' | 'failed';
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string | null;
+  total: number;
+  processed: number;
+  failed: number;
+  items: WikiBulkJobItem[];
+  wikiIngestionRecords?: WikiIngestionRecord[];
+  generatedRecords?: {
+    noteRecords?: NoteRecord[];
+    documentRecords?: DocumentRecord[];
+    timelineRecords?: TimelineEvent[];
+  };
+  neo4j?: Array<{ status?: string; message?: string; skippedReason?: string }>;
+  graphPreviews?: WikiGraphPreviewRecord[];
 }
 
 interface BotAlert {
@@ -431,6 +506,10 @@ interface WikiIngestContext {
   caseTitle?: string;
   serviceName?: string;
   pageId?: string;
+  privacyLevel?: WikiPrivacyLevel;
+  redactionMode?: WikiRedactionMode;
+  retentionPolicy?: WikiRetentionPolicy;
+  reviewBeforeGraphWrite?: boolean;
 }
 
 const tabs: Array<{ id: TabId; label: string; icon: LucideIcon }> = [
@@ -3576,7 +3655,8 @@ function EmptyHint({ text }: { text: string }) {
 
 const CASE_MANAGEMENT_STORAGE_KEY = 'streetvoices:case-management:v1';
 const CASE_MANAGEMENT_API_PATH = '/api/case-management/workspace';
-const CASE_MANAGEMENT_WIKI_INGEST_PATH = '/api/case-management/wiki/ingest';
+const CASE_MANAGEMENT_WIKI_INGEST_PREVIEW_PATH = '/api/case-management/wiki/ingest/preview';
+const CASE_MANAGEMENT_WIKI_INGEST_JOB_PATH = '/api/case-management/wiki/ingest/jobs';
 const CASE_MANAGEMENT_WIKI_INGESTIONS_PATH = '/api/case-management/wiki/ingestions';
 
 interface CaseManagementDraft {
@@ -3719,6 +3799,16 @@ function downloadJson(filename: string, payload: unknown) {
   window.URL.revokeObjectURL(href);
 }
 
+function appendWikiIngestContext(formData: FormData, context: WikiIngestContext) {
+  Object.entries(context).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      formData.append(key, String(value));
+    }
+  });
+}
+
+const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
 async function saveServerCaseManagementDraft(draft: CaseManagementDraft, token: string) {
   const response = await fetch(CASE_MANAGEMENT_API_PATH, {
     method: 'PUT',
@@ -3803,6 +3893,11 @@ export default function CaseManagementPage() {
   const [wikiIngestSourceName, setWikiIngestSourceName] = useState('');
   const [wikiIngesting, setWikiIngesting] = useState(false);
   const [wikiIngestStatus, setWikiIngestStatus] = useState('');
+  const [wikiIngestPrivacyLevel, setWikiIngestPrivacyLevel] = useState<WikiPrivacyLevel>('case-team');
+  const [wikiIngestRedactionMode, setWikiIngestRedactionMode] = useState<WikiRedactionMode>('standard');
+  const [wikiIngestRetentionPolicy, setWikiIngestRetentionPolicy] = useState<WikiRetentionPolicy>('keep-source');
+  const [wikiGraphPreviews, setWikiGraphPreviews] = useState<WikiGraphPreviewRecord[]>([]);
+  const [wikiBulkJob, setWikiBulkJob] = useState<WikiBulkJobState | null>(null);
   const [draftNotice, setDraftNotice] = useState(
     savedDraft ? `Local draft restored from ${formatDateTime(savedDraft.savedAt)}.` : 'Changes save locally in this browser.',
   );
@@ -5593,39 +5688,52 @@ export default function CaseManagementPage() {
     const uploadedFiles = Array.from(files);
     const formData = new FormData();
     uploadedFiles.forEach((file) => formData.append('files', file));
-    Object.entries(context).forEach(([key, value]) => {
-      if (value) formData.append(key, value);
-    });
+    appendWikiIngestContext(formData, context);
 
     setWikiIngesting(true);
-    setWikiIngestStatus(`Ingesting ${uploadedFiles.length} file${uploadedFiles.length === 1 ? '' : 's'} into the Case Wiki...`);
+    setWikiIngestStatus(`Queueing ${uploadedFiles.length} file${uploadedFiles.length === 1 ? '' : 's'} for Case Wiki ingestion...`);
 
     try {
-      const response = await fetch(CASE_MANAGEMENT_WIKI_INGEST_PATH, {
+      const response = await fetch(CASE_MANAGEMENT_WIKI_INGEST_JOB_PATH, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      if (!response.ok) throw new Error(`Upload failed with ${response.status}`);
+      if (!response.ok) throw new Error(`Job failed to start with ${response.status}`);
 
-      const payload = (await response.json()) as {
-        wikiIngestionRecords?: WikiIngestionRecord[];
-        generatedRecords?: {
-          noteRecords?: NoteRecord[];
-          documentRecords?: DocumentRecord[];
-          timelineRecords?: TimelineEvent[];
-        };
-        neo4j?: Array<{ status?: string; message?: string; skippedReason?: string }>;
-      };
+      let payload = (await response.json()) as WikiBulkJobState;
+      setWikiBulkJob(payload);
+      setWikiIngestStatus(`Bulk ingest job started. ${payload.processed}/${payload.total} files processed.`);
+
+      for (let attempt = 0; attempt < 300 && ['queued', 'processing'].includes(payload.status); attempt += 1) {
+        await wait(850);
+        const jobResponse = await fetch(`${CASE_MANAGEMENT_WIKI_INGEST_JOB_PATH}/${payload.jobId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!jobResponse.ok) throw new Error(`Job polling failed with ${jobResponse.status}`);
+        payload = (await jobResponse.json()) as WikiBulkJobState;
+        setWikiBulkJob(payload);
+        setWikiIngestStatus(`Bulk ingest ${payload.status}. ${payload.processed}/${payload.total} files processed${payload.failed ? `, ${payload.failed} failed` : ''}.`);
+      }
+
+      if (payload.status === 'paused') {
+        setWikiIngestStatus(`Bulk ingest paused at ${payload.processed}/${payload.total} files.`);
+        return false;
+      }
+
       const incomingWikiRecords = payload.wikiIngestionRecords ?? [];
       const incomingNotes = payload.generatedRecords?.noteRecords ?? [];
       const incomingDocuments = payload.generatedRecords?.documentRecords ?? [];
       const incomingTimeline = payload.generatedRecords?.timelineRecords ?? [];
+      if (!incomingWikiRecords.length && payload.failed) {
+        throw new Error('Bulk ingest completed with no accepted files');
+      }
 
       setWikiIngestionRecords((records) => mergeById(records, incomingWikiRecords));
       setNoteRecords((records) => mergeById(records, incomingNotes));
       setDocumentRecords((records) => mergeById(records, incomingDocuments));
       setTimelineRecords((records) => mergeById(records, incomingTimeline));
+      setWikiGraphPreviews(payload.graphPreviews ?? []);
 
       const firstIngestion = incomingWikiRecords[0];
       if (firstIngestion?.pageId) {
@@ -5639,7 +5747,9 @@ export default function CaseManagementPage() {
 
       const graphStatuses = Array.from(new Set((payload.neo4j ?? []).map((item) => item.status ?? 'unknown')));
       const graphLabel = graphStatuses.length ? graphStatuses.join(', ') : 'not reported';
-      setWikiIngestStatus(`Ingested ${incomingWikiRecords.length} file${incomingWikiRecords.length === 1 ? '' : 's'}. Neo4j status: ${graphLabel}.`);
+      setWikiIngestStatus(
+        `Ingested ${incomingWikiRecords.length} file${incomingWikiRecords.length === 1 ? '' : 's'}. Neo4j status: ${graphLabel}${payload.failed ? `; ${payload.failed} failed` : ''}.`,
+      );
       setDraftNotice(`Case Wiki generated ${incomingWikiRecords.length} source page${incomingWikiRecords.length === 1 ? '' : 's'} from uploaded files.`);
       addAuditEvent({
         actor: 'Case Wiki ingestion',
@@ -5653,6 +5763,58 @@ export default function CaseManagementPage() {
       return false;
     } finally {
       setWikiIngesting(false);
+    }
+  };
+
+  const previewWikiGraph = async (files: File[] | null, context: WikiIngestContext) => {
+    if (!files?.length) return false;
+    if (!token) {
+      setWikiIngestStatus('Sign in before previewing graph changes.');
+      return false;
+    }
+
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    appendWikiIngestContext(formData, { ...context, reviewBeforeGraphWrite: true });
+    setWikiIngesting(true);
+    setWikiIngestStatus(`Previewing graph changes for ${files.length} source${files.length === 1 ? '' : 's'}...`);
+
+    try {
+      const response = await fetch(CASE_MANAGEMENT_WIKI_INGEST_PREVIEW_PATH, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!response.ok) throw new Error(`Preview failed with ${response.status}`);
+      const payload = (await response.json()) as {
+        graphPreviews?: WikiGraphPreviewRecord[];
+        wikiIngestionRecords?: WikiIngestionRecord[];
+      };
+      setWikiGraphPreviews(payload.graphPreviews ?? []);
+      setWikiIngestStatus(`Preview ready. Nothing has been written to Neo4j yet.`);
+      return true;
+    } catch {
+      setWikiGraphPreviews([]);
+      setWikiIngestStatus('Graph preview failed. Nothing was written to Neo4j.');
+      return false;
+    } finally {
+      setWikiIngesting(false);
+    }
+  };
+
+  const updateWikiBulkJob = async (action: 'pause' | 'resume' | 'retry') => {
+    if (!token || !wikiBulkJob?.jobId) return;
+    try {
+      const response = await fetch(`${CASE_MANAGEMENT_WIKI_INGEST_JOB_PATH}/${wikiBulkJob.jobId}/${action}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`${action} failed`);
+      const payload = (await response.json()) as WikiBulkJobState;
+      setWikiBulkJob(payload);
+      setWikiIngestStatus(`Bulk ingest ${payload.status}. ${payload.processed}/${payload.total} files processed.`);
+    } catch {
+      setWikiIngestStatus(`Could not ${action} the current bulk ingest job.`);
     }
   };
 
@@ -6279,9 +6441,13 @@ export default function CaseManagementPage() {
       caseTitle: ingestContextCase?.title,
       serviceName: selectedPageOrganization?.name,
       pageId: selectedPage?.id,
+      privacyLevel: wikiIngestPrivacyLevel,
+      redactionMode: wikiIngestRedactionMode,
+      retentionPolicy: wikiIngestRetentionPolicy,
     };
     const applyWikiIngestFiles = (files: File[], source: 'system picker' | 'native chooser' | 'drop zone') => {
       setWikiIngestPendingFiles(files);
+      setWikiGraphPreviews([]);
       setWikiIngestStatus(
         files.length
           ? `${files.length} file${files.length === 1 ? '' : 's'} ready from the ${source} for Case Wiki ingestion.`
@@ -6344,7 +6510,7 @@ export default function CaseManagementPage() {
       }
       applyWikiIngestFiles(files, 'drop zone');
     };
-    const submitWikiIngestModal = async () => {
+    const buildWikiIngestFilesFromDraft = () => {
       const pastedText = wikiIngestText.trim();
       let filesToIngest = wikiIngestPendingFiles;
 
@@ -6362,6 +6528,18 @@ export default function CaseManagementPage() {
         ];
       }
 
+      return filesToIngest;
+    };
+    const previewWikiIngestDraft = async () => {
+      const filesToPreview = buildWikiIngestFilesFromDraft();
+      if (!filesToPreview.length) {
+        setWikiIngestStatus('Choose files, drop files here, or paste source text before previewing the graph.');
+        return;
+      }
+      await previewWikiGraph(filesToPreview, wikiIngestContext);
+    };
+    const submitWikiIngestModal = async () => {
+      const filesToIngest = buildWikiIngestFilesFromDraft();
       if (!filesToIngest.length) {
         setWikiIngestStatus('Choose files, drop files here, or paste source text before ingesting into the Case Wiki.');
         return;
@@ -6372,6 +6550,7 @@ export default function CaseManagementPage() {
         setWikiIngestDragActive(false);
         setWikiIngestText('');
         setWikiIngestSourceName('');
+        setWikiGraphPreviews([]);
         if (wikiIngestHeroInputRef.current) {
           wikiIngestHeroInputRef.current.value = '';
         }
@@ -6386,6 +6565,8 @@ export default function CaseManagementPage() {
       setWikiIngestText('');
       setWikiIngestSourceName('');
       setWikiIngestStatus('');
+      setWikiGraphPreviews([]);
+      setWikiBulkJob(null);
       if (wikiIngestHeroInputRef.current) {
         wikiIngestHeroInputRef.current.value = '';
       }
@@ -6394,6 +6575,21 @@ export default function CaseManagementPage() {
       }
     };
     const hasWikiIngestDraft = wikiIngestPendingFiles.length > 0 || Boolean(wikiIngestText.trim());
+    const wikiIngestSelectStyle = {
+      ...glassButton,
+      borderRadius: 8,
+      color: colors.text,
+      minHeight: 40,
+      padding: '9px 10px',
+      width: '100%',
+    } satisfies React.CSSProperties;
+    const wikiIngestLabelStyle = {
+      display: 'grid',
+      gap: 6,
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: 800,
+    } satisfies React.CSSProperties;
 
     return (
       <>
@@ -6484,6 +6680,45 @@ export default function CaseManagementPage() {
                   ? 'Text source ready'
                   : 'Waiting for source'}
             </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 10 }}>
+            <label style={wikiIngestLabelStyle}>
+              Privacy
+              <select
+                value={wikiIngestPrivacyLevel}
+                onChange={(event) => setWikiIngestPrivacyLevel(event.currentTarget.value as WikiPrivacyLevel)}
+                style={wikiIngestSelectStyle}
+              >
+                <option value="case-team">Case team</option>
+                <option value="private">Private case note</option>
+                <option value="personal">Personal archive</option>
+                <option value="public">Public-safe source</option>
+              </select>
+            </label>
+            <label style={wikiIngestLabelStyle}>
+              Redaction
+              <select
+                value={wikiIngestRedactionMode}
+                onChange={(event) => setWikiIngestRedactionMode(event.currentTarget.value as WikiRedactionMode)}
+                style={wikiIngestSelectStyle}
+              >
+                <option value="standard">Standard PHI cleanup</option>
+                <option value="strict">Strict demo-safe cleanup</option>
+                <option value="none">No redaction</option>
+              </select>
+            </label>
+            <label style={wikiIngestLabelStyle}>
+              Source retention
+              <select
+                value={wikiIngestRetentionPolicy}
+                onChange={(event) => setWikiIngestRetentionPolicy(event.currentTarget.value as WikiRetentionPolicy)}
+                style={wikiIngestSelectStyle}
+              >
+                <option value="keep-source">Keep source artifact</option>
+                <option value="review-source">Flag source for review</option>
+              </select>
+            </label>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 0.7fr) minmax(260px, 1fr)', gap: 12 }}>
@@ -6657,29 +6892,148 @@ export default function CaseManagementPage() {
                   Select a file above or paste text
                 </span>
               ) : (
-                <button
-                  type="button"
-                  data-testid="case-wiki-inline-ingest-submit"
-                  style={{
-                    ...primaryButtonStyle,
-                    opacity: wikiIngesting ? 0.62 : 1,
-                    cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                  }}
-                  onClick={() => void submitWikiIngestModal()}
-                  disabled={wikiIngesting}
-                  {...accentButtonHoverHandlers}
-                >
-                  <Upload size={16} />
-                  {wikiIngesting
-                    ? 'Ingesting...'
-                    : wikiIngestPendingFiles.length
-                      ? 'Ingest selected files'
-                      : 'Ingest pasted source'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    data-testid="case-wiki-preview-graph"
+                    style={{
+                      ...buttonStyle,
+                      opacity: wikiIngesting ? 0.62 : 1,
+                      cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                    }}
+                    onClick={() => void previewWikiIngestDraft()}
+                    disabled={wikiIngesting}
+                    {...buttonHoverHandlers}
+                  >
+                    <Workflow size={16} />
+                    Preview graph
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="case-wiki-inline-ingest-submit"
+                    style={{
+                      ...primaryButtonStyle,
+                      opacity: wikiIngesting ? 0.62 : 1,
+                      cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                    }}
+                    onClick={() => void submitWikiIngestModal()}
+                    disabled={wikiIngesting}
+                    {...accentButtonHoverHandlers}
+                  >
+                    <Upload size={16} />
+                    {wikiIngesting
+                      ? 'Ingesting...'
+                      : wikiIngestPendingFiles.length
+                        ? 'Ingest selected files'
+                        : 'Ingest pasted source'}
+                  </button>
+                </>
               )}
             </div>
           </div>
         </div>
+
+        {(wikiGraphPreviews.length > 0 || wikiBulkJob) && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 12, marginTop: 12 }}>
+            {wikiGraphPreviews.length > 0 && (
+              <section style={{ ...surfaceStyle, display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <div>
+                    <strong style={{ color: colors.text }}>Graph review before commit</strong>
+                    <p style={{ margin: '4px 0 0', color: colors.textSecondary, fontSize: 12 }}>
+                      Preview only. These nodes are not written to Neo4j until you ingest the source.
+                    </p>
+                  </div>
+                  <span style={{ ...glassButton, borderRadius: 8, color: colors.textSecondary, fontSize: 12, fontWeight: 800, padding: '6px 9px' }}>
+                    {wikiGraphPreviews.length} source{wikiGraphPreviews.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {wikiGraphPreviews.map((preview) => (
+                    <article key={preview.id} style={{ ...glassButton, borderRadius: 8, display: 'grid', gap: 8, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <strong style={{ color: colors.text }}>{preview.fileName}</strong>
+                        <span style={{ color: colors.textMuted, fontSize: 12, fontWeight: 800 }}>
+                          {preview.nodeCount} nodes · {preview.edgeCount} edges
+                        </span>
+                      </div>
+                      <span style={{ color: colors.textSecondary, fontSize: 12 }}>
+                        {preview.extractionStatus} via {preview.extractionMethod} · {preview.privacyLevel ?? 'case-team'} · {preview.redactionMode ?? 'standard'}
+                      </span>
+                      {preview.parserWarning && (
+                        <span style={{ color: colors.accent, fontSize: 12 }}>{preview.parserWarning}</span>
+                      )}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {Object.entries(preview.graphSummary?.nodeKinds ?? {}).map(([kind, count]) => (
+                          <span key={`${preview.id}-${kind}`} style={{ ...surfaceStyle, padding: '4px 7px', color: colors.textSecondary, fontSize: 11 }}>
+                            {kind}: {count}
+                          </span>
+                        ))}
+                        {Object.entries(preview.graphSummary?.edgeKinds ?? {}).map(([kind, count]) => (
+                          <span key={`${preview.id}-${kind}`} style={{ ...surfaceStyle, padding: '4px 7px', color: colors.textSecondary, fontSize: 11 }}>
+                            {kind}: {count}
+                          </span>
+                        ))}
+                      </div>
+                      {preview.textPreview && (
+                        <p style={{ margin: 0, color: colors.textSecondary, fontSize: 12, lineHeight: 1.45 }}>
+                          {preview.textPreview.slice(0, 280)}
+                        </p>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {wikiBulkJob && (
+              <section style={{ ...surfaceStyle, display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start' }}>
+                  <div>
+                    <strong style={{ color: colors.text }}>Bulk ingest queue</strong>
+                    <p style={{ margin: '4px 0 0', color: colors.textSecondary, fontSize: 12 }}>
+                      {wikiBulkJob.processed}/{wikiBulkJob.total} processed · {wikiBulkJob.failed} failed · {wikiBulkJob.status}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {['queued', 'processing'].includes(wikiBulkJob.status) && (
+                      <button type="button" style={{ ...buttonStyle, minHeight: 34, padding: '6px 9px' }} onClick={() => void updateWikiBulkJob('pause')} {...buttonHoverHandlers}>
+                        Pause
+                      </button>
+                    )}
+                    {wikiBulkJob.status === 'paused' && (
+                      <button type="button" style={{ ...buttonStyle, minHeight: 34, padding: '6px 9px' }} onClick={() => void updateWikiBulkJob('resume')} {...buttonHoverHandlers}>
+                        Resume
+                      </button>
+                    )}
+                    {wikiBulkJob.failed > 0 && (
+                      <button type="button" style={{ ...buttonStyle, minHeight: 34, padding: '6px 9px' }} onClick={() => void updateWikiBulkJob('retry')} {...buttonHoverHandlers}>
+                        Retry failed
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div style={{ ...glassButton, borderRadius: 8, height: 10, overflow: 'hidden', padding: 0 }}>
+                  <div
+                    style={{
+                      background: colors.accent,
+                      height: '100%',
+                      width: `${Math.min(100, Math.round((wikiBulkJob.processed / Math.max(1, wikiBulkJob.total)) * 100))}%`,
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'grid', gap: 6, maxHeight: 170, overflowY: 'auto' }}>
+                  {wikiBulkJob.items.map((item) => (
+                    <div key={item.itemId} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, color: colors.textSecondary, fontSize: 12 }}>
+                      <span style={{ color: colors.text }}>{item.fileName}</span>
+                      <span>{item.status}{item.neo4jStatus ? ` · Neo4j ${item.neo4jStatus}` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.34fr) minmax(0, 1fr)', gap: 16, marginTop: 16 }}>
           <aside style={{ ...surfaceStyle, display: 'grid', gap: 12, alignContent: 'start', maxHeight: 'min(72vh, 920px)', overflowY: 'auto' }}>
@@ -6768,8 +7122,13 @@ export default function CaseManagementPage() {
 	                      {[
 	                        ['File type', selectedIngestion.mimeType || 'unknown'],
 	                        ['Extraction', `${selectedIngestion.extractionStatus} via ${selectedIngestion.extractionMethod}`],
+	                        ['Privacy', `${selectedIngestion.privacyLevel ?? 'case-team'} · ${selectedIngestion.redactionMode ?? 'standard'} redaction`],
 	                        ['Neo4j', `${selectedIngestion.graphStatus}${selectedIngestion.graphMessage ? `: ${selectedIngestion.graphMessage}` : ''}`],
 	                        ['Graph shape', `${selectedIngestion.nodeCount} nodes · ${selectedIngestion.edgeCount} edges`],
+	                        ...(selectedIngestion.tableSummary
+	                          ? [['Table', `${selectedIngestion.tableSummary.rowCount ?? 0} rows · ${selectedIngestion.tableSummary.columnCount ?? 0} columns`]]
+	                          : []),
+	                        ...(selectedIngestion.parserWarning ? [['Parser note', selectedIngestion.parserWarning]] : []),
 	                      ].map(([label, value]) => (
 	                        <div key={label} style={{ border: '1px solid rgba(17,24,39,0.14)', borderRadius: 8, padding: 10 }}>
 	                          <strong style={{ display: 'block', color: '#111827', fontSize: 12 }}>{label}</strong>

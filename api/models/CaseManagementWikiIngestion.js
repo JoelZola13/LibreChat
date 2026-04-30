@@ -47,6 +47,10 @@ const caseManagementWikiIngestionSchema = new mongoose.Schema(
     linkedCaseId: String,
     linkedServiceName: String,
     sourcePageId: String,
+    privacy: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
     extraction: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
@@ -60,6 +64,10 @@ const caseManagementWikiIngestionSchema = new mongoose.Schema(
       default: {},
     },
     graph: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    graphSummary: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
