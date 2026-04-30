@@ -277,6 +277,7 @@ export default function JobDetailPage() {
   const [uploadedDocuments, setUploadedDocuments] = useState<ApplicationDocument[]>([]);
   const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([]);
   const [hasResume, setHasResume] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ name?: string; email?: string; resume?: string }>({});
   const responsibilitiesList = useMemo(() => (job ? getResponsibilitiesList(job) : []), [job]);
   const requirementsList = useMemo(() => (job ? getRequirementsList(job) : []), [job]);
   const aboutThisJob = useMemo(() => (job ? getAboutThisJob(job) : ""), [job]);
@@ -382,12 +383,22 @@ export default function JobDetailPage() {
 
   const handleApply = useCallback(() => {
     if (!job) return;
-    if (!applicationName.trim() || !applicationEmail.trim()) {
-      setToast("Add your name and email before submitting.");
-      return;
+    const errors: { name?: string; email?: string; resume?: string } = {};
+    if (!applicationName.trim()) {
+      errors.name = "Full name is required.";
+    }
+    const trimmedEmail = applicationEmail.trim();
+    if (!trimmedEmail) {
+      errors.email = "Email address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = "Enter a valid email address.";
     }
     if (uploadedDocuments.length === 0) {
-      setToast("Upload at least one document before submitting.");
+      errors.resume = "Please upload your resume to continue.";
+    }
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setToast("Please complete the required fields.");
       return;
     }
     const userId = getOrCreateUserId();
@@ -449,6 +460,7 @@ export default function JobDetailPage() {
       });
 
       setUploadedDocuments((prev) => [...prev, ...nextDocuments]);
+      setFormErrors((prev) => (prev.resume ? { ...prev, resume: undefined } : prev));
       event.target.value = "";
     },
     [],
@@ -1472,15 +1484,22 @@ export default function JobDetailPage() {
                 }}
               >
                 <label style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>Full Name</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>
+                    Full Name <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
+                  </span>
                   <input
                     type="text"
                     value={applicationName}
-                    onChange={(e) => setApplicationName(e.target.value)}
+                    onChange={(e) => {
+                      setApplicationName(e.target.value);
+                      if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: undefined }));
+                    }}
                     placeholder="Your full name"
+                    aria-invalid={Boolean(formErrors.name)}
+                    aria-describedby={formErrors.name ? "apply-name-error" : undefined}
                     style={{
                       borderRadius: "12px",
-                      border: `1px solid ${colors.border}`,
+                      border: `1px solid ${formErrors.name ? "#ef4444" : colors.border}`,
                       background: colors.surface,
                       color: colors.text,
                       padding: "12px 14px",
@@ -1488,17 +1507,29 @@ export default function JobDetailPage() {
                       outline: "none",
                     }}
                   />
+                  {formErrors.name && (
+                    <span id="apply-name-error" style={{ fontSize: "12px", color: "#ef4444" }}>
+                      {formErrors.name}
+                    </span>
+                  )}
                 </label>
                 <label style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>Email Address</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>
+                    Email Address <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
+                  </span>
                   <input
                     type="email"
                     value={applicationEmail}
-                    onChange={(e) => setApplicationEmail(e.target.value)}
+                    onChange={(e) => {
+                      setApplicationEmail(e.target.value);
+                      if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: undefined }));
+                    }}
                     placeholder="you@example.com"
+                    aria-invalid={Boolean(formErrors.email)}
+                    aria-describedby={formErrors.email ? "apply-email-error" : undefined}
                     style={{
                       borderRadius: "12px",
-                      border: `1px solid ${colors.border}`,
+                      border: `1px solid ${formErrors.email ? "#ef4444" : colors.border}`,
                       background: colors.surface,
                       color: colors.text,
                       padding: "12px 14px",
@@ -1506,6 +1537,11 @@ export default function JobDetailPage() {
                       outline: "none",
                     }}
                   />
+                  {formErrors.email && (
+                    <span id="apply-email-error" style={{ fontSize: "12px", color: "#ef4444" }}>
+                      {formErrors.email}
+                    </span>
+                  )}
                 </label>
               </div>
 
@@ -1562,17 +1598,17 @@ export default function JobDetailPage() {
                   gap: "12px",
                   padding: "16px",
                   borderRadius: "14px",
-                  border: `1px dashed ${colors.borderHover}`,
+                  border: `1px dashed ${formErrors.resume ? "#ef4444" : colors.borderHover}`,
                   background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.4)",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
                   <div>
                     <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 600, color: colors.text }}>
-                      Upload Documents
+                      Upload Documents <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
                     </h3>
                     <p style={{ margin: 0, fontSize: "13px", color: colors.textSecondary }}>
-                      Add your resume, cover letter, portfolio, or supporting files.
+                      Resume required. Add your resume, cover letter, portfolio, or supporting files.
                     </p>
                   </div>
                   <label
@@ -1646,6 +1682,12 @@ export default function JobDetailPage() {
                       </div>
                     ))}
                   </div>
+                )}
+
+                {formErrors.resume && (
+                  <span style={{ fontSize: "12px", color: "#ef4444", fontWeight: 500 }}>
+                    {formErrors.resume}
+                  </span>
                 )}
               </div>
 
