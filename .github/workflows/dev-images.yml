@@ -15,6 +15,10 @@ on:
       - 'client/**'
       - 'packages/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -88,7 +92,7 @@ jobs:
             ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:latest
-          platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
           target: ${{ matrix.target }}
 
       - name: Build and push Docker images to GHCR
@@ -101,5 +105,5 @@ jobs:
           tags: |
             ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:${{ github.sha }}
             ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:latest
-          platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
           target: ${{ matrix.target }}
