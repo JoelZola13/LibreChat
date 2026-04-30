@@ -21,12 +21,12 @@ jobs:
       actions: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
       - name: Set up Node.js 20.x
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: 20
           cache: npm
@@ -42,14 +42,14 @@ jobs:
           echo "Base commit SHA: $BASE_SHA"
 
           # Get changed files (only JS/TS files in api/ or client/)
-          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRTUXB "$BASE_SHA" HEAD | grep -E '^(api|client)/.*\.(js|jsx|ts|tsx)$' || true)
+          mapfile -t CHANGED_FILES < <(git diff --name-only --diff-filter=ACMRTUXB "$BASE_SHA" HEAD | grep -E '^(api|client)/.*\.(js|jsx|ts|tsx)$' || true)
 
           # Debug output
           echo "Changed files:"
-          echo "$CHANGED_FILES"
+          printf '%s\n' "${CHANGED_FILES[@]}"
 
           # Ensure there are files to lint before running ESLint
-          if [[ -z "$CHANGED_FILES" ]]; then
+          if [[ ${#CHANGED_FILES[@]} -eq 0 ]]; then
             echo "No matching files changed. Skipping ESLint."
             exit 0
           fi
@@ -57,4 +57,4 @@ jobs:
           # Run ESLint
           npx eslint --no-error-on-unmatched-pattern \
             --config eslint.config.mjs \
-            $CHANGED_FILES
+            "${CHANGED_FILES[@]}"

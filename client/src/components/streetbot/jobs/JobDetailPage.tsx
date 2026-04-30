@@ -5,8 +5,8 @@ import { useGlassStyles } from "../shared/useGlassStyles";
 import { useResponsive } from "../hooks/useResponsive";
 import { getAboutThisJob, getRequirementsList, getResponsibilitiesList } from "./jobContent";
 import { enrichJobSchedule, enrichJobsSchedule } from "./jobSchedule";
-import { addApplication, getApplicationByJob, getResume } from "./jobsStorage";
-import type { ApplicationDocument, Job, JobApplication } from "./types";
+import { addApplication, getApplicationByJob, getResume, getDefaultResume, getCoverLetters } from "./jobsStorage";
+import type { ApplicationDocument, Job, JobApplication, CoverLetter } from "./types";
 import {
   ArrowLeft,
   Briefcase,
@@ -274,6 +274,8 @@ export default function JobDetailPage() {
   const [applicationEmail, setApplicationEmail] = useState("");
   const [coverNote, setCoverNote] = useState("");
   const [uploadedDocuments, setUploadedDocuments] = useState<ApplicationDocument[]>([]);
+  const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([]);
+  const [hasResume, setHasResume] = useState(false);
   const responsibilitiesList = useMemo(() => (job ? getResponsibilitiesList(job) : []), [job]);
   const requirementsList = useMemo(() => (job ? getRequirementsList(job) : []), [job]);
   const aboutThisJob = useMemo(() => (job ? getAboutThisJob(job) : ""), [job]);
@@ -329,6 +331,8 @@ export default function JobDetailPage() {
     setApplicationEmail(existingApplication?.applicantEmail || resume?.email || "");
     setCoverNote(existingApplication?.coverNote || "");
     setUploadedDocuments(existingApplication?.documents || []);
+    setHasResume(!!resume?.fullName && !!resume?.email);
+    setCoverLetters(getCoverLetters(userId));
 
     // Check favorites
     (async () => {
@@ -396,6 +400,25 @@ export default function JobDetailPage() {
     setIsApplied(true);
     setToast("Application submitted and employer notified!");
   }, [applicationEmail, applicationName, coverNote, job, uploadedDocuments]);
+
+  const handleQuickApply = useCallback(() => {
+    if (!job) return;
+    const userId = getOrCreateUserId();
+    const resume = getDefaultResume(userId);
+    if (!resume?.fullName || !resume?.email) {
+      setToast("Complete your resume first for Quick Apply.");
+      return;
+    }
+    const nextApplication = addApplication(userId, job, {
+      applicantName: resume.fullName,
+      applicantEmail: resume.email,
+      coverNote: "",
+      documents: [],
+    });
+    setCurrentApplication(nextApplication);
+    setIsApplied(true);
+    setToast("Quick application submitted!");
+  }, [job]);
 
   const focusApplicationSection = useCallback(() => {
     setShowApplicationSection(true);
@@ -896,6 +919,45 @@ export default function JobDetailPage() {
                 >
                   <Briefcase style={{ width: "16px", height: "16px" }} />
                   Apply Now
+                </Link>
+              )}
+
+              {/* Quick Apply */}
+              {!isApplied && hasResume && job.apply_method !== "external" && (
+                <button
+                  onClick={handleQuickApply}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    borderRadius: "14px",
+                    padding: "12px 20px",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    border: `1px solid rgba(16,185,129,0.3)`,
+                    background: "rgba(16,185,129,0.1)",
+                    color: "#10B981",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <Sparkles style={{ width: "14px", height: "14px" }} />
+                  Quick Apply
+                </button>
+              )}
+
+              {/* Resume prompt */}
+              {!isApplied && !hasResume && (
+                <Link
+                  to="/jobs/resume"
+                  style={{
+                    fontSize: "0.75rem",
+                    color: colors.textMuted,
+                    textDecoration: "underline",
+                    alignSelf: "center",
+                  }}
+                >
+                  Create your resume for Quick Apply
                 </Link>
               )}
 
@@ -1448,6 +1510,31 @@ export default function JobDetailPage() {
 
               <label style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>Cover Note</span>
+                {coverLetters.length > 0 && (
+                  <select
+                    onChange={(e) => {
+                      const letter = coverLetters.find((cl) => cl.id === e.target.value);
+                      if (letter) setCoverNote(letter.content);
+                    }}
+                    defaultValue=""
+                    style={{
+                      borderRadius: "12px",
+                      border: `1px solid ${colors.border}`,
+                      background: colors.surface,
+                      color: colors.text,
+                      padding: "8px 12px",
+                      fontSize: "13px",
+                      outline: "none",
+                      cursor: "pointer",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    <option value="">Use a saved cover letter...</option>
+                    {coverLetters.map((cl) => (
+                      <option key={cl.id} value={cl.id}>{cl.title}</option>
+                    ))}
+                  </select>
+                )}
                 <textarea
                   value={coverNote}
                   onChange={(e) => setCoverNote(e.target.value)}

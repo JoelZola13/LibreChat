@@ -10,24 +10,31 @@ jobs:
   sync-translations:
     name: Sync Translation Keys with Locize
     runs-on: ubuntu-latest
+    env:
+      HAS_LOCIZE_SYNC_SECRETS: ${{ secrets.LOCIZE_API_KEY != '' && secrets.LOCIZE_PROJECT_ID != '' }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Set Up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: 20
 
       - name: Install locize CLI
+        if: ${{ github.event_name == 'push' && env.HAS_LOCIZE_SYNC_SECRETS == 'true' }}
         run: npm install -g locize-cli
 
       # Sync translations (Push missing keys & remove deleted ones)
       - name: Sync Locize with Repository
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' && env.HAS_LOCIZE_SYNC_SECRETS == 'true' }}
         run: |
           cd client/src/locales
           locize sync --api-key ${{ secrets.LOCIZE_API_KEY }} --project-id ${{ secrets.LOCIZE_PROJECT_ID }} --language en
+
+      - name: Skip Locize sync when secrets are unavailable
+        if: ${{ github.event_name == 'push' && env.HAS_LOCIZE_SYNC_SECRETS != 'true' }}
+        run: echo "Skipping Locize sync because LOCIZE_API_KEY or LOCIZE_PROJECT_ID is not configured."
 
       # When triggered by repository_dispatch, skip sync step.
       - name: Skip sync step on non-push events
@@ -38,24 +45,34 @@ jobs:
     name: Create Translation PR on Version Published
     runs-on: ubuntu-latest
     needs: sync-translations
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    env:
+      HAS_LOCIZE_DOWNLOAD_SECRETS: ${{ secrets.LOCIZE_PROJECT_ID != '' }}
     permissions:
       contents: write
       pull-requests: write
     steps:
+      - name: Skip translation PR when Locize secrets are unavailable
+        if: ${{ env.HAS_LOCIZE_DOWNLOAD_SECRETS != 'true' }}
+        run: echo "Skipping translation PR because LOCIZE_PROJECT_ID is not configured."
+
       # 1. Check out the repository.
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        if: ${{ env.HAS_LOCIZE_DOWNLOAD_SECRETS == 'true' }}
+        uses: actions/checkout@v6.0.2
 
       # 2. Download translation files from locize.
       - name: Download Translations from locize
-        uses: locize/download@v2
+        if: ${{ env.HAS_LOCIZE_DOWNLOAD_SECRETS == 'true' }}
+        uses: locize/download@v3
         with:
           project-id: ${{ secrets.LOCIZE_PROJECT_ID }}
           path: "client/src/locales"
 
       # 3. Create a Pull Request using built-in functionality.
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        if: ${{ env.HAS_LOCIZE_DOWNLOAD_SECRETS == 'true' }}
+        uses: peter-evans/create-pull-request@v8.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           sign-commits: true

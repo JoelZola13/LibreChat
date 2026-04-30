@@ -13,6 +13,7 @@ import {
   ChevronRight,
   ArrowRight,
   PenSquare,
+  LayoutDashboard,
   Search as SearchIcon,
   X as XIcon,
 } from "lucide-react";
@@ -891,18 +892,32 @@ const NewsPageHeader = memo<NewsPageHeaderProps>(({
         News
       </h1>
       {canEditNews && (
-        <Link
-          to="/news/editor"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105"
-          style={{
-            background: colors.accent,
-            color: "#0C0A09",
-            boxShadow: "0 4px 14px rgba(250,204,21,0.4)",
-          }}
-        >
-          <PenSquare size={15} />
-          Create Article
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/news/dashboard"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105"
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: `1px solid ${colors.border}`,
+              color: colors.text,
+            }}
+          >
+            <LayoutDashboard size={15} />
+            Dashboard
+          </Link>
+          <Link
+            to="/news/editor"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105"
+            style={{
+              background: colors.accent,
+              color: "#0C0A09",
+              boxShadow: "0 4px 14px rgba(250,204,21,0.4)",
+            }}
+          >
+            <PenSquare size={15} />
+            Create Article
+          </Link>
+        </div>
       )}
     </motion.div>
 

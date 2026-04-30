@@ -99,7 +99,7 @@ export default defineConfig(({ mode }) => {
     react(),
     nodePolyfills(),
     VitePWA({
-      injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
+      injectRegister: 'disabled',
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
       devOptions: {
         enabled: false, // disable service worker registration in development mode
@@ -125,19 +125,24 @@ export default defineConfig(({ mode }) => {
         ],
         runtimeCaching: [
           {
+            // Always prefer network for JS so in-flight deploys take effect
+            // immediately. Falls back to cache only when offline. Filenames are
+            // content-hashed so mixing versions is impossible.
             urlPattern: /^\/assets\/.*\.js$/,
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst',
             options: {
-              cacheName: 'js-cache-v2',
-              expiration: { maxEntries: 80, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheName: 'js-cache-v3',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 80, maxAgeSeconds: 7 * 24 * 60 * 60 },
             },
           },
           {
             urlPattern: /^\/assets\/.*\.css$/,
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst',
             options: {
-              cacheName: 'css-cache-v1',
-              expiration: { maxEntries: 30, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheName: 'css-cache-v2',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 30, maxAgeSeconds: 7 * 24 * 60 * 60 },
             },
           },
           {
@@ -182,7 +187,7 @@ export default defineConfig(({ mode }) => {
     target: 'es2020',
     sourcemap: process.env.NODE_ENV === 'development',
     outDir: './dist',
-    minify: 'terser',
+    minify: 'esbuild',
     rollupOptions: {
       preserveEntrySignatures: 'strict',
       output: {

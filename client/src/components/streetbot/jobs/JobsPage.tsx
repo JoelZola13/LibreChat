@@ -46,6 +46,23 @@ function getOrCreateUserId(): string {
   return userId;
 }
 
+// Salary parser for filtering and sorting
+function parseSalaryFromJob(job: Job): { min: number; max: number } | null {
+  const text = job.salary_range || job.compensation || "";
+  if (!text) return null;
+  // Match patterns like "$55,000-65,000", "$16.50/hour", "$35-50/hour", "55000-65000"
+  const numbers = text.replace(/[$,]/g, "").match(/(\d+(?:\.\d+)?)/g);
+  if (!numbers || numbers.length === 0) return null;
+  const vals = numbers.map(Number).filter((n) => !isNaN(n));
+  if (vals.length === 0) return null;
+  // Annualize hourly rates
+  const isHourly = /hour|hr/i.test(text);
+  const factor = isHourly ? 2080 : 1; // 40hrs * 52 weeks
+  const min = Math.min(...vals) * factor;
+  const max = Math.max(...vals) * factor;
+  return { min, max };
+}
+
 // Type alias for colors object from shared glass design system
 type JobColors = ReturnType<typeof useGlassStyles>['colors'];
 
@@ -583,6 +600,245 @@ const SAMPLE_JOBS: Job[] = [
     application_count: 18,
     employer_verified: true,
     employer_verification_type: "business",
+  },
+  {
+    id: "sample-25",
+    title: "Volunteer Photographer",
+    organization: "Street Voices",
+    logo_url: "/job-logos/street-voices.svg",
+    opportunity_type: "Volunteer",
+    category: "Media",
+    work_mode: "Hybrid",
+    location: "Toronto, ON",
+    compensation: "Volunteer (unpaid)",
+    description: "The Volunteer Photographer will support Street Voices by capturing high-quality photos at events, workshops, community programs, interviews, and media projects. This role is ideal for someone passionate about photography, storytelling, community work, and documenting powerful moments. What you'll gain: build your photography portfolio, gain real-world media and event coverage experience, work with a creative team, receive credit for published work, and contribute to a platform that uplifts Black youth and marginalized voices. Potential opportunities for references, networking, and future paid projects when available.",
+    responsibilities:
+      "Photograph Street Voices events, workshops, panels, programs, and community activities.\n" +
+      "Capture candid, portrait, behind-the-scenes, and event-style photography.\n" +
+      "Work with the media and creative team to understand the visual needs of each project.\n" +
+      "Edit and organize selected photos for use on social media, websites, reports, promotional materials, and storytelling projects.\n" +
+      "Help build the Street Voices visual archive.\n" +
+      "Follow consent, privacy, and community safety guidelines when photographing participants.\n" +
+      "Collaborate with writers, videographers, personalities, and other creative team members.",
+    requirements:
+      "Experience with photography, either professionally, academically, or independently.\n" +
+      "Access to a camera or high-quality photography equipment is an asset.\n" +
+      "Basic photo editing skills are an asset.\n" +
+      "Strong eye for composition, lighting, and storytelling.\n" +
+      "Respectful, professional, and comfortable working in community spaces.\n" +
+      "Interest in media, social impact, youth empowerment, or storytelling.",
+    equity_statement:
+      "Street Voices is a media and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media production, training, and community engagement.",
+    tags: "photography,media,volunteer,event coverage,creative,storytelling",
+    is_creative_opportunity: true,
+    is_media_gig: true,
+    posting_date: "2026-04-30",
+    employer_verified: true,
+    employer_verification_type: "non-profit",
+  },
+  {
+    id: "sample-26",
+    title: "Volunteer Program Intern / Web Developer Intern",
+    organization: "Street Voices",
+    logo_url: "/job-logos/street-voices.svg",
+    opportunity_type: "Volunteer",
+    category: "Technology",
+    work_mode: "Hybrid",
+    location: "Remote / Hybrid",
+    compensation: "Volunteer (unpaid) — mentorship, references, and future paid opportunities when available",
+    description: "The Volunteer Program Intern / Web Developer Intern will support Street Voices' technology and digital projects while learning about software development, web development, AI tools, and digital product building. This is a learning-focused volunteer internship — you'll get guidance and mentorship while helping with real tasks across websites, web applications, databases, AI tools, automation, user experience, and digital systems. The ideal candidate is curious, motivated, and excited to learn how technology can support communities. You don't need to be an expert — just open to mentorship, willing to practice new skills, and interested in helping build digital tools that make real impact. Time commitment is flexible based on availability, project needs, and learning goals.",
+    responsibilities:
+      "Support the development and improvement of Street Voices' websites, digital platforms, and web-based tools.\n" +
+      "Assist with front-end development tasks such as updating pages, layouts, forms, components, and user interfaces.\n" +
+      "Learn and contribute to back-end tasks such as APIs, databases, integrations, and basic server-side workflows.\n" +
+      "Help test websites, forms, applications, and digital tools to identify bugs or areas for improvement.\n" +
+      "Support research into AI tools, software libraries, automation systems, and web development best practices.\n" +
+      "Assist with organizing technical documentation, notes, project plans, and feature ideas.\n" +
+      "Work with the Street Voices team to translate program needs into digital solutions.\n" +
+      "Learn about AI-powered tools, chatbots, directories, case management systems, and service-access technology.\n" +
+      "Participate in mentorship sessions, team check-ins, and project discussions.\n" +
+      "Support digital projects connected to Street Voices' media platform, training program, directory, and technology initiatives.",
+    requirements:
+      "Interest in technology, web development, software development, AI, or digital products.\n" +
+      "Beginner, student, self-taught, or early-stage developer experience is welcome.\n" +
+      "Basic knowledge of HTML, CSS, JavaScript, React, Python, or similar tools is an asset but not required.\n" +
+      "Willingness to learn, ask questions, and receive feedback.\n" +
+      "Strong problem-solving skills and attention to detail.\n" +
+      "Reliable, organized, and able to complete agreed-upon tasks.\n" +
+      "Interest in community impact, youth empowerment, media, social services, or nonprofit technology.\n" +
+      "Comfortable working independently and as part of a team.",
+    nice_to_have:
+      "Experience with website builders, CMS platforms, GitHub, or basic coding projects.\n" +
+      "Familiarity with React, Next.js, Vite, Tailwind CSS, FastAPI, Python, or JavaScript.\n" +
+      "Interest in AI, automation, data scraping, search tools, or chatbot development.\n" +
+      "Basic design sense or interest in UI/UX.\n" +
+      "Experience using tools like Google Workspace, Notion, Airtable, Figma, GitHub, or project management apps.",
+    equity_statement:
+      "Street Voices is a media, technology, and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media training, digital tools, and community-based innovation.",
+    tags: "internship,web development,javascript,react,python,ai,mentorship,volunteer",
+    training_provided: true,
+    no_experience_required: true,
+    posting_date: "2026-04-30",
+    employer_verified: true,
+    employer_verification_type: "non-profit",
+  },
+  {
+    id: "sample-27",
+    title: "Podcast Producer — The Echo",
+    organization: "Street Voices",
+    logo_url: "/job-logos/street-voices.svg",
+    opportunity_type: "Part-time",
+    category: "Media",
+    work_mode: "Remote",
+    location: "Remote (in-person optional)",
+    compensation: "$150 per episode (bi-weekly, ~2 episodes/month)",
+    description: "The Echo is a Street Voices podcast that explores culture, pop culture, urban culture, media, community stories, entertainment, and the conversations shaping our generation. The Podcast Producer will help shape the direction, topics, and content strategy for The Echo — researching and developing episode topics, identifying relevant cultural conversations, helping structure episodes, and deciding which moments should be turned into clips for social media and promotional use. The ideal candidate is tapped into culture and knows what people are talking about: what makes a podcast conversation interesting, what makes a clip shareable, and how to shape raw conversations into strong media content. This is a part-time contract role with bi-weekly production (about two episodes per month) at $150 per episode.",
+    responsibilities:
+      "Develop episode topics for The Echo on a bi-weekly basis.\n" +
+      "Research current conversations in culture, pop culture, urban culture, entertainment, media, and community issues.\n" +
+      "Help shape the angle, structure, and flow of each podcast episode.\n" +
+      "Prepare topic notes, discussion points, and possible questions for hosts.\n" +
+      "Identify strong moments from each episode that should be edited into clips for social media.\n" +
+      "Decide which clips should be prioritized for promotion, engagement, and audience growth.\n" +
+      "Work with the podcast host, editor, and Street Voices team to support episode planning and release.\n" +
+      "Ensure topics are relevant, timely, engaging, and aligned with the voice of The Echo.\n" +
+      "Support creative brainstorming for recurring segments, guest ideas, and episode formats.\n" +
+      "Stay aware of social media trends, viral conversations, music, entertainment, youth culture, and community issues.\n" +
+      "Provide clear direction to editors on clip selections, timestamps, and content priorities when needed.",
+    requirements:
+      "Strong understanding of culture, pop culture, urban culture, entertainment, and social media trends.\n" +
+      "Experience with podcasting, media production, content creation, journalism, music or media commentary, or digital storytelling is an asset.\n" +
+      "Strong creative instincts and ability to identify engaging conversation topics.\n" +
+      "Ability to recognize strong soundbites, viral moments, and clip-worthy segments.\n" +
+      "Good research, communication, and organizational skills.\n" +
+      "Comfortable working remotely and meeting deadlines.\n" +
+      "Interest in Black culture, youth culture, media, community issues, and creative industries.\n" +
+      "Ability to collaborate with hosts, editors, and creative team members.",
+    nice_to_have:
+      "Experience producing podcasts, YouTube shows, radio segments, interviews, or digital media content.\n" +
+      "Familiarity with platforms such as TikTok, Instagram Reels, YouTube Shorts, and podcast platforms.\n" +
+      "Ability to create episode outlines, show notes, or content briefs.\n" +
+      "Experience selecting clips or creating short-form content strategies.\n" +
+      "Knowledge of Toronto culture, urban media, music, entertainment, and community conversations.\n" +
+      "Existing network of potential guests, creatives, artists, or commentators.",
+    equity_statement:
+      "Street Voices is a media and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media production, training, and community engagement.",
+    tags: "podcast,producer,culture,pop culture,urban culture,media,editorial",
+    is_media_gig: true,
+    is_creative_opportunity: true,
+    posting_date: "2026-04-30",
+    employer_verified: true,
+    employer_verification_type: "non-profit",
+  },
+  {
+    id: "sample-28",
+    title: "Volunteer Videographer",
+    organization: "Street Voices",
+    logo_url: "/job-logos/street-voices.svg",
+    opportunity_type: "Volunteer",
+    category: "Media",
+    work_mode: "Hybrid",
+    location: "Toronto, ON",
+    compensation: "Volunteer (unpaid)",
+    description: "The Volunteer Videographer will help Street Voices capture video content for events, interviews, workshops, documentaries, social media, promotional campaigns, and community stories. This role is ideal for someone passionate about visual storytelling and looking for hands-on experience in community-based media production. What you'll gain: build your videography and filmmaking portfolio, hands-on experience in media production, credit for published work, collaboration with a creative and mission-driven team, the chance to support meaningful stories from Black youth and marginalized communities, and potential references, networking, and future paid projects when available.",
+    responsibilities:
+      "Film events, workshops, interviews, panels, behind-the-scenes moments, and community stories.\n" +
+      "Support the production of short-form and long-form video content.\n" +
+      "Work with the creative team to plan shots, angles, and visual storytelling approaches.\n" +
+      "Assist with lighting, audio, camera setup, and production needs when required.\n" +
+      "Edit video clips for social media, website use, promotional content, and recap videos when needed.\n" +
+      "Organize video files and support Street Voices' media archive.\n" +
+      "Follow consent, privacy, and safety guidelines when filming participants and community members.\n" +
+      "Collaborate with photographers, writers, personalities, and other members of the media team.",
+    requirements:
+      "Experience with videography, video editing, filmmaking, or content creation.\n" +
+      "Access to a camera, phone, or video equipment is an asset.\n" +
+      "Familiarity with editing software such as Premiere Pro, Final Cut Pro, DaVinci Resolve, CapCut, or similar tools is an asset.\n" +
+      "Strong understanding of framing, audio, lighting, and storytelling.\n" +
+      "Reliable, creative, and comfortable working in community spaces.\n" +
+      "Interest in media, social justice, youth empowerment, or community storytelling.",
+    equity_statement:
+      "Street Voices is a media and community organization focused on empowering Black youth and marginalized communities through media, storytelling, training, and creative opportunities. We use video, journalism, photography, podcasting, and digital media to help communities take control of their narratives.",
+    tags: "videography,video editing,filmmaking,media,volunteer,event coverage",
+    is_creative_opportunity: true,
+    is_media_gig: true,
+    posting_date: "2026-04-30",
+    employer_verified: true,
+    employer_verification_type: "non-profit",
+  },
+  {
+    id: "sample-29",
+    title: "Volunteer Writer",
+    organization: "Street Voices",
+    logo_url: "/job-logos/street-voices.svg",
+    opportunity_type: "Volunteer",
+    category: "Media",
+    work_mode: "Hybrid",
+    location: "Remote / Hybrid",
+    compensation: "Volunteer (unpaid)",
+    description: "The Volunteer Writer will support Street Voices by writing articles, interviews, profiles, blog posts, event recaps, community stories, and other written content. This role is ideal for someone who enjoys writing, journalism, storytelling, research, and amplifying community voices. What you'll gain: build your writing portfolio, get published on the Street Voices platform, gain experience in journalism, media, and community storytelling, receive writing credit when published, work with a creative and mission-driven team, and access potential references, networking, and future paid projects when available.",
+    responsibilities:
+      "Write articles, interviews, profiles, opinion pieces, event recaps, and community-focused stories.\n" +
+      "Conduct interviews with artists, youth, community members, organizers, and Street Voices participants when needed.\n" +
+      "Research topics related to media, arts, culture, youth, social issues, community resources, and marginalized communities.\n" +
+      "Work with the editorial or creative team to develop story ideas and content angles.\n" +
+      "Edit and revise drafts based on feedback.\n" +
+      "Support written content for the Street Voices website, social media, newsletters, reports, and promotional materials.\n" +
+      "Ensure writing is respectful, accurate, engaging, and aligned with Street Voices' mission.\n" +
+      "Collaborate with photographers, videographers, personalities, and other team members to create multimedia stories.",
+    requirements:
+      "Strong writing, editing, and storytelling skills.\n" +
+      "Interest in journalism, blogging, creative writing, community storytelling, or media.\n" +
+      "Ability to write clearly and meet agreed-upon deadlines.\n" +
+      "Research and interview skills are an asset.\n" +
+      "Familiarity with social issues, arts, culture, youth issues, or marginalized communities is an asset.\n" +
+      "Open to feedback and collaboration.",
+    equity_statement:
+      "Street Voices is a media and community organization committed to empowering Black youth and marginalized voices through storytelling, media training, journalism, and creative expression.",
+    tags: "writing,journalism,storytelling,content,volunteer,media",
+    is_creative_opportunity: true,
+    is_media_gig: true,
+    posting_date: "2026-04-30",
+    employer_verified: true,
+    employer_verification_type: "non-profit",
+  },
+  {
+    id: "sample-30",
+    title: "Volunteer Personality",
+    organization: "Street Voices",
+    logo_url: "/job-logos/street-voices.svg",
+    opportunity_type: "Volunteer",
+    category: "Media",
+    work_mode: "Hybrid",
+    location: "Toronto, ON",
+    compensation: "Volunteer (unpaid)",
+    description: "The Volunteer Personality will represent Street Voices on camera, on mic, at events, and across media projects. This role is ideal for someone who is charismatic, confident, thoughtful, and passionate about interviewing people, hosting conversations, and bringing energy to community-based media content. A Personality may support interviews, podcasts, event hosting, street interviews, social media content, panel discussions, and other public-facing media projects. What you'll gain: build your hosting, interviewing, and media portfolio, gain experience in podcasting, video content, public speaking, and event hosting, receive credit for published appearances when applicable, network with creatives, community leaders, artists, and media professionals, work with a mission-driven creative team, and access potential references, networking, and future paid projects when available.",
+    responsibilities:
+      "Host or co-host interviews, podcasts, event segments, social media videos, and community conversations.\n" +
+      "Conduct interviews with artists, youth, entrepreneurs, organizers, creatives, and community members.\n" +
+      "Represent Street Voices in a professional, engaging, and authentic way.\n" +
+      "Help develop interview questions, conversation topics, and content ideas.\n" +
+      "Participate in video shoots, podcast recordings, panels, and live events when needed.\n" +
+      "Work with writers, videographers, photographers, and the creative team to produce engaging stories.\n" +
+      "Support social media and promotional content through on-camera appearances.\n" +
+      "Create a welcoming and respectful environment for guests and participants.\n" +
+      "Follow Street Voices' values around consent, respect, representation, and community care.",
+    requirements:
+      "Comfortable speaking on camera, on mic, or in front of an audience.\n" +
+      "Strong communication and interpersonal skills.\n" +
+      "Interest in media, entertainment, journalism, podcasting, public speaking, or community storytelling.\n" +
+      "Ability to ask thoughtful questions and hold engaging conversations.\n" +
+      "Reliable, respectful, and open to feedback.\n" +
+      "Experience with hosting, podcasting, interviewing, acting, content creation, or public speaking is an asset but not required.\n" +
+      "Passion for uplifting Black youth and marginalized voices.",
+    equity_statement:
+      "Street Voices is a media and community organization that empowers Black youth and marginalized voices through storytelling, media production, training, and community engagement.",
+    tags: "hosting,podcasting,on-camera,public speaking,media,volunteer",
+    is_creative_opportunity: true,
+    is_media_gig: true,
+    posting_date: "2026-04-30",
+    employer_verified: true,
+    employer_verification_type: "non-profit",
   },
 ];
 
@@ -1253,12 +1509,20 @@ export default function JobsPage() {
   const [filterOpportunityType, setFilterOpportunityType] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [filterWorkType, setFilterWorkType] = useState("");
+  const [filterExperienceLevel, setFilterExperienceLevel] = useState("");
+  const [filterSalaryMin, setFilterSalaryMin] = useState("");
+  const [filterSalaryMax, setFilterSalaryMax] = useState("");
   const [sortMode, setSortMode] = useState("newest");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"all" | "saved">("all");
   const [showFilters, setShowFilters] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [paginationMode, setPaginationMode] = useState<"paginated" | "infinite">("paginated");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loadedCount, setLoadedCount] = useState(20);
+  const PAGE_SIZE = 20;
   const { isAdmin } = useUserRole();
 
   const availableTags = useMemo(() => {
@@ -1277,8 +1541,11 @@ export default function JobsPage() {
     if (filterOpportunityType) count++;
     if (filterLocation) count++;
     if (filterTags.length > 0) count += filterTags.length;
+    if (filterWorkType) count++;
+    if (filterExperienceLevel) count++;
+    if (filterSalaryMin || filterSalaryMax) count++;
     return count;
-  }, [filterCategory, filterOpportunityType, filterLocation, filterTags]);
+  }, [filterCategory, filterOpportunityType, filterLocation, filterTags, filterWorkType, filterExperienceLevel, filterSalaryMin, filterSalaryMax]);
 
   const filteredJobs = useMemo(() => {
     let result = jobs;
@@ -1322,6 +1589,29 @@ export default function JobsPage() {
       });
     }
 
+    if (filterWorkType) {
+      result = result.filter((job) =>
+        (job.work_mode || "").toLowerCase().includes(filterWorkType.toLowerCase())
+      );
+    }
+
+    if (filterExperienceLevel) {
+      result = result.filter((job) => {
+        if (filterExperienceLevel === "No Experience Required") return job.no_experience_required;
+        return (job.experience_level || "").toLowerCase().includes(filterExperienceLevel.toLowerCase());
+      });
+    }
+
+    if (filterSalaryMin || filterSalaryMax) {
+      const minVal = filterSalaryMin ? parseFloat(filterSalaryMin) : 0;
+      const maxVal = filterSalaryMax ? parseFloat(filterSalaryMax) : Infinity;
+      result = result.filter((job) => {
+        const parsed = parseSalaryFromJob(job);
+        if (!parsed) return true; // Include jobs without parseable salary
+        return parsed.max >= minVal && parsed.min <= maxVal;
+      });
+    }
+
     result = [...result].sort((a, b) => {
       if (sortMode === "newest") {
         return (Number(b.id) || 0) - (Number(a.id) || 0);
@@ -1335,6 +1625,20 @@ export default function JobsPage() {
         if (a.is_featured && !b.is_featured) return -1;
         if (!a.is_featured && b.is_featured) return 1;
         return 0;
+      } else if (sortMode === "salary") {
+        const sa = parseSalaryFromJob(a);
+        const sb = parseSalaryFromJob(b);
+        if (!sa && !sb) return 0;
+        if (!sa) return 1;
+        if (!sb) return -1;
+        return sb.max - sa.max;
+      } else if (sortMode === "company") {
+        const orgA = (a.organization || "").toLowerCase();
+        const orgB = (b.organization || "").toLowerCase();
+        if (!orgA && !orgB) return 0;
+        if (!orgA) return 1;
+        if (!orgB) return -1;
+        return orgA.localeCompare(orgB);
       }
       return 0;
     });
@@ -1349,6 +1653,10 @@ export default function JobsPage() {
     filterOpportunityType,
     filterLocation,
     filterTags,
+    filterWorkType,
+    filterExperienceLevel,
+    filterSalaryMin,
+    filterSalaryMax,
     sortMode,
   ]);
 
@@ -1449,7 +1757,13 @@ export default function JobsPage() {
     setFilterOpportunityType("");
     setFilterLocation("");
     setFilterTags([]);
+    setFilterWorkType("");
+    setFilterExperienceLevel("");
+    setFilterSalaryMin("");
+    setFilterSalaryMax("");
     setJobQuery("");
+    setCurrentPage(1);
+    setLoadedCount(20);
   }, []);
 
   // Load applied job IDs from localStorage
@@ -1756,6 +2070,104 @@ export default function JobsPage() {
                 </div>
 
                 <div>
+                  <label htmlFor="filter-work-type" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                    Work Type
+                  </label>
+                  <select
+                    id="filter-work-type"
+                    value={filterWorkType}
+                    onChange={(e) => { setFilterWorkType(e.target.value); setCurrentPage(1); }}
+                    style={{
+                      width: "100%",
+                      cursor: "pointer",
+                      borderRadius: "14px",
+                      border: `1px solid ${colors.border}`,
+                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
+                      padding: "10px 12px",
+                      fontSize: "14px",
+                      color: colors.text,
+                      outline: "none",
+                    }}
+                  >
+                    <option value="">All Work Types</option>
+                    <option value="Remote">Remote</option>
+                    <option value="In Person">On-site</option>
+                    <option value="Hybrid">Hybrid</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="filter-experience" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                    Experience Level
+                  </label>
+                  <select
+                    id="filter-experience"
+                    value={filterExperienceLevel}
+                    onChange={(e) => { setFilterExperienceLevel(e.target.value); setCurrentPage(1); }}
+                    style={{
+                      width: "100%",
+                      cursor: "pointer",
+                      borderRadius: "14px",
+                      border: `1px solid ${colors.border}`,
+                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
+                      padding: "10px 12px",
+                      fontSize: "14px",
+                      color: colors.text,
+                      outline: "none",
+                    }}
+                  >
+                    <option value="">All Levels</option>
+                    <option value="Entry">Entry Level</option>
+                    <option value="Mid">Mid Level</option>
+                    <option value="Senior">Senior Level</option>
+                    <option value="No Experience Required">No Experience Required</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                    Salary Range (Annual)
+                  </label>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      type="number"
+                      value={filterSalaryMin}
+                      onChange={(e) => { setFilterSalaryMin(e.target.value); setCurrentPage(1); }}
+                      placeholder="Min"
+                      style={{
+                        flex: 1,
+                        borderRadius: "14px",
+                        border: `1px solid ${colors.border}`,
+                        background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
+                        padding: "10px 12px",
+                        fontSize: "14px",
+                        color: colors.text,
+                        outline: "none",
+                        boxSizing: "border-box" as const,
+                      }}
+                    />
+                    <span style={{ color: colors.textMuted, fontSize: "14px" }}>-</span>
+                    <input
+                      type="number"
+                      value={filterSalaryMax}
+                      onChange={(e) => { setFilterSalaryMax(e.target.value); setCurrentPage(1); }}
+                      placeholder="Max"
+                      style={{
+                        flex: 1,
+                        borderRadius: "14px",
+                        border: `1px solid ${colors.border}`,
+                        background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
+                        padding: "10px 12px",
+                        fontSize: "14px",
+                        color: colors.text,
+                        outline: "none",
+                        boxSizing: "border-box" as const,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
                   <label htmlFor="filter-sort" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
                     Sort By
                   </label>
@@ -1779,6 +2191,8 @@ export default function JobsPage() {
                     <option value="deadline">Deadline Approaching</option>
                     <option value="views">Most Viewed</option>
                     <option value="featured">Featured First</option>
+                    <option value="salary">Highest Salary</option>
+                    <option value="company">Company (A-Z)</option>
                   </select>
                 </div>
               </div>
@@ -1995,8 +2409,41 @@ export default function JobsPage() {
                 </button>
               </div>
             ) : (
+              <>
+              {/* Pagination mode toggle & info */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+                <div style={{ fontSize: "0.85rem", color: colors.textMuted }}>
+                  {filteredJobs.length} job{filteredJobs.length !== 1 ? "s" : ""} found
+                </div>
+                <div style={{ display: "flex", gap: "4px", borderRadius: "10px", overflow: "hidden", border: `1px solid ${colors.border}` }}>
+                  <button
+                    onClick={() => { setPaginationMode("paginated"); setCurrentPage(1); }}
+                    style={{
+                      padding: "6px 14px", fontSize: "0.75rem", fontWeight: 600, border: "none", cursor: "pointer",
+                      background: paginationMode === "paginated" ? colors.accent : "transparent",
+                      color: paginationMode === "paginated" ? "#000" : colors.textMuted,
+                    }}
+                  >
+                    Pages
+                  </button>
+                  <button
+                    onClick={() => { setPaginationMode("infinite"); setLoadedCount(20); }}
+                    style={{
+                      padding: "6px 14px", fontSize: "0.75rem", fontWeight: 600, border: "none", cursor: "pointer",
+                      background: paginationMode === "infinite" ? colors.accent : "transparent",
+                      color: paginationMode === "infinite" ? "#000" : colors.textMuted,
+                    }}
+                  >
+                    Scroll
+                  </button>
+                </div>
+              </div>
+
               <div style={{ display: "grid", gap: isMobile ? "14px" : "20px", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(340px, 1fr))" }}>
-                {filteredJobs.map((job) => (
+                {(paginationMode === "paginated"
+                  ? filteredJobs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+                  : filteredJobs.slice(0, loadedCount)
+                ).map((job) => (
                   <JobCard
                     key={job.id}
                     job={job}
@@ -2010,6 +2457,68 @@ export default function JobsPage() {
                   />
                 ))}
               </div>
+
+              {/* Pagination controls */}
+              {paginationMode === "paginated" && filteredJobs.length > PAGE_SIZE && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", marginTop: "24px" }}>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    style={{
+                      padding: "10px 20px", borderRadius: "12px", border: `1px solid ${colors.border}`,
+                      background: currentPage <= 1 ? "transparent" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+                      color: currentPage <= 1 ? colors.textMuted : colors.text,
+                      fontWeight: 600, fontSize: "0.85rem", cursor: currentPage <= 1 ? "default" : "pointer",
+                      opacity: currentPage <= 1 ? 0.5 : 1,
+                    }}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: "0.85rem", color: colors.textSecondary, fontWeight: 500 }}>
+                    Page {currentPage} of {Math.ceil(filteredJobs.length / PAGE_SIZE)}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(Math.ceil(filteredJobs.length / PAGE_SIZE), p + 1))}
+                    disabled={currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE)}
+                    style={{
+                      padding: "10px 20px", borderRadius: "12px", border: `1px solid ${colors.border}`,
+                      background: currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE) ? "transparent" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
+                      color: currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE) ? colors.textMuted : colors.text,
+                      fontWeight: 600, fontSize: "0.85rem",
+                      cursor: currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE) ? "default" : "pointer",
+                      opacity: currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE) ? 0.5 : 1,
+                    }}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+
+              {/* Infinite scroll sentinel */}
+              {paginationMode === "infinite" && loadedCount < filteredJobs.length && (
+                <div
+                  style={{ textAlign: "center", padding: "24px", marginTop: "12px" }}
+                  ref={(el) => {
+                    if (!el) return;
+                    const observer = new IntersectionObserver(
+                      (entries) => {
+                        if (entries[0].isIntersecting) {
+                          setLoadedCount((prev) => prev + 20);
+                          observer.disconnect();
+                        }
+                      },
+                      { threshold: 0.1 }
+                    );
+                    observer.observe(el);
+                  }}
+                >
+                  <Loader2 size={24} color={colors.textMuted} style={{ animation: "spin 1s linear infinite" }} />
+                  <div style={{ fontSize: "0.8rem", color: colors.textMuted, marginTop: "8px" }}>
+                    Loading more jobs...
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </section>
         </main>

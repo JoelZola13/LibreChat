@@ -31,6 +31,7 @@ type CourseReviewsProps = {
   courseId: string;
   userId: string;
   courseName?: string;
+  canWriteReview?: boolean;
 };
 
 function StarRating({
@@ -77,7 +78,7 @@ function StarRating({
   );
 }
 
-export function CourseReviews({ courseId, userId, courseName }: CourseReviewsProps) {
+export function CourseReviews({ courseId, userId, courseName, canWriteReview = true }: CourseReviewsProps) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [stats, setStats] = useState<RatingStats | null>(null);
   const [userReview, setUserReview] = useState<Review | null>(null);
@@ -261,7 +262,7 @@ export function CourseReviews({ courseId, userId, courseName }: CourseReviewsPro
         </div>
 
         {/* Write Review Button */}
-        {!userReview && !showForm && (
+        {!userReview && !showForm && canWriteReview && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -271,6 +272,12 @@ export function CourseReviews({ courseId, userId, courseName }: CourseReviewsPro
             <Edit2 className="w-5 h-5" />
             Write a Review
           </motion.button>
+        )}
+
+        {!canWriteReview && (
+          <div className="mt-6 rounded-xl border border-gray-800 bg-black/20 px-4 py-3 text-sm text-gray-400">
+            Enroll in this course to leave your own rating and quick review.
+          </div>
         )}
       </div>
 

@@ -21,7 +21,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6.0.2
 
       - name: Find unused i18next keys
         id: find-unused
@@ -52,7 +52,7 @@ jobs:
             if [[ "$KEY" == com_ui_special_var_* ]]; then
               # Check if TSpecialVarLabel is used in the codebase
               for DIR in "${SOURCE_DIRS[@]}"; do
-                if grep -r --include=\*.{js,jsx,ts,tsx} -q "TSpecialVarLabel" "$DIR"; then
+                if grep -r --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' -q "TSpecialVarLabel" "$DIR"; then
                   FOUND=true
                   break
                 fi
@@ -61,7 +61,7 @@ jobs:
               # Also check if the key is directly used somewhere
               if [[ "$FOUND" == false ]]; then
                 for DIR in "${SOURCE_DIRS[@]}"; do
-                  if grep -r --include=\*.{js,jsx,ts,tsx} -q "$KEY" "$DIR"; then
+                  if grep -r --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' -q "$KEY" "$DIR"; then
                     FOUND=true
                     break
                   fi
@@ -72,12 +72,12 @@ jobs:
               # Check if agent category localization is being used
               for DIR in "${SOURCE_DIRS[@]}"; do
                 # Check for dynamic category label/description usage
-                if grep -r --include=\*.{js,jsx,ts,tsx} -E "category\.(label|description).*startsWith.*['\"]com_" "$DIR" > /dev/null 2>&1 || \
+                if grep -r --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' -E "category\.(label|description).*startsWith.*['\"]com_" "$DIR" > /dev/null 2>&1 || \
                    # Check for the method that defines these keys
-                   grep -r --include=\*.{js,jsx,ts,tsx} "ensureDefaultCategories" "$DIR" > /dev/null 2>&1 || \
+                   grep -r --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' "ensureDefaultCategories" "$DIR" > /dev/null 2>&1 || \
                    # Check for direct usage in agentCategory.ts
-                   grep -r --include=\*.ts -E "label:.*['\"]$KEY['\"]" "$DIR" > /dev/null 2>&1 || \
-                   grep -r --include=\*.ts -E "description:.*['\"]$KEY['\"]" "$DIR" > /dev/null 2>&1; then
+                   grep -r --include='*.ts' -E "label:.*['\"]${KEY}['\"]" "$DIR" > /dev/null 2>&1 || \
+                   grep -r --include='*.ts' -E "description:.*['\"]${KEY}['\"]" "$DIR" > /dev/null 2>&1; then
                   FOUND=true
                   break
                 fi
@@ -86,7 +86,7 @@ jobs:
               # Also check if the key is directly used somewhere
               if [[ "$FOUND" == false ]]; then
                 for DIR in "${SOURCE_DIRS[@]}"; do
-                  if grep -r --include=\*.{js,jsx,ts,tsx} -q "$KEY" "$DIR"; then
+                  if grep -r --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' -q "$KEY" "$DIR"; then
                     FOUND=true
                     break
                   fi
@@ -95,7 +95,7 @@ jobs:
             else
               # Regular check for other keys
               for DIR in "${SOURCE_DIRS[@]}"; do
-                if grep -r --include=\*.{js,jsx,ts,tsx} -q "$KEY" "$DIR"; then
+                if grep -r --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' -q "$KEY" "$DIR"; then
                   FOUND=true
                   break
                 fi
@@ -110,13 +110,14 @@ jobs:
           # Output results
           if [[ ${#UNUSED_KEYS[@]} -gt 0 ]]; then
             echo "🛑 Found ${#UNUSED_KEYS[@]} unused i18n keys:"
-            echo "unused_keys=$(echo "${UNUSED_KEYS[@]}" | jq -R -s -c 'split(" ")')" >> $GITHUB_ENV
+            unused_keys_json=$(printf '%s\n' "${UNUSED_KEYS[@]}" | jq -R -s -c 'split("\n")[:-1]')
+            echo "unused_keys=${unused_keys_json}" >> "$GITHUB_ENV"
             for KEY in "${UNUSED_KEYS[@]}"; do
               echo "::warning title=Unused i18n Key::'$KEY' is defined but not used in the codebase."
             done
           else
             echo "✅ No unused i18n keys detected!"
-            echo "unused_keys=[]" >> $GITHUB_ENV
+            echo "unused_keys=[]" >> "$GITHUB_ENV"
           fi
 
       - name: Post verified comment on PR
@@ -125,7 +126,7 @@ jobs:
           PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
 
           # Format the unused keys list as checkboxes for easy manual checking.
-          FILTERED_KEYS=$(echo "$unused_keys" | jq -r '.[]' | grep -v '^\s*$' | sed 's/^/- [ ] `/;s/$/`/' )
+          FILTERED_KEYS=$(printf '%s' "$unused_keys" | jq -r '.[] | select(test("^\\s*$") | not) | "- [ ] `\(.)`"')
 
           COMMENT_BODY=$(cat <<EOF
           ### 🚨 Unused i18next Keys Detected
@@ -138,9 +139,9 @@ jobs:
           EOF
           )
 
-          gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
             -f body="$COMMENT_BODY" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}"
+            -H "Authorization: Bearer ${GITHUB_TOKEN}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

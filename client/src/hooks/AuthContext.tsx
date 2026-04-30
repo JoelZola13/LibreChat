@@ -131,6 +131,14 @@ const AuthContextProvider = ({
     loginUser.mutate(data);
   };
 
+  // Paths that render their own unauthenticated UI (in-component sign-in prompt)
+  // and should NOT be redirected to /login on silent-refresh failure.
+  const pathAllowsAnonymous = () => {
+    if (typeof window === 'undefined') return false;
+    const p = window.location.pathname || '';
+    return p.startsWith('/gallery') || p.startsWith('/creatives');
+  };
+
   const silentRefresh = useCallback(() => {
     if (authConfig?.test === true) {
       console.log('Test mode. Skipping silent refresh.');
@@ -146,6 +154,7 @@ const AuthContextProvider = ({
           if (authConfig?.test === true) {
             return;
           }
+          if (pathAllowsAnonymous()) return;
           navigate('/login');
         }
       },
@@ -154,6 +163,7 @@ const AuthContextProvider = ({
         if (authConfig?.test === true) {
           return;
         }
+        if (pathAllowsAnonymous()) return;
         navigate('/login');
       },
     });
@@ -164,7 +174,9 @@ const AuthContextProvider = ({
       setUser(userQuery.data);
     } else if (userQuery.isError) {
       doSetError((userQuery.error as Error).message);
-      navigate('/login', { replace: true });
+      if (!pathAllowsAnonymous()) {
+        navigate('/login', { replace: true });
+      }
     }
     if (error != null && error && isAuthenticated) {
       doSetError(undefined);

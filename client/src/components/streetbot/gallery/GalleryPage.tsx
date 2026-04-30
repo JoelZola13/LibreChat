@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const SubmitArtPage = lazy(() => import("./SubmitArtPage"));
+const AuthPopupModal = lazy(() => import("../shared/AuthPopupModal"));
 import {
   Filter,
   Search,
@@ -19,6 +20,17 @@ import {
   Grid,
   X,
   Maximize2,
+  ArrowLeft,
+  Upload,
+  Image,
+  ToggleLeft,
+  ToggleRight,
+  TrendingUp,
+  FolderOpen,
+  Inbox,
+  Clock,
+  Wallet,
+  PenTool,
 } from "lucide-react";
 import { SB_API_BASE } from "~/components/streetbot/shared/apiConfig";
 import { useGlassStyles } from "../shared/useGlassStyles";
@@ -71,6 +83,7 @@ interface Artwork {
   share_count: number;
   is_nsfw: boolean;
   is_approved: boolean;
+  additional_images: string[];
   created_at: string;
   updated_at: string;
 }
@@ -120,6 +133,18 @@ const GalleryImage = ({ src, alt }: { src: string; alt: string }) => {
 };
 
 /** Inline ProfileBadge replacement: simple avatar + name span */
+/** Slugify an artist name into a URL-safe username (e.g. "Maria Reyes" → "maria_reyes"). */
+const artistNameToSlug = (name?: string | null): string | null => {
+  if (!name) return null;
+  const slug = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip diacritics
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return slug || null;
+};
+
 const InlineProfileBadge = ({
   userId,
   username,
@@ -139,7 +164,8 @@ const InlineProfileBadge = ({
     <span
       onClick={(e) => {
         e.stopPropagation();
-        navigate(`/gallery/artist/${userId}`);
+        if (username) navigate(`/creatives/${encodeURIComponent(username)}`);
+        else navigate(`/gallery/artist/${userId}`);
       }}
       style={{
         display: "inline-flex",
@@ -395,13 +421,172 @@ const SimpleLightbox = ({
 
 // ── Artwork Detail View ──────────────────────────────────────────────────────
 
-function ArtworkDetailView({ artworkId, onBack }: { artworkId: string; onBack: () => void }) {
+/* ─── Artwork Image Slideshow with slow fade ─── */
+function ArtworkSlideshow({ artwork, glassCard }: { artwork: Artwork; glassCard: React.CSSProperties }) {
+  const allImages = [
+    artwork.full_resolution_url || artwork.image_url,
+    ...(artwork.additional_images || []),
+  ].filter(Boolean) as string[];
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [fade, setFade] = useState(1);
+  const hasMultiple = allImages.length > 1;
+
+  // Auto-advance every 5 seconds with slow crossfade
+  useEffect(() => {
+    if (!hasMultiple) return;
+    const interval = setInterval(() => {
+      setFade(0); // fade out
+      setTimeout(() => {
+        setCurrentIdx((prev) => (prev + 1) % allImages.length);
+        setFade(1); // fade in
+      }, 800); // 800ms fade-out, then switch and fade in
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [allImages.length, hasMultiple]);
+
+  const goTo = (idx: number) => {
+    if (idx === currentIdx) return;
+    setFade(0);
+    setTimeout(() => { setCurrentIdx(idx); setFade(1); }, 600);
+  };
+
+  return (
+    <div style={{ flex: '1 1 500px', minWidth: 300 }}>
+      <div style={{
+        ...glassCard, borderRadius: 16, overflow: 'hidden', position: 'relative',
+      }}>
+        <img
+          src={allImages[currentIdx]}
+          alt={`${artwork.title} - image ${currentIdx + 1}`}
+          style={{
+            width: '100%', display: 'block', maxHeight: '70vh', objectFit: 'contain',
+            background: '#000', opacity: fade,
+            transition: 'opacity 0.8s ease-in-out',
+          }}
+        />
+        {artwork.is_for_sale && (
+          <div style={{
+            position: 'absolute', top: 16, left: 16, padding: '6px 14px',
+            background: '#FFD600', color: '#000', fontWeight: 800, fontSize: '0.75rem',
+            borderRadius: 8, textTransform: 'uppercase',
+          }}>
+            {artwork.is_sold ? 'SOLD' : 'FOR SALE'}
+          </div>
+        )}
+        {/* Navigation arrows */}
+        {hasMultiple && (
+          <>
+            <button
+              onClick={() => goTo((currentIdx - 1 + allImages.length) % allImages.length)}
+              style={{
+                position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', cursor: 'pointer',
+                borderRadius: '50%', width: 40, height: 40, fontSize: '1.2rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                backdropFilter: 'blur(8px)',
+              }}
+            >‹</button>
+            <button
+              onClick={() => goTo((currentIdx + 1) % allImages.length)}
+              style={{
+                position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', cursor: 'pointer',
+                borderRadius: '50%', width: 40, height: 40, fontSize: '1.2rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                backdropFilter: 'blur(8px)',
+              }}
+            >›</button>
+          </>
+        )}
+      </div>
+      {/* Dot indicators */}
+      {hasMultiple && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+          {allImages.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => goTo(i)}
+              style={{
+                width: i === currentIdx ? 24 : 10, height: 10, borderRadius: 5,
+                background: i === currentIdx ? '#FFD600' : 'rgba(255,255,255,0.3)',
+                border: 'none', cursor: 'pointer', transition: 'all 0.3s ease',
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArtworkDetailView({ artworkId, onBack, onSelectTag }: { artworkId: string; onBack: () => void; onSelectTag?: (tag: string) => void }) {
   const { colors, glassCard, glassSurface } = useGlassStyles();
   const { user: authUser } = useAuthContext();
+  const navigate = useNavigate();
   const [artwork, setArtwork] = useState<Artwork | null>(null);
+  const [artistProfile, setArtistProfile] = useState<ArtistProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFav, setIsFav] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [savingPrice, setSavingPrice] = useState(false);
+  const [comments, setComments] = useState<Array<{id: string; user_id: string; user_name: string; user_avatar: string; body: string; created_at: string; parent_id: string | null; edited?: boolean}>>([]);
+  const [newComment, setNewComment] = useState('');
+  const [postingComment, setPostingComment] = useState(false);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+
+  const loadComments = () => {
+    fetch(`${GALLERY_API_URL}/comments?artwork_id=${encodeURIComponent(artworkId)}`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setComments(data); })
+      .catch(() => {});
+  };
+
+  useEffect(() => { if (artworkId) loadComments(); }, [artworkId]);
+
+  const handlePostComment = () => {
+    if (!newComment.trim()) return;
+    setPostingComment(true);
+    const userId = getOrCreateUserId(authUser?.id);
+    const userName = authUser?.name || authUser?.username || 'Anonymous';
+    const userAvatar = authUser?.avatar || '';
+    fetch(`${GALLERY_API_URL}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artwork_id: artworkId, user_id: userId, user_name: userName, user_avatar: userAvatar, body: newComment.trim(), parent_id: replyTo }),
+    })
+      .then(r => r.json())
+      .then(() => { setNewComment(''); setReplyTo(null); loadComments(); if (artwork) setArtwork({ ...artwork, comments: (artwork.comments || 0) + 1 }); })
+      .catch(() => {})
+      .finally(() => setPostingComment(false));
+  };
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState('');
+
+  const handleEditComment = (commentId: string) => {
+    const userId = getOrCreateUserId(authUser?.id);
+    fetch(`${GALLERY_API_URL}/comments`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: commentId, user_id: userId, body: editBody.trim() }),
+    })
+      .then(r => r.json())
+      .then(() => { setEditingId(null); setEditBody(''); loadComments(); })
+      .catch(() => {});
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    if (!confirm('Delete this comment?')) return;
+    const userId = getOrCreateUserId(authUser?.id);
+    fetch(`${GALLERY_API_URL}/comments?id=${encodeURIComponent(commentId)}&user_id=${encodeURIComponent(userId)}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(() => { loadComments(); if (artwork) setArtwork({ ...artwork, comments: Math.max((artwork.comments || 1) - 1, 0) }); })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -411,6 +596,78 @@ function ArtworkDetailView({ artworkId, onBack }: { artworkId: string; onBack: (
       .catch(() => setError('Artwork not found'))
       .finally(() => setLoading(false));
   }, [artworkId]);
+
+  useEffect(() => {
+    const artistId = artwork?.artist_id;
+    if (!artistId) { setArtistProfile(null); return; }
+    let cancelled = false;
+    fetch(`${SB_API_BASE}/street-profiles/batch-lookup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_ids: [artistId] }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(profiles => {
+        if (cancelled) return;
+        setArtistProfile(profiles && profiles[artistId] ? profiles[artistId] : null);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [artwork?.artist_id]);
+
+  const handleSavePrice = async () => {
+    if (!artwork || !authUser?.id) return;
+    const trimmed = priceDraft.trim();
+    const parsed = trimmed === "" ? null : Number(trimmed);
+    if (parsed !== null && (Number.isNaN(parsed) || parsed < 0)) {
+      alert("Enter a valid price (0 or greater).");
+      return;
+    }
+    setSavingPrice(true);
+    try {
+      const body: Record<string, unknown> = { price: parsed };
+      if (parsed !== null && !artwork.is_for_sale) body.is_for_sale = true;
+      const resp = await fetch(
+        `${GALLERY_API_URL}/artworks/${encodeURIComponent(artwork.id)}?user_id=${encodeURIComponent(authUser.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `Update failed (${resp.status})`);
+      }
+      const updated = await resp.json();
+      setArtwork(updated);
+      setEditingPrice(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setSavingPrice(false);
+    }
+  };
+
+  const handleDeleteArtwork = async () => {
+    if (!artwork || !authUser?.id) return;
+    if (!window.confirm('Delete this artwork? This cannot be undone.')) return;
+    setDeleting(true);
+    try {
+      const resp = await fetch(
+        `${GALLERY_API_URL}/artworks/${encodeURIComponent(artwork.id)}?user_id=${encodeURIComponent(authUser.id)}`,
+        { method: 'DELETE' },
+      );
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `Delete failed (${resp.status})`);
+      }
+      navigate('/gallery');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete failed');
+      setDeleting(false);
+    }
+  };
 
   // Check if favorited
   useEffect(() => {
@@ -475,62 +732,155 @@ function ArtworkDetailView({ artworkId, onBack }: { artworkId: string; onBack: (
         </button>
 
         <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
-          {/* Left: Artwork image */}
-          <div style={{ flex: '1 1 500px', minWidth: 300 }}>
-            <div style={{
-              ...glassCard, borderRadius: 16, overflow: 'hidden', position: 'relative',
-            }}>
-              <img
-                src={artwork.full_resolution_url || artwork.image_url}
-                alt={artwork.title}
-                style={{ width: '100%', display: 'block', maxHeight: '70vh', objectFit: 'contain', background: '#000' }}
-              />
-              {artwork.is_for_sale && (
-                <div style={{
-                  position: 'absolute', top: 16, left: 16, padding: '6px 14px',
-                  background: '#FFD600', color: '#000', fontWeight: 800, fontSize: '0.75rem',
-                  borderRadius: 8, textTransform: 'uppercase',
-                }}>
-                  {artwork.is_sold ? 'SOLD' : 'FOR SALE'}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Left: Artwork image slideshow */}
+          <ArtworkSlideshow artwork={artwork} glassCard={glassCard} />
 
           {/* Right: Details */}
           <div style={{ flex: '1 1 350px', minWidth: 280 }}>
             <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: colors.text, margin: '0 0 8px' }}>
               {artwork.title}
             </h1>
-            <p style={{ fontSize: '0.95rem', color: colors.textMuted, margin: '0 0 20px' }}>
-              by <span style={{ color: colors.accent, fontWeight: 600 }}>{artwork.artist_name || 'Unknown Artist'}</span>
-              {artwork.year_created && <span> · {artwork.year_created}</span>}
+            <p style={{ fontSize: '0.95rem', color: colors.textMuted, margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span>by</span>
+              {artwork.artist_id && artistProfile ? (
+                <InlineProfileBadge
+                  userId={artwork.artist_id}
+                  username={artistProfile.username}
+                  displayName={artistProfile.display_name}
+                  avatarUrl={artistProfile.avatar_url || undefined}
+                  isVerified={artistProfile.is_verified}
+                />
+              ) : (() => {
+                const name = artwork.artist_name || 'Anonymous';
+                const slug = artistNameToSlug(artwork.artist_name);
+                if (!slug) {
+                  return (
+                    <span style={{ color: colors.accent, fontWeight: 600 }}>
+                      {name}
+                    </span>
+                  );
+                }
+                return (
+                  <span
+                    role="link"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/creatives/${encodeURIComponent(slug)}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/creatives/${encodeURIComponent(slug)}`);
+                      }
+                    }}
+                    style={{
+                      color: colors.accent,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: 3,
+                    }}
+                  >
+                    {name}
+                  </span>
+                );
+              })()}
+              {artwork.year_created && <span>· {artwork.year_created}</span>}
             </p>
 
             {/* Price */}
-            {artwork.is_for_sale && artwork.price != null && (
-              <div style={{
-                ...glassSurface, padding: '16px 20px', borderRadius: 12, marginBottom: 20,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
-                <div>
-                  <div style={{ fontSize: '0.65rem', color: colors.textMuted, textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Price</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFD600' }}>
-                    ${Number(artwork.price).toFixed(2)} <span style={{ fontSize: '0.7rem', color: colors.textMuted }}>{artwork.currency}</span>
+            {(() => {
+              const isOwner = !!(authUser?.id && artwork.artist_id && authUser.id === artwork.artist_id);
+              const showBlock = (artwork.is_for_sale && artwork.price != null) || isOwner;
+              if (!showBlock) return null;
+              return (
+                <div style={{
+                  ...glassSurface, padding: '16px 20px', borderRadius: 12, marginBottom: 20,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.65rem', color: colors.textMuted, textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Price</div>
+                    {editingPrice ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#FFD600' }}>$</span>
+                        <input
+                          autoFocus
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={priceDraft}
+                          onChange={(e) => setPriceDraft(e.target.value)}
+                          placeholder="Not for sale"
+                          style={{
+                            width: 120, padding: '6px 10px', borderRadius: 8,
+                            border: `1px solid ${colors.border}`, background: 'rgba(255,255,255,0.05)',
+                            color: colors.text, fontSize: '1.1rem', fontWeight: 700,
+                          }}
+                        />
+                        <button
+                          onClick={handleSavePrice}
+                          disabled={savingPrice}
+                          style={{
+                            padding: '6px 14px', borderRadius: 8, border: 'none', background: '#FFD600',
+                            color: '#000', fontWeight: 700, fontSize: '0.8rem',
+                            cursor: savingPrice ? 'not-allowed' : 'pointer', opacity: savingPrice ? 0.6 : 1,
+                          }}
+                        >
+                          {savingPrice ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => { setEditingPrice(false); setPriceDraft(''); }}
+                          disabled={savingPrice}
+                          style={{
+                            padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.border}`,
+                            background: 'transparent', color: colors.textMuted, fontSize: '0.8rem', cursor: 'pointer',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFD600' }}>
+                          {artwork.is_for_sale && artwork.price != null
+                            ? new Intl.NumberFormat("en-CA", { style: "currency", currency: artwork.currency || "CAD" }).format(Number(artwork.price))
+                            : <span style={{ fontSize: '0.95rem', color: colors.textMuted, fontWeight: 600 }}>Not for sale</span>}
+                        </div>
+                        {isOwner && (
+                          <button
+                            onClick={() => {
+                              setPriceDraft(artwork.price != null ? String(artwork.price) : '');
+                              setEditingPrice(true);
+                            }}
+                            title="Edit price"
+                            style={{
+                              padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.border}`,
+                              background: 'rgba(255,255,255,0.04)', color: colors.textMuted,
+                              fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >
+                            <PenTool size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Edit
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
+                  {!editingPrice && artwork.is_for_sale && artwork.price != null && (
+                    artwork.is_sold ? (
+                      <span style={{ padding: '8px 18px', borderRadius: 10, background: 'rgba(239,68,68,0.15)', color: '#ef4444', fontWeight: 700, fontSize: '0.8rem' }}>Sold</span>
+                    ) : (
+                      <button style={{
+                        padding: '10px 24px', borderRadius: 10, border: 'none',
+                        background: '#FFD600', color: '#000', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                      }}>
+                        Purchase
+                      </button>
+                    )
+                  )}
                 </div>
-                {artwork.is_sold ? (
-                  <span style={{ padding: '8px 18px', borderRadius: 10, background: 'rgba(239,68,68,0.15)', color: '#ef4444', fontWeight: 700, fontSize: '0.8rem' }}>Sold</span>
-                ) : (
-                  <button style={{
-                    padding: '10px 24px', borderRadius: 10, border: 'none',
-                    background: '#FFD600', color: '#000', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
-                  }}>
-                    Purchase
-                  </button>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             {/* Description */}
             {artwork.description && (
@@ -577,9 +927,10 @@ function ArtworkDetailView({ artworkId, onBack }: { artworkId: string; onBack: (
                 <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: colors.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>Tags</h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {artwork.tags.map(tag => (
-                    <span key={tag} style={{
+                    <span key={tag} onClick={() => onSelectTag ? onSelectTag(tag) : null} style={{
                       padding: '4px 12px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 600,
                       background: 'rgba(255,214,0,0.1)', color: '#FFD600', border: '1px solid rgba(255,214,0,0.2)',
+                      cursor: onSelectTag ? 'pointer' : 'default', transition: 'all 0.2s',
                     }}>{tag}</span>
                   ))}
                 </div>
@@ -612,13 +963,157 @@ function ArtworkDetailView({ artworkId, onBack }: { artworkId: string; onBack: (
               }}>
                 <Heart size={16} fill={isFav ? '#ef4444' : 'none'} /> {isFav ? 'Favorited' : 'Favorite'}
               </button>
-              <button onClick={() => { navigator.clipboard.writeText(window.location.href); }} style={{
+              <button onClick={async () => {
+                const shareUrl = window.location.href;
+                const shareData = { title: artwork.title, text: `Check out "${artwork.title}" by ${artwork.artist_name} on Street Gallery`, url: shareUrl };
+                try {
+                  if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) {
+                    await navigator.share(shareData);
+                  } else {
+                    await navigator.clipboard.writeText(shareUrl);
+                    const btn = document.getElementById('share-link-btn');
+                    if (btn) {
+                      btn.textContent = '✓ Link Copied!';
+                      btn.style.borderColor = 'rgba(34,197,94,0.5)';
+                      btn.style.color = '#22c55e';
+                      setTimeout(() => { btn.textContent = ''; btn.style.borderColor = ''; btn.style.color = ''; }, 2000);
+                    }
+                  }
+                } catch { await navigator.clipboard.writeText(shareUrl); }
+              }} id="share-link-btn-wrapper" style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 10,
                 border: `1px solid ${colors.border}`, background: 'rgba(255,255,255,0.04)',
                 color: colors.text, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+                transition: 'all 0.2s',
               }}>
-                <Copy size={16} /> Share Link
+                <Copy size={16} /> <span id="share-link-btn">Share Link</span>
               </button>
+              {authUser?.id && artwork.artist_id && authUser.id === artwork.artist_id && (
+                <button onClick={handleDeleteArtwork} disabled={deleting} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 10,
+                  border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.1)',
+                  color: '#ef4444', cursor: deleting ? 'not-allowed' : 'pointer',
+                  fontSize: '0.82rem', fontWeight: 600, opacity: deleting ? 0.6 : 1,
+                }}>
+                  <X size={16} /> {deleting ? 'Deleting…' : 'Delete'}
+                </button>
+              )}
+            </div>
+
+            {/* Comments Section */}
+            <div style={{ ...glassSurface, padding: '20px', borderRadius: 12, marginTop: 20 }}>
+              <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: colors.accent, textTransform: 'uppercase', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <MessageCircle size={16} /> Comments ({comments.length})
+              </h3>
+
+              {/* Comment input */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #eab308, #f59e0b)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: '#000', flexShrink: 0 }}>
+                  {(authUser?.name || authUser?.username || 'A').charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex: 1 }}>
+                  {replyTo && (
+                    <div style={{ fontSize: '0.7rem', color: colors.accent, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      Replying to comment <button onClick={() => setReplyTo(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.7rem' }}>✕ Cancel</button>
+                    </div>
+                  )}
+                  <textarea
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                    placeholder="Add a comment..."
+                    rows={2}
+                    style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 12px', color: colors.text, fontSize: '0.82rem', resize: 'vertical', outline: 'none', fontFamily: 'inherit' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                    <button
+                      onClick={handlePostComment}
+                      disabled={postingComment || !newComment.trim()}
+                      style={{ background: newComment.trim() ? colors.accent : 'rgba(255,255,255,0.1)', color: newComment.trim() ? '#000' : colors.textMuted, border: 'none', borderRadius: 20, padding: '6px 18px', fontSize: '0.75rem', fontWeight: 700, cursor: newComment.trim() ? 'pointer' : 'default', transition: 'all 0.2s' }}
+                    >
+                      {postingComment ? 'Posting...' : 'Post'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Comment list */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {comments.length === 0 && (
+                  <p style={{ fontSize: '0.8rem', color: colors.textMuted, textAlign: 'center', padding: '10px 0' }}>No comments yet. Be the first!</p>
+                )}
+                {comments.filter(c => !c.parent_id).map(comment => (
+                  <div key={comment.id}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700, color: colors.text, flexShrink: 0 }}>
+                        {(comment.user_name || 'A').charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: colors.text }}>{comment.user_name || 'Anonymous'}</span>
+                          <span style={{ fontSize: '0.62rem', color: colors.textMuted }}>{new Date(comment.created_at).toLocaleDateString()}</span>
+                        </div>
+                        {editingId === comment.id ? (
+                          <div style={{ margin: '4px 0' }}>
+                            <textarea value={editBody} onChange={e => setEditBody(e.target.value)} rows={2} style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 10px', color: colors.text, fontSize: '0.8rem', resize: 'vertical', outline: 'none', fontFamily: 'inherit' }} />
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                              <button onClick={() => handleEditComment(comment.id)} style={{ background: colors.accent, color: '#000', border: 'none', borderRadius: 14, padding: '4px 14px', fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                              <button onClick={() => { setEditingId(null); setEditBody(''); }} style={{ background: 'rgba(255,255,255,0.1)', color: colors.text, border: 'none', borderRadius: 14, padding: '4px 14px', fontSize: '0.68rem', cursor: 'pointer' }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: '0.8rem', color: colors.text, lineHeight: 1.5, margin: '4px 0' }}>
+                            {comment.body}
+                            {comment.edited && <span style={{ fontSize: '0.6rem', color: colors.textMuted, marginLeft: 6 }}>(edited)</span>}
+                          </p>
+                        )}
+                        <div style={{ display: 'flex', gap: 12, marginTop: 2 }}>
+                          <button onClick={() => { setReplyTo(comment.id); }} style={{ background: 'none', border: 'none', color: colors.textMuted, fontSize: '0.65rem', cursor: 'pointer', padding: 0 }}>Reply</button>
+                          {comment.user_id === getOrCreateUserId(authUser?.id) && editingId !== comment.id && (
+                            <>
+                              <button onClick={() => { setEditingId(comment.id); setEditBody(comment.body); }} style={{ background: 'none', border: 'none', color: colors.accent, fontSize: '0.65rem', cursor: 'pointer', padding: 0 }}>Edit</button>
+                              <button onClick={() => handleDeleteComment(comment.id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.65rem', cursor: 'pointer', padding: 0 }}>Delete</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Replies */}
+                    {comments.filter(r => r.parent_id === comment.id).map(reply => (
+                      <div key={reply.id} style={{ display: 'flex', gap: 10, marginLeft: 38, marginTop: 8 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', fontWeight: 700, color: colors.text, flexShrink: 0 }}>
+                          {(reply.user_name || 'A').charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: colors.text }}>{reply.user_name || 'Anonymous'}</span>
+                            <span style={{ fontSize: '0.6rem', color: colors.textMuted }}>{new Date(reply.created_at).toLocaleDateString()}</span>
+                          </div>
+                          {editingId === reply.id ? (
+                            <div style={{ margin: '3px 0' }}>
+                              <textarea value={editBody} onChange={e => setEditBody(e.target.value)} rows={2} style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 10px', color: colors.text, fontSize: '0.78rem', resize: 'vertical', outline: 'none', fontFamily: 'inherit' }} />
+                              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                <button onClick={() => handleEditComment(reply.id)} style={{ background: colors.accent, color: '#000', border: 'none', borderRadius: 14, padding: '4px 14px', fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                                <button onClick={() => { setEditingId(null); setEditBody(''); }} style={{ background: 'rgba(255,255,255,0.1)', color: colors.text, border: 'none', borderRadius: 14, padding: '4px 14px', fontSize: '0.68rem', cursor: 'pointer' }}>Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p style={{ fontSize: '0.78rem', color: colors.text, lineHeight: 1.5, margin: '3px 0' }}>
+                              {reply.body}
+                              {reply.edited && <span style={{ fontSize: '0.6rem', color: colors.textMuted, marginLeft: 6 }}>(edited)</span>}
+                            </p>
+                          )}
+                          {reply.user_id === getOrCreateUserId(authUser?.id) && editingId !== reply.id && (
+                            <div style={{ display: 'flex', gap: 12, marginTop: 2 }}>
+                              <button onClick={() => { setEditingId(reply.id); setEditBody(reply.body); }} style={{ background: 'none', border: 'none', color: colors.accent, fontSize: '0.65rem', cursor: 'pointer', padding: 0 }}>Edit</button>
+                              <button onClick={() => handleDeleteComment(reply.id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.65rem', cursor: 'pointer', padding: 0 }}>Delete</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Commission info */}
@@ -632,8 +1127,1898 @@ function ArtworkDetailView({ artworkId, onBack }: { artworkId: string; onBack: (
             )}
           </div>
         </div>
+
+        {/* More by this Artist */}
+        {artwork.artist_id && <MoreByArtist artistId={artwork.artist_id} artistName={artwork.artist_name || 'this artist'} currentArtworkId={artwork.id} glassCard={glassCard} colors={colors} />}
+
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+/* ─── More by this Artist section ─── */
+function MoreByArtist({ artistId, artistName, currentArtworkId, glassCard, colors }: {
+  artistId: string; artistName: string; currentArtworkId: string;
+  glassCard: React.CSSProperties; colors: Record<string, string>;
+}) {
+  const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch(`${GALLERY_API_URL}/artworks`)
+      .then(r => r.json())
+      .then((data: Artwork[]) => {
+        const byArtist = data.filter(a => a.artist_id === artistId && a.id !== currentArtworkId);
+        setArtworks(byArtist);
+      })
+      .catch(() => {});
+  }, [artistId, currentArtworkId]);
+
+  if (artworks.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 40, paddingBottom: 40 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: colors.text, margin: 0 }}>
+          More by <span style={{ color: '#FFD600' }}>{artistName}</span>
+        </h2>
+      </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: 20,
+      }}>
+        {artworks.slice(0, 6).map(art => (
+          <div
+            key={art.id}
+            onClick={() => navigate(`/gallery/artwork/${art.id}`)}
+            style={{
+              ...glassCard, borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = '0 12px 30px rgba(0,0,0,0.4)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <div style={{ aspectRatio: '4/3', background: '#000', position: 'relative' }}>
+              <img
+                src={art.thumbnail_url || art.image_url}
+                alt={art.title}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+              {art.is_for_sale && (
+                <div style={{
+                  position: 'absolute', top: 10, left: 10, padding: '4px 10px',
+                  background: '#FFD600', color: '#000', fontWeight: 800, fontSize: '0.65rem',
+                  borderRadius: 6, textTransform: 'uppercase',
+                }}>
+                  {art.is_sold ? 'SOLD' : 'FOR SALE'}
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '12px 14px' }}>
+              <div style={{ fontWeight: 700, color: colors.text, fontSize: '0.9rem', marginBottom: 4 }}>{art.title}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 10, fontSize: '0.72rem', color: colors.textMuted }}>
+                  <span>👁 {art.view_count}</span>
+                  <span>❤ {art.favorite_count}</span>
+                </div>
+                {art.is_for_sale && art.price && (
+                  <span style={{ color: '#FFD600', fontWeight: 700, fontSize: '0.82rem' }}>
+                    CA${art.price.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Style Collections ────────────────────────────────────────────────────────
+
+const MEDIUM_COLLECTIONS = [
+  {
+    id: "photography",
+    name: "Photography",
+    description: "Captured moments — street scenes, portraits, landscapes, and raw visual storytelling.",
+    cover: "https://picsum.photos/seed/col-photo/600/400",
+    gradient: "linear-gradient(135deg, #232526 0%, #414345 100%)",
+  },
+  {
+    id: "digital-art",
+    name: "Digital Art",
+    description: "Born on screen — digital illustrations, 3D renders, generative art, and pixel craft.",
+    cover: "https://picsum.photos/seed/col-digital/600/400",
+    gradient: "linear-gradient(135deg, #0ff 0%, #f0f 50%, #ff0 100%)",
+  },
+  {
+    id: "oil-painting",
+    name: "Oil Painting",
+    description: "Rich textures and deep colour — the timeless tradition of oil on canvas.",
+    cover: "https://picsum.photos/seed/col-oil/600/400",
+    gradient: "linear-gradient(135deg, #8B4513 0%, #D2691E 100%)",
+  },
+  {
+    id: "watercolor",
+    name: "Watercolor",
+    description: "Soft washes, translucent layers, and flowing pigment on paper.",
+    cover: "https://picsum.photos/seed/col-watercolor/600/400",
+    gradient: "linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)",
+  },
+  {
+    id: "mixed-media",
+    name: "Mixed Media",
+    description: "Collage, assemblage, and boundary-breaking combinations of materials and technique.",
+    cover: "https://picsum.photos/seed/col-mixed/600/400",
+    gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+  },
+  {
+    id: "street-art",
+    name: "Street Art",
+    description: "Murals, stencils, wheat-paste, and graffiti — art that lives on walls and in public spaces.",
+    cover: "https://picsum.photos/seed/col-street/600/400",
+    gradient: "linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%)",
+  },
+  {
+    id: "acrylic",
+    name: "Acrylic",
+    description: "Versatile and vibrant — fast-drying acrylics from bold impasto to smooth glazes.",
+    cover: "https://picsum.photos/seed/col-acrylic/600/400",
+    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+  },
+  {
+    id: "charcoal",
+    name: "Charcoal",
+    description: "Dramatic contrasts and raw mark-making — the power of black and white.",
+    cover: "https://picsum.photos/seed/col-charcoal/600/400",
+    gradient: "linear-gradient(135deg, #434343 0%, #000000 100%)",
+  },
+  {
+    id: "ink",
+    name: "Ink",
+    description: "Bold lines, delicate washes, and the expressive flow of ink on paper.",
+    cover: "https://picsum.photos/seed/col-ink/600/400",
+    gradient: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+  },
+];
+
+function CollectionsView({ onBack, onSelectMedium }: { onBack: () => void; onSelectMedium: (medium: string) => void }) {
+  const { colors, glassCard } = useGlassStyles();
+  const { user: authUser } = useAuthContext();
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Fetch artwork counts per medium
+    fetch(`${GALLERY_API_URL}/artworks`)
+      .then((r) => r.json())
+      .then((artworks: Artwork[]) => {
+        const mediumCounts: Record<string, number> = {};
+        artworks.forEach((a) => {
+          if (a.medium) {
+            mediumCounts[a.medium] = (mediumCounts[a.medium] || 0) + 1;
+          }
+        });
+        setCounts(mediumCounts);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load saved collections for this user
+  useEffect(() => {
+    if (!authUser?.id) return;
+    fetch(`${GALLERY_API_URL}/collections/saved?user_id=${authUser.id}`)
+      .then((r) => r.json())
+      .then((rows: { collection_id: string }[]) => {
+        setSavedIds(new Set(rows.map((r) => r.collection_id)));
+      })
+      .catch(() => {});
+  }, [authUser?.id]);
+
+  const toggleSave = async (collectionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!authUser?.id) return;
+    const isSaved = savedIds.has(collectionId);
+    const method = isSaved ? "DELETE" : "POST";
+    try {
+      await fetch(
+        `${GALLERY_API_URL}/collections/save?user_id=${authUser.id}&collection_id=${collectionId}`,
+        { method },
+      );
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (isSaved) next.delete(collectionId);
+        else next.add(collectionId);
+        return next;
+      });
+    } catch {}
+  };
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1200, margin: "0 auto", padding: "32px 20px" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: `1px solid ${colors.border}`,
+              borderRadius: "50%",
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: colors.text,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,214,0,0.15)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "1.8rem", fontWeight: 800, color: "#FFD700" }}>
+              Collections
+            </h1>
+            <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: "0.9rem" }}>
+              Browse artwork by medium
+            </p>
+          </div>
+        </div>
+
+        {/* Collections Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: "24px",
+          }}
+        >
+          {MEDIUM_COLLECTIONS.map((col) => {
+            const count = counts[col.name] || 0;
+            return (
+              <div
+                key={col.id}
+                onClick={() => onSelectMedium(col.name)}
+                style={{
+                  ...glassCard,
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 40px rgba(255, 214, 0, 0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "";
+                }}
+              >
+                {/* Cover image with gradient overlay */}
+                <div
+                  style={{
+                    height: 180,
+                    backgroundImage: `${col.gradient}, url(${col.cover})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    backgroundBlendMode: "overlay",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: "60%",
+                      background: `linear-gradient(transparent, ${colors.bg})`,
+                    }}
+                  />
+                  {/* Heart bookmark button */}
+                  <button
+                    onClick={(e) => toggleSave(col.id, e)}
+                    style={{
+                      position: "absolute",
+                      top: 12,
+                      left: 12,
+                      background: savedIds.has(col.id) ? "rgba(255, 60, 80, 0.85)" : "rgba(0,0,0,0.5)",
+                      backdropFilter: "blur(10px)",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: 38,
+                      height: 38,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      transition: "all 0.25s ease",
+                      boxShadow: savedIds.has(col.id) ? "0 0 12px rgba(255,60,80,0.4)" : "none",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!savedIds.has(col.id)) {
+                        e.currentTarget.style.background = "rgba(255, 60, 80, 0.6)";
+                        e.currentTarget.style.transform = "scale(1.15)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!savedIds.has(col.id)) {
+                        e.currentTarget.style.background = "rgba(0,0,0,0.5)";
+                      }
+                      e.currentTarget.style.transform = "scale(1)";
+                    }}
+                  >
+                    <Heart
+                      size={18}
+                      fill={savedIds.has(col.id) ? "#fff" : "none"}
+                      color="#fff"
+                      strokeWidth={2}
+                    />
+                  </button>
+
+                </div>
+
+                {/* Info */}
+                <div style={{ padding: "16px 20px 12px" }}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: 700, color: colors.text }}>
+                    {col.name}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: colors.textMuted, lineHeight: 1.5 }}>
+                    {col.description}
+                  </p>
+                </div>
+
+                {/* Footer bar */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "auto" }}>
+                  <span style={{ fontSize: "0.78rem", color: colors.textMuted, fontWeight: 500 }}>
+                    {count} {count === 1 ? "piece" : "pieces"}
+                  </span>
+                  <span style={{ fontSize: "0.78rem", color: colors.accent, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                    View →
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Saved Collections View ──────────────────────────────────────────────────
+
+function SavedCollectionsView({ onBack, onSelectMedium }: { onBack: () => void; onSelectMedium: (medium: string) => void }) {
+  const { colors, glassCard } = useGlassStyles();
+  const { user: authUser } = useAuthContext();
+  const navigate = useNavigate();
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [allArtworks, setAllArtworks] = useState<Artwork[]>([]);
+  const [favoritedArtworkIds, setFavoritedArtworkIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch(`${GALLERY_API_URL}/artworks`)
+      .then((r) => r.json())
+      .then((artworks: Artwork[]) => {
+        const list = Array.isArray(artworks) ? artworks : [];
+        setAllArtworks(list);
+        const mediumCounts: Record<string, number> = {};
+        list.forEach((a) => {
+          if (a.medium) mediumCounts[a.medium] = (mediumCounts[a.medium] || 0) + 1;
+        });
+        setCounts(mediumCounts);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!authUser?.id) return;
+    fetch(`${GALLERY_API_URL}/collections/saved?user_id=${authUser.id}`)
+      .then((r) => r.json())
+      .then((rows: { collection_id: string }[]) => {
+        setSavedIds(new Set(rows.map((r) => r.collection_id)));
+      })
+      .catch(() => {});
+  }, [authUser?.id]);
+
+  // Load favorited artworks (heart toggles in the main gallery).
+  useEffect(() => {
+    const uid = getOrCreateUserId(authUser?.id);
+    if (!uid) return;
+    fetch(`${GALLERY_API_URL}/user/${encodeURIComponent(uid)}/artwork-favorites`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { artwork_id?: string }[] | any) => {
+        const ids = Array.isArray(rows)
+          ? rows.map((r) => r?.artwork_id).filter((v): v is string => !!v)
+          : [];
+        setFavoritedArtworkIds(new Set(ids));
+      })
+      .catch(() => {});
+  }, [authUser?.id]);
+
+  const unfavoriteArtwork = async (artworkId: string) => {
+    const uid = getOrCreateUserId(authUser?.id);
+    if (!uid) return;
+    try {
+      await fetch(
+        `${GALLERY_API_URL}/artworks/${encodeURIComponent(artworkId)}/favorites?user_id=${encodeURIComponent(uid)}`,
+        { method: "DELETE" },
+      );
+      setFavoritedArtworkIds((prev) => {
+        const next = new Set(prev);
+        next.delete(artworkId);
+        return next;
+      });
+    } catch {}
+  };
+
+  const favoritedArtworks = allArtworks.filter((a) => favoritedArtworkIds.has(a.id));
+
+  const unsave = async (collectionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!authUser?.id) return;
+    try {
+      await fetch(
+        `${GALLERY_API_URL}/collections/save?user_id=${authUser.id}&collection_id=${collectionId}`,
+        { method: "DELETE" },
+      );
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(collectionId);
+        return next;
+      });
+    } catch {}
+  };
+
+  const savedCollections = MEDIUM_COLLECTIONS.filter((col) => savedIds.has(col.id));
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1200, margin: "0 auto", padding: "32px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: `1px solid ${colors.border}`,
+              borderRadius: "50%",
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: colors.text,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,214,0,0.15)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "1.8rem", fontWeight: 800, color: "#FFD700" }}>
+              <Heart size={24} style={{ marginRight: 8, verticalAlign: "middle" }} fill="#ff3c50" color="#ff3c50" />
+              Saved
+            </h1>
+            <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: "0.9rem" }}>
+              Your favorited artworks and bookmarked collections
+            </p>
+          </div>
+        </div>
+
+        {/* ── Favorited artworks ───────────────────────────────────── */}
+        <div style={{ marginBottom: 40 }}>
+          <h2 style={{ margin: "0 0 16px", fontSize: "1.1rem", fontWeight: 700, color: colors.text }}>
+            Favorited Artworks
+            {favoritedArtworks.length > 0 && (
+              <span style={{ marginLeft: 8, color: colors.textMuted, fontWeight: 500, fontSize: "0.9rem" }}>
+                ({favoritedArtworks.length})
+              </span>
+            )}
+          </h2>
+          {favoritedArtworks.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "48px 20px",
+                ...glassCard,
+              }}
+            >
+              <Heart size={36} color={colors.textMuted} style={{ marginBottom: 12 }} />
+              <p style={{ color: colors.text, fontWeight: 600, margin: "0 0 6px" }}>
+                No favorited artworks yet
+              </p>
+              <p style={{ color: colors.textMuted, fontSize: "0.88rem", margin: 0 }}>
+                Tap the heart on any artwork to save it here.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                gap: "16px",
+              }}
+            >
+              {favoritedArtworks.map((art) => (
+                <div
+                  key={art.id}
+                  onClick={() => navigate(`/gallery/artwork/${art.id}`)}
+                  style={{
+                    ...glassCard,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    position: "relative",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,60,80,0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "";
+                  }}
+                >
+                  <div style={{ aspectRatio: "4/3", overflow: "hidden", background: "#222" }}>
+                    <GalleryImage src={art.thumbnail_url || art.image_url} alt={art.title} />
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      unfavoriteArtwork(art.id);
+                    }}
+                    title="Remove from favorites"
+                    style={{
+                      position: "absolute",
+                      top: 10,
+                      right: 10,
+                      background: "rgba(0,0,0,0.55)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "50%",
+                      width: 32,
+                      height: 32,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    <Heart size={16} fill="#ff3c50" color="#ff3c50" />
+                  </button>
+                  <div style={{ padding: "12px 14px" }}>
+                    <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: colors.text }}>
+                      {art.title}
+                    </h4>
+                    {art.artist_name && (
+                      <p style={{ margin: "4px 0 0", fontSize: "0.8rem", color: colors.textMuted }}>
+                        by {art.artist_name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Saved collections ───────────────────────────────────── */}
+        <h2 style={{ margin: "0 0 16px", fontSize: "1.1rem", fontWeight: 700, color: colors.text }}>
+          Saved Collections
+          {savedCollections.length > 0 && (
+            <span style={{ marginLeft: 8, color: colors.textMuted, fontWeight: 500, fontSize: "0.9rem" }}>
+              ({savedCollections.length})
+            </span>
+          )}
+        </h2>
+
+        {savedCollections.length === 0 ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "80px 20px",
+              ...glassCard,
+            }}
+          >
+            <Heart size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
+            <h3 style={{ color: colors.text, margin: "0 0 8px" }}>No saved collections yet</h3>
+            <p style={{ color: colors.textMuted, margin: 0 }}>
+              Browse collections and click the heart to bookmark your favourites.
+            </p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "24px",
+            }}
+          >
+            {savedCollections.map((col) => {
+              const count = counts[col.name] || 0;
+              return (
+                <div
+                  key={col.id}
+                  onClick={() => onSelectMedium(col.name)}
+                  style={{
+                    ...glassCard,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    transition: "all 0.3s ease",
+                    position: "relative",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                    e.currentTarget.style.boxShadow = "0 12px 40px rgba(255, 60, 80, 0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "";
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 180,
+                      backgroundImage: `${col.gradient}, url(${col.cover})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      backgroundBlendMode: "overlay",
+                      position: "relative",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: "60%",
+                        background: `linear-gradient(transparent, ${colors.bg})`,
+                      }}
+                    />
+                    {/* Remove button */}
+                    <button
+                      onClick={(e) => unsave(col.id, e)}
+                      title="Remove from saved"
+                      style={{
+                        position: "absolute",
+                        top: 12,
+                        left: 12,
+                        background: "rgba(255, 60, 80, 0.85)",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: 38,
+                        height: 38,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        transition: "all 0.25s ease",
+                        boxShadow: "0 0 12px rgba(255,60,80,0.4)",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "rgba(200, 30, 50, 1)";
+                        e.currentTarget.style.transform = "scale(1.15)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "rgba(255, 60, 80, 0.85)";
+                        e.currentTarget.style.transform = "scale(1)";
+                      }}
+                    >
+                      <Heart size={18} fill="#fff" color="#fff" strokeWidth={2} />
+                    </button>
+                  </div>
+                  <div style={{ padding: "16px 20px 12px" }}>
+                    <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: 700, color: colors.text }}>
+                      {col.name}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: "0.85rem", color: colors.textMuted, lineHeight: 1.5 }}>
+                      {col.description}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "auto" }}>
+                    <span style={{ fontSize: "0.78rem", color: colors.textMuted, fontWeight: 500 }}>
+                      {count} {count === 1 ? "piece" : "pieces"}
+                    </span>
+                    <span style={{ fontSize: "0.78rem", color: colors.accent, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                      View →
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Medium & style options for the upload form ──────────────────────────────
+
+const MEDIUM_OPTIONS = [
+  "Oil Painting",
+  "Digital Art",
+  "Photography",
+  "Watercolor",
+  "Mixed Media",
+  "Street Art",
+  "Acrylic",
+  "Charcoal",
+  "Ink",
+];
+
+const STYLE_OPTIONS = [
+  "Abstract",
+  "Contemporary",
+  "Realism",
+  "Pop Art",
+  "Minimalist",
+  "Cyberpunk",
+  "Impressionism",
+  "Surrealism",
+  "Expressionism",
+  "Urban",
+];
+
+// Medium-specific sub-styles for the filter sidebar
+const MEDIUM_STYLES: Record<string, string[]> = {
+  Photography: [
+    "Street Photography",
+    "Film Photography",
+    "Portrait Photography",
+    "Landscape Photography",
+    "Documentary",
+    "Black & White",
+    "Abstract Photography",
+    "Fashion Photography",
+  ],
+  "Digital Art": [
+    "3D Render",
+    "Pixel Art",
+    "Generative Art",
+    "Digital Illustration",
+    "Concept Art",
+    "Cyberpunk",
+    "Vaporwave",
+    "AI-Assisted",
+  ],
+  "Oil Painting": [
+    "Realism",
+    "Impressionism",
+    "Abstract",
+    "Expressionism",
+    "Surrealism",
+    "Classical",
+    "Plein Air",
+    "Figurative",
+  ],
+  Watercolor: [
+    "Botanical",
+    "Landscape",
+    "Loose / Wet-on-Wet",
+    "Illustrative",
+    "Abstract",
+    "Portraiture",
+    "Urban Sketching",
+  ],
+  "Mixed Media": [
+    "Collage",
+    "Assemblage",
+    "Found Object",
+    "Textile Art",
+    "Contemporary",
+    "Experimental",
+    "Layered",
+  ],
+  "Street Art": [
+    "Graffiti",
+    "Mural",
+    "Stencil",
+    "Wheat-Paste",
+    "Tagging",
+    "Wildstyle",
+    "Political",
+    "Pop Art",
+  ],
+  Acrylic: [
+    "Abstract",
+    "Pop Art",
+    "Impasto",
+    "Minimalist",
+    "Figurative",
+    "Geometric",
+    "Contemporary",
+  ],
+  Charcoal: [
+    "Portrait",
+    "Figure Drawing",
+    "Landscape",
+    "Hyperrealism",
+    "Gestural",
+    "Abstract",
+    "Architectural",
+  ],
+  Ink: [
+    "Line Art",
+    "Sumi-e / Brush",
+    "Cross-Hatching",
+    "Calligraphy",
+    "Illustrative",
+    "Abstract",
+    "Comic / Manga",
+  ],
+};
+
+// ── Upload Art View ─────────────────────────────────────────────────────────
+
+function UploadArtView({ onBack }: { onBack: () => void }) {
+  const { colors, glassCard, glassSurface } = useGlassStyles();
+  const { user: authUser, isAuthenticated } = useAuthContext();
+  const navigate = useNavigate();
+
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [profileCheck, setProfileCheck] = useState<"loading" | "missing" | "ok">("loading");
+
+  // Auto-open the login/register modal for anonymous visitors landing here.
+  useEffect(() => {
+    if (!isAuthenticated || !authUser?.id) {
+      setAuthModalOpen(true);
+    } else {
+      setAuthModalOpen(false);
+    }
+  }, [isAuthenticated, authUser?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authUser?.id) {
+      setProfileCheck("loading");
+      return;
+    }
+    let cancelled = false;
+    setProfileCheck("loading");
+    fetch(`${SB_API_BASE}/street-profiles/batch-lookup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_ids: [authUser.id] }),
+    })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((profiles) => {
+        if (cancelled) return;
+        setProfileCheck(profiles && profiles[authUser.id!] ? "ok" : "missing");
+      })
+      .catch(() => {
+        if (!cancelled) setProfileCheck("missing");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, authUser?.id]);
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [medium, setMedium] = useState("");
+  const [style, setStyle] = useState("");
+  const [tags, setTags] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isForSale, setIsForSale] = useState(false);
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState("CAD");
+  const [acceptsCommissions, setAcceptsCommissions] = useState(false);
+  const [commissionInfo, setCommissionInfo] = useState("");
+  const [yearCreated, setYearCreated] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAuthenticated || !authUser?.id) {
+      setError("Please sign in to submit artwork.");
+      setAuthModalOpen(true);
+      return;
+    }
+    if (profileCheck !== "ok") {
+      setError("Create your Street Profile before submitting artwork.");
+      navigate("/profile");
+      return;
+    }
+    if (!title.trim() || !imageFile) {
+      setError("Title and image are required.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const userId = authUser.id;
+      const formData = new FormData();
+      formData.append("title", title.trim());
+      formData.append("artist_id", userId);
+      if (description.trim()) formData.append("description", description.trim());
+      if (medium) formData.append("medium", medium);
+      if (style) formData.append("style", style);
+      if (tags.trim()) formData.append("tags", tags.trim());
+      if (yearCreated) formData.append("year_created", yearCreated);
+      formData.append("is_for_sale", String(isForSale));
+      if (isForSale && price) {
+        formData.append("price", price);
+        formData.append("currency", currency);
+      }
+      formData.append("accepts_commissions", String(acceptsCommissions));
+      if (acceptsCommissions && commissionInfo.trim()) {
+        formData.append("commission_info", commissionInfo.trim());
+      }
+      formData.append("image", imageFile);
+
+      const resp = await fetch(`${GALLERY_API_URL}/artworks`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error((data && data.error) || `Upload failed (${resp.status})`);
+      }
+
+      const newId = data && data.id;
+      console.log("[gallery] upload response:", { ok: resp.ok, status: resp.status, id: newId, data });
+      if (newId) {
+        const detailPath = `/gallery/artwork/${newId}`;
+        // Hard navigation — avoids any React Router / cached-component race.
+        window.location.assign(detailPath);
+      } else {
+        setSuccess(true);
+        setTimeout(() => window.location.assign("/gallery"), 1500);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "12px 16px",
+    background: "rgba(255,255,255,0.05)",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "10px",
+    color: colors.text,
+    fontSize: "0.95rem",
+    outline: "none",
+    transition: "border-color 0.2s",
+    boxSizing: "border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: "6px",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
+  };
+
+  const needsAuth = !isAuthenticated || !authUser?.id;
+  const needsProfile = !needsAuth && profileCheck === "missing";
+  if (needsAuth || needsProfile) {
+    return (
+      <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+        <GlassBackground />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 520, margin: "0 auto", padding: "80px 20px", textAlign: "center" }}>
+          <div style={{ ...glassCard, padding: "40px 32px", borderRadius: 20 }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>{needsAuth ? "\u{1F512}" : "\u{1F3A8}"}</div>
+            <h2 style={{ color: colors.text, fontSize: "1.5rem", fontWeight: 700, margin: "0 0 12px" }}>
+              {needsAuth ? "Sign in to submit art" : "Create your Street Profile first"}
+            </h2>
+            <p style={{ color: colors.textMuted, fontSize: "0.95rem", lineHeight: 1.6, margin: "0 0 28px" }}>
+              {needsAuth
+                ? "You need to be signed in to share your work on Street Gallery."
+                : "Street Gallery submissions are linked to your Street Profile so the community can find and follow your work."}
+            </p>
+            <button
+              onClick={() => (needsAuth ? setAuthModalOpen(true) : navigate("/profile"))}
+              style={{
+                background: "#FFD700",
+                color: "#000",
+                fontWeight: 700,
+                padding: "12px 28px",
+                borderRadius: 999,
+                border: "none",
+                cursor: "pointer",
+                fontSize: "1rem",
+                marginRight: 12,
+              }}
+            >
+              {needsAuth ? "Sign In / Create Account" : "Create Street Profile"}
+            </button>
+            <button
+              onClick={onBack}
+              style={{
+                background: "transparent",
+                color: colors.textMuted,
+                padding: "12px 20px",
+                borderRadius: 999,
+                border: `1px solid ${colors.border}`,
+                cursor: "pointer",
+                fontSize: "0.95rem",
+              }}
+            >
+              Back to Gallery
+            </button>
+          </div>
+        </div>
+        {authModalOpen && (
+          <Suspense fallback={null}>
+            <AuthPopupModal
+              isOpen={authModalOpen}
+              onClose={() => {
+                setAuthModalOpen(false);
+                if (needsAuth) navigate('/gallery');
+              }}
+              initialTab="login"
+            />
+          </Suspense>
+        )}
+      </div>
+    );
+  }
+  if (profileCheck === "loading") {
+    return (
+      <div style={{ background: colors.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: colors.textMuted }} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 720, margin: "0 auto", padding: "32px 20px" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: `1px solid ${colors.border}`,
+              borderRadius: "50%",
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: colors.text,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,214,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+            }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "1.8rem", fontWeight: 800, color: colors.text }}>
+              Submit Your Art
+            </h1>
+            <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: "0.9rem" }}>
+              Share your artwork with the Street Voices community
+            </p>
+          </div>
+        </div>
+
+        {/* Success message */}
+        {success && (
+          <div
+            style={{
+              ...glassCard,
+              padding: "24px",
+              marginBottom: 24,
+              textAlign: "center",
+              borderColor: "rgba(34,197,94,0.4)",
+            }}
+          >
+            <p style={{ fontSize: "1.2rem", color: "#22c55e", fontWeight: 700, margin: 0 }}>
+              Artwork submitted successfully!
+            </p>
+            <p style={{ color: colors.textMuted, marginTop: 8, marginBottom: 0 }}>
+              Redirecting to gallery...
+            </p>
+          </div>
+        )}
+
+        {/* Form */}
+        {!success && (
+          <form onSubmit={handleSubmit}>
+            <div style={{ ...glassCard, padding: "28px", marginBottom: 24 }}>
+              <h2 style={{ margin: "0 0 24px", fontSize: "1.1rem", color: "#FFD700", fontWeight: 700 }}>
+                Artwork Details
+              </h2>
+
+              {/* Title */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>
+                  Title <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Give your artwork a title"
+                  required
+                  style={inputStyle}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Tell the story behind your piece..."
+                  rows={4}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                />
+              </div>
+
+              {/* Medium & Style row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div>
+                  <label style={labelStyle}>Medium</label>
+                  <select
+                    value={medium}
+                    onChange={(e) => { setMedium(e.target.value); setStyle(""); }}
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    <option value="">Select medium...</option>
+                    {MEDIUM_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>{medium ? `${medium} Style` : "Style"}</label>
+                  <select
+                    value={style}
+                    onChange={(e) => setStyle(e.target.value)}
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    <option value="">Select style...</option>
+                    {(medium && MEDIUM_STYLES[medium] ? MEDIUM_STYLES[medium] : STYLE_OPTIONS).map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Tags & Year row */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div>
+                  <label style={labelStyle}>Tags</label>
+                  <input
+                    type="text"
+                    value={tags}
+                    onChange={(e) => setTags(e.target.value)}
+                    placeholder="abstract, colorful, portrait (comma-separated)"
+                    style={inputStyle}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Year Created</label>
+                  <input
+                    type="number"
+                    value={yearCreated}
+                    onChange={(e) => setYearCreated(e.target.value)}
+                    placeholder={String(new Date().getFullYear())}
+                    min="1900"
+                    max={new Date().getFullYear()}
+                    style={inputStyle}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Image Upload Card */}
+            <div style={{ ...glassCard, padding: "28px", marginBottom: 24 }}>
+              <h2 style={{ margin: "0 0 24px", fontSize: "1.1rem", color: "#FFD700", fontWeight: 700 }}>
+                <Image size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />
+                Upload Image <span style={{ color: "#ef4444" }}>*</span>
+              </h2>
+
+              {imagePreview ? (
+                <div style={{ position: "relative", marginBottom: 16 }}>
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    style={{
+                      width: "100%",
+                      maxHeight: 400,
+                      objectFit: "contain",
+                      borderRadius: 12,
+                      border: `1px solid ${colors.border}`,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setImageFile(null); setImagePreview(null); }}
+                    style={{
+                      position: "absolute",
+                      top: 10,
+                      right: 10,
+                      background: "rgba(0,0,0,0.7)",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: 32,
+                      height: 32,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      color: "#fff",
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <label
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "48px 24px",
+                    border: `2px dashed ${colors.border}`,
+                    borderRadius: 12,
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    textAlign: "center",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#FFD700";
+                    e.currentTarget.style.background = "rgba(255,214,0,0.05)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = colors.border;
+                    e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  <Upload size={40} style={{ color: colors.textMuted, marginBottom: 12 }} />
+                  <p style={{ color: colors.text, fontWeight: 600, margin: "0 0 4px" }}>
+                    Click to upload your artwork
+                  </p>
+                  <p style={{ color: colors.textMuted, fontSize: "0.85rem", margin: 0 }}>
+                    PNG, JPG, GIF, or WebP (max 10MB)
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    onChange={handleImageChange}
+                    style={{ display: "none" }}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Pricing & Commissions Card */}
+            <div style={{ ...glassCard, padding: "28px", marginBottom: 24 }}>
+              <h2 style={{ margin: "0 0 24px", fontSize: "1.1rem", color: "#FFD700", fontWeight: 700 }}>
+                Pricing & Commissions
+              </h2>
+
+              {/* For Sale toggle */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: isForSale ? 16 : 20 }}>
+                <button
+                  type="button"
+                  onClick={() => setIsForSale(!isForSale)}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}
+                >
+                  {isForSale ? (
+                    <ToggleRight size={28} style={{ color: "#FFD700" }} />
+                  ) : (
+                    <ToggleLeft size={28} style={{ color: colors.textMuted }} />
+                  )}
+                </button>
+                <span style={{ color: colors.text, fontWeight: 600 }}>Available for sale</span>
+              </div>
+
+              {isForSale && (
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 20 }}>
+                  <div>
+                    <label style={labelStyle}>Price</label>
+                    <input
+                      type="number"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      style={inputStyle}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Currency</label>
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      style={{ ...inputStyle, cursor: "pointer" }}
+                    >
+                      <option value="CAD">CAD</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Commissions toggle */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: acceptsCommissions ? 16 : 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setAcceptsCommissions(!acceptsCommissions)}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}
+                >
+                  {acceptsCommissions ? (
+                    <ToggleRight size={28} style={{ color: "#FFD700" }} />
+                  ) : (
+                    <ToggleLeft size={28} style={{ color: colors.textMuted }} />
+                  )}
+                </button>
+                <span style={{ color: colors.text, fontWeight: 600 }}>Open to commissions</span>
+              </div>
+
+              {acceptsCommissions && (
+                <div style={{ marginTop: 4 }}>
+                  <label style={labelStyle}>Commission Details</label>
+                  <textarea
+                    value={commissionInfo}
+                    onChange={(e) => setCommissionInfo(e.target.value)}
+                    placeholder="Describe your commission availability, pricing, turnaround time..."
+                    rows={3}
+                    style={{ ...inputStyle, resize: "vertical" }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div
+                style={{
+                  background: "rgba(239,68,68,0.1)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  marginBottom: 16,
+                  color: "#ef4444",
+                  fontSize: "0.9rem",
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            {/* Submit button */}
+            <button
+              type="submit"
+              disabled={submitting || !title.trim() || !imageFile}
+              style={{
+                width: "100%",
+                padding: "16px",
+                background: submitting || !title.trim() || !imageFile
+                  ? "rgba(255,214,0,0.3)"
+                  : "#FFD700",
+                color: "#000",
+                fontWeight: 800,
+                fontSize: "1rem",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                border: "none",
+                borderRadius: "999px",
+                cursor: submitting || !title.trim() || !imageFile ? "not-allowed" : "pointer",
+                transition: "all 0.2s",
+                boxShadow: submitting || !title.trim() || !imageFile
+                  ? "none"
+                  : "0 4px 14px rgba(255, 214, 0, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+              }}
+              onMouseEnter={(e) => {
+                if (!submitting && title.trim() && imageFile) {
+                  e.currentTarget.style.transform = "scale(1.02)";
+                  e.currentTarget.style.boxShadow = "0 6px 20px rgba(255, 214, 0, 0.5)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
+                e.currentTarget.style.boxShadow = submitting || !title.trim() || !imageFile
+                  ? "none"
+                  : "0 4px 14px rgba(255, 214, 0, 0.4)";
+              }}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload size={18} />
+                  Submit Artwork
+                </>
+              )}
+            </button>
+          </form>
+        )}
+      </div>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+/* ─── Dashboard View ─── */
+/* ─── Portfolio Stats Detail Panel ─── */
+function PortfolioStatsPanel({ onClose, glassCard }: { onClose: () => void; glassCard: React.CSSProperties }) {
+  const [activeTab, setActiveTab] = useState<string>("overview");
+
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "artworks", label: "Top Artworks" },
+    { id: "timeline", label: "Engagement Timeline" },
+  ];
+
+  const overviewStats = [
+    { label: "Total Views", value: "3,847", change: "+12%", up: true },
+    { label: "Total Saves", value: "284", change: "+8%", up: true },
+    { label: "Profile Visits", value: "1,203", change: "+23%", up: true },
+    { label: "Avg. Time on Page", value: "2m 34s", change: "-3%", up: false },
+    { label: "Share Clicks", value: "156", change: "+41%", up: true },
+  ];
+
+  const topArtworks = [
+    { title: "Urban Pulse", views: 567, saves: 42, comments: 8, medium: "Digital Art" },
+    { title: "Morning Light", views: 312, saves: 28, comments: 5, medium: "Watercolor" },
+    { title: "Concrete Dreams", views: 234, saves: 18, comments: 3, medium: "Mixed Media" },
+    { title: "Neon Reflections", views: 189, saves: 15, comments: 2, medium: "Digital Art" },
+    { title: "Golden Hour", views: 145, saves: 12, comments: 4, medium: "Photography" },
+  ];
+
+  const timeline = [
+    { period: "This Week", views: 892, saves: 67, visits: 234 },
+    { period: "Last Week", views: 743, saves: 51, visits: 198 },
+    { period: "2 Weeks Ago", views: 681, saves: 48, visits: 187 },
+    { period: "3 Weeks Ago", views: 612, saves: 43, visits: 156 },
+    { period: "4 Weeks Ago", views: 519, saves: 38, visits: 128 },
+    { period: "Last Month", views: 1840, saves: 127, visits: 489 },
+  ];
+
+  return (
+    <div style={{ ...glassCard, padding: 0, borderRadius: 16, overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <TrendingUp size={24} color="#FFD600" />
+          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>Portfolio Stats</h2>
+        </div>
+        <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", cursor: "pointer", padding: "6px 8px" }}>
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              flex: 1,
+              padding: "14px 16px",
+              background: activeTab === tab.id ? "rgba(255,214,0,0.08)" : "transparent",
+              border: "none",
+              borderBottom: activeTab === tab.id ? "2px solid #FFD600" : "2px solid transparent",
+              color: activeTab === tab.id ? "#FFD600" : "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: 24 }}>
+        {activeTab === "overview" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
+            {overviewStats.map((stat) => (
+              <div
+                key={stat.label}
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 12,
+                  padding: 20,
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,214,0,0.06)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,214,0,0.2)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.08)"; }}
+              >
+                <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 8, fontWeight: 500 }}>{stat.label}</div>
+                <div style={{ color: "#fff", fontSize: 28, fontWeight: 800 }}>{stat.value}</div>
+                <div style={{ color: stat.up ? "#4ade80" : "#f87171", fontSize: 13, marginTop: 6, fontWeight: 600 }}>
+                  {stat.change} <span style={{ color: "rgba(255,255,255,0.3)", fontWeight: 400 }}>vs last month</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "artworks" && (
+          <div>
+            {topArtworks.map((art, i) => (
+              <div
+                key={art.title}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "16px 12px",
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  borderRadius: 8,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span style={{ color: "#FFD600", fontSize: 18, fontWeight: 800, width: 28 }}>#{i + 1}</span>
+                  <div>
+                    <div style={{ color: "#fff", fontSize: 15, fontWeight: 600 }}>{art.title}</div>
+                    <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>{art.medium}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontSize: 16, fontWeight: 700 }}>{art.views}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>views</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#FFD600", fontSize: 16, fontWeight: 700 }}>{art.saves}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>saves</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 16, fontWeight: 700 }}>{art.comments}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>comments</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "timeline" && (
+          <div>
+            {timeline.map((row) => (
+              <div
+                key={row.period}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 12px",
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  borderRadius: 8,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                <div style={{ color: "#fff", fontSize: 14, fontWeight: 600, minWidth: 120 }}>{row.period}</div>
+                <div style={{ display: "flex", gap: 24 }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>{row.views.toLocaleString()}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>views</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#FFD600", fontSize: 15, fontWeight: 700 }}>{row.saves}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>saves</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: 700 }}>{row.visits}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>visits</div>
+                  </div>
+                </div>
+                {/* Mini bar chart */}
+                <div style={{ width: 120, height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.min(100, (row.views / 900) * 100)}%`, height: "100%", background: "linear-gradient(90deg, #FFD600, #ff9800)", borderRadius: 4 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Dashboard View ─── */
+function DashboardView({ onBack }: { onBack: () => void }) {
+  const { colors, glassCard } = useGlassStyles();
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const sections = [
+    {
+      id: "portfolio-stats",
+      icon: <TrendingUp size={28} color="#FFD600" />,
+      title: "Portfolio Stats",
+      description: "Views, saves, profile visits, and which artworks get the most engagement.",
+      items: [
+        { label: "Total Views", value: "3,847" },
+        { label: "Total Saves", value: "284" },
+        { label: "Profile Visits", value: "1,203" },
+        { label: "Top Artwork", value: "Urban Pulse" },
+        { label: "Engagement Trend", value: "+18% this month" },
+      ],
+      expandable: true,
+    },
+    {
+      id: "artwork-manager",
+      icon: <PenTool size={28} color="#FFD600" />,
+      title: "Artwork Manager",
+      description: "Upload, edit, tag by collection/style, and set availability.",
+      items: [
+        { label: "Upload new artwork", value: "→", action: () => navigate("/gallery/upload") },
+        { label: "Edit existing pieces", value: "15 artworks" },
+        { label: "Tag by collection & style", value: "8 collections" },
+        { label: "For Sale", value: "6 pieces" },
+        { label: "Commission", value: "3 open" },
+        { label: "Display Only", value: "6 pieces" },
+      ],
+    },
+    {
+      id: "collection-assignment",
+      icon: <FolderOpen size={28} color="#FFD600" />,
+      title: "Collection Assignment",
+      description: "Organise your artworks into the style collections.",
+      items: [
+        { label: "Photography", value: "2 pieces", action: () => navigate("/gallery/collections") },
+        { label: "Digital Art", value: "4 pieces", action: () => navigate("/gallery/collections") },
+        { label: "Oil Painting", value: "1 piece", action: () => navigate("/gallery/collections") },
+        { label: "Watercolor", value: "2 pieces", action: () => navigate("/gallery/collections") },
+        { label: "Mixed Media", value: "2 pieces", action: () => navigate("/gallery/collections") },
+        { label: "Street Art", value: "1 piece", action: () => navigate("/gallery/collections") },
+      ],
+    },
+    {
+      id: "inquiry-inbox",
+      icon: <Inbox size={28} color="#FFD600" />,
+      title: "Inquiry Inbox",
+      description: "Messages from buyers and collaborators routed through the platform.",
+      items: [
+        { label: "New inquiries", value: "3 unread" },
+        { label: "From: Sarah M.", value: "Interested in 'Urban Pulse' — CA$450" },
+        { label: "From: David K.", value: "Commission request — portrait" },
+        { label: "From: Gallery XYZ", value: "Exhibition opportunity" },
+        { label: "Archived", value: "12 conversations" },
+      ],
+    },
+    {
+      id: "commission-tracker",
+      icon: <Clock size={28} color="#FFD600" />,
+      title: "Commission Status Tracker",
+      description: "Track open requests, in-progress work, and delivered commissions.",
+      items: [
+        { label: "Open Requests", value: "2" },
+        { label: "In Progress", value: "1" },
+        { label: "Delivered", value: "4" },
+        { label: "Total Revenue", value: "CA$3,200" },
+        { label: "Avg. Completion", value: "12 days" },
+      ],
+    },
+    {
+      id: "earnings-summary",
+      icon: <Wallet size={28} color="#FFD600" />,
+      title: "Earnings Summary",
+      description: "Revenue by artwork and period — ready when transactions go live.",
+      items: [
+        { label: "Total Earnings", value: "CA$5,450" },
+        { label: "This Month", value: "CA$1,200" },
+        { label: "Last Month", value: "CA$890" },
+        { label: "Top Seller", value: "Concrete Dreams — CA$1,200" },
+        { label: "Pending Payouts", value: "CA$450" },
+      ],
+    },
+  ];
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px", position: "relative", zIndex: 1 }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: "50%",
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#fff",
+            }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ color: "#FFD600", fontSize: 32, fontWeight: 800, margin: 0 }}>Artist Dashboard</h1>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, margin: "4px 0 0" }}>
+              Manage your gallery, track engagement, and handle inquiries
+            </p>
+          </div>
+        </div>
+
+        {/* Expanded Portfolio Stats Panel */}
+        {expandedSection === "portfolio-stats" && (
+          <div style={{ marginTop: 24, marginBottom: 24 }}>
+            <PortfolioStatsPanel onClose={() => setExpandedSection(null)} glassCard={glassCard} />
+          </div>
+        )}
+
+        {/* Dashboard Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: 24,
+            marginTop: 32,
+          }}
+        >
+          {sections.map((section) => (
+            <div
+              key={section.title}
+              onClick={() => {
+                if (section.expandable) {
+                  setExpandedSection(expandedSection === section.id ? null : section.id);
+                }
+              }}
+              style={{
+                ...glassCard,
+                padding: 28,
+                borderRadius: 16,
+                cursor: "pointer",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                border: expandedSection === section.id ? "1px solid rgba(255,214,0,0.3)" : (glassCard as any).border,
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 12px 40px rgba(255,214,0,0.1)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "none";
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+                <div
+                  style={{
+                    background: "rgba(255,214,0,0.1)",
+                    borderRadius: 12,
+                    width: 48,
+                    height: 48,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {section.icon}
+                </div>
+                <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, margin: 0 }}>{section.title}</h2>
+                {section.expandable && (
+                  <span style={{ marginLeft: "auto", color: "#FFD600", fontSize: 12, fontWeight: 600 }}>
+                    {expandedSection === section.id ? "▲ Collapse" : "▼ Expand"}
+                  </span>
+                )}
+              </div>
+              <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, lineHeight: 1.5, margin: "0 0 16px" }}>
+                {section.description}
+              </p>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {section.items.map((item) => (
+                  <li
+                    key={item.label}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if ((item as any).action) (item as any).action();
+                    }}
+                    style={{
+                      color: "rgba(255,255,255,0.7)",
+                      fontSize: 13,
+                      padding: "10px 8px",
+                      borderBottom: "1px solid rgba(255,255,255,0.05)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      cursor: (item as any).action ? "pointer" : "default",
+                      borderRadius: 6,
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "#FFD600", fontSize: 8 }}>●</span>
+                      {item.label}
+                    </span>
+                    <span style={{ color: "#FFD600", fontSize: 13, fontWeight: 600 }}>{item.value}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -642,9 +3027,20 @@ export default function GalleryPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, colors, glassCard, glassSurface, glassTag, cardHoverHandlers, buttonHoverHandlers } = useGlassStyles();
-  const { user: authUser } = useAuthContext();
+  const { user: authUser, isAuthenticated } = useAuthContext();
   const [filterOpen, setFilterOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [galleryAuthOpen, setGalleryAuthOpen] = useState(false);
+
+  // Intercept Submit Art clicks for anonymous visitors — pop up auth modal
+  // instead of sending them to /gallery/upload where the gate also fires.
+  const handleSubmitArtClick = useCallback(() => {
+    if (!isAuthenticated || !authUser?.id) {
+      setGalleryAuthOpen(true);
+      return;
+    }
+    navigate("/gallery/upload");
+  }, [isAuthenticated, authUser?.id, navigate]);
 
   // Check if we're on an artwork detail page
   const artworkMatch = location.pathname.match(/\/gallery\/artwork\/(.+)/);
@@ -661,6 +3057,8 @@ export default function GalleryPage() {
   const [selectedStyle, setSelectedStyle] = useState<string>("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showForSale, setShowForSale] = useState(false);
+  const [priceSort, setPriceSort] = useState<"" | "low-high" | "high-low">("");
+  const [showHotOnly, setShowHotOnly] = useState(false);
   const [mediums, setMediums] = useState<MediumOption[]>([]);
   const [popularTags, setPopularTags] = useState<{ tag: string; count: number }[]>([]);
 
@@ -717,15 +3115,29 @@ export default function GalleryPage() {
       const url = `${GALLERY_API_URL}/artworks${params.toString() ? `?${params}` : ""}`;
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`Failed to load artworks (${resp.status})`);
-      const data = await resp.json();
-      setArtworks(Array.isArray(data) ? data : []);
+      const rawData = await resp.json();
+      let data: Artwork[] = Array.isArray(rawData) ? rawData : [];
+
+      // Hot products filter (high engagement: views + favorites)
+      if (showHotOnly) {
+        data = data.filter(a => (a.view_count || 0) + (a.favorites || 0) >= 10);
+      }
+
+      // Price sort
+      if (priceSort === "low-high") {
+        data.sort((a, b) => (a.price || 0) - (b.price || 0));
+      } else if (priceSort === "high-low") {
+        data.sort((a, b) => (b.price || 0) - (a.price || 0));
+      }
+
+      setArtworks(data);
     } catch (error) {
       setArtworksError(error instanceof Error ? error.message : "Failed to load artworks");
       setArtworks([]);
     } finally {
       setArtworksLoading(false);
     }
-  }, [searchQuery, selectedMedium, selectedStyle, selectedTags, showForSale]);
+  }, [searchQuery, selectedMedium, selectedStyle, selectedTags, showForSale, priceSort, showHotOnly]);
 
   // Load user's artwork favorites
   const loadFavorites = useCallback(async () => {
@@ -873,14 +3285,65 @@ export default function GalleryPage() {
   };
 
   // Get unique styles from artworks for filter
-  const availableStyles = [...new Set(artworks.map((a) => a.style).filter(Boolean))];
+  // When a medium is selected, show medium-specific sub-styles; otherwise show styles from artworks
+  const availableStyles = selectedMedium && MEDIUM_STYLES[selectedMedium]
+    ? MEDIUM_STYLES[selectedMedium]
+    : [...new Set(artworks.map((a) => a.style).filter(Boolean))];
 
   // Page-specific accent text color (not in shared hook)
   const accentText = isDark ? "#FFD700" : "#000";
 
   // Artwork detail view — checked after all hooks
   if (artworkMatch) {
-    return <ArtworkDetailView artworkId={artworkMatch[1]} onBack={() => navigate('/gallery')} />;
+    return <ArtworkDetailView artworkId={artworkMatch[1]} onBack={() => navigate('/gallery')} onSelectTag={(tag) => { setSelectedTags([tag]); navigate('/gallery'); }} />;
+  }
+
+  // Upload page sub-route (already declared earlier in the function)
+  if (isUploadPage) {
+    return <UploadArtView onBack={() => navigate('/gallery')} />;
+  }
+
+  // Saved collections page sub-route
+  const isSavedPage = location.pathname === '/gallery/saved';
+  if (isSavedPage) {
+    return (
+      <SavedCollectionsView
+        onBack={() => navigate('/gallery')}
+        onSelectMedium={(medium) => {
+          setSelectedMedium(medium);
+          navigate('/gallery');
+        }}
+      />
+    );
+  }
+
+  // Dashboard page sub-route
+  const isDashboardPage = location.pathname === '/gallery/dashboard';
+  if (isDashboardPage) {
+    return <DashboardView onBack={() => navigate('/gallery')} />;
+  }
+
+  // Collections page sub-route
+  const isCollectionsPage = location.pathname === '/gallery/collections';
+  if (isCollectionsPage) {
+    return (
+      <CollectionsView
+        onBack={() => navigate('/gallery')}
+        onSelectMedium={(medium) => {
+          setSelectedMedium(medium);
+          navigate('/gallery');
+        }}
+      />
+    );
+  }
+
+  // Render full-page upload if on /gallery/upload
+  if (isUploadPage) {
+    return (
+      <Suspense fallback={<div style={{ padding: 40, textAlign: "center" }}>Loading...</div>}>
+        <SubmitArtPage />
+      </Suspense>
+    );
   }
 
   // Render full-page upload if on /gallery/upload
@@ -953,7 +3416,7 @@ export default function GalleryPage() {
             }}
           >
             <button
-              onClick={() => navigate("/gallery/upload")}
+              onClick={handleSubmitArtClick}
               style={{
                 background: "#FFD700",
                 color: "#000",
@@ -1037,9 +3500,39 @@ export default function GalleryPage() {
             >
               <BarChart3 size={16} /> Dashboard
             </button>
+            <button
+              onClick={() => navigate("/gallery/saved")}
+              style={{
+                border: `1px solid ${colors.border}`,
+                color: colors.textSecondary,
+                padding: "12px 24px",
+                borderRadius: "999px",
+                fontWeight: "bold",
+                textTransform: "uppercase",
+                transition: "all 0.2s",
+                background: colors.surface,
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255, 60, 80, 0.15)";
+                e.currentTarget.style.transform = "scale(1.05)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = colors.surface;
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              <Heart size={16} /> Saved
+            </button>
           </div>
         </div>
       </div>
+
 
       <div
         style={{
@@ -1102,7 +3595,7 @@ export default function GalleryPage() {
             </label>
             <select
               value={selectedMedium}
-              onChange={(e) => setSelectedMedium(e.target.value)}
+              onChange={(e) => { setSelectedMedium(e.target.value); setSelectedStyle(""); }}
               style={{
                 width: "100%",
                 background: colors.cardBg,
@@ -1134,10 +3627,10 @@ export default function GalleryPage() {
                 fontSize: "0.9rem",
               }}
             >
-              <Tag size={14} /> Style
+              <Tag size={14} /> {selectedMedium ? `${selectedMedium} Styles` : "Style"}
             </label>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {availableStyles.slice(0, 6).map((style) => (
+              {availableStyles.slice(0, 8).map((style) => (
                 <label
                   key={style}
                   style={{
@@ -1290,12 +3783,42 @@ export default function GalleryPage() {
             </label>
           </div>
 
+          {/* Price Sort */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontWeight: "bold", fontSize: "0.85rem", color: colors.accent, display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <DollarSign size={14} /> Price
+            </label>
+            {[
+              { value: "", label: "Default" },
+              { value: "low-high", label: "Lowest to Highest" },
+              { value: "high-low", label: "Highest to Lowest" },
+            ].map(opt => (
+              <label key={opt.value} style={{ display: "flex", alignItems: "center", padding: "6px 8px", borderRadius: 8, cursor: "pointer", background: priceSort === opt.value ? "rgba(255,214,0,0.1)" : "transparent", color: colors.text, fontWeight: "normal", marginBottom: 2 }}>
+                <input type="radio" name="priceSort" checked={priceSort === opt.value} onChange={() => setPriceSort(opt.value as "" | "low-high" | "high-low")} style={{ marginRight: 8, accentColor: colors.accent }} />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+
+          {/* Hot Products */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontWeight: "bold", fontSize: "0.85rem", color: "#ef4444", display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              🔥 Most Popular
+            </label>
+            <label style={{ display: "flex", alignItems: "center", padding: "6px 8px", borderRadius: 8, cursor: "pointer", background: showHotOnly ? "rgba(239,68,68,0.1)" : "transparent", color: colors.text, fontWeight: "normal" }}>
+              <input type="checkbox" checked={showHotOnly} onChange={(e) => setShowHotOnly(e.target.checked)} style={{ marginRight: 8, accentColor: "#ef4444" }} />
+              Show hot products only
+            </label>
+          </div>
+
           <button
             onClick={() => {
               setSelectedMedium("");
               setSelectedStyle("");
               setSelectedTags([]);
               setShowForSale(false);
+              setPriceSort("");
+              setShowHotOnly(false);
               setSearchQuery("");
             }}
             style={{
@@ -1316,197 +3839,6 @@ export default function GalleryPage() {
 
         {/* Main Grid */}
         <div style={{ flex: 1, padding: "20px" }}>
-          {/* User Uploads Section - GLASSMORPHISM */}
-          <div
-            style={{
-              ...glassCard,
-              padding: "20px",
-              marginBottom: "24px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <h3 style={{ margin: 0, color: accentText, fontSize: "1.1rem" }}>
-                Your Uploaded Art
-              </h3>
-              <button
-                type="button"
-                onClick={() => navigate("/gallery/upload")}
-                style={{
-                  background: "rgba(255, 214, 0, 0.1)",
-                  backdropFilter: "blur(10px)",
-                  border: "1px solid rgba(255, 214, 0, 0.3)",
-                  color: accentText,
-                  padding: "8px 16px",
-                  borderRadius: "999px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(255, 214, 0, 0.2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(255, 214, 0, 0.1)";
-                }}
-              >
-                Manage uploads
-              </button>
-            </div>
-
-            {uploadsMessage && (
-              <p
-                style={{
-                  marginTop: 10,
-                  marginBottom: 0,
-                  color: accentText,
-                  fontSize: "0.85rem",
-                }}
-              >
-                {uploadsMessage}
-              </p>
-            )}
-
-            <div style={{ marginTop: 14 }}>
-              {uploadsLoading ? (
-                <p style={{ margin: 0, color: colors.textMuted }}>Loading uploads...</p>
-              ) : uploadsError ? (
-                <p style={{ margin: 0, color: colors.error }}>{uploadsError}</p>
-              ) : uploads.length === 0 ? (
-                <p style={{ margin: 0, color: colors.textMuted }}>
-                  No uploads yet. Click &quot;Manage uploads&quot; to submit your first
-                  piece.
-                </p>
-              ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                    gap: 16,
-                  }}
-                >
-                  {uploads.slice(0, 6).map((upload) => (
-                    <div
-                      key={upload.id}
-                      style={{
-                        background: colors.surface,
-                        backdropFilter: "blur(16px) saturate(180%)",
-                        WebkitBackdropFilter: "blur(16px) saturate(180%)",
-                        borderRadius: "16px",
-                        overflow: "hidden",
-                        border: `1px solid ${colors.border}`,
-                        position: "relative",
-                        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "translateY(-4px)";
-                        e.currentTarget.style.borderColor = colors.borderHover;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "translateY(0)";
-                        e.currentTarget.style.borderColor = colors.border;
-                      }}
-                    >
-                      <div
-                        style={{
-                          aspectRatio: "1",
-                          background: "rgba(0,0,0,0.3)",
-                          position: "relative",
-                        }}
-                      >
-                        <img
-                          loading="lazy"
-                          decoding="async"
-                          src={upload.image_url}
-                          alt={upload.title}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: "block",
-                          }}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src =
-                              "/assets/gallery/cyberpunk.png";
-                          }}
-                        />
-                      </div>
-                      <div style={{ padding: "12px" }}>
-                        <div
-                          style={{
-                            fontWeight: "bold",
-                            color: colors.text,
-                            marginBottom: 8,
-                          }}
-                        >
-                          {upload.title}
-                        </div>
-                        <div style={{ display: "flex", gap: 10 }}>
-                          <a
-                            href={upload.image_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              flex: 1,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 8,
-                              borderRadius: "10px",
-                              border: `1px solid ${colors.border}`,
-                              background: "transparent",
-                              color: colors.text,
-                              padding: "8px 10px",
-                              fontWeight: "bold",
-                              textDecoration: "none",
-                              transition: "all 0.2s",
-                            }}
-                          >
-                            <ExternalLink size={16} />
-                            View
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => handleShareOrCopy(upload.image_url)}
-                            style={{
-                              flex: 1,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 8,
-                              borderRadius: "10px",
-                              border: `1px solid ${colors.border}`,
-                              background: "transparent",
-                              color: colors.text,
-                              padding: "8px 10px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              transition: "all 0.2s",
-                            }}
-                          >
-                            {typeof navigator !== "undefined" && "share" in navigator ? (
-                              <Share2 size={16} />
-                            ) : (
-                              <Copy size={16} />
-                            )}
-                            Share
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Search and Filter Toggle - GLASSMORPHISM */}
           <div
             style={{
@@ -1603,7 +3935,7 @@ export default function GalleryPage() {
               <p style={{ fontSize: "1.2rem", marginBottom: 16 }}>No artworks found</p>
               <p>Be the first to submit your art to the gallery!</p>
               <button
-                onClick={() => navigate("/gallery/upload")}
+                onClick={handleSubmitArtClick}
                 style={{
                   marginTop: 16,
                   padding: "10px 20px",
@@ -1622,7 +3954,7 @@ export default function GalleryPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
                 gap: "24px",
               }}
             >
@@ -1641,7 +3973,7 @@ export default function GalleryPage() {
                 >
                   <div
                     style={{
-                      aspectRatio: "1",
+                      aspectRatio: "16/9",
                       position: "relative",
                       background: "#222",
                     }}
@@ -1828,18 +4160,45 @@ export default function GalleryPage() {
                           isVerified={artistProfiles[art.artist_id].is_verified}
                         />
                       </div>
-                    ) : art.artist_name ? (
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "0.85rem",
-                          color: colors.textSecondary,
-                          marginBottom: "10px",
-                        }}
-                      >
-                        by {art.artist_name}
-                      </span>
-                    ) : null}
+                    ) : art.artist_name ? (() => {
+                      const slug = artistNameToSlug(art.artist_name);
+                      const baseStyle: React.CSSProperties = {
+                        display: "block",
+                        fontSize: "0.85rem",
+                        color: colors.textSecondary,
+                        marginBottom: "10px",
+                      };
+                      if (!slug) {
+                        return <span style={baseStyle}>by {art.artist_name}</span>;
+                      }
+                      return (
+                        <span style={baseStyle}>
+                          by{" "}
+                          <span
+                            role="link"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/creatives/${encodeURIComponent(slug)}`);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/creatives/${encodeURIComponent(slug)}`);
+                              }
+                            }}
+                            style={{
+                              color: colors.text,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {art.artist_name}
+                          </span>
+                        </span>
+                      );
+                    })() : null}
                     <div
                       style={{
                         display: "flex",
@@ -1952,6 +4311,15 @@ export default function GalleryPage() {
         />
       )}
 
+      {galleryAuthOpen && (
+        <Suspense fallback={null}>
+          <AuthPopupModal
+            isOpen={galleryAuthOpen}
+            onClose={() => setGalleryAuthOpen(false)}
+            initialTab="login"
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

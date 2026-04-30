@@ -11,7 +11,7 @@ import {
   getLearningRecommendations,
   LearningRecommendation,
 } from './api/ai-tutor';
-import { getOrCreateUserId } from './api/userId';
+import { useAcademyUserId } from './useAcademyUserId';
 
 interface AiTutorChatProps {
   courseId?: string;
@@ -28,7 +28,7 @@ export function AiTutorChat({
   initialMessage,
   onClose,
 }: AiTutorChatProps) {
-  const [userId, setUserId] = useState<string | null>(null);
+  const userId = useAcademyUserId();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
   const [input, setInput] = useState('');
@@ -39,15 +39,11 @@ export function AiTutorChat({
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setUserId(getOrCreateUserId());
-  }, []);
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    if (initialMessage && userId && !sessionId) {
+    if (initialMessage && !sessionId) {
       handleSendMessage(initialMessage);
     }
   }, [initialMessage, userId]);

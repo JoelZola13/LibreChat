@@ -36,6 +36,7 @@ const GroupsPage = lazy(() => import('~/components/streetbot/groups/GroupsPage')
 const GroupDetailPage = lazy(() => import('~/components/streetbot/groups/GroupDetailPage'));
 const NewsPage = lazy(() => import('~/components/streetbot/news/NewsPage'));
 const NewsEditorPage = lazy(() => import('~/components/streetbot/news/editor/EditorPage'));
+const NewsDashboardPage = lazy(() => import('~/components/streetbot/news/dashboard'));
 const DirectoryPage = lazy(() => import('~/components/streetbot/directory/DirectoryPage'));
 const ServiceDetailPage = lazy(() => import('~/components/streetbot/directory/ServiceDetailPage'));
 const JobsPage = lazy(() => import('~/components/streetbot/jobs/JobsPage'));
@@ -43,15 +44,46 @@ const JobDetailPage = lazy(() => import('~/components/streetbot/jobs/JobDetailPa
 const MyApplicationsPage = lazy(() => import('~/components/streetbot/jobs/MyApplicationsPage'));
 const MyResumePage = lazy(() => import('~/components/streetbot/jobs/MyResumePage'));
 const EmployerDashboardPage = lazy(() => import('~/components/streetbot/jobs/EmployerDashboardPage'));
+const PostJobPage = lazy(() => import('~/components/streetbot/jobs/PostJobPage'));
+const ApplicantTrackingPage = lazy(() => import('~/components/streetbot/jobs/ApplicantTrackingPage'));
+const CandidateSearchPage = lazy(() => import('~/components/streetbot/jobs/CandidateSearchPage'));
 const CalendarPage = lazy(() => import('~/components/streetbot/calendar/CalendarPage'));
 const MessagesPage = lazy(() => import('~/components/streetbot/messages/MessagesPage'));
 const DocumentsPage = lazy(() => import('~/components/streetbot/documents/DocumentsPage'));
+const CaseManagementPage = lazy(
+  () => import('~/components/streetbot/case-management/CaseManagementPage'),
+);
 const AcademyPage = lazy(() => import('~/components/streetbot/academy/AcademyPage'));
 const AcademyCoursesPage = lazy(() => import('~/components/streetbot/academy/AcademyCoursesPage'));
+const AcademyCourseDetailPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyCourseDetailPage'),
+);
 const AcademyPathsPage = lazy(() => import('~/components/streetbot/academy/AcademyPathsPage'));
+const AcademyPathDetailPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyPathDetailPage'),
+);
+const AcademyEnrollmentPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyEnrollmentPage'),
+);
+const AcademySavedPage = lazy(() => import('~/components/streetbot/academy/AcademySavedPage'));
 const AcademyLivePage = lazy(() => import('~/components/streetbot/academy/AcademyLivePage'));
+const AcademyLiveSessionDetailPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyLiveSessionDetailPage'),
+);
+const AcademyDashboardPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyDashboardPage'),
+);
+const AcademyCertificatesPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyCertificatesPage'),
+);
 const AcademyInstructorPage = lazy(
   () => import('~/components/streetbot/academy/AcademyInstructorPage'),
+);
+const AcademyInstructorCoursePage = lazy(
+  () => import('~/components/streetbot/academy/AcademyInstructorCoursePage'),
+);
+const AcademyInstructorSubmissionListPage = lazy(
+  () => import('~/components/streetbot/academy/AcademyInstructorSubmissionListPage'),
 );
 const MissionControlPage = lazy(() => import('~/components/streetbot/mission-control/MissionControlPage'));
 const NotificationsPage = lazy(
@@ -62,6 +94,12 @@ const StoragePage = lazy(() => import('~/components/streetbot/storage/StoragePag
 const DatabasePage = lazy(() => import('~/components/streetbot/database/DatabasePage'));
 const GrantWriterPage = lazy(() => import('~/components/streetbot/grantwriter/GrantWriterPage'));
 const AgentMarketplacePage = lazy(() => import('~/components/streetbot/agents/AgentMarketplacePage'));
+const CreativeProfilePage = lazy(() => import('~/components/streetbot/profile/CreativeProfilePage'));
+const StreetProfileAcademySectionPage = lazy(
+  () => import('~/components/streetbot/profile/StreetProfileAcademySectionPage'),
+);
+const BookingPage = lazy(() => import('~/components/streetbot/profile/BookingPage'));
+const MyProfilePage = lazy(() => import('~/components/streetbot/profile/MyProfilePage'));
 const SettingsPage = lazy(() => import('~/components/streetbot/settings/SettingsPage'));
 const SBDashboardPage = lazy(() => import('~/components/streetbot/dashboard/DashboardPage'));
 const HowItWorksPage = lazy(() => import('~/components/streetbot/info/HowItWorksPage'));
@@ -234,8 +272,12 @@ export const router = createBrowserRouter(
             // Street Bot Pro pages — shared across both variants
             { path: 'profile', element: guardedSbPage('profile', ProfilePage) },
             { path: 'profile/*', element: guardedSbPage('profile', ProfilePage) },
+            { path: 'creatives/:username/academy/:section', element: guardedSbPage('profile', StreetProfileAcademySectionPage) },
+            { path: 'creatives/:username', element: guardedSbPage('profile', CreativeProfilePage) },
+            { path: 'creatives/:username/book', element: guardedSbPage('profile', BookingPage) },
             { path: 'groups', element: guardedSbPage('groups', GroupsPage) },
             { path: 'groups/:groupId', element: guardedSbPage('groups', GroupDetailPage) },
+            { path: 'news/dashboard', element: guardedSbPage('news', NewsDashboardPage) },
             { path: 'news/editor', element: guardedSbPage('news', NewsEditorPage) },
             { path: 'news/editor/:id', element: guardedSbPage('news', NewsEditorPage) },
             { path: 'news', element: guardedSbPage('news', NewsPage) },
@@ -261,16 +303,21 @@ export const router = createBrowserRouter(
             { path: 'directory', element: guardedSbPage('directory', DirectoryPage) },
             { path: 'directory/*', element: guardedSbPage('directory', DirectoryPage) },
             { path: 'jobs', element: guardedSbPage('jobs', JobsPage) },
+            { path: 'jobs/post', element: guardedSbPage('jobs', PostJobPage) },
+            { path: 'jobs/post/:jobId', element: guardedSbPage('jobs', PostJobPage) },
             { path: 'jobs/my-applications', element: guardedSbPage('jobs', MyApplicationsPage) },
             { path: 'jobs/resume', element: guardedSbPage('jobs', MyResumePage) },
             { path: 'jobs/employer', element: guardedSbPage('jobs', EmployerDashboardPage) },
+            { path: 'jobs/employer/applicants/:jobId', element: guardedSbPage('jobs', ApplicantTrackingPage) },
+            { path: 'jobs/employer/candidates', element: guardedSbPage('jobs', CandidateSearchPage) },
             { path: 'jobs/:jobId', element: guardedSbPage('jobs', JobDetailPage) },
             { path: 'jobs/*', element: guardedSbPage('jobs', JobsPage) },
             // Notifications — always accessible (not a nav item)
             { path: 'notifications', element: sbPage(NotificationsPage) },
             { path: 'notifications/*', element: sbPage(NotificationsPage) },
-            { path: 'settings', element: guardedSbPage('settings', SettingsPage) },
-            { path: 'settings/*', element: guardedSbPage('settings', SettingsPage) },
+            { path: 'settings/academy/:section', element: guardedSbPage('settings', StreetProfileAcademySectionPage) },
+            { path: 'settings', element: guardedSbPage('settings', MyProfilePage) },
+            { path: 'settings/*', element: guardedSbPage('settings', MyProfilePage) },
             // StreetBot-only pages
             ...(isStreetBot
               ? [
@@ -280,25 +327,48 @@ export const router = createBrowserRouter(
                   { path: 'gallery/*', element: guardedSbPage('gallery', GalleryPage) },
                   { path: 'calendar', element: guardedSbPage('calendar', CalendarPage) },
                   { path: 'calendar/*', element: guardedSbPage('calendar', CalendarPage) },
+                  { path: 'case-management', element: guardedSbPage('case-management', CaseManagementPage) },
+                  {
+                    path: 'case-management/*',
+                    element: guardedSbPage('case-management', CaseManagementPage),
+                  },
                   { path: 'messages', element: guardedSbPage('messages', MessagesPage) },
                   { path: 'messages/*', element: guardedSbPage('messages', MessagesPage) },
                   { path: 'documents', element: guardedSbPage('documents', DocumentsPage) },
                   { path: 'documents/*', element: guardedSbPage('documents', DocumentsPage) },
                   { path: 'academy/courses', element: sbPage(AcademyCoursesPage) },
-                  { path: 'academy/courses/*', element: sbPage(AcademyCoursesPage) },
+                  { path: 'academy/courses/:courseId', element: sbPage(AcademyCourseDetailPage) },
+                  { path: 'academy/courses/:courseId/enroll', element: sbPage(AcademyEnrollmentPage) },
                   { path: 'academy/paths', element: sbPage(AcademyPathsPage) },
-                  { path: 'academy/paths/*', element: sbPage(AcademyPathsPage) },
+                  { path: 'academy/paths/:slug', element: sbPage(AcademyPathDetailPage) },
+                  { path: 'academy/paths/:slug/enroll', element: sbPage(AcademyEnrollmentPage) },
+                  { path: 'academy/saved', element: sbPage(AcademySavedPage) },
                   { path: 'academy/live-sessions', element: sbPage(AcademyLivePage) },
-                  { path: 'academy/live-sessions/*', element: sbPage(AcademyLivePage) },
+                  { path: 'academy/live-sessions/:sessionId', element: sbPage(AcademyLiveSessionDetailPage) },
+                  { path: 'academy/dashboard', element: sbPage(AcademyDashboardPage) },
+                  { path: 'academy/dashboard/*', element: sbPage(AcademyDashboardPage) },
+                  { path: 'academy/certificates', element: sbPage(AcademyCertificatesPage) },
                   { path: 'academy/instructor', element: sbPage(AcademyInstructorPage) },
+                  { path: 'academy/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
+                  { path: 'academy/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'academy/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
                   { path: 'academy/instructor/*', element: sbPage(AcademyInstructorPage) },
                   { path: 'learning/courses', element: sbPage(AcademyCoursesPage) },
-                  { path: 'learning/courses/*', element: sbPage(AcademyCoursesPage) },
+                  { path: 'learning/courses/:courseId', element: sbPage(AcademyCourseDetailPage) },
+                  { path: 'learning/courses/:courseId/enroll', element: sbPage(AcademyEnrollmentPage) },
                   { path: 'learning/paths', element: sbPage(AcademyPathsPage) },
-                  { path: 'learning/paths/*', element: sbPage(AcademyPathsPage) },
+                  { path: 'learning/paths/:slug', element: sbPage(AcademyPathDetailPage) },
+                  { path: 'learning/paths/:slug/enroll', element: sbPage(AcademyEnrollmentPage) },
+                  { path: 'learning/saved', element: sbPage(AcademySavedPage) },
                   { path: 'learning/live-sessions', element: sbPage(AcademyLivePage) },
-                  { path: 'learning/live-sessions/*', element: sbPage(AcademyLivePage) },
+                  { path: 'learning/live-sessions/:sessionId', element: sbPage(AcademyLiveSessionDetailPage) },
+                  { path: 'learning/dashboard', element: sbPage(AcademyDashboardPage) },
+                  { path: 'learning/dashboard/*', element: sbPage(AcademyDashboardPage) },
+                  { path: 'learning/certificates', element: sbPage(AcademyCertificatesPage) },
                   { path: 'learning/instructor', element: sbPage(AcademyInstructorPage) },
+                  { path: 'learning/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
+                  { path: 'learning/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'learning/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
                   { path: 'learning/instructor/*', element: sbPage(AcademyInstructorPage) },
                   { path: 'academy', element: sbPage(AcademyPage) },
                   { path: 'academy/*', element: sbPage(AcademyPage) },
@@ -306,6 +376,8 @@ export const router = createBrowserRouter(
                   { path: 'learning/*', element: sbPage(AcademyPage) },
                   { path: 'tasks', element: guardedSbPage('tasks', MissionControlPage) },
                   { path: 'tasks/*', element: guardedSbPage('tasks', MissionControlPage) },
+                  { path: 'mission-control', element: guardedSbPage('tasks', MissionControlPage) },
+                  { path: 'mission-control/*', element: guardedSbPage('tasks', MissionControlPage) },
                   { path: 'social-media', element: guardedSbPage('social-media', SocialMediaPage) },
                   {
                     path: 'social-media/*',

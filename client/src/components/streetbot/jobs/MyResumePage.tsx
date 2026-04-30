@@ -19,18 +19,41 @@ import {
   Award,
   Sparkles,
   Save,
+  Star,
+  FileText,
+  Lock,
+  CheckCircle,
+  AlertCircle,
+  Copy,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useGlassStyles } from "../shared/useGlassStyles";
 import { GlassBackground } from "../shared/GlassBackground";
 import { calculateJobMatch } from "./jobMatching";
 import { enrichJobsSchedule } from "./jobSchedule";
-import { getResume, saveResume, createEmptyResume } from "./jobsStorage";
+import { calculateCompletenessScore, getCompletenessLabel, getCompletenessColor } from "./jobCompleteness";
+import {
+  getResume, saveResume, createEmptyResume,
+  getResumeVersions, saveResumeVersion, deleteResumeVersion, setDefaultResumeVersion,
+  getPrivacySettings, savePrivacySettings, getApplications,
+} from "./jobsStorage";
+import CoverLetterEditor from "./CoverLetterEditor";
+import ResumePathChooser from "./ResumePathChooser";
+import ResumeUploader from "./ResumeUploader";
+import ResumeBuilder from "./ResumeBuilder";
+import CoverLetterBuilder from "./CoverLetterBuilder";
+import DocumentManager from "./DocumentManager";
+import { getUploadedDocuments, deleteUploadedDocument, setDefaultUploadedDocument, getCoverLetters, deleteCoverLetter } from "./jobsStorage";
 import type {
   Job,
   Resume,
   ResumeExperience,
   ResumeEducation,
   ResumeCertification,
+  ResumeVersion,
+  PrivacySettings,
+  JobApplication,
 } from "./types";
 
 // ── Helpers ──
@@ -80,11 +103,40 @@ export default function MyResumePage() {
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
+  const [activeTab, setActiveTab] = useState<"resume" | "coverLetters">("resume");
+  const [resumeVersions, setResumeVersions] = useState<ResumeVersion[]>([]);
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
+  const [privacy, setPrivacy] = useState<PrivacySettings>(() => getPrivacySettings(userId));
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [recentApps, setRecentApps] = useState<JobApplication[]>([]);
+  const [resumeView, setResumeView] = useState<"main" | "chooser" | "upload" | "builder">("main");
+  const [coverLetterView, setCoverLetterView] = useState<"main" | "chooser" | "upload" | "builder">("main");
+  const [uploadedDocs, setUploadedDocs] = useState(() => getUploadedDocuments(userId));
+
+  // Load resume versions, applications
+  useEffect(() => {
+    const versions = getResumeVersions(userId);
+    setResumeVersions(versions);
+    if (versions.length > 0 && !activeVersionId) {
+      const defaultV = versions.find((v) => v.isDefault) || versions[0];
+      setActiveVersionId(defaultV.id);
+    }
+    const apps = getApplications(userId).filter((a) => !a.withdrawn).sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
+    setRecentApps(apps.slice(0, 5));
+  }, [userId]);
 
   // Auto-save whenever resume changes
   useEffect(() => {
     const timer = setTimeout(() => {
       saveResume(resume);
+      // Also save to active resume version
+      if (activeVersionId) {
+        const versions = getResumeVersions(userId);
+        const v = versions.find((ver) => ver.id === activeVersionId);
+        if (v) {
+          saveResumeVersion({ ...v, resume });
+        }
+      }
       setLastSaved(new Date().toLocaleTimeString());
     }, 500);
     return () => clearTimeout(timer);
@@ -431,7 +483,7 @@ export default function MyResumePage() {
                     </div>
                   </div>
                   <div style={{ fontSize: "12px", color: colors.textMuted, whiteSpace: "nowrap" }}>
-                    {formatDate(exp.startDate)} \u2013 {exp.current ? "Present" : formatDate(exp.endDate)}
+                    {formatDate(exp.startDate)} \u2013 {exp.current ? "Present" : formatDate(exp.endDate || "")}
                   </div>
                 </div>
                 {exp.description && (
@@ -461,7 +513,7 @@ export default function MyResumePage() {
                   <div style={{ fontSize: "13px", color: colors.textSecondary }}>{edu.institution}</div>
                 </div>
                 <div style={{ fontSize: "12px", color: colors.textMuted, whiteSpace: "nowrap" }}>
-                  {formatDate(edu.startDate)} \u2013 {edu.current ? "Present" : formatDate(edu.endDate)}
+                  {formatDate(edu.startDate)} \u2013 {edu.current ? "Present" : formatDate(edu.endDate || "")}
                 </div>
               </div>
             ))}
@@ -565,32 +617,32 @@ export default function MyResumePage() {
       <div style={cardStyle}>
         <h3 style={sectionTitleStyle}>
           <User style={{ width: "20px", height: "20px", color: colors.accent }} />
-          Contact Information
+          Personal Information
         </h3>
         <div style={{ display: "grid", gap: "14px", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <div>
             <label style={labelStyle}>Full Name *</label>
-            <input style={inputStyle} value={resume.fullName} onChange={(e) => updateField("fullName", e.target.value)} placeholder="Jane Doe" />
+            <input style={inputStyle} value={resume.fullName} onChange={(e) => updateField("fullName", e.target.value)} placeholder="e.g. Jordan Mitchell" />
           </div>
           <div>
             <label style={labelStyle}>Email *</label>
-            <input style={inputStyle} type="email" value={resume.email} onChange={(e) => updateField("email", e.target.value)} placeholder="jane@example.com" />
+            <input style={inputStyle} type="email" value={resume.email} onChange={(e) => updateField("email", e.target.value)} placeholder="e.g. jordan@email.com" />
           </div>
           <div>
             <label style={labelStyle}>Phone</label>
-            <input style={inputStyle} type="tel" value={resume.phone || ""} onChange={(e) => updateField("phone", e.target.value)} placeholder="(416) 555-0123" />
+            <input style={inputStyle} type="tel" value={resume.phone || ""} onChange={(e) => updateField("phone", e.target.value)} placeholder="e.g. (416) 555-0123" />
           </div>
           <div>
             <label style={labelStyle}>Location</label>
-            <input style={inputStyle} value={resume.location || ""} onChange={(e) => updateField("location", e.target.value)} placeholder="Toronto, ON" />
+            <input style={inputStyle} value={resume.location || ""} onChange={(e) => updateField("location", e.target.value)} placeholder="e.g. Toronto, ON" />
           </div>
           <div>
-            <label style={labelStyle}>Website / Portfolio</label>
-            <input style={inputStyle} value={resume.website || ""} onChange={(e) => updateField("website", e.target.value)} placeholder="https://myportfolio.com" />
+            <label style={labelStyle}>Website or Portfolio</label>
+            <input style={inputStyle} value={resume.website || ""} onChange={(e) => updateField("website", e.target.value)} placeholder="e.g. https://yourportfolio.com" />
           </div>
           <div>
             <label style={labelStyle}>LinkedIn</label>
-            <input style={inputStyle} value={resume.linkedin || ""} onChange={(e) => updateField("linkedin", e.target.value)} placeholder="https://linkedin.com/in/janedoe" />
+            <input style={inputStyle} value={resume.linkedin || ""} onChange={(e) => updateField("linkedin", e.target.value)} placeholder="e.g. linkedin.com/in/jordanmitchell" />
           </div>
         </div>
       </div>
@@ -605,7 +657,7 @@ export default function MyResumePage() {
           style={textareaStyle}
           value={resume.summary}
           onChange={(e) => updateField("summary", e.target.value)}
-          placeholder="A brief summary of your professional background, key strengths, and career goals..."
+          placeholder="Craft a compelling overview of your professional journey — highlight your core strengths, key accomplishments, and the unique value you bring to prospective employers..."
           rows={4}
         />
       </div>
@@ -636,15 +688,15 @@ export default function MyResumePage() {
             <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
               <div>
                 <label style={labelStyle}>Job Title</label>
-                <input style={inputStyle} value={exp.title} onChange={(e) => updateExperience(exp.id, { title: e.target.value })} placeholder="Software Developer" />
+                <input style={inputStyle} value={exp.title} onChange={(e) => updateExperience(exp.id, { title: e.target.value })} placeholder="e.g. Program Coordinator" />
               </div>
               <div>
                 <label style={labelStyle}>Company</label>
-                <input style={inputStyle} value={exp.company} onChange={(e) => updateExperience(exp.id, { company: e.target.value })} placeholder="Acme Corp" />
+                <input style={inputStyle} value={exp.company} onChange={(e) => updateExperience(exp.id, { company: e.target.value })} placeholder="e.g. Community Health Network" />
               </div>
               <div>
                 <label style={labelStyle}>Location</label>
-                <input style={inputStyle} value={exp.location || ""} onChange={(e) => updateExperience(exp.id, { location: e.target.value })} placeholder="Toronto, ON" />
+                <input style={inputStyle} value={exp.location || ""} onChange={(e) => updateExperience(exp.id, { location: e.target.value })} placeholder="e.g. Toronto, ON" />
               </div>
               <div>
                 <label style={labelStyle}>Start Date</label>
@@ -672,7 +724,7 @@ export default function MyResumePage() {
                 style={textareaStyle}
                 value={exp.description}
                 onChange={(e) => updateExperience(exp.id, { description: e.target.value })}
-                placeholder="Describe your responsibilities and achievements..."
+                placeholder="Outline your key responsibilities, measurable accomplishments, and the impact you made in this role..."
                 rows={3}
               />
             </div>
@@ -709,15 +761,15 @@ export default function MyResumePage() {
             <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
               <div>
                 <label style={labelStyle}>Institution</label>
-                <input style={inputStyle} value={edu.institution} onChange={(e) => updateEducation(edu.id, { institution: e.target.value })} placeholder="University of Toronto" />
+                <input style={inputStyle} value={edu.institution} onChange={(e) => updateEducation(edu.id, { institution: e.target.value })} placeholder="e.g. University of Toronto" />
               </div>
               <div>
                 <label style={labelStyle}>Degree</label>
-                <input style={inputStyle} value={edu.degree} onChange={(e) => updateEducation(edu.id, { degree: e.target.value })} placeholder="Bachelor of Arts" />
+                <input style={inputStyle} value={edu.degree} onChange={(e) => updateEducation(edu.id, { degree: e.target.value })} placeholder="e.g. Bachelor of Arts" />
               </div>
               <div>
                 <label style={labelStyle}>Field of Study</label>
-                <input style={inputStyle} value={edu.field || ""} onChange={(e) => updateEducation(edu.id, { field: e.target.value })} placeholder="Computer Science" />
+                <input style={inputStyle} value={edu.field || ""} onChange={(e) => updateEducation(edu.id, { field: e.target.value })} placeholder="e.g. Social Work, Business Administration" />
               </div>
               <div>
                 <label style={labelStyle}>Start Date</label>
@@ -750,15 +802,18 @@ export default function MyResumePage() {
       <div style={cardStyle}>
         <h3 style={sectionTitleStyle}>
           <Sparkles style={{ width: "20px", height: "20px", color: colors.accent }} />
-          Skills
+          Core Competencies &amp; Skills
         </h3>
+        <p style={{ fontSize: "0.8rem", color: colors.textMuted, margin: "0 0 12px", lineHeight: 1.5 }}>
+          Showcase the expertise that sets you apart. Include both technical proficiencies and transferable skills.
+        </p>
         <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
           <input
             style={{ ...inputStyle, flex: 1 }}
             value={skillInput}
             onChange={(e) => setSkillInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkill(); } }}
-            placeholder="Type a skill and press Enter..."
+            placeholder="Enter a skill and press Enter (e.g. Project Management, Data Analysis)..."
           />
           <button
             onClick={addSkill}
@@ -832,7 +887,7 @@ export default function MyResumePage() {
             value={interestInput}
             onChange={(e) => setInterestInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addInterest(); } }}
-            placeholder="Youth work, remote jobs, design, healthcare..."
+            placeholder="Enter your interests (e.g. Community Development, Digital Media)..."
           />
           <button
             onClick={addInterest}
@@ -918,11 +973,11 @@ export default function MyResumePage() {
             <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
               <div>
                 <label style={labelStyle}>Certification Name</label>
-                <input style={inputStyle} value={cert.name} onChange={(e) => updateCertification(cert.id, { name: e.target.value })} placeholder="CompTIA A+" />
+                <input style={inputStyle} value={cert.name} onChange={(e) => updateCertification(cert.id, { name: e.target.value })} placeholder="e.g. First Aid/CPR, WHMIS" />
               </div>
               <div>
                 <label style={labelStyle}>Issuer</label>
-                <input style={inputStyle} value={cert.issuer} onChange={(e) => updateCertification(cert.id, { issuer: e.target.value })} placeholder="CompTIA" />
+                <input style={inputStyle} value={cert.issuer} onChange={(e) => updateCertification(cert.id, { issuer: e.target.value })} placeholder="e.g. Canadian Red Cross" />
               </div>
               <div>
                 <label style={labelStyle}>Date Earned</label>
@@ -935,6 +990,58 @@ export default function MyResumePage() {
           <Plus style={{ width: "14px", height: "14px" }} /> Add Certification
         </button>
       </div>
+
+      {/* ── Save & Generate Resume ── */}
+      <div style={{
+        ...glassCard,
+        padding: "28px",
+        borderRadius: "20px",
+        marginTop: "8px",
+        textAlign: "center",
+        background: isDark
+          ? "linear-gradient(135deg, rgba(255,214,0,0.06), rgba(255,255,255,0.03))"
+          : "linear-gradient(135deg, rgba(255,214,0,0.08), rgba(255,255,255,0.6))",
+        border: `1px solid ${isDark ? "rgba(255,214,0,0.15)" : "rgba(255,214,0,0.25)"}`,
+      }}>
+        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: colors.text, margin: "0 0 6px" }}>
+          Ready to Finalize Your Resume?
+        </h3>
+        <p style={{ fontSize: "0.85rem", color: colors.textSecondary, margin: "0 0 20px", lineHeight: 1.5 }}>
+          Review your details above, then save to generate your professional resume. Your information is auto-saved as you type, but clicking below ensures everything is up to date.
+        </p>
+        <button
+          onClick={() => {
+            saveResume(resume);
+            if (activeVersionId) {
+              const versions = getResumeVersions(userId);
+              const v = versions.find((ver) => ver.id === activeVersionId);
+              if (v) saveResumeVersion({ ...v, resume });
+            }
+            setLastSaved(new Date().toLocaleTimeString());
+            setToast("Resume saved successfully!");
+            setMode("preview");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "14px 36px",
+            borderRadius: "14px",
+            border: "none",
+            background: "linear-gradient(135deg, #FFD600, #E6C200)",
+            color: "#000",
+            fontWeight: 700,
+            fontSize: "1rem",
+            cursor: "pointer",
+            boxShadow: "0 4px 20px rgba(255, 214, 0, 0.35)",
+            transition: "all 0.2s",
+          }}
+        >
+          <Save style={{ width: "18px", height: "18px" }} />
+          Save &amp; Preview Resume
+        </button>
+      </div>
     </>
   );
 
@@ -944,10 +1051,10 @@ export default function MyResumePage() {
         <div>
           <h3 style={{ ...sectionTitleStyle, marginBottom: "8px" }}>
             <Sparkles style={{ width: "20px", height: "20px", color: colors.accent }} />
-            Personalized Recommendations
+            Tailored Opportunities for You
           </h3>
           <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: colors.textSecondary }}>
-            Your skills, experience, summary, and interests shape these matches. The more complete your resume is, the sharper the fit score becomes.
+            These curated matches are powered by your skills, experience, and professional interests. A more complete resume yields higher-quality recommendations.
           </p>
         </div>
       </div>
@@ -956,7 +1063,7 @@ export default function MyResumePage() {
         <p style={{ margin: 0, fontSize: "14px", color: colors.textSecondary }}>Loading recommendations...</p>
       ) : recommendedJobs.length === 0 ? (
         <p style={{ margin: 0, fontSize: "14px", color: colors.textSecondary }}>
-          Add a few skills or interests to start getting personalized job matches.
+          Add your skills and areas of interest to receive personalized job recommendations tailored to your profile.
         </p>
       ) : (
         <div style={{ display: "grid", gap: "14px" }}>
@@ -1041,104 +1148,302 @@ export default function MyResumePage() {
   // Main Render
   // ══════════════════════════════════════════════════════════════════════════
 
+  const hasResumes = resumeVersions.length > 0 || uploadedDocs.filter((d) => d.kind === "resume").length > 0;
+  const hasCoverLetters = getCoverLetters(userId).length > 0 || uploadedDocs.filter((d) => d.kind === "cover_letter").length > 0;
+
   return (
     <div style={{ position: "relative", minHeight: "100%" }}>
       <GlassBackground />
 
       <div style={{ position: "relative", zIndex: 1, maxWidth: "860px", margin: "0 auto", padding: "24px 16px 80px" }}>
-        {/* Header */}
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "28px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <Link
-              to="/jobs"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                borderRadius: "12px",
-                border: `1px solid ${colors.border}`,
-                background: colors.surface,
-                backdropFilter: "blur(24px)",
-                padding: "8px 14px",
-                fontSize: "13px",
-                fontWeight: 500,
-                color: colors.textSecondary,
-                textDecoration: "none",
-                transition: "all 0.2s",
-              }}
-            >
-              <ArrowLeft style={{ width: "14px", height: "14px" }} />
-              Jobs
-            </Link>
-            <h1 style={{ fontSize: "24px", fontWeight: 800, color: colors.text, margin: 0 }}>
-              My Resume
-            </h1>
-          </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {lastSaved && (
-              <span style={{ fontSize: "12px", color: colors.textMuted, display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                <Save style={{ width: "12px", height: "12px" }} /> Saved {lastSaved}
-              </span>
-            )}
+        {/* ═══ HEADER — clean and simple ═══ */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+          <Link
+            to="/jobs"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              borderRadius: "12px", border: `1px solid ${colors.border}`,
+              background: colors.surface, backdropFilter: "blur(24px)",
+              padding: "8px 14px", fontSize: "13px", fontWeight: 500,
+              color: colors.textSecondary, textDecoration: "none",
+            }}
+          >
+            <ArrowLeft style={{ width: "14px", height: "14px" }} /> Jobs
+          </Link>
+          <h1 style={{ fontSize: "24px", fontWeight: 800, color: colors.text, margin: 0 }}>
+            My Documents
+          </h1>
+        </div>
+        <p style={{ fontSize: "0.9rem", color: colors.textMuted, margin: "0 0 24px" }}>
+          Upload or create your resume and cover letter to apply for jobs.
+        </p>
 
-            {/* Mode Toggle */}
-            <div
-              style={{
-                display: "inline-flex",
-                borderRadius: "14px",
-                border: `1px solid ${colors.border}`,
-                background: colors.surface,
-                overflow: "hidden",
-              }}
-            >
-              <button
-                onClick={() => setMode("edit")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 16px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  border: "none",
-                  fontFamily: "inherit",
-                  background: mode === "edit" ? colors.accent : "transparent",
-                  color: mode === "edit" ? "#000" : colors.textSecondary,
-                  transition: "all 0.2s",
-                }}
-              >
-                <Pencil style={{ width: "14px", height: "14px" }} />
-                Edit
-              </button>
-              <button
-                onClick={() => setMode("preview")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 16px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  border: "none",
-                  fontFamily: "inherit",
-                  background: mode === "preview" ? colors.accent : "transparent",
-                  color: mode === "preview" ? "#000" : colors.textSecondary,
-                  transition: "all 0.2s",
-                }}
-              >
-                <Eye style={{ width: "14px", height: "14px" }} />
-                Preview
-              </button>
-            </div>
-          </div>
+        {/* ═══ TAB NAVIGATION — Resume / Cover Letters ═══ */}
+        <div style={{ display: "flex", gap: "4px", marginBottom: "24px", borderRadius: "14px", border: `1px solid ${colors.border}`, background: colors.surface, overflow: "hidden", width: "fit-content" }}>
+          <button
+            onClick={() => { setActiveTab("resume"); setResumeView("main"); }}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "10px 20px", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", border: "none", background: activeTab === "resume" ? colors.accent : "transparent", color: activeTab === "resume" ? "#000" : colors.textSecondary }}
+          >
+            <FileText size={14} /> Resume
+          </button>
+          <button
+            onClick={() => { setActiveTab("coverLetters"); setCoverLetterView("main"); }}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "10px 20px", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", border: "none", background: activeTab === "coverLetters" ? colors.accent : "transparent", color: activeTab === "coverLetters" ? "#000" : colors.textSecondary }}
+          >
+            <Mail size={14} /> Cover Letters
+          </button>
         </div>
 
-        {/* Content */}
-        {mode === "preview" ? renderPreview() : renderEdit()}
-        {renderRecommendations()}
+        {/* ═══════════════════════════════════════════ */}
+        {/* ═══ RESUME TAB ═══ */}
+        {/* ═══════════════════════════════════════════ */}
+        {activeTab === "resume" && (
+          <>
+            {/* Builder view */}
+            {resumeView === "builder" ? (
+              <ResumeBuilder
+                userId={userId} existingResume={resume}
+                onComplete={() => {
+                  setResumeView("main");
+                  setResume(getResume(userId) || createEmptyResume(userId));
+                  setResumeVersions(getResumeVersions(userId));
+                  setMode("preview"); // Show preview immediately after creating
+                }}
+                onCancel={() => setResumeView("main")}
+                colors={colors} isDark={isDark} glassCard={glassCard} glassSurface={glassSurface}
+              />
+            ) : resumeView === "upload" ? (
+              <ResumeUploader
+                userId={userId} kind="resume"
+                onComplete={() => { setResumeView("main"); setUploadedDocs(getUploadedDocuments(userId)); }}
+                onCancel={() => setResumeView("main")}
+                colors={colors} isDark={isDark} glassCard={glassCard}
+              />
+            ) : (
+              /* ── Main resume view ── */
+              <>
+                {/* Two big action buttons — always visible */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "28px" }}>
+                  <button
+                    onClick={() => setResumeView("upload")}
+                    style={{
+                      ...glassSurface, padding: "24px 20px", borderRadius: "20px",
+                      border: `2px solid transparent`, cursor: "pointer", textAlign: "center",
+                      transition: "all 0.3s ease", display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: "12px",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#3B82F6"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "transparent"; (e.currentTarget as HTMLElement).style.transform = "none"; }}
+                  >
+                    <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "rgba(59,130,246,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Copy size={22} color="#3B82F6" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.95rem", fontWeight: 700, color: colors.text }}>Upload Resume</div>
+                      <div style={{ fontSize: "0.75rem", color: colors.textMuted, marginTop: "4px" }}>Add your existing PDF or Word file</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setResumeView("builder")}
+                    style={{
+                      ...glassSurface, padding: "24px 20px", borderRadius: "20px",
+                      border: `2px solid transparent`, cursor: "pointer", textAlign: "center",
+                      transition: "all 0.3s ease", display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: "12px",
+                      background: isDark ? "linear-gradient(135deg, rgba(255,214,0,0.06), rgba(255,255,255,0.03))" : "linear-gradient(135deg, rgba(255,214,0,0.08), rgba(255,255,255,0.6))",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#FFD600"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "transparent"; (e.currentTarget as HTMLElement).style.transform = "none"; }}
+                  >
+                    <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "rgba(255,214,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Sparkles size={22} color="#FFD600" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.95rem", fontWeight: 700, color: colors.text }}>Create Resume</div>
+                      <div style={{ fontSize: "0.75rem", color: colors.textMuted, marginTop: "4px" }}>We'll help you build a professional one</div>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Saved resumes list */}
+                {hasResumes && (
+                  <div style={{ ...glassCard, padding: "20px 24px", borderRadius: "20px", marginBottom: "20px" }}>
+                    <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: "0 0 16px" }}>Your Saved Resumes</h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      {/* Created resumes */}
+                      {resumeVersions.map((v) => (
+                        <div key={v.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", borderRadius: "14px", background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", border: `1px solid ${colors.border}` }}>
+                          <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(255,214,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <FileText size={16} color="#FFD600" />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.text }}>{v.label}</div>
+                            <div style={{ fontSize: "0.7rem", color: colors.textMuted }}>Created {v.isDefault ? " \u00b7 Default" : ""}</div>
+                          </div>
+                          <button
+                            onClick={() => { setActiveVersionId(v.id); setResume(v.resume); setMode("preview"); }}
+                            style={{ padding: "6px 14px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <Eye size={13} /> Preview
+                          </button>
+                          <button
+                            onClick={() => { setActiveVersionId(v.id); setResume(v.resume); setMode("edit"); }}
+                            style={{ padding: "6px 12px", borderRadius: "10px", border: "none", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", color: colors.textMuted, fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <Pencil size={13} /> Edit
+                          </button>
+                        </div>
+                      ))}
+                      {/* Uploaded resumes */}
+                      {uploadedDocs.filter((d) => d.kind === "resume").map((doc) => (
+                        <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", borderRadius: "14px", background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", border: `1px solid ${colors.border}` }}>
+                          <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(59,130,246,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <Copy size={16} color="#3B82F6" />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.text }}>{doc.label}</div>
+                            <div style={{ fontSize: "0.7rem", color: colors.textMuted }}>Uploaded \u00b7 {doc.fileName}{doc.isDefault ? " \u00b7 Default" : ""}</div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              deleteUploadedDocument(userId, doc.id);
+                              setUploadedDocs(getUploadedDocuments(userId));
+                            }}
+                            style={{ padding: "6px", borderRadius: "8px", border: "none", background: "rgba(239,68,68,0.06)", color: "#EF4444", cursor: "pointer", display: "flex", alignItems: "center" }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Edit/Preview area — only show when user clicks Preview or Edit on a resume */}
+                {mode === "preview" && resumeVersions.length > 0 && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                      <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: 0 }}>Resume Preview</h3>
+                      <button
+                        onClick={() => setMode("edit")}
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
+                      >
+                        <Pencil size={14} /> Switch to Edit
+                      </button>
+                    </div>
+                    {renderPreview()}
+                  </div>
+                )}
+
+                {mode === "edit" && resumeVersions.length > 0 && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                      <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: 0 }}>
+                        Editing: {resumeVersions.find((v) => v.id === activeVersionId)?.label || "Resume"}
+                      </h3>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        {lastSaved && (
+                          <span style={{ fontSize: "0.7rem", color: colors.textMuted, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                            <Save style={{ width: "11px", height: "11px" }} /> {lastSaved}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => setMode("preview")}
+                          style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
+                        >
+                          <Eye size={14} /> Preview
+                        </button>
+                      </div>
+                    </div>
+                    {renderEdit()}
+                  </div>
+                )}
+
+                {/* Recommendations — only show if user has a resume */}
+                {hasResumes && renderRecommendations()}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════ */}
+        {/* ═══ COVER LETTERS TAB ═══ */}
+        {/* ═══════════════════════════════════════════ */}
+        {activeTab === "coverLetters" && (
+          <>
+            {coverLetterView === "builder" ? (
+              <CoverLetterBuilder
+                userId={userId}
+                onComplete={() => setCoverLetterView("main")}
+                onCancel={() => setCoverLetterView("main")}
+                colors={colors} isDark={isDark} glassCard={glassCard} glassSurface={glassSurface}
+              />
+            ) : coverLetterView === "upload" ? (
+              <ResumeUploader
+                userId={userId} kind="cover_letter"
+                onComplete={() => { setCoverLetterView("main"); setUploadedDocs(getUploadedDocuments(userId)); }}
+                onCancel={() => setCoverLetterView("main")}
+                colors={colors} isDark={isDark} glassCard={glassCard}
+              />
+            ) : (
+              <>
+                {/* Two big action buttons */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "28px" }}>
+                  <button
+                    onClick={() => setCoverLetterView("upload")}
+                    style={{
+                      ...glassSurface, padding: "24px 20px", borderRadius: "20px",
+                      border: `2px solid transparent`, cursor: "pointer", textAlign: "center",
+                      transition: "all 0.3s ease", display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: "12px",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#3B82F6"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "transparent"; (e.currentTarget as HTMLElement).style.transform = "none"; }}
+                  >
+                    <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "rgba(59,130,246,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Copy size={22} color="#3B82F6" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.95rem", fontWeight: 700, color: colors.text }}>Upload Cover Letter</div>
+                      <div style={{ fontSize: "0.75rem", color: colors.textMuted, marginTop: "4px" }}>Add your existing PDF or Word file</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setCoverLetterView("builder")}
+                    style={{
+                      ...glassSurface, padding: "24px 20px", borderRadius: "20px",
+                      border: `2px solid transparent`, cursor: "pointer", textAlign: "center",
+                      transition: "all 0.3s ease", display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: "12px",
+                      background: isDark ? "linear-gradient(135deg, rgba(255,214,0,0.06), rgba(255,255,255,0.03))" : "linear-gradient(135deg, rgba(255,214,0,0.08), rgba(255,255,255,0.6))",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#FFD600"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "transparent"; (e.currentTarget as HTMLElement).style.transform = "none"; }}
+                  >
+                    <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "rgba(255,214,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Sparkles size={22} color="#FFD600" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.95rem", fontWeight: 700, color: colors.text }}>Create Cover Letter</div>
+                      <div style={{ fontSize: "0.75rem", color: colors.textMuted, marginTop: "4px" }}>We'll generate a tailored one for you</div>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Saved cover letters */}
+                {hasCoverLetters && (
+                  <div style={{ ...glassCard, padding: "20px 24px", borderRadius: "20px" }}>
+                    <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: "0 0 16px" }}>Your Saved Cover Letters</h3>
+                    <CoverLetterEditor userId={userId} colors={colors} isDark={isDark} glassCard={glassCard} glassSurface={glassSurface} />
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
 
       {/* Toast */}

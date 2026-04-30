@@ -2,10 +2,20 @@ name: Docker Compose Build Latest Main Image Tag (Manual Dispatch)
 
 on:
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Docker platforms to build for manual runs'
+        required: false
+        default: linux/amd64
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      HAS_DOCKERHUB_SECRETS: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
     strategy:
       matrix:
         include:
@@ -18,35 +28,45 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Fetch tags and set the latest tag
         run: |
           git fetch --tags
-          echo "LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)" >> $GITHUB_ENV
+          latest_tag=$(git describe --tags "$(git rev-list --tags --max-count=1)")
+          echo "LATEST_TAG=${latest_tag}" >> "$GITHUB_ENV"
 
       # Set up QEMU
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4.0.0
 
       # Set up Docker Buildx
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4.0.0
 
       # Log in to GitHub Container Registry
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Normalize GHCR owner
+        id: ghcr-owner
+        run: echo "owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       # Login to Docker Hub
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        if: ${{ env.HAS_DOCKERHUB_SECRETS == 'true' }}
+        uses: docker/login-action@v4.1.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Skip Docker Hub login
+        if: ${{ env.HAS_DOCKERHUB_SECRETS != 'true' }}
+        run: echo "Skipping Docker Hub login and tags because DOCKERHUB_USERNAME or DOCKERHUB_TOKEN is not configured."
 
       # Prepare the environment
       - name: Prepare environment
@@ -55,15 +75,29 @@ jobs:
 
       # Build and push Docker images for each target
       - name: Build and push Docker images
-        uses: docker/build-push-action@v5
+        if: ${{ env.HAS_DOCKERHUB_SECRETS == 'true' }}
+        uses: docker/build-push-action@v7.1.0
         with:
           context: .
           file: ${{ matrix.file }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:${{ env.LATEST_TAG }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:latest
+            ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:${{ env.LATEST_TAG }}
+            ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:${{ env.LATEST_TAG }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:latest
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
+          target: ${{ matrix.target }}
+
+      - name: Build and push Docker images to GHCR
+        if: ${{ env.HAS_DOCKERHUB_SECRETS != 'true' }}
+        uses: docker/build-push-action@v7.1.0
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: true
+          tags: |
+            ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:${{ env.LATEST_TAG }}
+            ghcr.io/${{ steps.ghcr-owner.outputs.owner }}/${{ matrix.image_name }}:latest
+          platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
           target: ${{ matrix.target }}

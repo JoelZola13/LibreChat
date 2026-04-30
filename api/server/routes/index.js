@@ -1,6 +1,7 @@
 const accessPermissions = require('./accessPermissions');
 const assistants = require('./assistants');
 const categories = require('./categories');
+const caseManagement = require('./caseManagement');
 const adminAuth = require('./admin/auth');
 const endpoints = require('./endpoints');
 const staticRoute = require('./static');
@@ -54,6 +55,7 @@ module.exports = {
   endpoints,
   assistants,
   categories,
+  caseManagement,
   staticRoute,
   accessPermissions,
 };

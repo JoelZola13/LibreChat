@@ -17,10 +17,10 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
 
       - name: Use Node.js 20.x
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: 20
           cache: 'npm'
@@ -66,7 +66,7 @@ jobs:
             local output_file=$2
             
             # Initialize empty output file
-            > "$output_file"
+            : > "$output_file"
             
             if [[ -d "$folder" ]]; then
               # Extract require() statements (use explicit includes for portability)
@@ -125,9 +125,11 @@ jobs:
             PEER_DEPS=$(jq -r '.peerDependencies // {} | keys[]' packages/client/package.json 2>/dev/null || echo "")
             
             # Combine all dependencies
-            echo "$DEPS" > librechat_client_deps.txt
-            echo "$DEV_DEPS" >> librechat_client_deps.txt
-            echo "$PEER_DEPS" >> librechat_client_deps.txt
+            {
+              echo "$DEPS"
+              echo "$DEV_DEPS"
+              echo "$PEER_DEPS"
+            } > librechat_client_deps.txt
             
             # Also include dependencies that are imported in packages/client
             cat packages_client_used_code.txt >> librechat_client_deps.txt
@@ -149,9 +151,11 @@ jobs:
             PEER_DEPS=$(jq -r '.peerDependencies // {} | keys[]' packages/api/package.json 2>/dev/null || echo "")
             
             # Combine all dependencies
-            echo "$DEPS" > librechat_api_deps.txt
-            echo "$DEV_DEPS" >> librechat_api_deps.txt
-            echo "$PEER_DEPS" >> librechat_api_deps.txt
+            {
+              echo "$DEPS"
+              echo "$DEV_DEPS"
+              echo "$PEER_DEPS"
+            } > librechat_api_deps.txt
             
             # Also include dependencies that are imported in packages/api
             cat packages_api_used_code.txt >> librechat_api_deps.txt
@@ -173,12 +177,14 @@ jobs:
             
             # Get all workspace dependencies (starting with @librechat/)
             if [[ -f "$package_json" ]]; then
-              local workspace_deps=$(jq -r '.dependencies // {} | to_entries[] | select(.key | startswith("@librechat/")) | .key' "$package_json" 2>/dev/null || echo "")
+              local workspace_deps
+              workspace_deps=$(jq -r '.dependencies // {} | to_entries[] | select(.key | startswith("@librechat/")) | .key' "$package_json" 2>/dev/null || echo "")
               
               # For each workspace dependency, get its dependencies
               for dep in $workspace_deps; do
                 # Convert @librechat/api to packages/api
-                local workspace_path=$(echo "$dep" | sed 's/@librechat\//packages\//')
+                local workspace_path
+                workspace_path=$(echo "$dep" | sed 's/@librechat\//packages\//')
                 local workspace_package_json="${workspace_path}/package.json"
                 
                 if [[ -f "$workspace_package_json" ]]; then
@@ -209,9 +215,11 @@ jobs:
             UNUSED=$(depcheck --json | jq -r '.dependencies | join("\n")' || echo "")
             # Exclude dependencies used in scripts, code, and workspace packages
             UNUSED=$(comm -23 <(echo "$UNUSED" | sort) <(cat root_used_deps.txt root_used_code.txt root_workspace_deps.txt | sort) || echo "")
-            echo "ROOT_UNUSED<<EOF" >> $GITHUB_ENV
-            echo "$UNUSED" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
+            {
+              echo "ROOT_UNUSED<<EOF"
+              echo "$UNUSED"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
           fi
 
       - name: Run depcheck for client/package.json
@@ -225,9 +233,11 @@ jobs:
             UNUSED=$(comm -23 <(echo "$UNUSED" | sort) <(cat ../client_used_deps.txt ../client_used_code.txt ../client_workspace_deps.txt ../packages_client_used_code.txt ../librechat_client_deps.txt 2>/dev/null | sort -u) || echo "")
             # Filter out false positives
             UNUSED=$(echo "$UNUSED" | grep -v "^micromark-extension-llm-math$" || echo "")
-            echo "CLIENT_UNUSED<<EOF" >> $GITHUB_ENV
-            echo "$UNUSED" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
+            {
+              echo "CLIENT_UNUSED<<EOF"
+              echo "$UNUSED"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
             cd ..
           fi
 
@@ -240,9 +250,11 @@ jobs:
             UNUSED=$(depcheck --json | jq -r '.dependencies | join("\n")' || echo "")
             # Exclude dependencies used in scripts, code, workspace packages, and @librechat/api imports
             UNUSED=$(comm -23 <(echo "$UNUSED" | sort) <(cat ../api_used_deps.txt ../api_used_code.txt ../api_workspace_deps.txt ../packages_api_used_code.txt ../librechat_api_deps.txt 2>/dev/null | sort -u) || echo "")
-            echo "API_UNUSED<<EOF" >> $GITHUB_ENV
-            echo "$UNUSED" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
+            {
+              echo "API_UNUSED<<EOF"
+              echo "$UNUSED"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
             cd ..
           fi
 
@@ -251,20 +263,20 @@ jobs:
         run: |
           PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
 
-          ROOT_LIST=$(echo "$ROOT_UNUSED" | awk '{print "- `" $0 "`"}')
-          CLIENT_LIST=$(echo "$CLIENT_UNUSED" | awk '{print "- `" $0 "`"}')
-          API_LIST=$(echo "$API_UNUSED" | awk '{print "- `" $0 "`"}')
+          ROOT_LIST=$(printf '%s\n' "$ROOT_UNUSED" | awk '{print "- `" $0 "`"}')
+          CLIENT_LIST=$(printf '%s\n' "$CLIENT_UNUSED" | awk '{print "- `" $0 "`"}')
+          API_LIST=$(printf '%s\n' "$API_UNUSED" | awk '{print "- `" $0 "`"}')
 
           COMMENT_BODY=$(cat <<EOF
           ### 🚨 Unused NPM Packages Detected
 
           The following **unused dependencies** were found:
 
-          $(if [[ ! -z "$ROOT_UNUSED" ]]; then echo "#### 📂 Root \`package.json\`"; echo ""; echo "$ROOT_LIST"; echo ""; fi)
+          $(if [[ -n "$ROOT_UNUSED" ]]; then echo "#### 📂 Root \`package.json\`"; echo ""; echo "$ROOT_LIST"; echo ""; fi)
 
-          $(if [[ ! -z "$CLIENT_UNUSED" ]]; then echo "#### 📂 Client \`client/package.json\`"; echo ""; echo "$CLIENT_LIST"; echo ""; fi)
+          $(if [[ -n "$CLIENT_UNUSED" ]]; then echo "#### 📂 Client \`client/package.json\`"; echo ""; echo "$CLIENT_LIST"; echo ""; fi)
 
-          $(if [[ ! -z "$API_UNUSED" ]]; then echo "#### 📂 API \`api/package.json\`"; echo ""; echo "$API_LIST"; echo ""; fi)
+          $(if [[ -n "$API_UNUSED" ]]; then echo "#### 📂 API \`api/package.json\`"; echo ""; echo "$API_LIST"; echo ""; fi)
 
           ⚠️ **Please remove these unused dependencies to keep your project clean.**
           EOF

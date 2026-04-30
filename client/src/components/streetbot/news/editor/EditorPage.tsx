@@ -8,7 +8,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useGlassStyles } from '../../shared/useGlassStyles';
 import { GlassBackground } from '../../shared/GlassBackground';
 import { SB_API_BASE } from '../../shared/apiConfig';
-import { ArrowLeft, Save, Send, Loader2, ChevronDown, Eye, PenLine } from 'lucide-react';
+import { ArrowLeft, Save, Send, Loader2, ChevronDown, Eye, PenLine, RefreshCw, Upload, ImageIcon } from 'lucide-react';
 import BlockEditor from './BlockEditor';
 import type { EditorBlock } from './BlockEditor';
 import { tryParseHtmlToBlocks, blocksToHtml, extractGalleryImages } from './blockConversions';
@@ -34,7 +34,26 @@ const CATEGORIES = ['Street Voices', 'Local', 'National', 'International'];
 export default function EditorPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { colors } = useGlassStyles();
+  const { colors: themeColors } = useGlassStyles();
+
+  // Always use dark colors since this page has a dark background
+  const colors = {
+    ...themeColors,
+    text: '#fff',
+    textSecondary: 'rgba(255, 255, 255, 0.7)',
+    textMuted: 'rgba(255, 255, 255, 0.5)',
+    border: 'rgba(255, 255, 255, 0.15)',
+    borderHover: 'rgba(255, 255, 255, 0.25)',
+    surface: 'rgba(255, 255, 255, 0.08)',
+    surfaceHover: 'rgba(255, 255, 255, 0.12)',
+    accent: '#FFD600',
+    accentGlow: 'rgba(255, 214, 0, 0.4)',
+    cardBg: 'rgba(255, 255, 255, 0.06)',
+    success: '#22c55e',
+    successBg: 'rgba(34, 197, 94, 0.15)',
+    error: '#ef4444',
+    errorBg: 'rgba(239, 68, 68, 0.15)',
+  };
 
   // Extract article ID from URL: /news/editor/:id
   const pathSegments = location.pathname.replace(/^\/news\/editor\/?/, '').split('/').filter(Boolean);
@@ -45,9 +64,17 @@ export default function EditorPage() {
   const [category, setCategory] = useState('Street Voices');
   const [tags, setTags] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageSource, setImageSource] = useState('');
+  const [imageCaption, setImageCaption] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [seoMeta, setSeoMeta] = useState('');
+  const [seoKeywords, setSeoKeywords] = useState('');
+  const [seoHashtags, setSeoHashtags] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [blocks, setBlocks] = useState<EditorBlock[]>([]);
   const [initialBlocks, setInitialBlocks] = useState<any[] | undefined>(undefined);
+  const [rawHtmlContent, setRawHtmlContent] = useState('');
   const [loading, setLoading] = useState(!!articleId);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -76,7 +103,17 @@ export default function EditorPage() {
         setCategory(data.category || 'Street Voices');
         setTags((data.tags || []).join(', '));
         setImageUrl(data.image_url || '');
+        setImageSource(data.image_credit || '');
+        setImageCaption(data.image_caption || '');
+        setSeoMeta(data.seo_meta || '');
+        setSeoKeywords(data.seo_keywords || '');
+        setSeoHashtags(data.seo_hashtags || '');
         setIsFeatured(data.is_featured || false);
+
+        // Store raw HTML for preview fallback
+        if (data.content) {
+          setRawHtmlContent(data.content);
+        }
 
         // Load blocks: prefer content_blocks, fall back to HTML conversion
         if (data.content_blocks && Array.isArray(data.content_blocks) && data.content_blocks.length > 0) {
@@ -127,6 +164,11 @@ export default function EditorPage() {
           .map((t) => t.trim())
           .filter(Boolean),
         image_url: imageUrl || undefined,
+        image_credit: imageSource || undefined,
+        image_caption: imageCaption || undefined,
+        seo_meta: seoMeta || undefined,
+        seo_keywords: seoKeywords || undefined,
+        seo_hashtags: seoHashtags || undefined,
         is_featured: isFeatured,
         status,
         content_blocks: blocks,
@@ -194,7 +236,7 @@ export default function EditorPage() {
   }
 
   return (
-    <div className="absolute inset-0 overflow-y-auto">
+    <div className="absolute inset-0 overflow-y-auto" style={{ background: '#0C0A09' }}>
       <GlassBackground />
       <div className="relative z-10 max-w-[900px] mx-auto px-4 py-6">
         {/* Toolbar */}
@@ -207,7 +249,7 @@ export default function EditorPage() {
           }}
         >
           <button
-            onClick={() => navigate('/news')}
+            onClick={() => navigate('/news/dashboard')}
             className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all hover:scale-105"
             style={{
               background: 'rgba(255,255,255,0.06)',
@@ -395,26 +437,261 @@ export default function EditorPage() {
           </div>
         )}
 
-        {/* Cover image preview */}
-        {imageUrl && (
-          <div className="mb-6 rounded-2xl overflow-hidden" style={{ border: `1px solid ${colors.border}` }}>
-            <img
-              src={imageUrl}
-              alt="Cover"
-              style={{ width: '100%', maxHeight: '300px', objectFit: 'cover', display: 'block' }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
+        {/* Hero cover image section */}
+        <div
+          className="mb-6 rounded-2xl overflow-hidden"
+          style={{
+            border: `1px solid ${colors.border}`,
+            background: 'rgba(255,255,255,0.03)',
+          }}
+        >
+          {imageUrl ? (
+            <>
+              <img
+                src={imageUrl}
+                alt="Cover"
+                style={{
+                  width: '100%',
+                  maxHeight: '400px',
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              {/* Image caption */}
+              <div style={{ padding: '8px 16px 0', borderTop: `1px solid ${colors.border}` }}>
+                <input
+                  type="text"
+                  value={imageCaption}
+                  onChange={(e) => setImageCaption(e.target.value)}
+                  placeholder="Image caption (e.g. A community shelter in downtown Toronto)"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    borderRadius: '8px',
+                    border: `1px solid ${colors.border}`,
+                    background: 'rgba(0,0,0,0.3)',
+                    color: colors.text,
+                    fontSize: '13px',
+                    fontFamily: 'Rubik, sans-serif',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+              {/* Image controls bar */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px 10px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <input
+                  type="text"
+                  value={imageSource}
+                  onChange={(e) => setImageSource(e.target.value)}
+                  placeholder="Image source / credit..."
+                  style={{
+                    flex: 1,
+                    minWidth: '150px',
+                    padding: '6px 10px',
+                    borderRadius: '8px',
+                    border: `1px solid ${colors.border}`,
+                    background: 'rgba(0,0,0,0.3)',
+                    color: colors.textSecondary,
+                    fontSize: '12px',
+                    fontFamily: 'Rubik, sans-serif',
+                    fontStyle: 'italic',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (fileInputRef.current) fileInputRef.current.click();
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    background: colors.surface,
+                    border: `1px solid ${colors.border}`,
+                    color: colors.textSecondary,
+                    fontSize: '12px',
+                    fontFamily: 'Rubik, sans-serif',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Upload size={12} />
+                  Upload
+                </button>
+                <button
+                  onClick={async () => {
+                    setGeneratingImage(true);
+                    try {
+                      const searchQuery = title || 'community news article';
+                      const res = await fetch(`${SB_API_BASE}/news/generate-image?query=${encodeURIComponent(searchQuery)}`);
+                      if (res.ok) {
+                        const data = await res.json();
+                        if (data.image_url) {
+                          setImageUrl(data.image_url);
+                          setImageSource(data.credit || '');
+                        }
+                      }
+                    } catch (err) {
+                      console.error('Image generation failed:', err);
+                    } finally {
+                      setGeneratingImage(false);
+                    }
+                  }}
+                  disabled={generatingImage}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    background: generatingImage ? 'rgba(168,85,247,0.3)' : 'rgba(168,85,247,0.6)',
+                    border: 'none',
+                    color: '#fff',
+                    fontSize: '12px',
+                    fontFamily: 'Rubik, sans-serif',
+                    cursor: generatingImage ? 'not-allowed' : 'pointer',
+                    opacity: generatingImage ? 0.7 : 1,
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {generatingImage ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                  {generatingImage ? 'Generating...' : 'Generate New Image'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                padding: '40px 24px',
+                color: colors.textMuted,
               }}
-            />
-          </div>
+            >
+              <ImageIcon size={32} style={{ opacity: 0.4 }} />
+              <p style={{ fontFamily: 'Rubik, sans-serif', fontSize: '14px', margin: 0 }}>
+                No cover image
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    if (fileInputRef.current) fileInputRef.current.click();
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    background: colors.surface,
+                    border: `1px solid ${colors.border}`,
+                    color: colors.textSecondary,
+                    fontSize: '13px',
+                    fontFamily: 'Rubik, sans-serif',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Upload size={14} />
+                  Upload Image
+                </button>
+                <button
+                  onClick={() => {
+                    const url = prompt('Enter image URL:');
+                    if (url) setImageUrl(url);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    background: colors.surface,
+                    border: `1px solid ${colors.border}`,
+                    color: colors.textSecondary,
+                    fontSize: '13px',
+                    fontFamily: 'Rubik, sans-serif',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ImageIcon size={14} />
+                  Add URL
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Hidden file input for uploads */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const url = URL.createObjectURL(file);
+                setImageUrl(url);
+                setImageSource(file.name);
+              }
+            }}
+          />
+        </div>
+
+        {/* Category badge */}
+        {category && (
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '4px 14px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: 700,
+              fontFamily: 'Rubik, sans-serif',
+              color: '#fff',
+              background:
+                category === 'Local' ? '#3b82f6' :
+                category === 'National' ? '#22c55e' :
+                category === 'International' ? '#a855f7' :
+                '#f59e0b',
+              marginBottom: '12px',
+            }}
+          >
+            {category}
+          </span>
         )}
 
         {/* Title */}
-        <input
-          type="text"
+        <textarea
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Article title..."
+          rows={1}
+          onInput={(e) => {
+            const el = e.currentTarget;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+          }}
+          ref={(el) => {
+            if (el && title) {
+              el.style.height = 'auto';
+              el.style.height = el.scrollHeight + 'px';
+            }
+          }}
           style={{
             width: '100%',
             background: 'transparent',
@@ -423,11 +700,14 @@ export default function EditorPage() {
             color: colors.text,
             fontFamily: 'Rubik, sans-serif',
             fontWeight: 700,
-            fontSize: 'clamp(2rem, 5vw, 3rem)',
+            fontSize: 'clamp(1.5rem, 3.5vw, 2.25rem)',
             letterSpacing: '-0.02em',
-            lineHeight: 1.2,
+            lineHeight: 1.3,
             marginBottom: '8px',
             padding: '0',
+            resize: 'none',
+            overflow: 'hidden',
+            wordBreak: 'break-word' as const,
           }}
         />
 
@@ -468,20 +748,24 @@ export default function EditorPage() {
               lineHeight: 1.8,
             }}
           >
-            {blocks.length > 0 && blocks.some((b) => {
-              const c = b.content;
-              return b.type !== 'paragraph' || (Array.isArray(c) && c.length > 0 && c.some((item: any) => item.text));
-            }) ? (
-              <div
-                className="news-article-prose"
-                dangerouslySetInnerHTML={{ __html: blocksToHtml(blocks as any) }}
-                style={{ wordBreak: 'break-word' }}
-              />
-            ) : (
-              <p style={{ color: colors.textMuted, fontStyle: 'italic', textAlign: 'center', marginTop: '80px' }}>
-                Start writing to see a preview...
-              </p>
-            )}
+            {(() => {
+              const hasBlocks = blocks.length > 0 && blocks.some((b) => {
+                const c = b.content;
+                return b.type !== 'paragraph' || (Array.isArray(c) && c.length > 0 && c.some((item: any) => item.text));
+              });
+              const previewHtml = hasBlocks ? blocksToHtml(blocks as any) : rawHtmlContent;
+              return previewHtml ? (
+                <div
+                  className="news-article-prose"
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                  style={{ wordBreak: 'break-word' }}
+                />
+              ) : (
+                <p style={{ color: colors.textMuted, fontStyle: 'italic', textAlign: 'center', marginTop: '80px' }}>
+                  Start writing to see a preview...
+                </p>
+              );
+            })()}
           </div>
         ) : (
           <BlockEditor
@@ -489,6 +773,138 @@ export default function EditorPage() {
             onChange={handleBlocksChange}
             editable={true}
           />
+        )}
+
+        {/* SEO Section */}
+        {(seoMeta || seoKeywords || seoHashtags || articleId) && (
+          <div
+            className="mt-8 p-5 rounded-2xl"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              backdropFilter: 'blur(16px)',
+              border: `1px solid ${colors.border}`,
+            }}
+          >
+            <h3
+              style={{
+                fontFamily: 'Rubik, sans-serif',
+                fontSize: '14px',
+                fontWeight: 700,
+                color: colors.accent,
+                marginBottom: '16px',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+              }}
+            >
+              SEO & Social
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Meta Description */}
+              <div>
+                <label
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: colors.textMuted,
+                    fontFamily: 'Rubik, sans-serif',
+                    marginBottom: '4px',
+                  }}
+                >
+                  <span>Meta Description</span>
+                  <span style={{ color: seoMeta.length > 150 ? colors.error : colors.textMuted }}>
+                    {seoMeta.length}/150
+                  </span>
+                </label>
+                <textarea
+                  value={seoMeta}
+                  onChange={(e) => setSeoMeta(e.target.value)}
+                  placeholder="140-150 character description for search engines..."
+                  rows={2}
+                  maxLength={160}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    border: `1px solid ${colors.border}`,
+                    background: 'rgba(0,0,0,0.3)',
+                    color: colors.text,
+                    fontSize: '13px',
+                    fontFamily: 'Rubik, sans-serif',
+                    outline: 'none',
+                    resize: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Keywords */}
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: colors.textMuted,
+                    fontFamily: 'Rubik, sans-serif',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Keywords
+                </label>
+                <input
+                  type="text"
+                  value={seoKeywords}
+                  onChange={(e) => setSeoKeywords(e.target.value)}
+                  placeholder="housing, toronto, policy, community, advocacy..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    border: `1px solid ${colors.border}`,
+                    background: 'rgba(0,0,0,0.3)',
+                    color: colors.text,
+                    fontSize: '13px',
+                    fontFamily: 'Rubik, sans-serif',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Hashtags */}
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: colors.textMuted,
+                    fontFamily: 'Rubik, sans-serif',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Hashtags
+                </label>
+                <input
+                  type="text"
+                  value={seoHashtags}
+                  onChange={(e) => setSeoHashtags(e.target.value)}
+                  placeholder="#StreetVoices #Toronto #Community..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    border: `1px solid ${colors.border}`,
+                    background: 'rgba(0,0,0,0.3)',
+                    color: colors.text,
+                    fontSize: '13px',
+                    fontFamily: 'Rubik, sans-serif',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Bottom spacer */}

@@ -6,7 +6,7 @@ import type { Task, Label } from '@/lib/api/tasks';
 import type { UserInfo } from '../tasks/constants';
 import type {
   PaperclipAgent, PaperclipIssue, PaperclipLabel,
-  ClickUpSpace, ClickUpFolder, ClickUpList,
+  ClickUpSpace, ClickUpFolder, ClickUpList, HumanAssigneeOption,
 } from './types';
 
 // ── Priority mapping (Paperclip → tasks/ component) ──
@@ -18,24 +18,246 @@ const PRIORITY_MAP: Record<string, string> = {
   low: 'low',
 };
 
+export const CUSTOM_OTHER_ASSIGNEE_ID = 'custom-other';
+
+const CUSTOM_ASSIGNEE_PREFIX = '[custom-assignee:';
+const TASK_META_PREFIX = '[task-meta:';
+
+export interface IssueDescriptionMetadata {
+  notes?: string | null;
+  url?: string | null;
+  files?: string | null;
+  startAt?: string | null;
+  dueAt?: string | null;
+  attachments?: TaskAttachment[] | null;
+}
+
+export interface TaskAttachment {
+  file_id: string;
+  filename: string;
+  filepath: string;
+  user: string;
+  source?: string | null;
+  type?: string | null;
+}
+
+export const HUMAN_ASSIGNEES: HumanAssigneeOption[] = [
+  { id: 'joel-zola', name: 'Joel Zola' },
+  { id: 'ayse-barut', name: 'Ayse Barut' },
+  { id: 'selina-mccallum', name: 'Selina McCallum' },
+  { id: 'sam-walters', name: 'Sam Walters' },
+  { id: 'nathania-mbeshi', name: 'Nathania Mbeshi' },
+  { id: CUSTOM_OTHER_ASSIGNEE_ID, name: 'Other' },
+];
+
+function getIssueAssigneeId(issue: PaperclipIssue): string | null {
+  if (issue.assigneeAgentId) return issue.assigneeAgentId;
+  if (!issue.assigneeUserId) return null;
+  if (issue.assigneeUserId === CUSTOM_OTHER_ASSIGNEE_ID) {
+    const customName = extractCustomAssigneeName(issue.description);
+    if (customName) return `${CUSTOM_OTHER_ASSIGNEE_ID}:${issue.id}`;
+  }
+  return issue.assigneeUserId;
+}
+
+function getHumanAssignee(id: string): HumanAssigneeOption | undefined {
+  return HUMAN_ASSIGNEES.find((option) => option.id === id);
+}
+
+function normalizeAttachments(value: unknown): TaskAttachment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      file_id: typeof item.file_id === 'string' ? item.file_id : '',
+      filename: typeof item.filename === 'string' ? item.filename : '',
+      filepath: typeof item.filepath === 'string' ? item.filepath : '',
+      user: typeof item.user === 'string' ? item.user : '',
+      source: typeof item.source === 'string' ? item.source : null,
+      type: typeof item.type === 'string' ? item.type : null,
+    }))
+    .filter((item) => item.file_id && item.filename && item.filepath && item.user);
+}
+
+function parseIssueDescription(description?: string | null): {
+  customAssigneeName: string | null;
+  metadata: IssueDescriptionMetadata;
+  content: string | null;
+} {
+  if (!description) {
+    return { customAssigneeName: null, metadata: {}, content: null };
+  }
+
+  const lines = description.split('\n');
+  let cursor = 0;
+  let customAssigneeName: string | null = null;
+  let metadata: IssueDescriptionMetadata = {};
+  let foundMarker = false;
+
+  while (cursor < lines.length) {
+    const line = lines[cursor].trim();
+    if (!line) {
+      if (!foundMarker) {
+        break;
+      }
+      cursor += 1;
+      continue;
+    }
+
+    if (line.startsWith(CUSTOM_ASSIGNEE_PREFIX) && line.endsWith(']')) {
+      customAssigneeName = line.slice(CUSTOM_ASSIGNEE_PREFIX.length, -1).trim() || null;
+      foundMarker = true;
+      cursor += 1;
+      continue;
+    }
+
+    if (line.startsWith(TASK_META_PREFIX) && line.endsWith(']')) {
+      const rawJson = line.slice(TASK_META_PREFIX.length, -1);
+      try {
+        const parsed = JSON.parse(rawJson);
+        if (parsed && typeof parsed === 'object') {
+          metadata = {
+            notes: typeof parsed.notes === 'string' ? parsed.notes : null,
+            url: typeof parsed.url === 'string' ? parsed.url : null,
+            files: typeof parsed.files === 'string' ? parsed.files : null,
+            startAt: typeof parsed.startAt === 'string' ? parsed.startAt : null,
+            dueAt: typeof parsed.dueAt === 'string' ? parsed.dueAt : null,
+            attachments: normalizeAttachments(parsed.attachments),
+          };
+        }
+      } catch {
+        metadata = {};
+      }
+      foundMarker = true;
+      cursor += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  const content = lines.slice(cursor).join('\n').replace(/^\n+/, '').trim();
+  return {
+    customAssigneeName,
+    metadata,
+    content: content || null,
+  };
+}
+
+function cleanMetadata(metadata: IssueDescriptionMetadata): IssueDescriptionMetadata {
+  return Object.fromEntries(
+    Object.entries(metadata).filter(([key, value]) => {
+      if (typeof value === 'string') {
+        return value.trim().length > 0;
+      }
+      if (key === 'attachments' && Array.isArray(value)) {
+        return value.length > 0;
+      }
+      return false;
+    }),
+  );
+}
+
+export function buildIssueDescription({
+  content,
+  customAssigneeName,
+  metadata,
+}: {
+  content?: string | null;
+  customAssigneeName?: string | null;
+  metadata?: IssueDescriptionMetadata;
+}): string {
+  const markers: string[] = [];
+  const cleanContent = content?.trim() || '';
+  const cleanName = customAssigneeName?.trim();
+  const cleanMeta = cleanMetadata(metadata || {});
+
+  if (cleanName) {
+    markers.push(`${CUSTOM_ASSIGNEE_PREFIX}${cleanName}]`);
+  }
+
+  if (Object.keys(cleanMeta).length > 0) {
+    markers.push(`${TASK_META_PREFIX}${JSON.stringify(cleanMeta)}]`);
+  }
+
+  if (markers.length === 0) {
+    return cleanContent;
+  }
+
+  return cleanContent ? `${markers.join('\n')}\n\n${cleanContent}` : markers.join('\n');
+}
+
+export function extractCustomAssigneeName(description?: string | null): string | null {
+  return parseIssueDescription(description).customAssigneeName;
+}
+
+export function extractIssueMetadata(description?: string | null): IssueDescriptionMetadata {
+  return parseIssueDescription(description).metadata;
+}
+
+export function stripCustomAssigneeMarker(description?: string | null): string | null {
+  return parseIssueDescription(description).content;
+}
+
+export function prependCustomAssigneeMarker(
+  description: string | undefined,
+  customAssigneeName: string | undefined,
+): string {
+  const parsed = parseIssueDescription(description);
+  return buildIssueDescription({
+    content: parsed.content,
+    customAssigneeName,
+    metadata: parsed.metadata,
+  });
+}
+
+export function replaceIssueDescriptionContent(
+  description: string | undefined | null,
+  content: string | undefined | null,
+): string {
+  const parsed = parseIssueDescription(description);
+  return buildIssueDescription({
+    content,
+    customAssigneeName: parsed.customAssigneeName,
+    metadata: parsed.metadata,
+  });
+}
+
+export function replaceIssueDescriptionMetadata(
+  description: string | undefined | null,
+  metadata: IssueDescriptionMetadata,
+): string {
+  const parsed = parseIssueDescription(description);
+  return buildIssueDescription({
+    content: parsed.content,
+    customAssigneeName: parsed.customAssigneeName,
+    metadata,
+  });
+}
+
 // ── Issue → Task ──
 
 export function issueToTask(issue: PaperclipIssue, allIssues: PaperclipIssue[]): Task {
   const subtasks = allIssues.filter(i => i.parentId === issue.id);
   const completedSubtasks = subtasks.filter(i => i.status === 'done').length;
+  const assigneeId = getIssueAssigneeId(issue);
+  const parsed = parseIssueDescription(issue.description);
 
   return {
     id: issue.id,
     projectId: issue.projectId || '',
     parentTaskId: issue.parentId,
     title: issue.title,
-    description: issue.description || undefined,
+    description: parsed.content || undefined,
     status: issue.status === 'backlog' ? 'todo' : issue.status,
     priority: PRIORITY_MAP[issue.priority] || 'none',
-    dueAt: undefined, // Paperclip has no due date
-    startAt: issue.startedAt || undefined,
+    dueAt: issue.dueDate || parsed.metadata.dueAt || undefined,
+    startAt: issue.startedAt || parsed.metadata.startAt || undefined,
     completedAt: issue.completedAt || undefined,
-    assignees: issue.assigneeAgentId ? [issue.assigneeAgentId] : [],
+    assignees: assigneeId ? [assigneeId] : [],
     labels: issue.labels.map(l => l.id),
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt,
@@ -81,9 +303,37 @@ export function agentToUserInfo(agent: PaperclipAgent): UserInfo {
   };
 }
 
-export function buildAgentMap(agents: PaperclipAgent[]): Record<string, UserInfo> {
+function humanAssigneeToUserInfo(assignee: HumanAssigneeOption): UserInfo {
+  return {
+    name: assignee.name,
+    avatar: hashColor(assignee.id),
+    initials: getInitials(assignee.name),
+  };
+}
+
+export function getIssueAssigneeName(issue: PaperclipIssue): string | null {
+  if (issue.assigneeUserId === CUSTOM_OTHER_ASSIGNEE_ID) {
+    return extractCustomAssigneeName(issue.description) || getHumanAssignee(CUSTOM_OTHER_ASSIGNEE_ID)?.name || 'Other';
+  }
+  if (issue.assigneeUserId) {
+    return getHumanAssignee(issue.assigneeUserId)?.name || issue.assigneeUserId;
+  }
+  return null;
+}
+
+export function buildAgentMap(agents: PaperclipAgent[], issues: PaperclipIssue[] = []): Record<string, UserInfo> {
   const map: Record<string, UserInfo> = {};
   agents.forEach(a => { map[a.id] = agentToUserInfo(a); });
+  HUMAN_ASSIGNEES.forEach((assignee) => {
+    map[assignee.id] = humanAssigneeToUserInfo(assignee);
+  });
+  issues.forEach((issue) => {
+    if (issue.assigneeUserId !== CUSTOM_OTHER_ASSIGNEE_ID) return;
+    const customName = extractCustomAssigneeName(issue.description);
+    if (!customName) return;
+    const syntheticId = `${CUSTOM_OTHER_ASSIGNEE_ID}:${issue.id}`;
+    map[syntheticId] = humanAssigneeToUserInfo({ id: syntheticId, name: customName });
+  });
   return map;
 }
 
@@ -107,7 +357,7 @@ export function buildHierarchy(
   for (const issue of topLevelIssues) {
     if (issue.assigneeAgentId) {
       tasksByAgent.set(issue.assigneeAgentId, (tasksByAgent.get(issue.assigneeAgentId) || 0) + 1);
-    } else {
+    } else if (!issue.assigneeUserId) {
       unassignedCount++;
     }
   }
@@ -192,7 +442,7 @@ export function filterIssues(
 
   // List filter
   if (opts.listId === 'unassigned') {
-    result = result.filter(i => !i.assigneeAgentId);
+    result = result.filter(i => !i.assigneeAgentId && !i.assigneeUserId);
   } else if (opts.listId?.startsWith('agent-')) {
     const agentId = opts.listId.replace('agent-', '');
     result = result.filter(i => i.assigneeAgentId === agentId);
@@ -215,7 +465,10 @@ export function filterIssues(
 
   // Assignee filter
   if (opts.assignees && opts.assignees.length > 0) {
-    result = result.filter(i => i.assigneeAgentId && opts.assignees!.includes(i.assigneeAgentId));
+    result = result.filter(i => {
+      const assigneeId = getIssueAssigneeId(i);
+      return assigneeId ? opts.assignees!.includes(assigneeId) : false;
+    });
   }
 
   // Label filter

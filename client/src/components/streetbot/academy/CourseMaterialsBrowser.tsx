@@ -23,6 +23,7 @@ import {
   MATERIAL_TYPE_ICONS,
   MATERIAL_TYPES,
 } from "./api/course-materials";
+import { downloadAcademyAsset, openAcademyAsset } from "./academyFileAssets";
 
 // ============================================================================
 // Types
@@ -337,62 +338,103 @@ export function CourseMaterialsBrowser({
                       style={{ borderTop: `1px solid ${colors.border}` }}
                     >
                       <div className="pt-3">
-                        {typeMaterials.map((material) => (
-                          <div
-                            key={material.linkId}
-                            className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group"
-                          >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <FileText
-                                size={18}
-                                style={{ color: colors.accent, flexShrink: 0 }}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div
-                                  className="truncate"
-                                  style={{ color: colors.text }}
-                                >
-                                  {material.title}
-                                </div>
-                                <div
-                                  className="flex items-center gap-2 text-xs"
-                                  style={{ color: colors.textSecondary }}
-                                >
-                                  <span>{material.wordCount} words</span>
-                                  <span>·</span>
-                                  <Clock size={10} />
-                                  <span>
-                                    {formatReadingTime(material.readingTimeMinutes)}
-                                  </span>
+                        {typeMaterials.map((material) => {
+                          const hasPreviewActions = Boolean(
+                            material.fileUrl ||
+                              (material.documentId && material.documentId.startsWith("upload:") === false),
+                          );
+                          const previewTarget = material.fileUrl || material.documentId || "";
+
+                          return (
+                            <div
+                              key={material.linkId}
+                              className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group"
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <FileText
+                                  size={18}
+                                  style={{ color: colors.accent, flexShrink: 0 }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div
+                                    className="truncate"
+                                    style={{ color: colors.text }}
+                                  >
+                                    {material.title}
+                                  </div>
+                                  {material.notes && (
+                                    <div className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
+                                      {material.notes}
+                                    </div>
+                                  )}
+                                  <div
+                                    className="mt-1 flex flex-wrap items-center gap-2 text-xs"
+                                    style={{ color: colors.textSecondary }}
+                                  >
+                                    {material.fileName && <span>{material.fileName}</span>}
+                                    {material.fileName && (material.wordCount > 0 || material.readingTimeMinutes > 0) && <span>·</span>}
+                                    {material.wordCount > 0 && <span>{material.wordCount} words</span>}
+                                    {material.wordCount > 0 && material.readingTimeMinutes > 0 && <span>·</span>}
+                                    {material.readingTimeMinutes > 0 && (
+                                      <>
+                                        <Clock size={10} />
+                                        <span>{formatReadingTime(material.readingTimeMinutes)}</span>
+                                      </>
+                                    )}
+                                    {material.fileName == null && material.wordCount === 0 && material.readingTimeMinutes === 0 && (
+                                      <span>{MATERIAL_TYPE_LABELS[material.materialType]}</span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
 
-                            {/* Actions */}
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => handleView(material.documentId)}
-                                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                                title="View document"
-                              >
-                                <ExternalLink
-                                  size={16}
-                                  style={{ color: colors.accent }}
-                                />
-                              </button>
-                              <button
-                                onClick={() => handleDownload(material.documentId)}
-                                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                                title="Download document"
-                              >
-                                <Download
-                                  size={16}
-                                  style={{ color: colors.textSecondary }}
-                                />
-                              </button>
+                              {hasPreviewActions && (
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() =>
+                                      material.fileUrl
+                                        ? openAcademyAsset({
+                                            url: material.fileUrl,
+                                            filename: material.fileName || material.title,
+                                            mimeType: material.mimeType || undefined,
+                                            sizeBytes: material.sizeBytes || undefined,
+                                            uploadedAt: material.uploadedAt || undefined,
+                                          })
+                                        : handleView(previewTarget)
+                                    }
+                                    className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                                    title="View document"
+                                  >
+                                    <ExternalLink
+                                      size={16}
+                                      style={{ color: colors.accent }}
+                                    />
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      material.fileUrl
+                                        ? downloadAcademyAsset({
+                                            url: material.fileUrl,
+                                            filename: material.fileName || material.title,
+                                            mimeType: material.mimeType || undefined,
+                                            sizeBytes: material.sizeBytes || undefined,
+                                            uploadedAt: material.uploadedAt || undefined,
+                                          })
+                                        : handleDownload(previewTarget)
+                                    }
+                                    className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                                    title="Download document"
+                                  >
+                                    <Download
+                                      size={16}
+                                      style={{ color: colors.textSecondary }}
+                                    />
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </motion.div>

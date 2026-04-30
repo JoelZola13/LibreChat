@@ -30,6 +30,7 @@ const ROLE_PAGES: Record<UserRole, Set<string>> = {
     'jobs',
     'learning',
     'calendar',
+    'case-management',
     'social-media',
     'tasks',
     'documents',
@@ -44,8 +45,8 @@ const ROLE_PAGES: Record<UserRole, Set<string>> = {
   ]),
   designer: new Set(['news', 'directory', 'gallery', 'profile', 'settings']),
   media: new Set(['news', 'directory', 'gallery', 'forum', 'profile']),
-  service_user: new Set(['news', 'directory', 'jobs', 'profile']),
-  user: new Set(['news', 'directory', 'profile', 'settings']),
+  service_user: new Set(['news', 'directory', 'jobs', 'profile', 'gallery']),
+  user: new Set(['news', 'directory', 'profile', 'settings', 'gallery']),
 };
 
 const CACHE_PREFIX = 'sv_user_role_';
