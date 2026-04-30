@@ -64,7 +64,7 @@ jobs:
       # 2. Download translation files from locize.
       - name: Download Translations from locize
         if: ${{ env.HAS_LOCIZE_DOWNLOAD_SECRETS == 'true' }}
-        uses: locize/download@v2
+        uses: locize/download@v3
         with:
           project-id: ${{ secrets.LOCIZE_PROJECT_ID }}
           path: "client/src/locales"
