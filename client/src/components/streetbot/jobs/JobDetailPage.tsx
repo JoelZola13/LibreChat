@@ -384,8 +384,11 @@ export default function JobDetailPage() {
   const handleApply = useCallback(() => {
     if (!job) return;
     const errors: { name?: string; email?: string; resume?: string } = {};
-    if (!applicationName.trim()) {
+    const nameParts = applicationName.trim().split(/\s+/).filter(Boolean);
+    if (nameParts.length === 0) {
       errors.name = "Full name is required.";
+    } else if (nameParts.length < 2) {
+      errors.name = "Please enter your first and last name.";
     }
     const trimmedEmail = applicationEmail.trim();
     if (!trimmedEmail) {
