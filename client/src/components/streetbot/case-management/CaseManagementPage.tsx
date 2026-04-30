@@ -3742,6 +3742,7 @@ export default function CaseManagementPage() {
   const savedDraft = useMemo(readCaseManagementDraft, []);
   const importInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const wikiIngestHeroInputRef = useRef<HTMLInputElement>(null);
   const wikiIngestInputRef = useRef<HTMLInputElement>(null);
   const serverSaveTimerRef = useRef<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>(() => caseManagementTabFromPath() ?? savedDraft?.activeTab ?? 'overview');
@@ -6320,6 +6321,12 @@ export default function CaseManagementPage() {
         setWikiIngestDragActive(false);
         setWikiIngestText('');
         setWikiIngestSourceName('');
+        if (wikiIngestHeroInputRef.current) {
+          wikiIngestHeroInputRef.current.value = '';
+        }
+        if (wikiIngestInputRef.current) {
+          wikiIngestInputRef.current.value = '';
+        }
       }
     };
     const clearWikiIngestDraft = () => {
@@ -6328,6 +6335,9 @@ export default function CaseManagementPage() {
       setWikiIngestText('');
       setWikiIngestSourceName('');
       setWikiIngestStatus('');
+      if (wikiIngestHeroInputRef.current) {
+        wikiIngestHeroInputRef.current.value = '';
+      }
       if (wikiIngestInputRef.current) {
         wikiIngestInputRef.current.value = '';
       }
@@ -6354,25 +6364,40 @@ export default function CaseManagementPage() {
             <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
               {wikiIngestionRecords.length} ingested files
             </span>
-            <button
-              type="button"
+            <label
               data-testid="case-wiki-ingest-button"
               style={{
                 ...primaryButtonStyle,
                 cursor: wikiIngesting ? 'not-allowed' : 'pointer',
                 opacity: wikiIngesting ? 0.76 : 1,
+                overflow: 'hidden',
+                position: 'relative',
               }}
-              onClick={() => {
-                setWikiIngestStatus('Use the native file chooser in the Source files field below, or paste source text.');
-                wikiIngestInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                wikiIngestInputRef.current?.focus();
-              }}
-              disabled={wikiIngesting}
+              aria-disabled={wikiIngesting}
               {...accentButtonHoverHandlers}
             >
+              <input
+                ref={wikiIngestHeroInputRef}
+                data-testid="case-wiki-ingest-top-input"
+                type="file"
+                multiple
+                disabled={wikiIngesting}
+                aria-label="Ingest files into Case Wiki"
+                onChange={handleWikiIngestFileSelection}
+                onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
+                style={{
+                  cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                  height: '100%',
+                  inset: 0,
+                  opacity: 0.001,
+                  position: 'absolute',
+                  width: '100%',
+                  zIndex: 2,
+                }}
+              />
               <Upload size={16} />
               {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
-            </button>
+            </label>
           </div>
         </div>
 
