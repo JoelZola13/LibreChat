@@ -6364,18 +6364,20 @@ export default function CaseManagementPage() {
             <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
               {wikiIngestionRecords.length} ingested files
             </span>
-            <label
+            <div
               data-testid="case-wiki-ingest-button"
               style={{
-                ...primaryButtonStyle,
-                cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                ...surfaceStyle,
+                alignItems: 'center',
+                display: 'flex',
+                gap: 10,
+                minHeight: 40,
                 opacity: wikiIngesting ? 0.76 : 1,
-                overflow: 'hidden',
-                position: 'relative',
+                padding: '8px 10px',
               }}
               aria-disabled={wikiIngesting}
-              {...accentButtonHoverHandlers}
             >
+              <Upload size={16} color={colors.accent} />
               <input
                 ref={wikiIngestHeroInputRef}
                 data-testid="case-wiki-ingest-top-input"
@@ -6386,18 +6388,20 @@ export default function CaseManagementPage() {
                 onChange={handleWikiIngestFileSelection}
                 onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
                 style={{
+                  background: colors.surface,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 8,
+                  color: colors.text,
                   cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                  height: '100%',
-                  inset: 0,
-                  opacity: 0.001,
-                  position: 'absolute',
+                  fontSize: 13,
+                  fontWeight: 900,
+                  maxWidth: 280,
+                  minHeight: 30,
+                  padding: 3,
                   width: '100%',
-                  zIndex: 2,
                 }}
               />
-              <Upload size={16} />
-              {wikiIngesting ? 'Ingesting...' : 'Ingest files'}
-            </label>
+            </div>
           </div>
         </div>
 
