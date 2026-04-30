@@ -13,5 +13,6 @@ librechat*
 Dockerfile*
 docs
 
-# Ignore all hidden files
-.*
+# Ignore hidden files without matching the build context root (`.`).
+.[!.]*
+..?*
