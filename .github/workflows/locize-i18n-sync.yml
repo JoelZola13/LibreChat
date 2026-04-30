@@ -72,7 +72,7 @@ jobs:
       # 3. Create a Pull Request using built-in functionality.
       - name: Create Pull Request
         if: ${{ env.HAS_LOCIZE_DOWNLOAD_SECRETS == 'true' }}
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@v8.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           sign-commits: true
