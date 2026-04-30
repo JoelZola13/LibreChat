@@ -490,6 +490,14 @@ export function getStorageUsage(): { used: number; limit: number; percentage: nu
 
 // ── Sample Data Seeding ──
 
+export function clearSeedApplications(): void {
+  const apps = read<JobApplication>(APPS_KEY);
+  const real = apps.filter((a) => !a.id?.startsWith("app_seed_"));
+  if (real.length !== apps.length) {
+    write(APPS_KEY, real);
+  }
+}
+
 export function seedIfNeeded(userId: string) {
   if (localStorage.getItem(SEEDED_KEY)) return;
   localStorage.setItem(SEEDED_KEY, "1");

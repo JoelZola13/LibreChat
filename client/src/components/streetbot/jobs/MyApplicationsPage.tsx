@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Briefcase, Clock, CheckCircle, XCircle, AlertCircle, Send } from "lucide-react";
 import { useGlassStyles } from "../shared/useGlassStyles";
 import { GlassBackground } from "../shared/GlassBackground";
-import { getApplications, withdrawApplication, seedIfNeeded } from "./jobsStorage";
+import { getApplications, withdrawApplication, clearSeedApplications } from "./jobsStorage";
 import type { JobApplication, ApplicationStatus } from "./types";
 
 type FilterTab = "all" | ApplicationStatus | "withdrawn";
@@ -50,8 +50,10 @@ export default function MyApplicationsPage() {
   const userId = useMemo(() => getUserId(), []);
 
   useEffect(() => {
-    seedIfNeeded(userId);
-    setApplications(getApplications(userId));
+    clearSeedApplications();
+    setApplications(
+      getApplications(userId).sort((a, b) => b.appliedAt.localeCompare(a.appliedAt)),
+    );
   }, [userId]);
 
   const filtered = useMemo(() => {
@@ -71,7 +73,9 @@ export default function MyApplicationsPage() {
 
   const handleWithdraw = (appId: string) => {
     withdrawApplication(userId, appId);
-    setApplications(getApplications(userId));
+    setApplications(
+      getApplications(userId).sort((a, b) => b.appliedAt.localeCompare(a.appliedAt)),
+    );
     setConfirmWithdraw(null);
     setToast("Application withdrawn");
     setTimeout(() => setToast(""), 3000);
