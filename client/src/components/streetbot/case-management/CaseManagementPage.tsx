@@ -39,14 +39,6 @@ import {
 import { useGlassStyles } from '../shared/useGlassStyles';
 import { useAuthContext } from '~/hooks/AuthContext';
 
-type BrowserFileHandle = {
-  getFile: () => Promise<File>;
-};
-
-type BrowserFilePickerWindow = Window & {
-  showOpenFilePicker?: (options?: { multiple?: boolean; excludeAcceptAllOption?: boolean }) => Promise<BrowserFileHandle[]>;
-};
-
 type TabId =
   | 'overview'
   | 'knowledge'
@@ -6462,7 +6454,7 @@ export default function CaseManagementPage() {
       redactionMode: wikiIngestRedactionMode,
       retentionPolicy: wikiIngestRetentionPolicy,
     };
-    const applyWikiIngestFiles = (files: File[], source: 'system picker' | 'native chooser' | 'drop zone') => {
+    const applyWikiIngestFiles = (files: File[], source: 'file chooser' | 'drop zone') => {
       setWikiIngestPendingFiles(files);
       setWikiGraphPreviews([]);
       setWikiIngestStatus(
@@ -6471,50 +6463,9 @@ export default function CaseManagementPage() {
           : 'Choose one or more files before ingesting into the Case Wiki.',
       );
     };
-    const openWikiSystemFilePicker = async () => {
-      if (wikiIngesting) return;
-
-      const filePickerWindow = window as BrowserFilePickerWindow;
-      if (typeof filePickerWindow.showOpenFilePicker === 'function') {
-        try {
-          const handles = await filePickerWindow.showOpenFilePicker({
-            multiple: true,
-            excludeAcceptAllOption: false,
-          });
-          const files = await Promise.all(handles.map((handle) => handle.getFile()));
-          applyWikiIngestFiles(files, 'system picker');
-          if (wikiIngestHeroInputRef.current) {
-            wikiIngestHeroInputRef.current.value = '';
-          }
-          if (wikiIngestInputRef.current) {
-            wikiIngestInputRef.current.value = '';
-          }
-          return;
-        } catch (error) {
-          if (error instanceof DOMException && error.name === 'AbortError') {
-            setWikiIngestStatus('File selection cancelled. No source was added to the Case Wiki.');
-            return;
-          }
-          setWikiIngestStatus('The Chrome file picker was blocked. Try the native chooser below or drop files onto the panel.');
-        }
-      }
-
-      const fallbackInput = wikiIngestInputRef.current ?? wikiIngestHeroInputRef.current;
-      if (fallbackInput) {
-        setWikiIngestStatus('Opening the native browser file picker fallback.');
-        if (typeof fallbackInput.showPicker === 'function') {
-          fallbackInput.showPicker();
-          return;
-        }
-        fallbackInput.click();
-        return;
-      }
-
-      setWikiIngestStatus('File picker unavailable. Drop files onto the panel or paste source text.');
-    };
     const handleWikiIngestFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.currentTarget.files ?? []);
-      applyWikiIngestFiles(files, 'native chooser');
+      applyWikiIngestFiles(files, 'file chooser');
     };
     const handleWikiIngestDrop = (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
@@ -6607,6 +6558,15 @@ export default function CaseManagementPage() {
       fontSize: 12,
       fontWeight: 800,
     } satisfies React.CSSProperties;
+    const wikiNativeFileInputStyle = {
+      cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+      fontSize: 0,
+      height: '100%',
+      inset: 0,
+      opacity: 0,
+      position: 'absolute',
+      width: '100%',
+    } satisfies React.CSSProperties;
 
     return (
       <>
@@ -6628,42 +6588,36 @@ export default function CaseManagementPage() {
             <span style={{ ...surfaceStyle, padding: '7px 10px', color: colors.textSecondary, fontSize: 12, fontWeight: 800 }}>
               {wikiIngestionRecords.length} ingested files
             </span>
-            <button
-              type="button"
+            <label
+              role="button"
               data-testid="case-wiki-ingest-button"
-              onClick={() => void openWikiSystemFilePicker()}
-              disabled={wikiIngesting}
+              aria-disabled={wikiIngesting}
               style={{
                 ...primaryButtonStyle,
                 alignItems: 'center',
+                cursor: wikiIngesting ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
                 minHeight: 40,
                 opacity: wikiIngesting ? 0.76 : 1,
+                overflow: 'hidden',
                 padding: '9px 13px',
+                position: 'relative',
               }}
               {...accentButtonHoverHandlers}
             >
               <Upload size={16} />
               Ingest files
-            </button>
-            <input
-              ref={wikiIngestHeroInputRef}
-              data-testid="case-wiki-ingest-top-input"
-              type="file"
-              multiple
-              disabled={wikiIngesting}
-              aria-label="Native Case Wiki file chooser fallback"
-              onChange={handleWikiIngestFileSelection}
-              style={{
-                border: 0,
-                height: 1,
-                opacity: 0.001,
-                overflow: 'hidden',
-                pointerEvents: 'none',
-                position: 'absolute',
-                width: 1,
-              }}
-              tabIndex={-1}
-            />
+              <input
+                ref={wikiIngestHeroInputRef}
+                data-testid="case-wiki-ingest-top-input"
+                type="file"
+                multiple
+                disabled={wikiIngesting}
+                aria-label="Choose files for Case Wiki ingestion"
+                onChange={handleWikiIngestFileSelection}
+                style={wikiNativeFileInputStyle}
+              />
+            </label>
           </div>
         </div>
 
@@ -6754,40 +6708,43 @@ export default function CaseManagementPage() {
                     flexWrap: 'wrap',
                   }}
                 >
-                  <input
-                    ref={wikiIngestInputRef}
-                    id="case-wiki-inline-ingest-file-input"
-                    data-testid="case-wiki-inline-ingest-input"
-                    type="file"
-                    multiple
-                    disabled={wikiIngesting}
-                    aria-label="Choose files for Case Wiki ingestion"
-                    onChange={handleWikiIngestFileSelection}
+                  <label
+                    role="button"
+                    data-testid="case-wiki-inline-system-picker"
+                    aria-disabled={wikiIngesting}
                     style={{
-                      color: colors.text,
+                      ...primaryButtonStyle,
+                      alignItems: 'center',
                       cursor: wikiIngesting ? 'not-allowed' : 'pointer',
-                      flex: '1 1 260px',
-                      fontSize: 13,
-                      fontWeight: 800,
-                      maxWidth: '100%',
+                      display: 'inline-flex',
+                      flex: '0 0 auto',
+                      minHeight: 38,
+                      opacity: wikiIngesting ? 0.7 : 1,
+                      overflow: 'hidden',
+                      padding: '8px 12px',
+                      position: 'relative',
                     }}
-                  />
+                    {...accentButtonHoverHandlers}
+                  >
+                    <Upload size={15} />
+                    Choose files
+                    <input
+                      ref={wikiIngestInputRef}
+                      id="case-wiki-inline-ingest-file-input"
+                      data-testid="case-wiki-inline-ingest-input"
+                      type="file"
+                      multiple
+                      disabled={wikiIngesting}
+                      aria-label="Choose files for Case Wiki ingestion"
+                      onChange={handleWikiIngestFileSelection}
+                      style={wikiNativeFileInputStyle}
+                    />
+                  </label>
                   <span style={{ color: colors.textSecondary, fontSize: 13, fontWeight: 800 }}>
                     {wikiIngestPendingFiles.length
                       ? `${wikiIngestPendingFiles.length} selected source${wikiIngestPendingFiles.length === 1 ? '' : 's'}`
                       : 'No files selected yet'}
                   </span>
-                  <button
-                    type="button"
-                    data-testid="case-wiki-inline-system-picker"
-                    style={{ ...buttonStyle, minHeight: 36, padding: '7px 10px' }}
-                    onClick={() => void openWikiSystemFilePicker()}
-                    disabled={wikiIngesting}
-                    {...buttonHoverHandlers}
-                  >
-                    <Upload size={15} />
-                    Open picker
-                  </button>
                 </div>
               </div>
 
