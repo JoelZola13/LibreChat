@@ -6386,7 +6386,6 @@ export default function CaseManagementPage() {
                 disabled={wikiIngesting}
                 aria-label="Ingest files into Case Wiki"
                 onChange={handleWikiIngestFileSelection}
-                onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
                 style={{
                   background: colors.surface,
                   border: `1px solid ${colors.border}`,
@@ -6462,7 +6461,6 @@ export default function CaseManagementPage() {
                     disabled={wikiIngesting}
                     aria-label="Choose files for Case Wiki ingestion"
                     onChange={handleWikiIngestFileSelection}
-                    onClick={() => setWikiIngestStatus('Choose one or more files for Case Wiki ingestion.')}
                     style={{
                       color: colors.text,
                       cursor: wikiIngesting ? 'not-allowed' : 'pointer',
