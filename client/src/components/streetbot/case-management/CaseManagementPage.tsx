@@ -5245,6 +5245,23 @@ export default function CaseManagementPage() {
           setDocumentRecords((records) => mergeById(records, payload.generatedRecords?.documentRecords ?? []));
           setTimelineRecords((records) => mergeById(records, payload.generatedRecords?.timelineRecords ?? []));
         }
+
+        const jobsResponse = await fetch(CASE_MANAGEMENT_WIKI_INGEST_JOB_PATH, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!jobsResponse.ok || cancelled) return;
+        const jobsPayload = (await jobsResponse.json()) as { jobs?: WikiBulkJobState[] };
+        const jobs = jobsPayload.jobs ?? [];
+        const visibleJob =
+          jobs.find((job) => ['queued', 'processing', 'paused', 'completed_with_errors'].includes(job.status)) ?? jobs[0];
+        if (visibleJob) {
+          setWikiBulkJob(visibleJob);
+          setWikiGraphPreviews(visibleJob.graphPreviews ?? []);
+          setWikiIngestionRecords((records) => mergeById(records, visibleJob.wikiIngestionRecords ?? []));
+          setNoteRecords((records) => mergeById(records, visibleJob.generatedRecords?.noteRecords ?? []));
+          setDocumentRecords((records) => mergeById(records, visibleJob.generatedRecords?.documentRecords ?? []));
+          setTimelineRecords((records) => mergeById(records, visibleJob.generatedRecords?.timelineRecords ?? []));
+        }
       } catch {
         if (!cancelled) {
           setWikiIngestStatus('Stored wiki ingestions are unavailable; the local wiki still works.');

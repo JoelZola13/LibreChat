@@ -16,13 +16,22 @@ const {
   saveCaseManagementWikiIngestion,
 } = require('~/models/CaseManagementWikiIngestion');
 const {
+  createCaseManagementWikiIngestJob,
+  getCaseManagementWikiIngestJob,
+  getCaseManagementWikiIngestJobsForUser,
+  getPendingCaseManagementWikiIngestJobs,
+  updateCaseManagementWikiIngestJob,
+} = require('~/models/CaseManagementWikiIngestJob');
+const {
   buildCaseWikiUpload,
   normalizeWikiIngestContext,
 } = require('~/server/services/CaseManagementWikiIngestion');
 
 const router = express.Router();
 const WIKI_INGEST_FILE_LIMIT = 64;
-const wikiIngestJobs = new Map();
+const terminalJobStatuses = new Set(['completed', 'completed_with_errors', 'failed']);
+const activeWikiIngestJobIds = new Set();
+let pendingJobsResumeScheduled = false;
 
 router.use(requireJwtAuth);
 
@@ -95,54 +104,167 @@ const makeGraphPreviewRecord = (ingestion) => {
   };
 };
 
-const makeJobSnapshot = (job) => ({
-  jobId: job.jobId,
+const normalizeJob = (job) => {
+  const normalized = typeof job?.toObject === 'function' ? job.toObject() : { ...(job || {}) };
+  return {
+    ...normalized,
+    items: Array.isArray(normalized.items) ? normalized.items : [],
+    ingestions: Array.isArray(normalized.ingestions) ? normalized.ingestions : [],
+    wikiIngestionRecords: Array.isArray(normalized.wikiIngestionRecords) ? normalized.wikiIngestionRecords : [],
+    generatedRecords: {
+      noteRecords: Array.isArray(normalized.generatedRecords?.noteRecords) ? normalized.generatedRecords.noteRecords : [],
+      documentRecords: Array.isArray(normalized.generatedRecords?.documentRecords) ? normalized.generatedRecords.documentRecords : [],
+      timelineRecords: Array.isArray(normalized.generatedRecords?.timelineRecords) ? normalized.generatedRecords.timelineRecords : [],
+    },
+    graphPreviews: Array.isArray(normalized.graphPreviews) ? normalized.graphPreviews : [],
+    neo4j: Array.isArray(normalized.neo4j) ? normalized.neo4j : [],
+  };
+};
+
+const serializeJobUpdate = (job) => ({
   status: job.status,
-  createdAt: job.createdAt,
-  updatedAt: job.updatedAt,
+  context: job.context || {},
+  items: job.items || [],
+  ingestions: job.ingestions || [],
+  wikiIngestionRecords: job.wikiIngestionRecords || [],
+  generatedRecords: job.generatedRecords || {
+    noteRecords: [],
+    documentRecords: [],
+    timelineRecords: [],
+  },
+  graphPreviews: job.graphPreviews || [],
+  neo4j: job.neo4j || [],
+  startedAt: job.startedAt || null,
   completedAt: job.completedAt || null,
-  total: job.items.length,
-  processed: job.items.filter((item) => item.status === 'completed').length,
-  failed: job.items.filter((item) => item.status === 'failed').length,
-  items: job.items.map(({ file, ...item }) => ({
-    ...item,
-    size: file?.size || item.size || 0,
-    mimeType: file?.mimetype || item.mimeType || 'application/octet-stream',
-  })),
-  wikiIngestionRecords: job.wikiIngestionRecords,
-  generatedRecords: job.generatedRecords,
-  neo4j: job.neo4j,
-  graphPreviews: job.graphPreviews,
+  lastError: job.lastError || '',
 });
 
-const processWikiIngestJob = async (job) => {
-  if (!job || job.running) return;
-  job.running = true;
-  job.status = job.status === 'paused' ? 'paused' : 'processing';
-  job.updatedAt = new Date().toISOString();
+const persistWikiIngestJob = async (job) =>
+  normalizeJob(
+    await updateCaseManagementWikiIngestJob(job.user, job.jobId, {
+      $set: serializeJobUpdate(job),
+    }),
+  );
+
+const fileFromJobItem = (item) => ({
+  path: item.path,
+  filename: item.storedName,
+  originalname: item.fileName,
+  mimetype: item.mimeType || 'application/octet-stream',
+  size: item.size || 0,
+});
+
+const makeJobSnapshot = (jobInput, { includeArtifacts = true } = {}) => {
+  const job = normalizeJob(jobInput);
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    completedAt: job.completedAt || null,
+    total: job.items.length,
+    processed: job.items.filter((item) => item.status === 'completed').length,
+    failed: job.items.filter((item) => item.status === 'failed').length,
+    items: job.items.map(({ path: _path, ...item }) => ({
+      ...item,
+      size: item.size || 0,
+      mimeType: item.mimeType || 'application/octet-stream',
+    })),
+    wikiIngestionRecords: includeArtifacts ? job.wikiIngestionRecords : [],
+    generatedRecords: includeArtifacts
+      ? job.generatedRecords
+      : {
+          noteRecords: [],
+          documentRecords: [],
+          timelineRecords: [],
+        },
+    neo4j: includeArtifacts ? job.neo4j : job.neo4j.slice(-5),
+    graphPreviews: includeArtifacts ? job.graphPreviews : [],
+  };
+};
+
+const maybeResumeWikiIngestJob = (job) => {
+  if (job && ['queued', 'processing'].includes(job.status) && !activeWikiIngestJobIds.has(job.jobId)) {
+    setImmediate(() => processWikiIngestJob(job));
+  }
+};
+
+const resumePendingWikiIngestJobs = async () => {
+  try {
+    const jobs = await getPendingCaseManagementWikiIngestJobs();
+    jobs.forEach((job) => maybeResumeWikiIngestJob(job));
+  } catch (error) {
+    logger.warn('[caseManagement] Could not resume pending Case Wiki ingest jobs', error);
+  }
+};
+
+const schedulePendingWikiIngestJobResume = () => {
+  if (pendingJobsResumeScheduled) return;
+  pendingJobsResumeScheduled = true;
+  setTimeout(() => {
+    resumePendingWikiIngestJobs().catch((error) => {
+      logger.warn('[caseManagement] Pending Case Wiki ingest resume failed', error);
+    });
+  }, 5000);
+};
+
+const processWikiIngestJob = async (jobInput) => {
+  let job = normalizeJob(jobInput);
+  if (!job?.jobId || activeWikiIngestJobIds.has(job.jobId)) return;
+  activeWikiIngestJobIds.add(job.jobId);
 
   try {
-    while (job.status !== 'paused') {
-      const item = job.items.find((candidate) => candidate.status === 'queued');
-      if (!item) break;
+    job = normalizeJob((await getCaseManagementWikiIngestJob(job.user, job.jobId)) || job);
+    if (job.status === 'paused' || terminalJobStatuses.has(job.status)) return;
 
-      item.status = 'processing';
-      item.startedAt = new Date().toISOString();
-      job.updatedAt = item.startedAt;
+    job.status = 'processing';
+    job.startedAt = job.startedAt || new Date();
+    job.items = job.items.map((item) =>
+      item.status === 'processing'
+        ? {
+            ...item,
+            status: 'queued',
+            resumedAt: new Date().toISOString(),
+          }
+        : item,
+    );
+    job = await persistWikiIngestJob(job);
+
+    while (job.status !== 'paused') {
+      const latestJob = await getCaseManagementWikiIngestJob(job.user, job.jobId);
+      if (!latestJob) break;
+      job = normalizeJob(latestJob);
+      if (job.status === 'paused' || terminalJobStatuses.has(job.status)) break;
+
+      const itemIndex = job.items.findIndex((candidate) => candidate.status === 'queued');
+      if (itemIndex === -1) break;
+
+      job.items[itemIndex].status = 'processing';
+      job.items[itemIndex].startedAt = new Date().toISOString();
+      job.status = 'processing';
+      job = await persistWikiIngestJob(job);
+      const item = job.items[itemIndex];
 
       try {
+        if (!item.path || !fs.existsSync(item.path)) {
+          throw new Error('Stored upload file is missing. Upload the source again or retry with a fresh file.');
+        }
+
         const built = await buildCaseWikiUpload({
-          file: item.file,
-          userId: job.userId,
+          file: fileFromJobItem(item),
+          userId: job.userId || job.user,
           context: job.context,
         });
-        const saved = await saveCaseManagementWikiIngestion(job.userId, built);
+        const saved = await saveCaseManagementWikiIngestion(job.userId || job.user, built);
 
-        item.status = 'completed';
-        item.completedAt = new Date().toISOString();
-        item.fileId = built.fileId;
-        item.pageId = built.generatedRecords?.frontendRecord?.pageId || built.wikiPage?.id;
-        item.neo4jStatus = built.neo4j?.status || 'unknown';
+        job.items[itemIndex] = {
+          ...item,
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+          fileId: built.fileId,
+          pageId: built.generatedRecords?.frontendRecord?.pageId || built.wikiPage?.id,
+          neo4jStatus: built.neo4j?.status || 'unknown',
+        };
         job.ingestions.push(saved);
         job.wikiIngestionRecords.push(built.generatedRecords.frontendRecord);
         job.generatedRecords.noteRecords.push(built.generatedRecords.note);
@@ -151,15 +273,20 @@ const processWikiIngestJob = async (job) => {
         job.neo4j.push(built.neo4j);
         job.graphPreviews.push(makeGraphPreviewRecord(built));
       } catch (error) {
-        item.status = 'failed';
-        item.error = error.message;
-        item.completedAt = new Date().toISOString();
+        job.items[itemIndex] = {
+          ...item,
+          status: 'failed',
+          error: error.message,
+          completedAt: new Date().toISOString(),
+        };
+        job.lastError = error.message;
         logger.error('[caseManagement] Failed to process wiki ingest job item', {
           jobId: job.jobId,
           fileName: item.fileName,
           error,
         });
       }
+      job = await persistWikiIngestJob(job);
     }
 
     if (job.status !== 'paused') {
@@ -167,17 +294,19 @@ const processWikiIngestJob = async (job) => {
       const queued = job.items.some((item) => item.status === 'queued' || item.status === 'processing');
       job.status = queued ? 'queued' : failed ? 'completed_with_errors' : 'completed';
       if (!queued) {
-        job.completedAt = new Date().toISOString();
+        job.completedAt = new Date();
       }
+      await persistWikiIngestJob(job);
     }
-    job.updatedAt = new Date().toISOString();
   } finally {
-    job.running = false;
+    activeWikiIngestJobIds.delete(job.jobId);
     if (job.status === 'queued') {
       setImmediate(() => processWikiIngestJob(job));
     }
   }
 };
+
+schedulePendingWikiIngestJobResume();
 
 router.get('/workspace', async (req, res) => {
   try {
@@ -290,13 +419,9 @@ router.post('/wiki/ingest/jobs', caseWikiUpload.array('files', WIKI_INGEST_FILE_
     const now = new Date().toISOString();
     const job = {
       jobId: crypto.randomUUID(),
-      userId: req.user.id,
       context: parseWikiIngestContext(req),
       status: 'queued',
-      createdAt: now,
-      updatedAt: now,
       completedAt: null,
-      running: false,
       ingestions: [],
       wikiIngestionRecords: [],
       generatedRecords: {
@@ -308,8 +433,9 @@ router.post('/wiki/ingest/jobs', caseWikiUpload.array('files', WIKI_INGEST_FILE_
       neo4j: [],
       items: req.files.map((file) => ({
         itemId: crypto.randomUUID(),
-        file,
         fileName: file.originalname,
+        storedName: file.filename,
+        path: file.path,
         size: file.size || 0,
         mimeType: file.mimetype || 'application/octet-stream',
         status: 'queued',
@@ -321,54 +447,74 @@ router.post('/wiki/ingest/jobs', caseWikiUpload.array('files', WIKI_INGEST_FILE_
       })),
     };
 
-    wikiIngestJobs.set(job.jobId, job);
-    setImmediate(() => processWikiIngestJob(job));
+    const savedJob = normalizeJob(await createCaseManagementWikiIngestJob(req.user.id, job));
+    setImmediate(() => processWikiIngestJob(savedJob));
 
-    return res.status(202).json(makeJobSnapshot(job));
+    return res.status(202).json(makeJobSnapshot(savedJob));
   } catch (error) {
     logger.error('[caseManagement] Failed to create wiki ingest job', error);
     return res.status(500).json({ error: 'Failed to start Case Wiki ingest job' });
   }
 });
 
-router.get('/wiki/ingest/jobs/:jobId', (req, res) => {
-  const job = wikiIngestJobs.get(req.params.jobId);
-  if (!job || String(job.userId) !== String(req.user.id)) {
+router.get('/wiki/ingest/jobs', async (req, res) => {
+  try {
+    const jobs = await getCaseManagementWikiIngestJobsForUser(req.user.id);
+    jobs.forEach((job) => maybeResumeWikiIngestJob(job));
+    return res.status(200).json({
+      jobs: jobs.map((job) => makeJobSnapshot(job, { includeArtifacts: false })),
+    });
+  } catch (error) {
+    logger.error('[caseManagement] Failed to load wiki ingest jobs', error);
+    return res.status(500).json({ error: 'Failed to load Case Wiki ingest jobs' });
+  }
+});
+
+router.get('/wiki/ingest/jobs/:jobId', async (req, res) => {
+  const job = await getCaseManagementWikiIngestJob(req.user.id, req.params.jobId);
+  if (!job) {
     return res.status(404).json({ error: 'Case Wiki ingest job not found' });
   }
+  maybeResumeWikiIngestJob(job);
   return res.status(200).json(makeJobSnapshot(job));
 });
 
-router.post('/wiki/ingest/jobs/:jobId/pause', (req, res) => {
-  const job = wikiIngestJobs.get(req.params.jobId);
-  if (!job || String(job.userId) !== String(req.user.id)) {
+router.post('/wiki/ingest/jobs/:jobId/pause', async (req, res) => {
+  const job = await getCaseManagementWikiIngestJob(req.user.id, req.params.jobId);
+  if (!job) {
     return res.status(404).json({ error: 'Case Wiki ingest job not found' });
   }
-  if (job.status === 'processing' || job.status === 'queued') {
-    job.status = 'paused';
-    job.updatedAt = new Date().toISOString();
-  }
-  return res.status(200).json(makeJobSnapshot(job));
+  const updatedJob =
+    job.status === 'processing' || job.status === 'queued'
+      ? await updateCaseManagementWikiIngestJob(req.user.id, req.params.jobId, { $set: { status: 'paused' } })
+      : job;
+  return res.status(200).json(makeJobSnapshot(updatedJob));
 });
 
-router.post('/wiki/ingest/jobs/:jobId/resume', (req, res) => {
-  const job = wikiIngestJobs.get(req.params.jobId);
-  if (!job || String(job.userId) !== String(req.user.id)) {
+router.post('/wiki/ingest/jobs/:jobId/resume', async (req, res) => {
+  const job = await getCaseManagementWikiIngestJob(req.user.id, req.params.jobId);
+  if (!job) {
     return res.status(404).json({ error: 'Case Wiki ingest job not found' });
   }
+  let updatedJob = job;
   if (job.status === 'paused') {
-    job.status = 'queued';
-    job.updatedAt = new Date().toISOString();
-    setImmediate(() => processWikiIngestJob(job));
+    const items = normalizeJob(job).items.map((item) =>
+      item.status === 'processing' ? { ...item, status: 'queued', resumedAt: new Date().toISOString() } : item,
+    );
+    updatedJob = await updateCaseManagementWikiIngestJob(req.user.id, req.params.jobId, {
+      $set: { status: 'queued', items },
+    });
+    setImmediate(() => processWikiIngestJob(updatedJob));
   }
-  return res.status(200).json(makeJobSnapshot(job));
+  return res.status(200).json(makeJobSnapshot(updatedJob));
 });
 
-router.post('/wiki/ingest/jobs/:jobId/retry', (req, res) => {
-  const job = wikiIngestJobs.get(req.params.jobId);
-  if (!job || String(job.userId) !== String(req.user.id)) {
+router.post('/wiki/ingest/jobs/:jobId/retry', async (req, res) => {
+  const jobRecord = await getCaseManagementWikiIngestJob(req.user.id, req.params.jobId);
+  if (!jobRecord) {
     return res.status(404).json({ error: 'Case Wiki ingest job not found' });
   }
+  const job = normalizeJob(jobRecord);
   job.items.forEach((item) => {
     if (item.status === 'failed') {
       item.status = 'queued';
@@ -379,9 +525,10 @@ router.post('/wiki/ingest/jobs/:jobId/retry', (req, res) => {
   });
   job.status = 'queued';
   job.completedAt = null;
-  job.updatedAt = new Date().toISOString();
-  setImmediate(() => processWikiIngestJob(job));
-  return res.status(200).json(makeJobSnapshot(job));
+  job.lastError = '';
+  const updatedJob = await persistWikiIngestJob(job);
+  setImmediate(() => processWikiIngestJob(updatedJob));
+  return res.status(200).json(makeJobSnapshot(updatedJob));
 });
 
 router.post('/wiki/ingest', caseWikiUpload.array('files', WIKI_INGEST_FILE_LIMIT), async (req, res) => {
