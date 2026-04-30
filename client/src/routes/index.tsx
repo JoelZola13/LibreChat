@@ -376,6 +376,8 @@ export const router = createBrowserRouter(
                   { path: 'learning/*', element: sbPage(AcademyPage) },
                   { path: 'tasks', element: guardedSbPage('tasks', MissionControlPage) },
                   { path: 'tasks/*', element: guardedSbPage('tasks', MissionControlPage) },
+                  { path: 'mission-control', element: guardedSbPage('tasks', MissionControlPage) },
+                  { path: 'mission-control/*', element: guardedSbPage('tasks', MissionControlPage) },
                   { path: 'social-media', element: guardedSbPage('social-media', SocialMediaPage) },
                   {
                     path: 'social-media/*',

@@ -18,6 +18,8 @@ interface Props {
     agentId?: string;
     assigneeUserId?: string;
     customAssigneeName?: string;
+    startAt?: string;
+    dueAt?: string;
   }) => Promise<void>;
   initialStatus?: 'todo' | 'in_progress' | 'done';
   onClose: () => void;
@@ -30,6 +32,8 @@ export default function CreateTaskModal({ agents, onSubmit, initialStatus = 'tod
   const [priority, setPriority] = useState('medium');
   const [assigneeValue, setAssigneeValue] = useState('');
   const [customAssigneeName, setCustomAssigneeName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -84,6 +88,12 @@ export default function CreateTaskModal({ agents, onSubmit, initialStatus = 'tod
         priority,
         status: initialStatus,
       };
+      if (startDate) {
+        payload.startAt = new Date(`${startDate}T09:00:00`).toISOString();
+      }
+      if (dueDate) {
+        payload.dueAt = new Date(`${dueDate}T17:00:00`).toISOString();
+      }
       if (assigneeValue.startsWith('agent:')) {
         payload.agentId = assigneeValue.slice('agent:'.length);
       } else if (assigneeValue.startsWith('human:')) {
@@ -101,7 +111,7 @@ export default function CreateTaskModal({ agents, onSubmit, initialStatus = 'tod
     } finally {
       setSubmitting(false);
     }
-  }, [title, description, priority, initialStatus, assigneeValue, customAssigneeName, otherAssigneeSelected, onSubmit, onClose]);
+  }, [title, description, priority, initialStatus, assigneeValue, customAssigneeName, startDate, dueDate, otherAssigneeSelected, onSubmit, onClose]);
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: '0.8rem',
@@ -223,6 +233,32 @@ export default function CreateTaskModal({ agents, onSubmit, initialStatus = 'tod
                 <option value="high">High</option>
                 <option value="critical">Critical</option>
               </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.7rem', fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
+                Start date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.7rem', fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
+                Due date
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                style={inputStyle}
+              />
             </div>
           </div>
 

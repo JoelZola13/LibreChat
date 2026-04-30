@@ -27,6 +27,8 @@ export interface IssueDescriptionMetadata {
   notes?: string | null;
   url?: string | null;
   files?: string | null;
+  startAt?: string | null;
+  dueAt?: string | null;
   attachments?: TaskAttachment[] | null;
 }
 
@@ -121,6 +123,8 @@ function parseIssueDescription(description?: string | null): {
             notes: typeof parsed.notes === 'string' ? parsed.notes : null,
             url: typeof parsed.url === 'string' ? parsed.url : null,
             files: typeof parsed.files === 'string' ? parsed.files : null,
+            startAt: typeof parsed.startAt === 'string' ? parsed.startAt : null,
+            dueAt: typeof parsed.dueAt === 'string' ? parsed.dueAt : null,
             attachments: normalizeAttachments(parsed.attachments),
           };
         }
@@ -240,17 +244,18 @@ export function issueToTask(issue: PaperclipIssue, allIssues: PaperclipIssue[]):
   const subtasks = allIssues.filter(i => i.parentId === issue.id);
   const completedSubtasks = subtasks.filter(i => i.status === 'done').length;
   const assigneeId = getIssueAssigneeId(issue);
+  const parsed = parseIssueDescription(issue.description);
 
   return {
     id: issue.id,
     projectId: issue.projectId || '',
     parentTaskId: issue.parentId,
     title: issue.title,
-    description: stripCustomAssigneeMarker(issue.description) || undefined,
+    description: parsed.content || undefined,
     status: issue.status === 'backlog' ? 'todo' : issue.status,
     priority: PRIORITY_MAP[issue.priority] || 'none',
-    dueAt: undefined, // Paperclip has no due date
-    startAt: issue.startedAt || undefined,
+    dueAt: issue.dueDate || parsed.metadata.dueAt || undefined,
+    startAt: issue.startedAt || parsed.metadata.startAt || undefined,
     completedAt: issue.completedAt || undefined,
     assignees: assigneeId ? [assigneeId] : [],
     labels: issue.labels.map(l => l.id),

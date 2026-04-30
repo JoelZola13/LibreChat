@@ -232,8 +232,8 @@ export default function TaskDetailPanel({
   const [priorityValue, setPriorityValue] = useState<PaperclipIssue['priority']>(issue.priority || 'medium');
   const [assigneeValue, setAssigneeValue] = useState(issueAssigneeValue);
   const [customAssigneeName, setCustomAssigneeName] = useState(initialCustomAssigneeName);
-  const [startedAtValue, setStartedAtValue] = useState(formatDateTimeInput(issue.startedAt));
-  const [dueDateValue, setDueDateValue] = useState(formatDateTimeInput(issue.dueDate));
+  const [startedAtValue, setStartedAtValue] = useState(formatDateTimeInput(issue.startedAt || initialMetadata.startAt));
+  const [dueDateValue, setDueDateValue] = useState(formatDateTimeInput(issue.dueDate || initialMetadata.dueAt));
   const [descriptionValue, setDescriptionValue] = useState(initialDescription);
   const [notesValue, setNotesValue] = useState(initialMetadata.notes || '');
   const [urlValue, setUrlValue] = useState(initialMetadata.url || '');
@@ -258,8 +258,8 @@ export default function TaskDetailPanel({
     setPriorityValue(issue.priority || 'medium');
     setAssigneeValue(issueAssigneeValue);
     setCustomAssigneeName(initialCustomAssigneeName);
-    setStartedAtValue(formatDateTimeInput(issue.startedAt));
-    setDueDateValue(formatDateTimeInput(issue.dueDate));
+    setStartedAtValue(formatDateTimeInput(issue.startedAt || initialMetadata.startAt));
+    setDueDateValue(formatDateTimeInput(issue.dueDate || initialMetadata.dueAt));
     setDescriptionValue(initialDescription);
     setNotesValue(initialMetadata.notes || '');
     setUrlValue(initialMetadata.url || '');
@@ -279,6 +279,8 @@ export default function TaskDetailPanel({
     initialCustomAssigneeName,
     issue.startedAt,
     issue.dueDate,
+    initialMetadata.startAt,
+    initialMetadata.dueAt,
     initialDescription,
     initialMetadata.notes,
     initialMetadata.url,
@@ -349,10 +351,12 @@ export default function TaskDetailPanel({
         notes: overrides?.notes ?? notesValue,
         url: overrides?.url ?? urlValue,
         files: overrides?.files ?? filesValue,
+        startAt: toIsoDateTime(startedAtValue),
+        dueAt: toIsoDateTime(dueDateValue),
         attachments: overrides?.attachments ?? attachmentsValue,
       },
     });
-  }, [assigneeValue, attachmentsValue, customAssigneeName, descriptionValue, notesValue, urlValue, filesValue]);
+  }, [assigneeValue, attachmentsValue, customAssigneeName, descriptionValue, dueDateValue, filesValue, notesValue, startedAtValue, urlValue]);
 
   const patchIssue = useCallback(async (field: string, body: Record<string, unknown>) => {
     setSavingField(field);
@@ -493,8 +497,9 @@ export default function TaskDetailPanel({
     await patchIssue('dates', {
       startedAt: nextStartedAt,
       dueDate: nextDueDate,
+      description: buildCurrentDescription(),
     });
-  }, [startedAtValue, dueDateValue, issue.startedAt, issue.dueDate, patchIssue]);
+  }, [startedAtValue, dueDateValue, issue.startedAt, issue.dueDate, buildCurrentDescription, patchIssue]);
 
   const saveMetadataField = useCallback(async (
     field: 'notes' | 'url' | 'files',

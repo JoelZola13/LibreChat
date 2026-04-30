@@ -3,7 +3,7 @@ import { paperclipFetch, relayFetch } from './config';
 import { useMissionControlData } from './useMissionControlData';
 import {
   buildHierarchy, buildAgentMap, filterIssues, groupByStatus,
-  issuesToTasks, paperclipLabelsToLabels, prependCustomAssigneeMarker,
+  buildIssueDescription, issuesToTasks, paperclipLabelsToLabels,
 } from './paperclipAdapter';
 import type {
   PaperclipLabel, PaperclipGoal, FilterState, ViewMode,
@@ -126,6 +126,8 @@ export function useClickUpData(): ClickUpData {
     agentId?: string;
     assigneeUserId?: string;
     customAssigneeName?: string;
+    startAt?: string;
+    dueAt?: string;
     parentId?: string;
   }) => {
     // Resolve agentId from agentName if needed
@@ -141,9 +143,14 @@ export function useClickUpData(): ClickUpData {
     }
     const body: Record<string, unknown> = {
       title: payload.title,
-      description: payload.assigneeUserId
-        ? prependCustomAssigneeMarker(payload.description, payload.customAssigneeName)
-        : (payload.description || ''),
+      description: buildIssueDescription({
+        content: payload.description || '',
+        customAssigneeName: payload.assigneeUserId ? payload.customAssigneeName : undefined,
+        metadata: {
+          startAt: payload.startAt,
+          dueAt: payload.dueAt,
+        },
+      }),
       priority: payload.priority || 'medium',
       // Paperclip only accepts new issues in todo; move after create when needed.
       status: 'todo',
@@ -151,6 +158,8 @@ export function useClickUpData(): ClickUpData {
     if (assigneeAgentId) body.assigneeAgentId = assigneeAgentId;
     if (payload.assigneeUserId) body.assigneeUserId = payload.assigneeUserId;
     if (payload.parentId) body.parentId = payload.parentId;
+    if (payload.startAt) body.startedAt = payload.startAt;
+    if (payload.dueAt) body.dueDate = payload.dueAt;
 
     const createdIssue = await paperclipFetch<{ id: string }>('/issues', {
       method: 'POST',
