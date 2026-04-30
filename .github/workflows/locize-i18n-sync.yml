@@ -14,10 +14,10 @@ jobs:
       HAS_LOCIZE_SYNC_SECRETS: ${{ secrets.LOCIZE_API_KEY != '' && secrets.LOCIZE_PROJECT_ID != '' }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Set Up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: 20
 
@@ -59,7 +59,7 @@ jobs:
       # 1. Check out the repository.
       - name: Checkout Repository
         if: ${{ env.HAS_LOCIZE_DOWNLOAD_SECRETS == 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       # 2. Download translation files from locize.
       - name: Download Translations from locize
