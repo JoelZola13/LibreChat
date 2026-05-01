@@ -188,8 +188,8 @@ export default function AcademyPathsPage() {
           </div>
         </div>
 
-        <section className="mt-2">
-          <div className="grid gap-6 xl:grid-cols-2">
+        <section className="mt-2 flex justify-center">
+          <div className="grid w-full max-w-6xl gap-6">
             {featuredPathSummaries.map((summary) => {
               const visual = getLearningPathCardArt(summary.path);
               const featuredCourses = summary.includedCourses.slice(0, 4);
@@ -198,167 +198,173 @@ export default function AcademyPathsPage() {
               return (
                 <article
                   key={summary.path.slug}
-                  className="group rounded-[26px] border p-6 transition-transform duration-300 hover:-translate-y-2"
+                  className="group rounded-[32px] border p-6 transition-transform duration-300 hover:-translate-y-2 md:p-8"
                   style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}
                 >
-                  <div className="relative mb-5 overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border }}>
-                    <img
-                      src={visual.src}
-                      alt={summary.path.title}
-                      className="h-[220px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                      onError={(event) => {
-                        if (event.currentTarget.dataset.fallbackApplied === "true") {
-                          return;
-                        }
-                        event.currentTarget.dataset.fallbackApplied = "true";
-                        event.currentTarget.src = visual.fallbackSrc;
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-                    <div className="absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: "rgba(15,23,42,0.65)", color: visual.accent }}>
-                      {visual.eyebrow}
-                    </div>
-                  </div>
-                  <div className="mb-4 flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: summary.path.color }}>
-                        {summary.path.level}
-                      </p>
-                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                        New Program
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => togglePathSaved(summary.path.slug)}
-                      className="rounded-full p-2"
-                      style={{ background: `${summary.path.color}18`, border: `1px solid ${colors.border}` }}
-                      aria-label="Save program"
-                    >
-                      <Heart
-                        className="h-4 w-4"
-                        style={{
-                          color: summary.path.color,
-                          fill: isPathSaved(summary.path.slug) ? summary.path.color : "transparent",
+                  <div className="grid gap-6 lg:grid-cols-[1.05fr,0.95fr] lg:items-stretch">
+                    <div className="relative overflow-hidden rounded-[28px] border" style={{ borderColor: colors.border }}>
+                      <img
+                        src={visual.src}
+                        alt={summary.path.title}
+                        className="h-[280px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03] lg:h-full lg:min-h-[540px]"
+                        onError={(event) => {
+                          if (event.currentTarget.dataset.fallbackApplied === "true") {
+                            return;
+                          }
+                          event.currentTarget.dataset.fallbackApplied = "true";
+                          event.currentTarget.src = visual.fallbackSrc;
                         }}
                       />
-                    </button>
-                  </div>
-                  <h3 className="text-2xl font-semibold" style={{ color: colors.text }}>
-                    {summary.path.title}
-                  </h3>
-                  <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                    {summary.path.description}
-                  </p>
-                  <p className="mt-3 text-xs font-medium" style={{ color: colors.textMuted }}>
-                    Based on your goal: {summary.path.title}
-                  </p>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+                      <div className="absolute left-5 top-5 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: "rgba(15,23,42,0.72)", color: visual.accent }}>
+                        {visual.eyebrow}
+                      </div>
+                    </div>
 
-                  <div className="mt-5 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
-                    <span className="inline-flex items-center gap-2">
-                      <BookOpen className="h-4 w-4" />
-                      {getLearningPathDisplayCourseCount(summary.path, visibleCourses)} courses
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      {getLearningPathDurationLabel(summary.path, visibleCourses)}
-                    </span>
-                    <span>{summary.path.level}</span>
-                  </div>
+                    <div className="flex flex-col justify-center">
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: summary.path.color }}>
+                            {summary.path.level}
+                          </p>
+                          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                            New Program
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => togglePathSaved(summary.path.slug)}
+                          className="rounded-full p-2"
+                          style={{ background: `${summary.path.color}18`, border: `1px solid ${colors.border}` }}
+                          aria-label="Save program"
+                        >
+                          <Heart
+                            className="h-4 w-4"
+                            style={{
+                              color: summary.path.color,
+                              fill: isPathSaved(summary.path.slug) ? summary.path.color : "transparent",
+                            }}
+                          />
+                        </button>
+                      </div>
 
-                  <div className="mt-5">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                      Recommended Courses
-                    </p>
-                    <div className="space-y-2">
-                      {featuredCourses.length > 0
-                        ? featuredCourses.map((course) => {
-                            const courseVisual = getCourseCardArt(course);
+                      <h3 className="text-3xl font-semibold leading-tight md:text-4xl" style={{ color: colors.text }}>
+                        {summary.path.title}
+                      </h3>
+                      <p className="mt-3 text-base leading-7" style={{ color: colors.textSecondary }}>
+                        {summary.path.description}
+                      </p>
+                      <p className="mt-4 text-sm font-medium" style={{ color: colors.textMuted }}>
+                        Based on your goal: {summary.path.title}
+                      </p>
 
-                            return (
-                              <div
-                                key={course.id}
-                                className="rounded-2xl border px-4 py-3"
-                                style={{ borderColor: colors.border, background: colors.cardBgStrong }}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <img
-                                    src={courseVisual.src}
-                                    alt={course.title}
-                                    className="h-16 w-20 rounded-2xl object-cover"
-                                    onError={(event) => {
-                                      if (event.currentTarget.dataset.fallbackApplied === "true") {
-                                        return;
-                                      }
-                                      event.currentTarget.dataset.fallbackApplied = "true";
-                                      event.currentTarget.src = courseVisual.fallbackSrc;
-                                    }}
-                                  />
-                                  <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+                      <div className="mt-6 flex flex-wrap gap-4 text-sm" style={{ color: colors.textSecondary }}>
+                        <span className="inline-flex items-center gap-2">
+                          <BookOpen className="h-4 w-4" />
+                          {getLearningPathDisplayCourseCount(summary.path, visibleCourses)} courses
+                        </span>
+                        <span className="inline-flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          {getLearningPathDurationLabel(summary.path, visibleCourses)}
+                        </span>
+                        <span>{summary.path.level}</span>
+                      </div>
+
+                      <div className="mt-6">
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                          Recommended Courses
+                        </p>
+                        <div className="space-y-3">
+                          {featuredCourses.length > 0
+                            ? featuredCourses.map((course) => {
+                                const courseVisual = getCourseCardArt(course);
+
+                                return (
+                                  <div
+                                    key={course.id}
+                                    className="rounded-2xl border px-4 py-3"
+                                    style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <img
+                                        src={courseVisual.src}
+                                        alt={course.title}
+                                        className="h-16 w-20 rounded-2xl object-cover"
+                                        onError={(event) => {
+                                          if (event.currentTarget.dataset.fallbackApplied === "true") {
+                                            return;
+                                          }
+                                          event.currentTarget.dataset.fallbackApplied = "true";
+                                          event.currentTarget.src = courseVisual.fallbackSrc;
+                                        }}
+                                      />
+                                      <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+                                        <div>
+                                          <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                                            {course.title}
+                                          </p>
+                                          <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
+                                            {(course.level || "Beginner").toLowerCase()}
+                                            {course.duration ? ` · ${course.duration}` : ""}
+                                          </p>
+                                        </div>
+                                        <a
+                                          href={`${basePath}/courses/${course.id}`}
+                                          className="text-xs font-semibold"
+                                          style={{ color: colors.accent }}
+                                        >
+                                          Learn More
+                                        </a>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            : fallbackCourseTitles.map((courseTitle, index) => (
+                                <div
+                                  key={`${summary.path.slug}-${courseTitle}-${index}`}
+                                  className="rounded-2xl border px-4 py-3 text-sm"
+                                  style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.text }}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
                                     <div>
                                       <p className="text-sm font-semibold" style={{ color: colors.text }}>
-                                        {course.title}
+                                        {courseTitle}
                                       </p>
                                       <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
-                                        {(course.level || "Beginner").toLowerCase()}
-                                        {course.duration ? ` · ${course.duration}` : ""}
+                                        Included in {summary.path.title}
                                       </p>
                                     </div>
-                                    <a
-                                      href={`${basePath}/courses/${course.id}`}
-                                      className="text-xs font-semibold"
-                                      style={{ color: colors.accent }}
-                                    >
-                                      Learn More
-                                    </a>
+                                    <span className="text-xs font-semibold" style={{ color: colors.accent }}>
+                                      Step {index + 1}
+                                    </span>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          })
-                        : fallbackCourseTitles.map((courseTitle, index) => (
-                            <div
-                              key={`${summary.path.slug}-${courseTitle}-${index}`}
-                              className="rounded-2xl border px-4 py-3 text-sm"
-                              style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.text }}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <p className="text-sm font-semibold" style={{ color: colors.text }}>
-                                    {courseTitle}
-                                  </p>
-                                  <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
-                                    Included in {summary.path.title}
-                                  </p>
-                                </div>
-                                <span className="text-xs font-semibold" style={{ color: colors.accent }}>
-                                  Step {index + 1}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                    </div>
-                  </div>
+                              ))}
+                        </div>
+                      </div>
 
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <a
-                      href={`${basePath}/paths/${summary.path.slug}`}
-                      className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
-                      style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
-                    >
-                      Learn More
-                    </a>
-                    <a
-                      href={
-                        summary.includedCourses.length > 0
-                          ? `${basePath}/paths/${summary.path.slug}/enroll`
-                          : `${basePath}/paths/${summary.path.slug}`
-                      }
-                      className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
-                      style={{ background: summary.path.color, color: "#fff" }}
-                    >
-                      {summary.includedCourses.length > 0 ? "Sign up Now" : "View Program"}
-                      <ArrowRight className="h-4 w-4" />
-                    </a>
+                      <div className="mt-7 flex flex-wrap gap-3">
+                        <a
+                          href={`${basePath}/paths/${summary.path.slug}`}
+                          className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+                          style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
+                        >
+                          Learn More
+                        </a>
+                        <a
+                          href={
+                            summary.includedCourses.length > 0
+                              ? `${basePath}/paths/${summary.path.slug}/enroll`
+                              : `${basePath}/paths/${summary.path.slug}`
+                          }
+                          className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+                          style={{ background: summary.path.color, color: "#fff" }}
+                        >
+                          {summary.includedCourses.length > 0 ? "Sign up Now" : "View Program"}
+                          <ArrowRight className="h-4 w-4" />
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 </article>
               );

@@ -188,7 +188,7 @@ export default function AcademyCoursesPage() {
           </div>
         </div>
 
-        <section className="grid gap-4 rounded-[28px] border p-5 md:grid-cols-[1.2fr,0.8fr,0.6fr]" style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}>
+        <section className="grid gap-4 rounded-[28px] border p-5 md:grid-cols-[1.4fr,0.8fr]" style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}>
           <div className="relative">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: colors.textMuted }} />
             <input
@@ -205,13 +205,6 @@ export default function AcademyCoursesPage() {
             <option value="Intermediate">Intermediate</option>
             <option value="Advanced">Advanced</option>
           </select>
-          <a
-            href={`${basePath}/paths`}
-            className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-            style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
-          >
-            View Paths
-          </a>
         </section>
 
         <section className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
