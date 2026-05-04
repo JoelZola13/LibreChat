@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 
 type ThemeName = 'light' | 'dark';
+type ShortcutAction = 'jump' | 'compose' | 'next' | 'previous';
 
 const getLibreChatTheme = (): ThemeName => {
   const html = document.documentElement;
@@ -26,6 +27,20 @@ const getLibreChatTheme = (): ThemeName => {
   }
 
   return 'dark';
+};
+
+const isEditableShortcutTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  return (
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    tagName === 'select' ||
+    target.isContentEditable
+  );
 };
 
 export default function SocialMessagesPage() {
@@ -67,6 +82,56 @@ export default function SocialMessagesPage() {
       window.removeEventListener('storage', syncIframeTheme);
     };
   }, [syncIframeTheme]);
+
+  useEffect(() => {
+    const postShortcut = (action: ShortcutAction) => {
+      iframeRef.current?.contentWindow?.postMessage(
+        { source: 'librechat', type: 'street-voices-shortcut', action },
+        window.location.origin,
+      );
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableShortcutTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const modifierKey = event.metaKey || event.ctrlKey;
+
+      if (modifierKey && !event.altKey && !event.shiftKey && key === 'k') {
+        event.preventDefault();
+        postShortcut('jump');
+        return;
+      }
+
+      if (modifierKey && !event.altKey && !event.shiftKey && key === 'n') {
+        event.preventDefault();
+        postShortcut('compose');
+        return;
+      }
+
+      if (!modifierKey && !event.altKey && !event.shiftKey && key === '/') {
+        event.preventDefault();
+        postShortcut('jump');
+        return;
+      }
+
+      if (event.altKey && !modifierKey && !event.shiftKey && event.key === 'ArrowDown') {
+        event.preventDefault();
+        postShortcut('next');
+        return;
+      }
+
+      if (event.altKey && !modifierKey && !event.shiftKey && event.key === 'ArrowUp') {
+        event.preventDefault();
+        postShortcut('previous');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden bg-white dark:bg-[#17121f]">
