@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 type ThemeName = 'light' | 'dark';
 type ShortcutAction = 'jump' | 'compose' | 'next' | 'previous';
@@ -43,12 +44,12 @@ const isEditableShortcutTarget = (target: EventTarget | null) => {
   );
 };
 
-const buildIframeSrc = () => {
-  if (typeof window === 'undefined') {
+const buildIframeSrc = (search?: string) => {
+  if (typeof window === 'undefined' && search === undefined) {
     return '/social/dm?embed=true';
   }
 
-  const parentParams = new URLSearchParams(window.location.search);
+  const parentParams = new URLSearchParams(search ?? window.location.search);
   const channel = parentParams.get('channel');
   const message = parentParams.get('message') || parentParams.get('msg');
   let path = '/social/dm';
@@ -68,8 +69,13 @@ const buildIframeSrc = () => {
 };
 
 export default function SocialMessagesPage() {
+  const location = useLocation();
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [iframeSrc, setIframeSrc] = useState(buildIframeSrc);
+  const [iframeSrc, setIframeSrc] = useState(() => buildIframeSrc(location.search));
+
+  useEffect(() => {
+    setIframeSrc(buildIframeSrc(location.search));
+  }, [location.search]);
 
   const syncIframeTheme = useCallback(() => {
     const theme = getLibreChatTheme();

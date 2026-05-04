@@ -93,7 +93,11 @@ async function installConversationApiMocks(page: Page) {
     if (request.method() === 'POST') {
       const body = JSON.parse(request.postData() || '{}') as CapturedMessagePost;
       messages.push(body);
-      await fulfillJson(route, 201, socialMessage(channelId, body.content || '', body.parentId || null));
+      await fulfillJson(
+        route,
+        201,
+        socialMessage(channelId, body.content || '', body.parentId || null),
+      );
       return;
     }
 
@@ -122,7 +126,10 @@ async function openFirstConversation(page: Page) {
     .locator(messagesSidebar)
     .locator('a[href*="/channels/"], a[href*="/dm/"]');
   const conversationCount = await conversationLinks.count();
-  test.skip(conversationCount === 0, 'Messages needs at least one seeded channel or DM for conversation smoke coverage');
+  test.skip(
+    conversationCount === 0,
+    'Messages needs at least one seeded channel or DM for conversation smoke coverage',
+  );
 
   await conversationLinks.first().click();
   await expect(page.getByTestId('message-composer')).toBeVisible();
@@ -140,6 +147,20 @@ test.describe('Social Messages smoke', () => {
     const frame = page.frameLocator(messagesFrame);
     await expect(frame.locator(messagesSidebar)).toBeVisible();
     await expect(frame.getByText('Direct messages').first()).toBeVisible();
+  });
+
+  test('LibreChat /messages permalink query opens the requested embedded conversation', async ({
+    page,
+  }) => {
+    await page.goto('/messages?channel=channel-channel-random&message=e2e-message-link', {
+      waitUntil: 'domcontentloaded',
+    });
+
+    await expect(page).not.toHaveURL(authRedirectPattern);
+    await expect(page.locator(messagesFrame)).toHaveAttribute(
+      'src',
+      /\/social\/channels\/channel-random\?embed=true&message=e2e-message-link/,
+    );
   });
 
   test('embedded Social messages supports light and dark themes', async ({ page }) => {
@@ -184,7 +205,10 @@ test.describe('Social Messages smoke', () => {
 
     const startButtons = page.getByTestId('start-dm-button');
     const startButtonCount = await startButtons.count();
-    test.skip(startButtonCount === 0, 'Messages needs at least one teammate or agent for DM-start coverage');
+    test.skip(
+      startButtonCount === 0,
+      'Messages needs at least one teammate or agent for DM-start coverage',
+    );
 
     const firstStartButton = startButtons.first();
     const expectedUserId = await firstStartButton.getAttribute('data-user-id');
