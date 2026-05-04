@@ -24034,6 +24034,52 @@ export default function CaseManagementPage() {
 	        };
 	      },
 	    );
+	    const activeArchiveReviewSelectionReceiptGateWorkPacketRows =
+	      activeArchiveReviewSelectionReceiptRunwayRows.map((step) => {
+	        const gateInstructions: Record<
+	          string,
+	          {
+	            blocked: string;
+	            decision: string;
+	            output: string;
+	          }
+	        > = {
+	          boundary: {
+	            blocked: 'No attachment writes or source cleanup.',
+	            decision: 'Decide whether the source stays standalone or needs one explicit live-record attachment.',
+	            output: 'Boundary receipt and source-first route.',
+	          },
+	          shelf: {
+	            blocked: 'No automatic re-shelving or graph mutation.',
+	            decision: 'Choose the Life Domain or collection shelf that should own this source.',
+	            output: 'Shelf recommendation for the wiki index.',
+	          },
+	          extraction: {
+	            blocked: 'No article promotion or vector writes.',
+	            decision: 'Confirm the parser output is useful enough to become source notes.',
+	            output: 'Extracted source-note packet.',
+	          },
+	          evidence: {
+	            blocked: 'No approved evidence enters memory without review.',
+	            decision: 'Review chunks, citations, and claims before they become durable memory.',
+	            output: 'Citation-ready evidence packet.',
+	          },
+	          graph: {
+	            blocked: 'No graph write from this review card.',
+	            decision: 'Confirm reviewed chunks and entities are ready for Neo4j sync.',
+	            output: 'Neo4j node/edge sync receipt.',
+	          },
+	          vector: {
+	            blocked: 'No live Weaviate write from this review card.',
+	            decision: 'Confirm approved chunks should be embedded in Weaviate.',
+	            output: 'Vector write readiness receipt.',
+	          },
+	        };
+	        return {
+	          ...step,
+	          ...gateInstructions[step.id],
+	        };
+	      });
 	    const isExtractableLocalArchiveSource = (ingestion: WikiIngestionRecord) => {
 	      const review = archiveReviewForIngestion(ingestion);
 	      return Boolean(
@@ -39377,14 +39423,139 @@ export default function CaseManagementPage() {
 		                          );
 		                        })}
 		                      </div>
-		                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
-		                        Runway actions only navigate to review surfaces. They do not save receipt decisions, attach records, write Weaviate vectors, sync Neo4j, promote articles, clean, move, or delete files.
-		                      </span>
-		                    </div>
-		                    <div
-		                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
-		                      style={{
-                        background: 'rgba(17,24,39,0.035)',
+			                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+			                        Runway actions only navigate to review surfaces. They do not save receipt decisions, attach records, write Weaviate vectors, sync Neo4j, promote articles, clean, move, or delete files.
+			                      </span>
+			                    </div>
+			                    <div
+			                      data-testid="case-wiki-archive-review-selected-lane-work-packet"
+			                      style={{
+			                        background: 'rgba(255,255,255,0.66)',
+			                        border: `1px solid ${colors.border}`,
+			                        borderRadius: 8,
+			                        display: 'grid',
+			                        gap: 8,
+			                        padding: 9,
+			                      }}
+			                    >
+			                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+			                        <strong style={{ color: colors.text, fontSize: 11, textTransform: 'uppercase' }}>
+			                          Gate work packet
+			                        </strong>
+			                        <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 900 }}>
+			                          Human-reviewed source memory
+			                        </span>
+			                      </div>
+			                      <div style={{ display: 'grid', gap: 7 }}>
+			                        {activeArchiveReviewSelectionReceiptGateWorkPacketRows.map((step) => {
+			                          const workTone =
+			                            step.state === 'active'
+			                              ? {
+			                                  background: 'rgba(255,212,0,0.13)',
+			                                  border: 'rgba(202,138,4,0.24)',
+			                                  color: '#92400e',
+			                                }
+			                              : step.state === 'locked'
+			                                ? {
+			                                    background: 'rgba(17,24,39,0.035)',
+			                                    border: 'rgba(17,24,39,0.08)',
+			                                    color: colors.textMuted,
+			                                  }
+			                                : {
+			                                    background: 'rgba(16,185,129,0.08)',
+			                                    border: 'rgba(16,185,129,0.18)',
+			                                    color: '#047857',
+			                                  };
+			                          return (
+			                            <article
+			                              key={`${activeArchiveReviewSelectionReceipt.id}-work-packet-${step.id}`}
+			                              data-testid="case-wiki-archive-review-selected-lane-work-packet-row"
+			                              style={{
+			                                background: workTone.background,
+			                                border: `1px solid ${workTone.border}`,
+			                                borderRadius: 8,
+			                                display: 'grid',
+			                                gap: 7,
+			                                padding: 8,
+			                              }}
+			                            >
+			                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+			                                <div style={{ display: 'grid', gap: 2 }}>
+			                                  <span style={{ color: colors.textMuted, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+			                                    {step.stepLabel} · {step.phaseLabel}
+			                                  </span>
+			                                  <strong style={{ color: colors.text, fontSize: 12 }}>{step.label}</strong>
+			                                </div>
+			                                <span style={{ color: workTone.color, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+			                                  {step.statusLabel}
+			                                </span>
+			                              </div>
+			                              <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
+			                                {[
+			                                  ['Human decision', step.decision],
+			                                  ['Expected output', step.output],
+			                                  ['Still blocked', step.blocked],
+			                                ].map(([label, value]) => (
+			                                  <div
+			                                    key={`${step.id}-${label}`}
+			                                    style={{
+			                                      background: 'rgba(255,255,255,0.58)',
+			                                      border: `1px solid ${colors.border}`,
+			                                      borderRadius: 8,
+			                                      display: 'grid',
+			                                      gap: 3,
+			                                      padding: 7,
+			                                    }}
+			                                  >
+			                                    <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+			                                      {label}
+			                                    </span>
+			                                    <span style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 1.35 }}>
+			                                      {value}
+			                                    </span>
+			                                  </div>
+			                                ))}
+			                              </div>
+			                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+			                                <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 850 }}>
+			                                  First source: {step.firstTitle}
+			                                </span>
+			                                <button
+			                                  type="button"
+			                                  data-testid="case-wiki-archive-review-selected-lane-work-packet-open"
+			                                  onClick={() => {
+			                                    if (!step.firstSource) return;
+			                                    openWikiPage(
+			                                      wikiSourcePageIdForIngestion(step.firstSource),
+			                                      `Opened ${step.label.toLowerCase()} work packet source: ${step.firstTitle}.`,
+			                                    );
+			                                  }}
+			                                  disabled={!step.firstSource}
+			                                  style={{
+			                                    ...buttonStyle,
+			                                    fontSize: 9,
+			                                    minHeight: 25,
+			                                    opacity: step.firstSource ? 1 : 0.56,
+			                                    padding: '3px 6px',
+			                                    whiteSpace: 'nowrap',
+			                                  }}
+			                                  {...buttonHoverHandlers}
+			                                >
+			                                  Open gate packet source
+			                                </button>
+			                              </div>
+			                            </article>
+			                          );
+			                        })}
+			                      </div>
+			                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+			                        Work packet actions only open source review surfaces. They do not save receipts, attach records, write vectors, sync Neo4j, promote articles, move, clean, or delete files.
+			                      </span>
+			                    </div>
+			                    <div
+			                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
+			                      style={{
+			                        background: 'rgba(17,24,39,0.035)',
                         border: `1px solid ${colors.border}`,
                         borderRadius: 8,
                         display: 'grid',
