@@ -2125,7 +2125,7 @@ export default function JobsPage() {
                   <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
                     Salary Range (Annual)
                   </label>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", width: "100%" }}>
                     <input
                       type="number"
                       value={filterSalaryMin}
@@ -2133,6 +2133,7 @@ export default function JobsPage() {
                       placeholder="Min"
                       style={{
                         flex: 1,
+                        minWidth: 0,
                         borderRadius: "14px",
                         border: `1px solid ${colors.border}`,
                         background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
@@ -2151,6 +2152,7 @@ export default function JobsPage() {
                       placeholder="Max"
                       style={{
                         flex: 1,
+                        minWidth: 0,
                         borderRadius: "14px",
                         border: `1px solid ${colors.border}`,
                         background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
