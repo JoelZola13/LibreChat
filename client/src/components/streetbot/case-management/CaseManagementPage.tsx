@@ -24211,6 +24211,182 @@ export default function CaseManagementPage() {
 	          saveState,
 	        };
 	      });
+	    const activeArchiveReviewSelectionReceiptGateAnswerWorksheetRows =
+	      activeArchiveReviewSelectionReceiptGateSaveCheckpointRows.map((checkpoint, index) => {
+	        const previousGateLabel =
+	          activeArchiveReviewSelectionReceiptGateSaveCheckpointRows[index - 1]?.label || 'the earlier gate';
+	        const answerState =
+	          checkpoint.state === 'active'
+	            ? 'Answer required before save'
+	            : checkpoint.state === 'locked'
+	              ? `Waiting for ${previousGateLabel}`
+	              : 'Audit answer only';
+	        const worksheetStamp =
+	          checkpoint.state === 'active'
+	            ? 'Needs answer'
+	            : checkpoint.state === 'locked'
+	              ? 'Locked worksheet'
+	              : 'Audit worksheet';
+	        const saveBlocker =
+	          checkpoint.state === 'active'
+	            ? 'Reviewer answer and evidence note are required before this receipt can be saved.'
+	            : checkpoint.state === 'locked'
+	              ? `Complete the ${previousGateLabel.toLowerCase()} receipt before this worksheet can save.`
+	              : 'This gate is clear; only save if the audit answer changes.';
+	        return {
+	          ...checkpoint,
+	          answerState,
+	          decisionOptions: 'Accept / hold / needs evidence',
+	          evidenceNote: checkpoint.proof,
+	          manualSaveTarget: checkpoint.receiptPayload,
+	          saveBlocker,
+	          suggestedAnswer: checkpoint.accepted,
+	          worksheetStamp,
+	        };
+	      });
+	    const activeArchiveReviewSelectionReceiptArticleWorkupPreview = activeArchiveReviewSelectionReceipt
+	      ? (() => {
+	          const domainLabel = activeArchiveReviewSelectionReceiptDomainLabels[0] || 'Whole-life';
+	          const collectionLabels = compactUniqueText(
+	            activeArchiveReviewSelectionReceiptSources.flatMap((source) => {
+	              const review = archiveReviewForIngestion(source);
+	              return [...(review.suggestedCollections ?? []), review.lane || 'Source documents'].filter(Boolean);
+	            }),
+	            4,
+	          );
+	          const sourceKindLabels = compactUniqueText(
+	            activeArchiveReviewSelectionReceiptSources.map(
+	              (source) => archiveReviewForIngestion(source).sourceKind || source.mimeType || 'source',
+	            ),
+	            4,
+	          );
+	          const evidenceCounts = activeArchiveReviewSelectionReceiptSources.reduce(
+	            (counts, source) => {
+	              const embedding = embeddingReviewForIngestion(source);
+	              const chunks = embedding.chunks ?? [];
+	              counts.approved += chunks.filter((chunk) => chunk.status === 'approved-for-embedding').length;
+	              counts.pending += chunks.filter((chunk) => (chunk.status || 'pending-review') === 'pending-review').length;
+	              counts.rejected += chunks.filter((chunk) => chunk.status === 'do-not-embed').length;
+	              counts.total += chunks.length;
+	              if (embedding.graphSync?.status === 'written') counts.graphSynced += 1;
+	              return counts;
+	            },
+	            { approved: 0, graphSynced: 0, pending: 0, rejected: 0, total: 0 },
+	          );
+	          const boundaryReviewedCount = activeArchiveReviewSelectionReceiptSources.filter(
+	            (source) => !archiveReviewNeedsDecision(archiveReviewForIngestion(source).reviewStatus),
+	          ).length;
+	          const metadataOnlyCount = activeArchiveReviewSelectionReceiptSources.filter(
+	            (source) =>
+	              source.status === 'metadata-only' ||
+	              source.extractionStatus === 'metadata-only' ||
+	              (!source.extractedText && !source.textPreview && !source.summary),
+	          ).length;
+	          const sourceLead =
+	            activeArchiveReviewSelectionReceiptSources
+	              .map((source) => {
+	                const review = archiveReviewForIngestion(source);
+	                return (
+	                  source.summary ||
+	                  source.textPreview ||
+	                  source.extractedText ||
+	                  review.classificationReason ||
+	                  review.localArchive?.relativePath ||
+	                  source.fileName
+	                );
+	              })
+	              .find(Boolean)
+	              ?.slice(0, 260) || 'Selected sources are ready to become a reviewable wiki article workup.';
+	          const titleBase =
+	            collectionLabels[0] && collectionLabels[0] !== 'Source documents' ? collectionLabels[0] : domainLabel;
+	          const candidateTitle = `${titleBase} source article`;
+	          const citationRows = activeArchiveReviewSelectionReceiptSources.slice(0, 5).map((source) => {
+	            const review = archiveReviewForIngestion(source);
+	            const embedding = embeddingReviewForIngestion(source);
+	            const approvedCount = (embedding.chunks ?? []).filter(
+	              (chunk) => chunk.status === 'approved-for-embedding',
+	            ).length;
+	            return {
+	              approvedCount,
+	              id: source.id,
+	              reviewLabel: archiveReviewLabel(review.reviewStatus),
+	              title: review.suggestedWikiTitle || source.title || source.fileName,
+	            };
+	          });
+	          const exclusionRows = activeArchiveReviewSelectionReceiptSources
+	            .filter((source) => {
+	              const review = archiveReviewForIngestion(source);
+	              const embedding = embeddingReviewForIngestion(source);
+	              const approvedCount = (embedding.chunks ?? []).filter(
+	                (chunk) => chunk.status === 'approved-for-embedding',
+	              ).length;
+	              return (
+	                archiveReviewNeedsDecision(review.reviewStatus) ||
+	                source.status === 'metadata-only' ||
+	                source.extractionStatus === 'metadata-only' ||
+	                !approvedCount
+	              );
+	            })
+	            .slice(0, 5)
+	            .map((source) => {
+	              const review = archiveReviewForIngestion(source);
+	              const embedding = embeddingReviewForIngestion(source);
+	              const approvedCount = (embedding.chunks ?? []).filter(
+	                (chunk) => chunk.status === 'approved-for-embedding',
+	              ).length;
+	              const reason = archiveReviewNeedsDecision(review.reviewStatus)
+	                ? 'Needs boundary review'
+	                : source.status === 'metadata-only' || source.extractionStatus === 'metadata-only'
+	                  ? 'Needs readable extraction'
+	                  : !approvedCount
+	                    ? 'Needs approved evidence'
+	                    : 'Held for review';
+	              return {
+	                id: source.id,
+	                reason,
+	                title: review.suggestedWikiTitle || source.title || source.fileName,
+	              };
+	            });
+	          return {
+	            candidateTitle,
+	            citationRows,
+	            collectionLabel: collectionLabels.join(', ') || 'Source documents',
+	            domainLabel,
+	            evidenceCounts,
+	            exclusionRows,
+	            lead: sourceLead,
+	            metadataOnlyCount,
+	            reviewStatus: `${boundaryReviewedCount}/${activeArchiveReviewSelectionReceiptSources.length} boundaries reviewed`,
+	            sections: [
+	              {
+	                heading: 'Lead summary',
+	                text: sourceLead,
+	              },
+	              {
+	                heading: 'Source notebook',
+	                text: `${activeArchiveReviewSelectionReceiptSources.length} source document${
+	                  activeArchiveReviewSelectionReceiptSources.length === 1 ? '' : 's'
+	                } from ${domainLabel} · ${collectionLabels.join(', ') || 'Source documents'}.`,
+	              },
+	              {
+	                heading: 'Evidence and citations',
+	                text: `${evidenceCounts.approved} approved chunk${evidenceCounts.approved === 1 ? '' : 's'}, ${
+	                  evidenceCounts.pending
+	                } pending chunk${evidenceCounts.pending === 1 ? '' : 's'}, ${evidenceCounts.graphSynced} Neo4j synced source${
+	                  evidenceCounts.graphSynced === 1 ? '' : 's'
+	                }.`,
+	              },
+	              {
+	                heading: 'Boundary and exclusions',
+	                text: `${metadataOnlyCount} metadata-only source${metadataOnlyCount === 1 ? '' : 's'} and ${
+	                  exclusionRows.length
+	                } visible holdback item${exclusionRows.length === 1 ? '' : 's'} before durable publication or embedding.`,
+	              },
+	            ],
+	            sourceKindLabel: sourceKindLabels.join(', ') || 'source documents',
+	          };
+	        })()
+	      : null;
 	    const isExtractableLocalArchiveSource = (ingestion: WikiIngestionRecord) => {
 	      const review = archiveReviewForIngestion(ingestion);
 	      return Boolean(
@@ -27678,6 +27854,54 @@ export default function CaseManagementPage() {
             block: 'start',
           });
         });
+      }
+    };
+    const prepareSelectedArchiveReviewLaneArticleWorkup = async () => {
+      if (!activeArchiveReviewSelectionReceipt || !activeArchiveReviewSelectionReceiptSources.length) {
+        setWikiIngestStatus('Select a receipt lane before building a source-to-article workup.');
+        return;
+      }
+      const anchorSource = activeArchiveReviewSelectionReceiptSources
+        .slice()
+        .sort((first, second) => {
+          const firstEmbedding = embeddingReviewForIngestion(first);
+          const secondEmbedding = embeddingReviewForIngestion(second);
+          const firstApproved = firstEmbedding.chunks.filter((chunk) => chunk.status === 'approved-for-embedding').length;
+          const secondApproved = secondEmbedding.chunks.filter((chunk) => chunk.status === 'approved-for-embedding').length;
+          if (secondApproved !== firstApproved) return secondApproved - firstApproved;
+          const firstPending = firstEmbedding.chunks.filter((chunk) => (chunk.status || 'pending-review') === 'pending-review').length;
+          const secondPending = secondEmbedding.chunks.filter((chunk) => (chunk.status || 'pending-review') === 'pending-review').length;
+          if (firstPending !== secondPending) return firstPending - secondPending;
+          return toDate(second.uploadedAt).getTime() - toDate(first.uploadedAt).getTime();
+        })[0];
+      if (!anchorSource) {
+        setWikiIngestStatus('No selected lane source is visible enough to anchor a wiki article workup.');
+        return;
+      }
+      const relatedSourceIds = activeArchiveReviewSelectionReceiptSources
+        .map((source) => source.id)
+        .filter((sourceId) => sourceId !== anchorSource.id)
+        .slice(0, 11);
+      const anchorReview = archiveReviewForIngestion(anchorSource);
+      const receiptKey = activeArchiveReviewSelectionReceipt.id;
+      setWikiArticleSeedPreparingId(receiptKey);
+      setWikiIngestStatus(
+        `Building source-to-article workup from "${activeArchiveReviewSelectionReceipt.label}" with ${
+          relatedSourceIds.length + 1
+        } source${relatedSourceIds.length ? 's' : ''}. This creates review metadata only.`,
+      );
+      openWikiPage(
+        wikiSourcePageIdForIngestion(anchorSource),
+        `Building selected-lane article workup: ${anchorReview.suggestedWikiTitle || anchorSource.fileName}.`,
+      );
+      try {
+        await prepareWikiArticleWorkupPreview(
+          anchorSource,
+          relatedSourceIds,
+          relatedSourceIds.length ? 'merge-candidates' : 'single-source-article',
+        );
+      } finally {
+        setWikiArticleSeedPreparingId((current) => (current === receiptKey ? '' : current));
       }
     };
     const activateWikiReviewWorkQueue = (queueId: string) => {
@@ -40157,13 +40381,279 @@ export default function CaseManagementPage() {
 							                          );
 							                        })}
 							                      </div>
-							                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
-							                        Save checkpoint actions only open source review surfaces. They do not save receipts, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
-							                      </span>
-							                    </div>
-							                    <div
-							                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
-							                      style={{
+								                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                        Save checkpoint actions only open source review surfaces. They do not save receipts, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
+								                      </span>
+								                    </div>
+								                    <div
+								                      data-testid="case-wiki-archive-review-selected-lane-answer-worksheet"
+								                      style={{
+								                        background: 'rgba(255,255,255,0.66)',
+								                        border: `1px solid ${colors.border}`,
+								                        borderRadius: 8,
+								                        display: 'grid',
+								                        gap: 8,
+								                        padding: 9,
+								                      }}
+								                    >
+								                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+								                        <strong style={{ color: colors.text, fontSize: 11, textTransform: 'uppercase' }}>
+								                          Reviewer answer worksheet
+								                        </strong>
+								                        <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 900 }}>
+								                          Answer before save · Audit worksheet
+								                        </span>
+								                      </div>
+								                      <div style={{ display: 'grid', gap: 7 }}>
+								                        {activeArchiveReviewSelectionReceiptGateAnswerWorksheetRows.map((worksheet) => {
+								                          const worksheetTone =
+								                            worksheet.state === 'active'
+								                              ? {
+								                                  background: 'rgba(255,212,0,0.12)',
+								                                  border: 'rgba(202,138,4,0.22)',
+								                                  color: '#92400e',
+								                                }
+								                              : worksheet.state === 'locked'
+								                                ? {
+								                                    background: 'rgba(17,24,39,0.03)',
+								                                    border: 'rgba(17,24,39,0.08)',
+								                                    color: colors.textMuted,
+								                                  }
+								                                : {
+								                                    background: 'rgba(16,185,129,0.08)',
+								                                    border: 'rgba(16,185,129,0.18)',
+								                                    color: '#047857',
+								                                  };
+								                          return (
+								                            <article
+								                              key={`${activeArchiveReviewSelectionReceipt.id}-answer-worksheet-${worksheet.id}`}
+								                              data-testid="case-wiki-archive-review-selected-lane-answer-worksheet-row"
+								                              style={{
+								                                background: worksheetTone.background,
+								                                border: `1px solid ${worksheetTone.border}`,
+								                                borderRadius: 8,
+								                                display: 'grid',
+								                                gap: 7,
+								                                padding: 8,
+								                              }}
+								                            >
+								                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+								                                <div style={{ display: 'grid', gap: 2 }}>
+								                                  <span style={{ color: colors.textMuted, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                    {worksheet.stepLabel} · {worksheet.receiptKey}
+								                                  </span>
+								                                  <strong style={{ color: colors.text, fontSize: 12 }}>{worksheet.label} worksheet</strong>
+								                                </div>
+								                                <span style={{ color: worksheetTone.color, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                  {worksheet.worksheetStamp}
+								                                </span>
+								                              </div>
+								                              <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
+								                                {[
+								                                  ['Answer required', worksheet.answerState],
+								                                  ['Decision options', worksheet.decisionOptions],
+								                                  ['Suggested answer', worksheet.suggestedAnswer],
+								                                  ['Evidence note', worksheet.evidenceNote],
+								                                  ['Save blocker', worksheet.saveBlocker],
+								                                  ['Manual save target', worksheet.manualSaveTarget],
+								                                ].map(([label, value]) => (
+								                                  <div
+								                                    key={`${worksheet.id}-${label}`}
+								                                    style={{
+								                                      background: 'rgba(255,255,255,0.6)',
+								                                      border: `1px solid ${colors.border}`,
+								                                      borderRadius: 8,
+								                                      display: 'grid',
+								                                      gap: 3,
+								                                      padding: 7,
+								                                    }}
+								                                  >
+								                                    <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                      {label}
+								                                    </span>
+								                                    <span style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 1.35 }}>
+								                                      {value}
+								                                    </span>
+								                                  </div>
+								                                ))}
+								                              </div>
+								                              <button
+								                                type="button"
+								                                data-testid="case-wiki-archive-review-selected-lane-answer-worksheet-open"
+								                                onClick={() => {
+								                                  if (!worksheet.firstSource) return;
+								                                  openWikiPage(
+								                                    wikiSourcePageIdForIngestion(worksheet.firstSource),
+								                                    `Opened ${worksheet.label.toLowerCase()} answer worksheet source: ${worksheet.firstTitle}.`,
+								                                  );
+								                                }}
+								                                disabled={!worksheet.firstSource}
+								                                style={{
+								                                  ...buttonStyle,
+								                                  fontSize: 9,
+								                                  justifySelf: 'start',
+								                                  minHeight: 25,
+								                                  opacity: worksheet.firstSource ? 1 : 0.56,
+								                                  padding: '3px 6px',
+								                                  whiteSpace: 'nowrap',
+								                                }}
+								                                {...buttonHoverHandlers}
+								                              >
+								                                Open answer worksheet source
+								                              </button>
+								                            </article>
+								                          );
+								                        })}
+								                      </div>
+								                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                        Answer worksheet actions only open source review surfaces. They do not save receipts, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files. No automatic writes run from this worksheet.
+								                      </span>
+								                    </div>
+								                    {activeArchiveReviewSelectionReceiptArticleWorkupPreview && (
+								                      <div
+								                        data-testid="case-wiki-archive-review-selected-lane-article-workup"
+								                        style={{
+								                          background: 'linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255,255,255,0.66))',
+								                          border: `1px solid ${colors.border}`,
+								                          borderRadius: 8,
+								                          display: 'grid',
+								                          gap: 9,
+								                          padding: 10,
+								                        }}
+								                      >
+								                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start' }}>
+								                          <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+								                            <strong style={{ color: colors.text, fontSize: 12, textTransform: 'uppercase' }}>
+								                              Build the wiki article
+								                            </strong>
+								                            <span style={{ color: colors.textSecondary, fontSize: 11, fontWeight: 900, lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.candidateTitle}
+								                            </span>
+								                            <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.domainLabel} ·{' '}
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.collectionLabel} ·{' '}
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.sourceKindLabel}
+								                            </span>
+								                          </div>
+								                          <button
+								                            type="button"
+								                            data-testid="case-wiki-archive-review-selected-lane-build-article-workup"
+								                            onClick={() => void prepareSelectedArchiveReviewLaneArticleWorkup()}
+								                            disabled={wikiArticleSeedPreparingId === activeArchiveReviewSelectionReceipt.id}
+								                            style={{
+								                              ...primaryButtonStyle,
+								                              background:
+								                                wikiArticleSeedPreparingId === activeArchiveReviewSelectionReceipt.id
+								                                  ? 'rgba(17,24,39,0.24)'
+								                                  : '#111827',
+								                              color: '#fff',
+								                              minHeight: 32,
+								                              opacity: wikiArticleSeedPreparingId === activeArchiveReviewSelectionReceipt.id ? 0.62 : 1,
+								                              padding: '6px 9px',
+								                            }}
+								                          >
+								                            {wikiArticleSeedPreparingId === activeArchiveReviewSelectionReceipt.id
+								                              ? 'Building workup'
+								                              : 'Build article workup'}
+								                          </button>
+								                        </div>
+								                        <p style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 1.45, margin: 0 }}>
+								                          {activeArchiveReviewSelectionReceiptArticleWorkupPreview.lead}
+								                        </p>
+								                        <div
+								                          style={{
+								                            display: 'grid',
+								                            gap: 7,
+								                            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
+								                          }}
+								                        >
+								                          {[
+								                            ['Sources', activeArchiveReviewSelectionReceiptSources.length],
+								                            ['Review state', activeArchiveReviewSelectionReceiptArticleWorkupPreview.reviewStatus],
+								                            ['Approved chunks', activeArchiveReviewSelectionReceiptArticleWorkupPreview.evidenceCounts.approved],
+								                            ['Pending chunks', activeArchiveReviewSelectionReceiptArticleWorkupPreview.evidenceCounts.pending],
+								                            ['Neo4j synced', activeArchiveReviewSelectionReceiptArticleWorkupPreview.evidenceCounts.graphSynced],
+								                            ['Extraction gaps', activeArchiveReviewSelectionReceiptArticleWorkupPreview.metadataOnlyCount],
+								                          ].map(([label, value]) => (
+								                            <div
+								                              key={`${activeArchiveReviewSelectionReceipt.id}-article-workup-${label}`}
+								                              style={{
+								                                background: 'rgba(255,255,255,0.66)',
+								                                border: `1px solid ${colors.border}`,
+								                                borderRadius: 8,
+								                                display: 'grid',
+								                                gap: 3,
+								                                padding: 7,
+								                              }}
+								                            >
+								                              <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                {label}
+								                              </span>
+								                              <span style={{ color: colors.textSecondary, fontSize: 10, fontWeight: 900, lineHeight: 1.35 }}>
+								                                {value}
+								                              </span>
+								                            </div>
+								                          ))}
+								                        </div>
+								                        <div style={{ display: 'grid', gap: 7, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))' }}>
+								                          {activeArchiveReviewSelectionReceiptArticleWorkupPreview.sections.map((section) => (
+								                            <article
+								                              key={`${activeArchiveReviewSelectionReceipt.id}-article-section-${section.heading}`}
+								                              data-testid="case-wiki-archive-review-selected-lane-article-section"
+								                              style={{
+								                                background: 'rgba(255,255,255,0.62)',
+								                                border: `1px solid ${colors.border}`,
+								                                borderRadius: 8,
+								                                display: 'grid',
+								                                gap: 4,
+								                                padding: 8,
+								                              }}
+								                            >
+								                              <strong style={{ color: colors.text, fontSize: 11 }}>{section.heading}</strong>
+								                              <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.4 }}>
+								                                {section.text}
+								                              </span>
+								                            </article>
+								                          ))}
+								                        </div>
+								                        <div style={{ display: 'grid', gap: 7, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))' }}>
+								                          <div
+								                            data-testid="case-wiki-archive-review-selected-lane-article-citations"
+								                            style={{ background: 'rgba(255,255,255,0.62)', border: `1px solid ${colors.border}`, borderRadius: 8, display: 'grid', gap: 5, padding: 8 }}
+								                          >
+								                            <strong style={{ color: colors.text, fontSize: 11 }}>Citation packet</strong>
+								                            {activeArchiveReviewSelectionReceiptArticleWorkupPreview.citationRows.map((citation) => (
+								                              <span key={citation.id} style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+								                                {citation.title} · {citation.reviewLabel} · {citation.approvedCount} approved
+								                              </span>
+								                            ))}
+								                          </div>
+								                          <div
+								                            data-testid="case-wiki-archive-review-selected-lane-article-holdbacks"
+								                            style={{ background: 'rgba(255,255,255,0.62)', border: `1px solid ${colors.border}`, borderRadius: 8, display: 'grid', gap: 5, padding: 8 }}
+								                          >
+								                            <strong style={{ color: colors.text, fontSize: 11 }}>Holdbacks before memory</strong>
+								                            {activeArchiveReviewSelectionReceiptArticleWorkupPreview.exclusionRows.length ? (
+								                              activeArchiveReviewSelectionReceiptArticleWorkupPreview.exclusionRows.map((row) => (
+								                                <span key={row.id} style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+								                                  {row.title} · {row.reason}
+								                                </span>
+								                              ))
+								                            ) : (
+								                              <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                                No visible source holdbacks in this selected lane. The final promotion and embedding gates are still separate confirmations.
+								                              </span>
+								                            )}
+								                          </div>
+								                        </div>
+								                        <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                          Building this metadata only workup creates article-plan, citation, draft-preview, and readiness metadata from the selected lane. It still does not publish prose, attach records, write Weaviate vectors, sync Neo4j, clean files, move files, or delete files.
+								                        </span>
+								                      </div>
+								                    )}
+								                    <div
+								                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
+								                      style={{
 						                        background: 'rgba(17,24,39,0.035)',
                         border: `1px solid ${colors.border}`,
                         borderRadius: 8,
