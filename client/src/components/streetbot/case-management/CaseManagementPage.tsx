@@ -24111,6 +24111,59 @@ export default function CaseManagementPage() {
 	              ? `Prepare next: ${step.label}`
 	              : `Audit cleared: ${step.label}`,
 	      }));
+	    const activeArchiveReviewSelectionReceiptGateAnswerRubricRows =
+	      activeArchiveReviewSelectionReceiptGateReviewPromptRows.map((prompt) => {
+	        const gateRubrics: Record<
+	          string,
+	          {
+	            accepted: string;
+	            hold: string;
+	            receiptKey: string;
+	            unlocks: string;
+	          }
+	        > = {
+	          boundary: {
+	            accepted: 'Standalone confirmed, attachment caution documented, or exactly one target chosen.',
+	            hold: 'Identity is ambiguous, source may contain sensitive material, or target evidence is weak.',
+	            receiptKey: 'boundaryDecision',
+	            unlocks: 'Shelf review and extraction can continue with the source boundary preserved.',
+	          },
+	          shelf: {
+	            accepted: 'A Life Domain or collection shelf is named with a short reason and confidence.',
+	            hold: 'Topic is too broad, duplicate shelf is possible, or source family is unclear.',
+	            receiptKey: 'shelfRecommendation',
+	            unlocks: 'The source can appear in the wiki index without becoming a client/case attachment.',
+	          },
+	          extraction: {
+	            accepted: 'Parser output has usable sections, source notes, or a clear cleanup request.',
+	            hold: 'Text is missing, unreadable, misleading, or needs a different parser path.',
+	            receiptKey: 'extractionDecision',
+	            unlocks: 'Evidence chunk review and citation packet work can begin.',
+	          },
+	          evidence: {
+	            accepted: 'Chunks are approved, edited/redacted, or rejected with citation reasoning.',
+	            hold: 'Claims lack source support, privacy flags are unresolved, or chunk text needs cleanup.',
+	            receiptKey: 'evidenceDecision',
+	            unlocks: 'Approved chunks can be staged for article work, Neo4j, and vector dry-runs.',
+	          },
+	          graph: {
+	            accepted: 'Node labels, edge types, and source IDs are review-ready for Neo4j sync.',
+	            hold: 'Relationships are speculative, entities are duplicated, or provenance is incomplete.',
+	            receiptKey: 'graphReadiness',
+	            unlocks: 'A separate Neo4j sync gate can write reviewed nodes and relationships.',
+	          },
+	          vector: {
+	            accepted: 'Approved chunks, dry-run objects, privacy checks, and exclusions are confirmed.',
+	            hold: 'Sensitive chunks, weak citations, missing dry-run IDs, or do-not-embed flags remain.',
+	            receiptKey: 'vectorReadiness',
+	            unlocks: 'A separate Weaviate gate can embed only confirmed chunks.',
+	          },
+	        };
+	        return {
+	          ...prompt,
+	          ...gateRubrics[prompt.id],
+	        };
+	      });
 	    const isExtractableLocalArchiveSource = (ingestion: WikiIngestionRecord) => {
 	      const review = archiveReviewForIngestion(ingestion);
 	      return Boolean(
@@ -39688,14 +39741,135 @@ export default function CaseManagementPage() {
 				                          );
 				                        })}
 				                      </div>
-				                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
-				                        Review prompt actions only open source review surfaces. They do not record answers, approve chunks, attach records, write Neo4j, write Weaviate, promote articles, clean, move, or delete files.
-				                      </span>
-				                    </div>
-				                    <div
-				                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
-				                      style={{
-				                        background: 'rgba(17,24,39,0.035)',
+					                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+					                        Review prompt actions only open source review surfaces. They do not record answers, approve chunks, attach records, write Neo4j, write Weaviate, promote articles, clean, move, or delete files.
+					                      </span>
+					                    </div>
+					                    <div
+					                      data-testid="case-wiki-archive-review-selected-lane-answer-rubric"
+					                      style={{
+					                        background: 'rgba(255,255,255,0.62)',
+					                        border: `1px solid ${colors.border}`,
+					                        borderRadius: 8,
+					                        display: 'grid',
+					                        gap: 8,
+					                        padding: 9,
+					                      }}
+					                    >
+					                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+					                        <strong style={{ color: colors.text, fontSize: 11, textTransform: 'uppercase' }}>
+					                          Answer rubric
+					                        </strong>
+					                        <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 900 }}>
+					                          Accept · hold · unlock
+					                        </span>
+					                      </div>
+					                      <div style={{ display: 'grid', gap: 7 }}>
+					                        {activeArchiveReviewSelectionReceiptGateAnswerRubricRows.map((rubric) => {
+					                          const rubricTone =
+					                            rubric.state === 'active'
+					                              ? {
+					                                  background: 'rgba(255,212,0,0.12)',
+					                                  border: 'rgba(202,138,4,0.22)',
+					                                  color: '#92400e',
+					                                }
+					                              : rubric.state === 'locked'
+					                                ? {
+					                                    background: 'rgba(17,24,39,0.03)',
+					                                    border: 'rgba(17,24,39,0.08)',
+					                                    color: colors.textMuted,
+					                                  }
+					                                : {
+					                                    background: 'rgba(16,185,129,0.08)',
+					                                    border: 'rgba(16,185,129,0.18)',
+					                                    color: '#047857',
+					                                  };
+					                          return (
+					                            <article
+					                              key={`${activeArchiveReviewSelectionReceipt.id}-answer-rubric-${rubric.id}`}
+					                              data-testid="case-wiki-archive-review-selected-lane-answer-rubric-row"
+					                              style={{
+					                                background: rubricTone.background,
+					                                border: `1px solid ${rubricTone.border}`,
+					                                borderRadius: 8,
+					                                display: 'grid',
+					                                gap: 7,
+					                                padding: 8,
+					                              }}
+					                            >
+					                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+					                                <div style={{ display: 'grid', gap: 2 }}>
+					                                  <span style={{ color: colors.textMuted, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+					                                    {rubric.stepLabel} · {rubric.receiptKey}
+					                                  </span>
+					                                  <strong style={{ color: colors.text, fontSize: 12 }}>{rubric.label}</strong>
+					                                </div>
+					                                <span style={{ color: rubricTone.color, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+					                                  {rubric.statusLabel}
+					                                </span>
+					                              </div>
+					                              <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
+					                                {[
+					                                  ['Accept when', rubric.accepted],
+					                                  ['Hold when', rubric.hold],
+					                                  ['Unlocks next', rubric.unlocks],
+					                                ].map(([label, value]) => (
+					                                  <div
+					                                    key={`${rubric.id}-${label}`}
+					                                    style={{
+					                                      background: 'rgba(255,255,255,0.58)',
+					                                      border: `1px solid ${colors.border}`,
+					                                      borderRadius: 8,
+					                                      display: 'grid',
+					                                      gap: 3,
+					                                      padding: 7,
+					                                    }}
+					                                  >
+					                                    <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+					                                      {label}
+					                                    </span>
+					                                    <span style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 1.35 }}>
+					                                      {value}
+					                                    </span>
+					                                  </div>
+					                                ))}
+					                              </div>
+					                              <button
+					                                type="button"
+					                                data-testid="case-wiki-archive-review-selected-lane-answer-rubric-open"
+					                                onClick={() => {
+					                                  if (!rubric.firstSource) return;
+					                                  openWikiPage(
+					                                    wikiSourcePageIdForIngestion(rubric.firstSource),
+					                                    `Opened ${rubric.label.toLowerCase()} answer rubric source: ${rubric.firstTitle}.`,
+					                                  );
+					                                }}
+					                                disabled={!rubric.firstSource}
+					                                style={{
+					                                  ...buttonStyle,
+					                                  fontSize: 9,
+					                                  justifySelf: 'start',
+					                                  minHeight: 25,
+					                                  opacity: rubric.firstSource ? 1 : 0.56,
+					                                  padding: '3px 6px',
+					                                  whiteSpace: 'nowrap',
+					                                }}
+					                                {...buttonHoverHandlers}
+					                              >
+					                                Open rubric source
+					                              </button>
+					                            </article>
+					                          );
+					                        })}
+					                      </div>
+					                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+					                        Answer rubric actions only open source review surfaces. They do not accept answers, save receipts, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
+					                      </span>
+					                    </div>
+					                    <div
+					                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
+					                      style={{
+					                        background: 'rgba(17,24,39,0.035)',
                         border: `1px solid ${colors.border}`,
                         borderRadius: 8,
                         display: 'grid',
