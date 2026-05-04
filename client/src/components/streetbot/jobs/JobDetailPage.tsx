@@ -1252,35 +1252,58 @@ export default function JobDetailPage() {
                   </div>
                 </div>
               )}
-              {job.deadline && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <Clock
-                    style={{
-                      width: "18px",
-                      height: "18px",
-                      color: colors.accent,
-                      flexShrink: 0,
-                    }}
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 500,
-                        color: colors.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      Application Deadline
-                    </div>
-                    <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>
-                      {job.deadline}
+              {(() => {
+                const postedRaw = job.posting_date || job.created_at;
+                if (!postedRaw) return null;
+                const posted = new Date(postedRaw);
+                if (isNaN(posted.getTime())) return null;
+                const now = new Date();
+                const diffDays = Math.floor((now.getTime() - posted.getTime()) / 86400000);
+                let label: string;
+                if (diffDays <= 0) label = "Today";
+                else if (diffDays === 1) label = "Yesterday";
+                else if (diffDays < 7) label = `${diffDays} days ago`;
+                else if (diffDays < 30) {
+                  const weeks = Math.floor(diffDays / 7);
+                  label = `${weeks} week${weeks === 1 ? "" : "s"} ago`;
+                } else {
+                  label = posted.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                }
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <Clock style={{ width: "18px", height: "18px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
+                    <div>
+                      <div style={{ fontSize: "11px", fontWeight: 500, color: colors.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Posted</div>
+                      <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>{label}</div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
+              {(() => {
+                if (!job.deadline) return null;
+                const due = new Date(job.deadline);
+                if (isNaN(due.getTime())) return null;
+                const now = new Date();
+                const diffDays = Math.floor((due.getTime() - now.getTime()) / 86400000);
+                let label: string;
+                let isUrgent = false;
+                let isClosed = false;
+                if (diffDays < 0) { label = "Closed"; isClosed = true; }
+                else if (diffDays === 0) { label = "Closes today"; isUrgent = true; }
+                else if (diffDays === 1) { label = "Closes tomorrow"; isUrgent = true; }
+                else if (diffDays < 7) { label = `Closes in ${diffDays} days`; isUrgent = true; }
+                else label = due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                const valueColor = isUrgent ? "#EF4444" : (isClosed ? colors.textMuted : colors.text);
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <Clock style={{ width: "18px", height: "18px", color: isUrgent ? "#EF4444" : colors.accent, flexShrink: 0 }} aria-hidden="true" />
+                    <div>
+                      <div style={{ fontSize: "11px", fontWeight: 500, color: colors.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Application Deadline</div>
+                      <div style={{ fontSize: "14px", color: valueColor, fontWeight: isUrgent ? 700 : 500 }}>{label}</div>
+                    </div>
+                  </div>
+                );
+              })()}
               {job.experience_level && (
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <GraduationCap
@@ -2003,12 +2026,6 @@ export default function JobDetailPage() {
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                   <Briefcase style={{ width: "14px", height: "14px" }} aria-hidden="true" />
                   {job.application_count} applications
-                </span>
-              )}
-              {job.posting_date && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                  <Clock style={{ width: "14px", height: "14px" }} aria-hidden="true" />
-                  Posted {job.posting_date}
                 </span>
               )}
             </div>
