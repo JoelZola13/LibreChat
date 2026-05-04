@@ -142,29 +142,22 @@ function VerificationBadge({
     lg: { padding: "6px 14px", fontSize: "13px", iconSize: 14 },
   };
 
-  const typeConfig: Record<
-    string,
-    { label: string; bg: string; color: string }
-  > = {
+  const typeConfig: Record<string, { label: string; bg: string }> = {
     basic: {
       label: "Verified",
-      bg: "linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.15) 100%)",
-      color: "#22c55e",
+      bg: "linear-gradient(135deg, #16a34a 0%, #059669 100%)",
     },
     business: {
       label: "Verified Business",
-      bg: "linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)",
-      color: "#3b82f6",
+      bg: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
     },
     nonprofit: {
       label: "Verified Nonprofit",
-      bg: "linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%)",
-      color: "#a855f7",
+      bg: "linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)",
     },
     government: {
       label: "Government",
-      bg: "linear-gradient(135deg, rgba(234, 179, 8, 0.2) 0%, rgba(202, 138, 4, 0.15) 100%)",
-      color: "#eab308",
+      bg: "linear-gradient(135deg, #ca8a04 0%, #a16207 100%)",
     },
   };
 
@@ -179,13 +172,14 @@ function VerificationBadge({
         gap: "4px",
         borderRadius: "9999px",
         background: config.bg,
-        border: `1px solid ${config.color}33`,
         padding: styles.padding,
         fontSize: styles.fontSize,
-        fontWeight: 600,
-        color: config.color,
+        fontWeight: 700,
+        color: "#ffffff",
         whiteSpace: "nowrap",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
       }}
+      title={`${config.label} employer`}
     >
       <Shield
         style={{ width: styles.iconSize, height: styles.iconSize }}
@@ -814,22 +808,6 @@ export default function JobDetailPage() {
               </span>
             )}
 
-            {/* Verified badge - bottom center */}
-            {job.employer_verified && (
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "-14px",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                }}
-              >
-                <VerificationBadge
-                  verificationType={job.employer_verification_type}
-                  size="lg"
-                />
-              </div>
-            )}
           </div>
 
           {/* ── Content ── */}
@@ -864,6 +842,11 @@ export default function JobDetailPage() {
                 >
                   {job.organization}
                 </p>
+              )}
+              {job.employer_verified && (
+                <div style={{ display: "flex", justifyContent: "center", marginTop: "12px" }}>
+                  <VerificationBadge verificationType={job.employer_verification_type} size="lg" />
+                </div>
               )}
             </div>
 
