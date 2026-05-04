@@ -24300,6 +24300,12 @@ export default function CaseManagementPage() {
 	          const titleBase =
 	            collectionLabels[0] && collectionLabels[0] !== 'Source documents' ? collectionLabels[0] : domainLabel;
 	          const candidateTitle = `${titleBase} source article`;
+	          const sourceTitles = activeArchiveReviewSelectionReceiptSources
+	            .map((source) => {
+	              const review = archiveReviewForIngestion(source);
+	              return review.suggestedWikiTitle || source.title || source.fileName;
+	            })
+	            .filter(Boolean);
 	          const citationRows = activeArchiveReviewSelectionReceiptSources.slice(0, 5).map((source) => {
 	            const review = archiveReviewForIngestion(source);
 	            const embedding = embeddingReviewForIngestion(source);
@@ -24347,14 +24353,68 @@ export default function CaseManagementPage() {
 	                title: review.suggestedWikiTitle || source.title || source.fileName,
 	              };
 	            });
+	          const draftArticleSections = [
+	            {
+	              heading: 'Overview',
+	              text: `${candidateTitle} is a draft Case Wiki article assembled from ${activeArchiveReviewSelectionReceiptSources.length} selected source document${
+	                activeArchiveReviewSelectionReceiptSources.length === 1 ? '' : 's'
+	              }. It stays source-first: every statement remains tied to the selected document lane until a human confirms publication.`,
+	            },
+	            {
+	              heading: 'Source history',
+	              text: `The current lane is ${activeArchiveReviewSelectionReceipt.label}. It includes ${
+	                sourceTitles.slice(0, 3).join(', ') || 'selected source documents'
+	              }${sourceTitles.length > 3 ? `, and ${sourceTitles.length - 3} more source${sourceTitles.length - 3 === 1 ? '' : 's'}` : ''}.`,
+	            },
+	            {
+	              heading: 'Evidence status',
+	              text: `${evidenceCounts.approved} approved chunk${evidenceCounts.approved === 1 ? '' : 's'} can support durable claims, while ${
+	                evidenceCounts.pending
+	              } pending chunk${evidenceCounts.pending === 1 ? '' : 's'} still need review before embedding or publication.`,
+	            },
+	            {
+	              heading: 'Open questions',
+	              text: exclusionRows.length
+	                ? `Holdbacks include ${exclusionRows.map((row) => `${row.title} (${row.reason})`).join('; ')}.`
+	                : 'No visible holdbacks are blocking the draft preview, but final promotion and embedding still require separate confirmation.',
+	            },
+	          ];
+	          const draftBacklinkRows = [
+	            {
+	              label: 'Life Domain',
+	              target: domainLabel,
+	              detail: 'Domain index backlink for whole-life navigation.',
+	            },
+	            {
+	              label: 'Collection',
+	              target: collectionLabels.join(', ') || 'Source documents',
+	              detail: 'Collection shelf backlink so this article does not float alone.',
+	            },
+	            {
+	              label: 'Selected receipt lane',
+	              target: activeArchiveReviewSelectionReceipt.label,
+	              detail: 'Reviewer queue backlink for the exact batch that created the draft.',
+	            },
+	            {
+	              label: 'Source notebook',
+	              target: sourceTitles[0] || 'First source',
+	              detail: 'Primary source backlink for citation inspection.',
+	            },
+	          ];
 	          return {
 	            candidateTitle,
 	            citationRows,
 	            collectionLabel: collectionLabels.join(', ') || 'Source documents',
+	            draftArticleSections,
+	            draftBacklinkRows,
 	            domainLabel,
 	            evidenceCounts,
 	            exclusionRows,
 	            lead: sourceLead,
+	            leadParagraphs: [
+	              sourceLead,
+	              'This page is a readable draft generated from a selected review lane. It is not a promoted article yet; it is the human-checkable bridge between source receipts, citations, and durable wiki publication.',
+	            ],
 	            metadataOnlyCount,
 	            reviewStatus: `${boundaryReviewedCount}/${activeArchiveReviewSelectionReceiptSources.length} boundaries reviewed`,
 	            sections: [
@@ -24384,6 +24444,7 @@ export default function CaseManagementPage() {
 	              },
 	            ],
 	            sourceKindLabel: sourceKindLabels.join(', ') || 'source documents',
+	            tableOfContents: draftArticleSections.map((section) => section.heading),
 	          };
 	        })()
 	      : null;
@@ -40645,6 +40706,149 @@ export default function CaseManagementPage() {
 								                              </span>
 								                            )}
 								                          </div>
+								                        </div>
+								                        <div
+								                          data-testid="case-wiki-archive-review-selected-lane-wiki-draft"
+								                          style={{
+								                            background: '#fff',
+								                            border: `1px solid ${colors.border}`,
+								                            borderRadius: 8,
+								                            display: 'grid',
+								                            gap: 10,
+								                            padding: 12,
+								                          }}
+								                        >
+								                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start' }}>
+								                            <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
+								                              <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                Street Voices Case Wiki draft
+								                              </span>
+								                              <h4
+								                                style={{
+								                                  color: colors.text,
+								                                  fontFamily: 'Georgia, serif',
+								                                  fontSize: 'clamp(22px, 3vw, 34px)',
+								                                  fontWeight: 800,
+								                                  lineHeight: 1.05,
+								                                  margin: 0,
+								                                  overflowWrap: 'anywhere',
+								                                }}
+								                              >
+								                                {activeArchiveReviewSelectionReceiptArticleWorkupPreview.candidateTitle}
+								                              </h4>
+								                            </div>
+								                            <span
+								                              style={{
+								                                background: 'rgba(255,212,0,0.14)',
+								                                border: '1px solid rgba(202,138,4,0.22)',
+								                                borderRadius: 8,
+								                                color: '#92400e',
+								                                fontSize: 10,
+								                                fontWeight: 950,
+								                                padding: '5px 7px',
+								                                textTransform: 'uppercase',
+								                              }}
+								                            >
+								                              Draft / not promoted
+								                            </span>
+								                          </div>
+								                          <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))' }}>
+								                            <div style={{ display: 'grid', gap: 8 }}>
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.leadParagraphs.map((paragraph) => (
+								                                <p
+								                                  key={`${activeArchiveReviewSelectionReceipt.id}-draft-lead-${paragraph.slice(0, 24)}`}
+								                                  style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 1.55, margin: 0 }}
+								                                >
+								                                  {paragraph}
+								                                </p>
+								                              ))}
+								                            </div>
+								                            <aside
+								                              style={{
+								                                background: 'rgba(17,24,39,0.035)',
+								                                border: `1px solid ${colors.border}`,
+								                                borderRadius: 8,
+								                                display: 'grid',
+								                                gap: 6,
+								                                padding: 8,
+								                              }}
+								                            >
+								                              <strong style={{ color: colors.text, fontSize: 11 }}>Contents</strong>
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.tableOfContents.map((heading, index) => (
+								                                <span
+								                                  key={`${activeArchiveReviewSelectionReceipt.id}-draft-toc-${heading}`}
+								                                  style={{ color: colors.textMuted, fontSize: 10, fontWeight: 850, lineHeight: 1.3 }}
+								                                >
+								                                  {index + 1}. {heading}
+								                                </span>
+								                              ))}
+								                            </aside>
+								                          </div>
+								                          <div style={{ display: 'grid', gap: 8 }}>
+								                            {activeArchiveReviewSelectionReceiptArticleWorkupPreview.draftArticleSections.map((section, index) => (
+								                              <section
+								                                key={`${activeArchiveReviewSelectionReceipt.id}-wiki-draft-${section.heading}`}
+								                                data-testid="case-wiki-archive-review-selected-lane-wiki-draft-section"
+								                                style={{
+								                                  borderTop: index ? `1px solid ${colors.border}` : 'none',
+								                                  display: 'grid',
+								                                  gap: 4,
+								                                  paddingTop: index ? 8 : 0,
+								                                }}
+								                              >
+								                                <h5
+								                                  style={{
+								                                    color: colors.text,
+								                                    fontFamily: 'Georgia, serif',
+								                                    fontSize: 16,
+								                                    margin: 0,
+								                                  }}
+								                                >
+								                                  {section.heading}
+								                                </h5>
+								                                <p style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 1.5, margin: 0 }}>
+								                                  {section.text}
+								                                  {activeArchiveReviewSelectionReceiptArticleWorkupPreview.citationRows[index] ? (
+								                                    <sup style={{ color: '#174ea6', fontWeight: 950 }}>
+								                                      {' '}
+								                                      [{index + 1}]
+								                                    </sup>
+								                                  ) : null}
+								                                </p>
+								                              </section>
+								                            ))}
+								                          </div>
+								                          <div
+								                            data-testid="case-wiki-archive-review-selected-lane-wiki-draft-backlinks"
+								                            style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))' }}
+								                          >
+								                            {activeArchiveReviewSelectionReceiptArticleWorkupPreview.draftBacklinkRows.map((backlink) => (
+								                              <div
+								                                key={`${activeArchiveReviewSelectionReceipt.id}-draft-backlink-${backlink.label}`}
+								                                style={{
+								                                  background: 'rgba(17,24,39,0.025)',
+								                                  border: `1px solid ${colors.border}`,
+								                                  borderRadius: 8,
+								                                  display: 'grid',
+								                                  gap: 3,
+								                                  padding: 7,
+								                                }}
+								                              >
+								                                <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                  {backlink.label}
+								                                </span>
+								                                <strong style={{ color: colors.textSecondary, fontSize: 10, overflowWrap: 'anywhere' }}>
+								                                  {backlink.target}
+								                                </strong>
+								                                <span style={{ color: colors.textMuted, fontSize: 9, lineHeight: 1.35 }}>
+								                                  {backlink.detail}
+								                                </span>
+								                              </div>
+								                            ))}
+								                          </div>
+								                          <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                            This preview is a readable wiki draft only. It shows how the selected lane can become an article before any promotion, embedding, Neo4j write, attachment, cleanup, move, or delete gate is opened.
+								                          </span>
 								                        </div>
 								                        <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
 								                          Building this metadata only workup creates article-plan, citation, draft-preview, and readiness metadata from the selected lane. It still does not publish prose, attach records, write Weaviate vectors, sync Neo4j, clean files, move files, or delete files.
