@@ -58,6 +58,20 @@ function deriveHoursPerWeek(job: Job): string {
   return "20-30 hrs/week";
 }
 
+function deriveDeadline(job: Job): string | undefined {
+  if (job.deadline) return job.deadline;
+  // Only synthesize for Street Voices roles (others either have a real deadline
+  // or intentionally don't have one).
+  if (job.organization !== "Street Voices") return job.deadline;
+  const base = job.posting_date || job.created_at;
+  if (!base) return job.deadline;
+  const baseDate = new Date(base);
+  if (isNaN(baseDate.getTime())) return job.deadline;
+  // Podcast Producer is bi-weekly and time-sensitive — shorter window.
+  const days = job.title?.includes("Podcast Producer") ? 30 : 60;
+  return new Date(baseDate.getTime() + days * 86400000).toISOString();
+}
+
 export function enrichJobSchedule(job: Job): Job {
   const sampleOverride = SAMPLE_SCHEDULE_DETAILS[job.id];
 
@@ -65,6 +79,7 @@ export function enrichJobSchedule(job: Job): Job {
     ...job,
     work_mode: job.work_mode || sampleOverride?.work_mode || deriveWorkMode(job),
     hours_per_week: job.hours_per_week || sampleOverride?.hours_per_week || deriveHoursPerWeek(job),
+    deadline: deriveDeadline(job),
   };
 }
 
