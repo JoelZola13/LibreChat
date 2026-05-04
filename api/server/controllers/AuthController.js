@@ -182,6 +182,11 @@ const refreshController = async (req, res) => {
 
 const socialSessionController = async (req, res) => {
   const bridgeSecret = process.env.LIBRECHAT_AUTH_BRIDGE_SECRET;
+  if (!bridgeSecret && process.env.NODE_ENV === 'production') {
+    logger.error('[socialSessionController] LIBRECHAT_AUTH_BRIDGE_SECRET is required in production');
+    return res.status(503).json({ message: 'LibreChat social auth bridge is not configured' });
+  }
+
   if (bridgeSecret && req.get('x-librechat-social-secret') !== bridgeSecret) {
     return res.status(403).json({ message: 'Invalid social auth bridge secret' });
   }
