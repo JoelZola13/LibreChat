@@ -1236,12 +1236,51 @@ function JobCard({
               <span style={{ fontSize: "13px", color: colors.text }}>{job.hours_per_week}</span>
             </div>
           )}
-          {job.posting_date && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Clock style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
-              <span style={{ fontSize: "13px", color: colors.text }}>Posted: {job.posting_date}</span>
-            </div>
-          )}
+          {(() => {
+            const postedRaw = job.posting_date || job.created_at;
+            if (!postedRaw) return null;
+            const posted = new Date(postedRaw);
+            if (isNaN(posted.getTime())) return null;
+            const now = new Date();
+            const diffDays = Math.floor((now.getTime() - posted.getTime()) / 86400000);
+            let label: string;
+            if (diffDays <= 0) label = "Posted today";
+            else if (diffDays === 1) label = "Posted yesterday";
+            else if (diffDays < 7) label = `Posted ${diffDays} days ago`;
+            else if (diffDays < 30) {
+              const weeks = Math.floor(diffDays / 7);
+              label = `Posted ${weeks} week${weeks === 1 ? "" : "s"} ago`;
+            } else {
+              label = `Posted ${posted.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+            }
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Clock style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
+                <span style={{ fontSize: "13px", color: colors.text }}>{label}</span>
+              </div>
+            );
+          })()}
+          {(() => {
+            if (!job.deadline) return null;
+            const due = new Date(job.deadline);
+            if (isNaN(due.getTime())) return null;
+            const now = new Date();
+            const diffDays = Math.floor((due.getTime() - now.getTime()) / 86400000);
+            let label: string;
+            let isUrgent = false;
+            if (diffDays < 0) label = "Closed";
+            else if (diffDays === 0) { label = "Closes today"; isUrgent = true; }
+            else if (diffDays === 1) { label = "Closes tomorrow"; isUrgent = true; }
+            else if (diffDays < 7) { label = `Closes in ${diffDays} days`; isUrgent = true; }
+            else label = `Closes ${due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+            const color = isUrgent ? "#EF4444" : (diffDays < 0 ? colors.textMuted : colors.text);
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Clock style={{ width: "16px", height: "16px", color: isUrgent ? "#EF4444" : colors.accent, flexShrink: 0 }} aria-hidden="true" />
+                <span style={{ fontSize: "13px", color, fontWeight: isUrgent ? 600 : 400 }}>{label}</span>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Footer */}
