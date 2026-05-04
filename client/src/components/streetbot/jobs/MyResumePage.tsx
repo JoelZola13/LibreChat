@@ -21,6 +21,7 @@ import {
   Save,
   Star,
   FileText,
+  Download,
   Lock,
   CheckCircle,
   AlertCircle,
@@ -419,7 +420,7 @@ export default function MyResumePage() {
   // ══════════════════════════════════════════════════════════════════════════
 
   const renderPreview = () => (
-    <div style={cardStyle}>
+    <div id="resume-print-area" style={cardStyle}>
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: "28px", paddingBottom: "20px", borderBottom: `1px solid ${colors.border}` }}>
         <h2 style={{ fontSize: "28px", fontWeight: 800, color: colors.text, margin: "0 0 4px 0" }}>
@@ -1323,15 +1324,49 @@ export default function MyResumePage() {
 
                 {/* Edit/Preview area — only show when user clicks Preview or Edit on a resume */}
                 {mode === "preview" && resumeVersions.length > 0 && (
-                  <div style={{ marginBottom: "20px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div className="resume-preview-section" style={{ marginBottom: "20px" }}>
+                    <style>{`
+                      @media print {
+                        body * { visibility: hidden !important; }
+                        #resume-print-area, #resume-print-area * { visibility: visible !important; }
+                        #resume-print-area {
+                          position: absolute !important;
+                          left: 0 !important;
+                          top: 0 !important;
+                          width: 100% !important;
+                          background: #ffffff !important;
+                          color: #111111 !important;
+                          padding: 24px !important;
+                          box-shadow: none !important;
+                          border: none !important;
+                        }
+                        #resume-print-area * {
+                          background: transparent !important;
+                          color: #111111 !important;
+                          border-color: #d4d4d4 !important;
+                          box-shadow: none !important;
+                        }
+                        #resume-print-area a { text-decoration: none !important; }
+                        @page { margin: 12mm; }
+                      }
+                    `}</style>
+                    <div className="resume-preview-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "8px", flexWrap: "wrap" }}>
                       <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: 0 }}>Resume Preview</h3>
-                      <button
-                        onClick={() => setMode("edit")}
-                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
-                      >
-                        <Pencil size={14} /> Switch to Edit
-                      </button>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        <button
+                          onClick={() => window.print()}
+                          aria-label="Download resume as PDF"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: "none", background: "#FFD600", color: "#000", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          <Download size={14} /> Download PDF
+                        </button>
+                        <button
+                          onClick={() => setMode("edit")}
+                          style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
+                        >
+                          <Pencil size={14} /> Switch to Edit
+                        </button>
+                      </div>
                     </div>
                     {renderPreview()}
                   </div>
