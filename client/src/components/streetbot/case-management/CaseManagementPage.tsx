@@ -24187,6 +24187,30 @@ export default function CaseManagementPage() {
 	          sourceScope,
 	        };
 	      });
+	    const activeArchiveReviewSelectionReceiptGateSaveCheckpointRows =
+	      activeArchiveReviewSelectionReceiptGateDraftReceiptRows.map((draft) => {
+	        const saveState =
+	          draft.state === 'active'
+	            ? 'Ready for human review save'
+	            : draft.state === 'locked'
+	              ? 'Blocked until earlier receipt'
+	              : 'Already clear / audit only';
+	        const checkpointStamp = draft.state === 'locked' ? 'Blocked / no save' : 'Review save only';
+	        const receiptPayload = `${draft.receiptKey}: reviewer answer, evidence note, source ids, gate state, timestamp`;
+	        const blockedWrites =
+	          draft.id === 'graph'
+	            ? 'Neo4j sync waits for a separate graph-write gate.'
+	            : draft.id === 'vector'
+	              ? 'Weaviate write waits for a separate embedding gate.'
+	              : 'Attachments, Neo4j, Weaviate, promotion, cleanup, moves, and deletes stay blocked.';
+	        return {
+	          ...draft,
+	          blockedWrites,
+	          checkpointStamp,
+	          receiptPayload,
+	          saveState,
+	        };
+	      });
 	    const isExtractableLocalArchiveSource = (ingestion: WikiIngestionRecord) => {
 	      const review = archiveReviewForIngestion(ingestion);
 	      return Boolean(
@@ -40009,13 +40033,137 @@ export default function CaseManagementPage() {
 						                          );
 						                        })}
 						                      </div>
-						                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
-						                        Draft receipt preview actions only open source review surfaces. They do not save receipts, accept answers, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
-						                      </span>
-						                    </div>
-						                    <div
-						                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
-						                      style={{
+							                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+							                        Draft receipt preview actions only open source review surfaces. They do not save receipts, accept answers, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
+							                      </span>
+							                    </div>
+							                    <div
+							                      data-testid="case-wiki-archive-review-selected-lane-save-checkpoint"
+							                      style={{
+							                        background: 'rgba(255,255,255,0.66)',
+							                        border: `1px solid ${colors.border}`,
+							                        borderRadius: 8,
+							                        display: 'grid',
+							                        gap: 8,
+							                        padding: 9,
+							                      }}
+							                    >
+							                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+							                        <strong style={{ color: colors.text, fontSize: 11, textTransform: 'uppercase' }}>
+							                          Receipt save checkpoint
+							                        </strong>
+							                        <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 900 }}>
+							                          Human review only
+							                        </span>
+							                      </div>
+							                      <div style={{ display: 'grid', gap: 7 }}>
+							                        {activeArchiveReviewSelectionReceiptGateSaveCheckpointRows.map((checkpoint) => {
+							                          const checkpointTone =
+							                            checkpoint.state === 'active'
+							                              ? {
+							                                  background: 'rgba(255,212,0,0.12)',
+							                                  border: 'rgba(202,138,4,0.22)',
+							                                  color: '#92400e',
+							                                }
+							                              : checkpoint.state === 'locked'
+							                                ? {
+							                                    background: 'rgba(17,24,39,0.03)',
+							                                    border: 'rgba(17,24,39,0.08)',
+							                                    color: colors.textMuted,
+							                                  }
+							                                : {
+							                                    background: 'rgba(16,185,129,0.08)',
+							                                    border: 'rgba(16,185,129,0.18)',
+							                                    color: '#047857',
+							                                  };
+							                          return (
+							                            <article
+							                              key={`${activeArchiveReviewSelectionReceipt.id}-save-checkpoint-${checkpoint.id}`}
+							                              data-testid="case-wiki-archive-review-selected-lane-save-checkpoint-row"
+							                              style={{
+							                                background: checkpointTone.background,
+							                                border: `1px solid ${checkpointTone.border}`,
+							                                borderRadius: 8,
+							                                display: 'grid',
+							                                gap: 7,
+							                                padding: 8,
+							                              }}
+							                            >
+							                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+							                                <div style={{ display: 'grid', gap: 2 }}>
+							                                  <span style={{ color: colors.textMuted, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+							                                    {checkpoint.stepLabel} · {checkpoint.receiptKey}
+							                                  </span>
+							                                  <strong style={{ color: colors.text, fontSize: 12 }}>{checkpoint.label} save checkpoint</strong>
+							                                </div>
+							                                <span style={{ color: checkpointTone.color, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+							                                  {checkpoint.checkpointStamp}
+							                                </span>
+							                              </div>
+							                              <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
+							                                {[
+							                                  ['Save readiness', checkpoint.saveState],
+							                                  ['Review receipt payload', checkpoint.receiptPayload],
+							                                  ['Human fields', checkpoint.record],
+							                                  ['Evidence required', checkpoint.proof],
+							                                  ['Unlocks after save', checkpoint.unlocks],
+							                                  ['Still blocked', checkpoint.blockedWrites],
+							                                ].map(([label, value]) => (
+							                                  <div
+							                                    key={`${checkpoint.id}-${label}`}
+							                                    style={{
+							                                      background: 'rgba(255,255,255,0.6)',
+							                                      border: `1px solid ${colors.border}`,
+							                                      borderRadius: 8,
+							                                      display: 'grid',
+							                                      gap: 3,
+							                                      padding: 7,
+							                                    }}
+							                                  >
+							                                    <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+							                                      {label}
+							                                    </span>
+							                                    <span style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 1.35 }}>
+							                                      {value}
+							                                    </span>
+							                                  </div>
+							                                ))}
+							                              </div>
+							                              <button
+							                                type="button"
+							                                data-testid="case-wiki-archive-review-selected-lane-save-checkpoint-open"
+							                                onClick={() => {
+							                                  if (!checkpoint.firstSource) return;
+							                                  openWikiPage(
+							                                    wikiSourcePageIdForIngestion(checkpoint.firstSource),
+							                                    `Opened ${checkpoint.label.toLowerCase()} save checkpoint source: ${checkpoint.firstTitle}.`,
+							                                  );
+							                                }}
+							                                disabled={!checkpoint.firstSource}
+							                                style={{
+							                                  ...buttonStyle,
+							                                  fontSize: 9,
+							                                  justifySelf: 'start',
+							                                  minHeight: 25,
+							                                  opacity: checkpoint.firstSource ? 1 : 0.56,
+							                                  padding: '3px 6px',
+							                                  whiteSpace: 'nowrap',
+							                                }}
+							                                {...buttonHoverHandlers}
+							                              >
+							                                Open save checkpoint source
+							                              </button>
+							                            </article>
+							                          );
+							                        })}
+							                      </div>
+							                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+							                        Save checkpoint actions only open source review surfaces. They do not save receipts, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
+							                      </span>
+							                    </div>
+							                    <div
+							                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
+							                      style={{
 						                        background: 'rgba(17,24,39,0.035)',
                         border: `1px solid ${colors.border}`,
                         borderRadius: 8,
