@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 type ThemeName = 'light' | 'dark';
 type ShortcutAction = 'jump' | 'compose' | 'next' | 'previous';
@@ -43,8 +43,33 @@ const isEditableShortcutTarget = (target: EventTarget | null) => {
   );
 };
 
+const buildIframeSrc = () => {
+  if (typeof window === 'undefined') {
+    return '/social/dm?embed=true';
+  }
+
+  const parentParams = new URLSearchParams(window.location.search);
+  const channel = parentParams.get('channel');
+  const message = parentParams.get('message') || parentParams.get('msg');
+  let path = '/social/dm';
+
+  if (channel?.startsWith('dm-')) {
+    path = `/social/dm/${encodeURIComponent(channel.slice(3))}`;
+  } else if (channel?.startsWith('channel-')) {
+    path = `/social/channels/${encodeURIComponent(channel.slice(8))}`;
+  }
+
+  const iframeParams = new URLSearchParams({ embed: 'true' });
+  if (message) {
+    iframeParams.set('message', message);
+  }
+
+  return `${path}?${iframeParams.toString()}`;
+};
+
 export default function SocialMessagesPage() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeSrc, setIframeSrc] = useState(buildIframeSrc);
 
   const syncIframeTheme = useCallback(() => {
     const theme = getLibreChatTheme();
@@ -82,6 +107,17 @@ export default function SocialMessagesPage() {
       window.removeEventListener('storage', syncIframeTheme);
     };
   }, [syncIframeTheme]);
+
+  useEffect(() => {
+    const syncIframeSrc = () => setIframeSrc(buildIframeSrc());
+
+    window.addEventListener('popstate', syncIframeSrc);
+    window.addEventListener('hashchange', syncIframeSrc);
+    return () => {
+      window.removeEventListener('popstate', syncIframeSrc);
+      window.removeEventListener('hashchange', syncIframeSrc);
+    };
+  }, []);
 
   useEffect(() => {
     const postShortcut = (action: ShortcutAction) => {
@@ -137,7 +173,7 @@ export default function SocialMessagesPage() {
     <div className="relative h-full min-h-0 w-full overflow-hidden bg-white dark:bg-[#17121f]">
       <iframe
         ref={iframeRef}
-        src="/social/dm?embed=true"
+        src={iframeSrc}
         title="Street Voices Messages"
         className="block h-full w-full border-0"
         allow="clipboard-read; clipboard-write; microphone"
