@@ -58,6 +58,50 @@ function deriveHoursPerWeek(job: Job): string {
   return "20-30 hrs/week";
 }
 
+// Curated list of community orgs that have been onboarded to the platform.
+// Mirrors the ORGANIZATION_LOGOS keys in JobsPage / JobDetailPage. Listings
+// from these orgs render a "Verified Nonprofit" badge so applicants can
+// distinguish them from unsolicited postings.
+const KNOWN_NONPROFIT_ORGS = new Set<string>([
+  "Access Alliance Multicultural Health",
+  "Beats & Rhymes Youth Program",
+  "Big Brothers Big Sisters Toronto",
+  "Black Voices Media Collective",
+  "CAMH Community Programs",
+  "Community Care Network",
+  "Community Connect Network",
+  "Housing First Program",
+  "Housing Justice Coalition",
+  "North York Community Pantry",
+  "Parks & Recreation Community Programs",
+  "Regent Park Arts Collective",
+  "Safe Haven Community Center",
+  "Social Planning Council",
+  "Street Voices",
+  "Street Voices Community Services",
+  "TechForGood Initiative",
+  "The Stop Community Food Centre",
+  "Youth Achievement Center",
+  "Youth Services Bureau",
+  "Youth Wellness Hub",
+]);
+
+function deriveVerification(
+  job: Job,
+): { employer_verified?: boolean; employer_verification_type?: string } {
+  // Don't override an already-set verification (e.g., from SAMPLE_JOBS or backend).
+  if (typeof job.employer_verified === "boolean") {
+    return {
+      employer_verified: job.employer_verified,
+      employer_verification_type: job.employer_verification_type,
+    };
+  }
+  if (job.organization && KNOWN_NONPROFIT_ORGS.has(job.organization)) {
+    return { employer_verified: true, employer_verification_type: "nonprofit" };
+  }
+  return {};
+}
+
 function deriveDeadline(job: Job): string | undefined {
   if (job.deadline) return job.deadline;
   // Only synthesize for Street Voices roles (others either have a real deadline
@@ -74,12 +118,14 @@ function deriveDeadline(job: Job): string | undefined {
 
 export function enrichJobSchedule(job: Job): Job {
   const sampleOverride = SAMPLE_SCHEDULE_DETAILS[job.id];
+  const verification = deriveVerification(job);
 
   return {
     ...job,
     work_mode: job.work_mode || sampleOverride?.work_mode || deriveWorkMode(job),
     hours_per_week: job.hours_per_week || sampleOverride?.hours_per_week || deriveHoursPerWeek(job),
     deadline: deriveDeadline(job),
+    ...verification,
   };
 }
 
