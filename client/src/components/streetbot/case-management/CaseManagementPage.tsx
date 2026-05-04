@@ -24041,38 +24041,59 @@ export default function CaseManagementPage() {
 	          {
 	            blocked: string;
 	            decision: string;
+	            inspect: string;
 	            output: string;
+	            proof: string;
+	            record: string;
 	          }
 	        > = {
 	          boundary: {
 	            blocked: 'No attachment writes or source cleanup.',
 	            decision: 'Decide whether the source stays standalone or needs one explicit live-record attachment.',
+	            inspect: 'Source title, path, extracted summary, and any live-record match signals.',
 	            output: 'Boundary receipt and source-first route.',
+	            proof: 'Boundary receipt explains why the source stays separate or why a target is justified.',
+	            record: 'Keep standalone, flag attachment candidate, or choose one explicit target.',
 	          },
 	          shelf: {
 	            blocked: 'No automatic re-shelving or graph mutation.',
 	            decision: 'Choose the Life Domain or collection shelf that should own this source.',
+	            inspect: 'Life Domain, collection, file family, and topic clues.',
 	            output: 'Shelf recommendation for the wiki index.',
+	            proof: 'Wiki index route can be traced back to source metadata and reviewer note.',
+	            record: 'Proposed shelf, confidence, and reason.',
 	          },
 	          extraction: {
 	            blocked: 'No article promotion or vector writes.',
 	            decision: 'Confirm the parser output is useful enough to become source notes.',
+	            inspect: 'Extracted text, section headings, file type, and parser confidence.',
 	            output: 'Extracted source-note packet.',
+	            proof: 'Source notes preserve useful text and identify extraction gaps before article work.',
+	            record: 'Accept extraction, mark for cleanup, or request a different parser path.',
 	          },
 	          evidence: {
 	            blocked: 'No approved evidence enters memory without review.',
 	            decision: 'Review chunks, citations, and claims before they become durable memory.',
+	            inspect: 'Pending chunks, claim text, citations, redactions, and do-not-embed choices.',
 	            output: 'Citation-ready evidence packet.',
+	            proof: 'Every approved claim has a source chunk and reviewer-visible citation trail.',
+	            record: 'Approve evidence, redact/edit, or reject chunks from memory.',
 	          },
 	          graph: {
 	            blocked: 'No graph write from this review card.',
 	            decision: 'Confirm reviewed chunks and entities are ready for Neo4j sync.',
+	            inspect: 'Entity candidates, relationship candidates, graph diff preview, and source IDs.',
 	            output: 'Neo4j node/edge sync receipt.',
+	            proof: 'Graph receipt lists source IDs, node labels, edge types, and write gate status.',
+	            record: 'Ready for Neo4j sync, hold for relationship review, or exclude from graph.',
 	          },
 	          vector: {
 	            blocked: 'No live Weaviate write from this review card.',
 	            decision: 'Confirm approved chunks should be embedded in Weaviate.',
+	            inspect: 'Approved chunks, dry-run object IDs, privacy flags, and embedding exclusions.',
 	            output: 'Vector write readiness receipt.',
+	            proof: 'Vector receipt lists chunk IDs, object fingerprints, and explicit write readiness.',
+	            record: 'Ready for Weaviate dry-run/write gate, hold, or do-not-embed.',
 	          },
 	        };
 	        return {
@@ -24080,6 +24101,16 @@ export default function CaseManagementPage() {
 	          ...gateInstructions[step.id],
 	        };
 	      });
+	    const activeArchiveReviewSelectionReceiptGateReviewPromptRows =
+	      activeArchiveReviewSelectionReceiptGateWorkPacketRows.map((step) => ({
+	        ...step,
+	        promptTitle:
+	          step.state === 'active'
+	            ? `Answer now: ${step.label}`
+	            : step.state === 'locked'
+	              ? `Prepare next: ${step.label}`
+	              : `Audit cleared: ${step.label}`,
+	      }));
 	    const isExtractableLocalArchiveSource = (ingestion: WikiIngestionRecord) => {
 	      const review = archiveReviewForIngestion(ingestion);
 	      return Boolean(
@@ -39548,14 +39579,123 @@ export default function CaseManagementPage() {
 			                          );
 			                        })}
 			                      </div>
-			                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
-			                        Work packet actions only open source review surfaces. They do not save receipts, attach records, write vectors, sync Neo4j, promote articles, move, clean, or delete files.
-			                      </span>
-			                    </div>
-			                    <div
-			                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
-			                      style={{
-			                        background: 'rgba(17,24,39,0.035)',
+				                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+				                        Work packet actions only open source review surfaces. They do not save receipts, attach records, write vectors, sync Neo4j, promote articles, move, clean, or delete files.
+				                      </span>
+				                    </div>
+				                    <div
+				                      data-testid="case-wiki-archive-review-selected-lane-review-prompts"
+				                      style={{
+				                        background: 'rgba(255,255,255,0.6)',
+				                        border: `1px solid ${colors.border}`,
+				                        borderRadius: 8,
+				                        display: 'grid',
+				                        gap: 8,
+				                        padding: 9,
+				                      }}
+				                    >
+				                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+				                        <strong style={{ color: colors.text, fontSize: 11, textTransform: 'uppercase' }}>
+				                          Gate review prompts
+				                        </strong>
+				                        <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 900 }}>
+				                          Inspect · record · prove
+				                        </span>
+				                      </div>
+				                      <div style={{ display: 'grid', gap: 7, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 230px), 1fr))' }}>
+				                        {activeArchiveReviewSelectionReceiptGateReviewPromptRows.map((prompt) => {
+				                          const promptTone =
+				                            prompt.state === 'active'
+				                              ? {
+				                                  background: 'rgba(255,212,0,0.12)',
+				                                  border: 'rgba(202,138,4,0.22)',
+				                                  color: '#92400e',
+				                                }
+				                              : prompt.state === 'locked'
+				                                ? {
+				                                    background: 'rgba(17,24,39,0.03)',
+				                                    border: 'rgba(17,24,39,0.08)',
+				                                    color: colors.textMuted,
+				                                  }
+				                                : {
+				                                    background: 'rgba(16,185,129,0.08)',
+				                                    border: 'rgba(16,185,129,0.18)',
+				                                    color: '#047857',
+				                                  };
+				                          return (
+				                            <article
+				                              key={`${activeArchiveReviewSelectionReceipt.id}-review-prompt-${prompt.id}`}
+				                              data-testid="case-wiki-archive-review-selected-lane-review-prompt-row"
+				                              style={{
+				                                background: promptTone.background,
+				                                border: `1px solid ${promptTone.border}`,
+				                                borderRadius: 8,
+				                                display: 'grid',
+				                                gap: 6,
+				                                padding: 8,
+				                              }}
+				                            >
+				                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'start' }}>
+				                                <div style={{ display: 'grid', gap: 2 }}>
+				                                  <span style={{ color: colors.textMuted, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+				                                    {prompt.stepLabel} · {prompt.phaseLabel}
+				                                  </span>
+				                                  <strong style={{ color: colors.text, fontSize: 11 }}>{prompt.promptTitle}</strong>
+				                                </div>
+				                                <span style={{ color: promptTone.color, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+				                                  {prompt.statusLabel}
+				                                </span>
+				                              </div>
+				                              {[
+				                                ['Inspect', prompt.inspect],
+				                                ['Record answer', prompt.record],
+				                                ['Evidence proof', prompt.proof],
+				                              ].map(([label, value]) => (
+				                                <div key={`${prompt.id}-${label}`} style={{ display: 'grid', gap: 2 }}>
+				                                  <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+				                                    {label}
+				                                  </span>
+				                                  <span style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 1.35 }}>
+				                                    {value}
+				                                  </span>
+				                                </div>
+				                              ))}
+				                              <button
+				                                type="button"
+				                                data-testid="case-wiki-archive-review-selected-lane-review-prompt-open"
+				                                onClick={() => {
+				                                  if (!prompt.firstSource) return;
+				                                  openWikiPage(
+				                                    wikiSourcePageIdForIngestion(prompt.firstSource),
+				                                    `Opened ${prompt.label.toLowerCase()} review prompt source: ${prompt.firstTitle}.`,
+				                                  );
+				                                }}
+				                                disabled={!prompt.firstSource}
+				                                style={{
+				                                  ...buttonStyle,
+				                                  fontSize: 9,
+				                                  justifySelf: 'start',
+				                                  minHeight: 25,
+				                                  opacity: prompt.firstSource ? 1 : 0.56,
+				                                  padding: '3px 6px',
+				                                  whiteSpace: 'nowrap',
+				                                }}
+				                                {...buttonHoverHandlers}
+				                              >
+				                                Open prompt source
+				                              </button>
+				                            </article>
+				                          );
+				                        })}
+				                      </div>
+				                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+				                        Review prompt actions only open source review surfaces. They do not record answers, approve chunks, attach records, write Neo4j, write Weaviate, promote articles, clean, move, or delete files.
+				                      </span>
+				                    </div>
+				                    <div
+				                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
+				                      style={{
+				                        background: 'rgba(17,24,39,0.035)',
                         border: `1px solid ${colors.border}`,
                         borderRadius: 8,
                         display: 'grid',
