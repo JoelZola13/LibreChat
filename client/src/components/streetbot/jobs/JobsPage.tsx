@@ -1567,12 +1567,16 @@ export default function JobsPage() {
     }
 
     if (filterCategory) {
-      result = result.filter((job) => job.category === filterCategory);
+      const needle = filterCategory.toLowerCase();
+      result = result.filter((job) =>
+        (job.category || "").toLowerCase().includes(needle),
+      );
     }
 
     if (filterOpportunityType) {
-      result = result.filter(
-        (job) => job.opportunity_type === filterOpportunityType
+      const needle = filterOpportunityType.toLowerCase();
+      result = result.filter((job) =>
+        (job.opportunity_type || "").toLowerCase().includes(needle),
       );
     }
 
