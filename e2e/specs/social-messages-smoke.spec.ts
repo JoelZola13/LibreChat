@@ -60,6 +60,21 @@ function channelIdFromUrl(url: string) {
   return match?.[1] || 'e2e-channel';
 }
 
+function permalinkChannelParamFromSocialUrl(url: string) {
+  const { pathname } = new URL(url);
+  const dmMatch = pathname.match(/\/social\/dm\/([^/?#]+)/);
+  if (dmMatch?.[1]) {
+    return `dm-${decodeURIComponent(dmMatch[1])}`;
+  }
+
+  const channelMatch = pathname.match(/\/social\/channels\/([^/?#]+)/);
+  if (channelMatch?.[1]) {
+    return `channel-${decodeURIComponent(channelMatch[1])}`;
+  }
+
+  return null;
+}
+
 async function getMessagesIframe(page: Page): Promise<Frame> {
   const iframe = page.locator(messagesFrame);
   await expect(iframe).toHaveCount(1);
@@ -161,6 +176,48 @@ test.describe('Social Messages smoke', () => {
       'src',
       /\/social\/channels\/channel-random\?embed=true&message=e2e-message-link/,
     );
+  });
+
+  test('LibreChat /messages permalink query highlights the requested message inside embedded Social', async ({
+    page,
+  }) => {
+    await page.goto('/social/dm?embed=true', { waitUntil: 'domcontentloaded' });
+    await expect(page).not.toHaveURL(authRedirectPattern);
+    await openFirstConversation(page);
+
+    const channelParam = permalinkChannelParamFromSocialUrl(page.url());
+    test.skip(
+      !channelParam,
+      'Messages needs an opened channel or DM for permalink highlight coverage',
+    );
+
+    const messageRows = page.getByTestId('message-row');
+    const messageRowCount = await messageRows.count();
+    test.skip(
+      messageRowCount === 0,
+      'Messages needs at least one seeded message for permalink highlight coverage',
+    );
+
+    const targetRow = messageRows.nth(messageRowCount - 1);
+    const messageId = await targetRow.getAttribute('data-message-id');
+    test.skip(!messageId, 'Messages rows need data-message-id for permalink highlight coverage');
+
+    await page.goto(`/messages?channel=${channelParam}&message=${messageId}`, {
+      waitUntil: 'domcontentloaded',
+    });
+
+    await expect(page).not.toHaveURL(authRedirectPattern);
+    await expect(page.locator(messagesFrame)).toHaveAttribute(
+      'src',
+      new RegExp(`/social/.+\\?embed=true&message=${messageId}`),
+    );
+
+    const frame = await getMessagesIframe(page);
+    const highlightedRow = frame.locator(
+      `[data-testid="message-row"][data-message-id="${messageId}"]`,
+    );
+    await expect(highlightedRow).toHaveAttribute('aria-current', 'true');
+    await expect(highlightedRow).toHaveClass(/ring-accent/);
   });
 
   test('embedded Social messages supports light and dark themes', async ({ page }) => {

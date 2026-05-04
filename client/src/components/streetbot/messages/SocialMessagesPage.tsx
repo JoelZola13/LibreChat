@@ -44,7 +44,7 @@ const isEditableShortcutTarget = (target: EventTarget | null) => {
   );
 };
 
-const buildIframeSrc = (search?: string) => {
+export const buildIframeSrc = (search?: string) => {
   if (typeof window === 'undefined' && search === undefined) {
     return '/social/dm?embed=true';
   }
