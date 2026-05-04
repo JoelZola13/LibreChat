@@ -476,13 +476,10 @@ export default function JobDetailPage() {
   const shareJob = useCallback(() => {
     if (!job) return;
     const url = `${window.location.origin}/jobs/${job.id}`;
-    const text = `Check out this opportunity: ${job.title} at ${job.organization || "Street Voices"}`;
-    if (navigator.share) {
-      navigator.share({ title: job.title, text, url });
-    } else {
-      navigator.clipboard.writeText(url);
-      setToast("Link copied to clipboard!");
-    }
+    navigator.clipboard.writeText(url).then(
+      () => setToast("Link copied to clipboard!"),
+      () => setToast("Couldn't copy link. Long-press the share button to copy manually."),
+    );
   }, [job]);
 
   // ── Tag badges config ──
