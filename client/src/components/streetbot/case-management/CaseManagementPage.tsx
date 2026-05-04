@@ -24446,18 +24446,21 @@ export default function CaseManagementPage() {
 	          const promotionPacketStatus = promotionPacketBlockedReasons.length
 	            ? 'Blocked before promotion'
 	            : 'Ready for human promotion review';
+	          const sourcePageIdForPacket = (source: Pick<WikiIngestionRecord, 'id' | 'pageId'>) => {
+	            const sourcePageId = source.pageId?.trim();
+	            return sourcePageId && !sourcePageId.startsWith('domain:') ? sourcePageId : `ingest:${source.id}`;
+	          };
 	          const sourceManifestRows = activeArchiveReviewSelectionReceiptSources.slice(0, 8).map((source, index) => {
 	            const review = archiveReviewForIngestion(source);
 	            const embedding = embeddingReviewForIngestion(source);
 	            const approvedCount = (embedding.chunks ?? []).filter(
 	              (chunk) => chunk.status === 'approved-for-embedding',
 	            ).length;
-	            const sourcePageId = source.pageId?.trim();
 	            return {
 	              approvedCount,
 	              id: source.id,
 	              label: `Source ${index + 1}`,
-	              pageId: sourcePageId && !sourcePageId.startsWith('domain:') ? sourcePageId : `ingest:${source.id}`,
+	              pageId: sourcePageIdForPacket(source),
 	              reviewLabel: archiveReviewLabel(review.reviewStatus),
 	              title: review.suggestedWikiTitle || source.title || source.fileName,
 	            };
@@ -24492,6 +24495,72 @@ export default function CaseManagementPage() {
 	            '- Neo4j: separate graph sync gate required.',
 	            '- Attachments / cleanup / moves / deletes: separate explicit gates required.',
 	          ].join('\n');
+	          const proposedPageId = `article:${slugifyRoute(candidateTitle) || 'selected-lane-draft'}`;
+	          const firstBoundaryBlockerSource = activeArchiveReviewSelectionReceiptSources.find((source) =>
+	            archiveReviewNeedsDecision(archiveReviewForIngestion(source).reviewStatus),
+	          );
+	          const firstEvidenceBlockerSource = activeArchiveReviewSelectionReceiptSources.find((source) => {
+	            const embedding = embeddingReviewForIngestion(source);
+	            return !(embedding.chunks ?? []).some((chunk) => chunk.status === 'approved-for-embedding');
+	          });
+	          const firstHoldbackSource = exclusionRows[0]
+	            ? activeArchiveReviewSelectionReceiptSources.find((source) => source.id === exclusionRows[0].id)
+	            : null;
+	          const firstPromotionBlockerSource =
+	            firstBoundaryBlockerSource ||
+	            firstEvidenceBlockerSource ||
+	            firstHoldbackSource ||
+	            activeArchiveReviewSelectionReceiptSources[0] ||
+	            null;
+	          const promotionReviewRows = [
+	            {
+	              detail: promotionPacketBlockedReasons.length
+	                ? `${promotionPacketBlockedReasons.length} blocker${promotionPacketBlockedReasons.length === 1 ? '' : 's'} must clear before publication.`
+	                : 'All visible blockers are clear enough for a separate human publish confirmation.',
+	              label: 'Publish decision',
+	              value: promotionPacketStatus,
+	            },
+	            {
+	              detail: 'This is the proposed durable wiki route for the selected lane article.',
+	              label: 'Proposed page id',
+	              value: proposedPageId,
+	            },
+	            {
+	              detail: 'Only reviewed citations should survive into the durable article record.',
+	              label: 'Citation rule',
+	              value: `${citationRows.length} reference${citationRows.length === 1 ? '' : 's'} staged`,
+	            },
+	            {
+	              detail: 'Vectors, graph sync, attachments, cleanup, moves, and deletion stay behind their own explicit gates.',
+	              label: 'Memory writes',
+	              value: 'No live writes from this desk',
+	            },
+	          ];
+	          const promotionReviewActions = [
+	            {
+	              actionType: 'open-source',
+	              buttonLabel: promotionPacketBlockedReasons.length ? 'Open first blocker' : 'Open anchor source',
+	              detail: firstPromotionBlockerSource
+	                ? `Go to ${archiveReviewForIngestion(firstPromotionBlockerSource).suggestedWikiTitle || firstPromotionBlockerSource.title || firstPromotionBlockerSource.fileName} before publishing.`
+	                : 'No source is available to open from this lane.',
+	              label: promotionPacketBlockedReasons.length ? 'Clear blocker' : 'Inspect source',
+	              targetPageId: firstPromotionBlockerSource ? sourcePageIdForPacket(firstPromotionBlockerSource) : '',
+	            },
+	            {
+	              actionType: 'build-workup',
+	              buttonLabel: wikiArticleSeedPreparingId === activeArchiveReviewSelectionReceipt.id ? 'Building workup' : 'Build workup',
+	              detail: 'Refresh the metadata-only article workup from this selected lane without publishing or writing memory.',
+	              label: 'Refresh article workup',
+	              targetPageId: '',
+	            },
+	            {
+	              actionType: 'open-article',
+	              buttonLabel: 'Open proposed article',
+	              detail: 'Open the proposed article route as a review target. If it does not exist yet, the page remains a draft target.',
+	              label: 'Review article target',
+	              targetPageId: proposedPageId,
+	            },
+	          ];
 	          return {
 	            candidateTitle,
 	            citationRows,
@@ -24511,6 +24580,9 @@ export default function CaseManagementPage() {
 	            promotionPacketBlockedReasons,
 	            promotionPacketMarkdown,
 	            promotionPacketStatus,
+	            promotionReviewActions,
+	            promotionReviewRows,
+	            proposedPageId,
 	            reviewStatus: `${boundaryReviewedCount}/${activeArchiveReviewSelectionReceiptSources.length} boundaries reviewed`,
 	            sections: [
 	              {
@@ -41109,6 +41181,124 @@ export default function CaseManagementPage() {
 								                          </div>
 								                          <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
 								                            The packet is review material only. It does not publish the article, write vectors, sync Neo4j, attach source documents, move files, clean files, or delete anything.
+								                          </span>
+								                        </div>
+								                        <div
+								                          data-testid="case-wiki-archive-review-selected-lane-promotion-review-desk"
+								                          style={{
+								                            background: 'linear-gradient(180deg, rgba(255,255,255,0.76), rgba(255,255,255,0.58))',
+								                            border: `1px solid ${colors.border}`,
+								                            borderRadius: 8,
+								                            display: 'grid',
+								                            gap: 9,
+								                            padding: 10,
+								                          }}
+								                        >
+								                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start' }}>
+								                            <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
+								                              <strong style={{ color: colors.text, fontSize: 12, textTransform: 'uppercase' }}>
+								                                Promotion review desk
+								                              </strong>
+								                              <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                                Human decision layer for turning this selected lane into a durable wiki article.
+								                              </span>
+								                            </div>
+								                            <span
+								                              style={{
+								                                background: 'rgba(17,24,39,0.045)',
+								                                border: `1px solid ${colors.border}`,
+								                                borderRadius: 8,
+								                                color: colors.textSecondary,
+								                                fontSize: 10,
+								                                fontWeight: 950,
+								                                padding: '5px 7px',
+								                                overflowWrap: 'anywhere',
+								                              }}
+								                            >
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.proposedPageId}
+								                            </span>
+								                          </div>
+								                          <div style={{ display: 'grid', gap: 7, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
+								                            {activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionReviewRows.map((row) => (
+								                              <article
+								                                key={`${activeArchiveReviewSelectionReceipt.id}-promotion-review-row-${row.label}`}
+								                                data-testid="case-wiki-archive-review-selected-lane-promotion-review-row"
+								                                style={{
+								                                  background: 'rgba(255,255,255,0.7)',
+								                                  border: `1px solid ${colors.border}`,
+								                                  borderRadius: 8,
+								                                  display: 'grid',
+								                                  gap: 4,
+								                                  padding: 8,
+								                                }}
+								                              >
+								                                <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                  {row.label}
+								                                </span>
+								                                <strong style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+								                                  {row.value}
+								                                </strong>
+								                                <span style={{ color: colors.textMuted, fontSize: 9, lineHeight: 1.35 }}>
+								                                  {row.detail}
+								                                </span>
+								                              </article>
+								                            ))}
+								                          </div>
+								                          <div style={{ display: 'grid', gap: 7, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))' }}>
+								                            {activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionReviewActions.map((action) => {
+								                              const isBuildAction = action.actionType === 'build-workup';
+								                              const isOpenAction = action.actionType !== 'build-workup';
+								                              const isDisabled =
+								                                (isBuildAction && wikiArticleSeedPreparingId === activeArchiveReviewSelectionReceipt.id) ||
+								                                (isOpenAction && !action.targetPageId);
+								                              return (
+								                                <article
+								                                  key={`${activeArchiveReviewSelectionReceipt.id}-promotion-review-action-${action.label}`}
+								                                  data-testid="case-wiki-archive-review-selected-lane-promotion-review-action"
+								                                  style={{
+								                                    background: 'rgba(17,24,39,0.035)',
+								                                    border: `1px solid ${colors.border}`,
+								                                    borderRadius: 8,
+								                                    display: 'grid',
+								                                    gap: 6,
+								                                    padding: 8,
+								                                  }}
+								                                >
+								                                  <strong style={{ color: colors.text, fontSize: 11 }}>{action.label}</strong>
+								                                  <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                                    {action.detail}
+								                                  </span>
+								                                  <button
+								                                    type="button"
+								                                    data-testid="case-wiki-archive-review-selected-lane-promotion-review-action-button"
+								                                    onClick={() => {
+								                                      if (isBuildAction) {
+								                                        void prepareSelectedArchiveReviewLaneArticleWorkup();
+								                                        return;
+								                                      }
+								                                      if (!action.targetPageId) return;
+								                                      openWikiPage(action.targetPageId, `${action.label}: ${action.targetPageId}.`);
+								                                    }}
+								                                    disabled={isDisabled}
+								                                    style={{
+								                                      ...buttonStyle,
+								                                      fontSize: 9,
+								                                      justifySelf: 'start',
+								                                      minHeight: 26,
+								                                      opacity: isDisabled ? 0.56 : 1,
+								                                      padding: '4px 7px',
+								                                      whiteSpace: 'nowrap',
+								                                    }}
+								                                    {...buttonHoverHandlers}
+								                                  >
+								                                    {action.buttonLabel}
+								                                  </button>
+								                                </article>
+								                              );
+								                            })}
+								                          </div>
+								                          <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                            This desk does not publish. It only makes the human review decision, article target, blockers, and next navigation-safe moves explicit.
 								                          </span>
 								                        </div>
 								                        <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
