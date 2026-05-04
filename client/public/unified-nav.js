@@ -77,7 +77,7 @@
 
   // Detect streetbot (non-home) pages and toggle body class to hide theme/profile controls
   var SB_PATHS = ['/jobs','/agents','/groups','/news','/gallery','/directory','/social',
-    '/how-it-works','/about','/terms','/privacy','/manage','/notifications','/academy','/learning','/profile','/street-profile','/messages'];
+    '/how-it-works','/about','/terms','/privacy','/manage','/notifications','/academy','/learning','/profile','/street-profile','/messages','/analytics'];
   function isStreetbotPage() {
     var p = window.location.pathname;
     for (var i = 0; i < SB_PATHS.length; i++) {

@@ -109,6 +109,10 @@ const PrivacyPage = lazy(() => import('~/components/streetbot/info/PrivacyPage')
 const AddListingPage = lazy(() => import('~/components/streetbot/directory/AddListingPage'));
 const EditListingPage = lazy(() => import('~/components/streetbot/directory/EditListingPage'));
 const AdminClaimsPage = lazy(() => import('~/components/streetbot/admin/AdminClaimsPage'));
+// ── Local 3180 Analytics (hidden URL, admin-only). Branch: local/analytics-platform.
+const AnalyticsPage = lazy(() => import('~/components/streetbot/analytics/AnalyticsPage'));
+import { AnalyticsGuard } from '~/components/streetbot/analytics/AnalyticsGuard';
+import { AnalyticsProvider } from '~/components/streetbot/lib/analytics-sdk/react';
 const AdminRolesPage = lazy(() => import('~/components/streetbot/admin/AdminRolesPage'));
 
 const SBPageFallback = () => (
@@ -150,10 +154,34 @@ const guardedSbPage = (
   </RoleGuard>
 );
 
+// Local 3180 Analytics provider — gated on VITE_ANALYTICS_ENABLED.
+// When unset/false this is a transparent pass-through so the local sandbox
+// can be toggled via env without touching code.
+const ANALYTICS_ENABLED =
+  import.meta.env.VITE_ANALYTICS_ENABLED === 'true' ||
+  import.meta.env.VITE_ANALYTICS_ENABLED === '1';
+
+const MaybeAnalyticsProvider = ({ children }: { children: React.ReactNode }) => {
+  if (!ANALYTICS_ENABLED) return <>{children}</>;
+  return (
+    <AnalyticsProvider
+      collectorUrl={(import.meta.env.VITE_ANALYTICS_COLLECTOR_URL as string) || '/api/analytics'}
+      posthogKey={import.meta.env.VITE_POSTHOG_KEY as string | undefined}
+      posthogHost={import.meta.env.VITE_POSTHOG_HOST as string | undefined}
+      appVariant={(import.meta.env.VITE_APP_VARIANT as 'streetbot' | 'directory') || 'streetbot'}
+      environment={import.meta.env.MODE === 'production' ? 'production' : 'local'}
+    >
+      {children}
+    </AnalyticsProvider>
+  );
+};
+
 const AuthLayout = () => (
   <AuthContextProvider>
-    <Outlet />
-    <ApiErrorWatcher />
+    <MaybeAnalyticsProvider>
+      <Outlet />
+      <ApiErrorWatcher />
+    </MaybeAnalyticsProvider>
   </AuthContextProvider>
 );
 
@@ -300,6 +328,17 @@ export const router = createBrowserRouter(
             // Admin pages (use /manage prefix to avoid Vite /admin proxy to Directus)
             { path: 'manage/claims', element: sbPage(AdminClaimsPage) },
             { path: 'manage/roles', element: sbPage(AdminRolesPage) },
+            // ── Local 3180 Analytics (hidden URL — not in any nav). Admin-only via AnalyticsGuard.
+            {
+              path: 'analytics',
+              element: (
+                <AnalyticsGuard>
+                  <Suspense fallback={<SBPageFallback />}>
+                    <AnalyticsPage />
+                  </Suspense>
+                </AnalyticsGuard>
+              ),
+            },
             { path: 'directory', element: guardedSbPage('directory', DirectoryPage) },
             { path: 'directory/*', element: guardedSbPage('directory', DirectoryPage) },
             { path: 'jobs', element: guardedSbPage('jobs', JobsPage) },
