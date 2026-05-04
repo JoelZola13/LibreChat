@@ -24164,6 +24164,29 @@ export default function CaseManagementPage() {
 	          ...gateRubrics[prompt.id],
 	        };
 	      });
+	    const activeArchiveReviewSelectionReceiptGateDraftReceiptRows =
+	      activeArchiveReviewSelectionReceiptGateAnswerRubricRows.map((rubric) => {
+	        const draftState =
+	          rubric.state === 'active'
+	            ? 'Ready for human answer'
+	            : rubric.state === 'locked'
+	              ? 'Waiting on earlier receipt'
+	              : 'Cleared for audit';
+	        const selectedSourceCount = rubric.totalCount || activeArchiveReviewSelectionReceiptAllSourceRows.length;
+	        const sourceScope =
+	          selectedSourceCount > 1
+	            ? `${rubric.firstTitle} plus ${selectedSourceCount - 1} more selected source${
+	                selectedSourceCount - 1 === 1 ? '' : 's'
+	              }`
+	            : rubric.firstTitle;
+	        return {
+	          ...rubric,
+	          draftId: `selected-lane:${rubric.receiptKey}:${rubric.id}`,
+	          draftState,
+	          noWriteStamp: 'Preview only / no write',
+	          sourceScope,
+	        };
+	      });
 	    const isExtractableLocalArchiveSource = (ingestion: WikiIngestionRecord) => {
 	      const review = archiveReviewForIngestion(ingestion);
 	      return Boolean(
@@ -39862,14 +39885,138 @@ export default function CaseManagementPage() {
 					                          );
 					                        })}
 					                      </div>
-					                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
-					                        Answer rubric actions only open source review surfaces. They do not accept answers, save receipts, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
-					                      </span>
-					                    </div>
-					                    <div
-					                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
-					                      style={{
-					                        background: 'rgba(17,24,39,0.035)',
+						                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+						                        Answer rubric actions only open source review surfaces. They do not accept answers, save receipts, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
+						                      </span>
+						                    </div>
+						                    <div
+						                      data-testid="case-wiki-archive-review-selected-lane-draft-receipts"
+						                      style={{
+						                        background: 'rgba(255,255,255,0.64)',
+						                        border: `1px solid ${colors.border}`,
+						                        borderRadius: 8,
+						                        display: 'grid',
+						                        gap: 8,
+						                        padding: 9,
+						                      }}
+						                    >
+						                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+						                        <strong style={{ color: colors.text, fontSize: 11, textTransform: 'uppercase' }}>
+						                          Draft receipt preview
+						                        </strong>
+						                        <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 900 }}>
+						                          Shape before save
+						                        </span>
+						                      </div>
+						                      <div style={{ display: 'grid', gap: 7 }}>
+						                        {activeArchiveReviewSelectionReceiptGateDraftReceiptRows.map((draft) => {
+						                          const draftTone =
+						                            draft.state === 'active'
+						                              ? {
+						                                  background: 'rgba(255,212,0,0.12)',
+						                                  border: 'rgba(202,138,4,0.22)',
+						                                  color: '#92400e',
+						                                }
+						                              : draft.state === 'locked'
+						                                ? {
+						                                    background: 'rgba(17,24,39,0.03)',
+						                                    border: 'rgba(17,24,39,0.08)',
+						                                    color: colors.textMuted,
+						                                  }
+						                                : {
+						                                    background: 'rgba(16,185,129,0.08)',
+						                                    border: 'rgba(16,185,129,0.18)',
+						                                    color: '#047857',
+						                                  };
+						                          return (
+						                            <article
+						                              key={`${activeArchiveReviewSelectionReceipt.id}-draft-receipt-${draft.id}`}
+						                              data-testid="case-wiki-archive-review-selected-lane-draft-receipt-row"
+						                              style={{
+						                                background: draftTone.background,
+						                                border: `1px solid ${draftTone.border}`,
+						                                borderRadius: 8,
+						                                display: 'grid',
+						                                gap: 7,
+						                                padding: 8,
+						                              }}
+						                            >
+						                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+						                                <div style={{ display: 'grid', gap: 2 }}>
+						                                  <span style={{ color: colors.textMuted, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+						                                    {draft.stepLabel} · {draft.draftId}
+						                                  </span>
+						                                  <strong style={{ color: colors.text, fontSize: 12 }}>{draft.label} receipt</strong>
+						                                </div>
+						                                <span style={{ color: draftTone.color, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+						                                  {draft.noWriteStamp}
+						                                </span>
+						                              </div>
+						                              <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
+						                                {[
+						                                  ['Receipt key', draft.receiptKey],
+						                                  ['Draft state', draft.draftState],
+						                                  ['Source scope', draft.sourceScope],
+						                                  ['Reviewer answer', draft.record],
+						                                  ['Evidence field', draft.proof],
+						                                  ['Unlocks after save', draft.unlocks],
+						                                ].map(([label, value]) => (
+						                                  <div
+						                                    key={`${draft.id}-${label}`}
+						                                    style={{
+						                                      background: 'rgba(255,255,255,0.58)',
+						                                      border: `1px solid ${colors.border}`,
+						                                      borderRadius: 8,
+						                                      display: 'grid',
+						                                      gap: 3,
+						                                      padding: 7,
+						                                    }}
+						                                  >
+						                                    <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+						                                      {label}
+						                                    </span>
+						                                    <span style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 1.35 }}>
+						                                      {value}
+						                                    </span>
+						                                  </div>
+						                                ))}
+						                              </div>
+						                              <button
+						                                type="button"
+						                                data-testid="case-wiki-archive-review-selected-lane-draft-receipt-open"
+						                                onClick={() => {
+						                                  if (!draft.firstSource) return;
+						                                  openWikiPage(
+						                                    wikiSourcePageIdForIngestion(draft.firstSource),
+						                                    `Opened ${draft.label.toLowerCase()} draft receipt source: ${draft.firstTitle}.`,
+						                                  );
+						                                }}
+						                                disabled={!draft.firstSource}
+						                                style={{
+						                                  ...buttonStyle,
+						                                  fontSize: 9,
+						                                  justifySelf: 'start',
+						                                  minHeight: 25,
+						                                  opacity: draft.firstSource ? 1 : 0.56,
+						                                  padding: '3px 6px',
+						                                  whiteSpace: 'nowrap',
+						                                }}
+						                                {...buttonHoverHandlers}
+						                              >
+						                                Open draft receipt source
+						                              </button>
+						                            </article>
+						                          );
+						                        })}
+						                      </div>
+						                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+						                        Draft receipt preview actions only open source review surfaces. They do not save receipts, accept answers, approve chunks, attach records, sync Neo4j, write Weaviate, promote articles, clean, move, or delete files.
+						                      </span>
+						                    </div>
+						                    <div
+						                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
+						                      style={{
+						                        background: 'rgba(17,24,39,0.035)',
                         border: `1px solid ${colors.border}`,
                         borderRadius: 8,
                         display: 'grid',
