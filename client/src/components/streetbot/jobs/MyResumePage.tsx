@@ -384,6 +384,140 @@ export default function MyResumePage() {
     marginBottom: "20px",
   };
 
+  // ── Print clean resume to a popup window so PDF export ignores live styling ──
+  const downloadResumeAsPdf = useCallback(() => {
+    const esc = (s?: string | null) =>
+      String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    const nl2br = (s: string) => esc(s).replace(/\n/g, "<br>");
+    const range = (start: string, end: string | undefined, current: boolean) =>
+      `${esc(formatDate(start))} – ${current ? "Present" : esc(formatDate(end || ""))}`;
+
+    const parts: string[] = [];
+
+    if (resume.summary?.trim()) {
+      parts.push(`<section><h2>Summary</h2><p>${nl2br(resume.summary)}</p></section>`);
+    }
+
+    if (resume.experience.length) {
+      const items = resume.experience.map((exp) => `
+        <div class="entry">
+          <div class="entry-head">
+            <div>
+              <div class="entry-title">${esc(exp.title || "Untitled Role")}</div>
+              <div class="entry-org">${esc(exp.company)}${exp.location ? ` &bull; ${esc(exp.location)}` : ""}</div>
+            </div>
+            <div class="entry-date">${range(exp.startDate, exp.endDate, exp.current)}</div>
+          </div>
+          ${exp.description ? `<p class="entry-desc">${nl2br(exp.description)}</p>` : ""}
+        </div>
+      `).join("");
+      parts.push(`<section><h2>Experience</h2>${items}</section>`);
+    }
+
+    if (resume.education.length) {
+      const items = resume.education.map((edu) => `
+        <div class="entry">
+          <div class="entry-head">
+            <div>
+              <div class="entry-title">${esc(edu.degree)}${edu.field ? `, ${esc(edu.field)}` : ""}</div>
+              <div class="entry-org">${esc(edu.institution)}</div>
+            </div>
+            <div class="entry-date">${range(edu.startDate, edu.endDate, edu.current)}</div>
+          </div>
+        </div>
+      `).join("");
+      parts.push(`<section><h2>Education</h2>${items}</section>`);
+    }
+
+    if (resume.skills.length) {
+      parts.push(`<section><h2>Skills</h2><div class="tags">${resume.skills.map((s) => `<span class="tag">${esc(s)}</span>`).join("")}</div></section>`);
+    }
+
+    if (resume.interests?.length) {
+      parts.push(`<section><h2>Interests</h2><div class="tags">${resume.interests.map((s) => `<span class="tag">${esc(s)}</span>`).join("")}</div></section>`);
+    }
+
+    if (resume.certifications?.length) {
+      const items = resume.certifications.map((cert) => `
+        <div class="entry">
+          <div class="entry-head">
+            <div>
+              <div class="entry-title">${esc(cert.name)}</div>
+              <div class="entry-org">${esc(cert.issuer)}</div>
+            </div>
+            ${cert.date ? `<div class="entry-date">${esc(formatDate(cert.date))}</div>` : ""}
+          </div>
+        </div>
+      `).join("");
+      parts.push(`<section><h2>Certifications</h2>${items}</section>`);
+    }
+
+    const contactItems = [
+      resume.email,
+      resume.phone,
+      resume.location,
+      resume.website,
+      resume.linkedin,
+    ].filter(Boolean).map((c) => `<span>${esc(String(c))}</span>`).join("");
+
+    const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(resume.fullName || "Resume")} — Resume</title>
+<style>
+@page { margin: 0.5in; }
+* { box-sizing: border-box; }
+html, body { background: #fff; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #111; line-height: 1.5; padding: 0; }
+header { text-align: center; padding-bottom: 16px; margin-bottom: 22px; border-bottom: 1px solid #d4d4d4; }
+header h1 { font-size: 26px; font-weight: 800; margin: 0 0 6px; letter-spacing: -0.01em; }
+.contact { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; font-size: 12px; color: #555; }
+section { margin-bottom: 18px; page-break-inside: avoid; }
+section h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #a16207; margin: 0 0 10px; }
+section p { margin: 0; font-size: 13px; color: #333; white-space: pre-wrap; }
+.entry { margin-bottom: 12px; page-break-inside: avoid; }
+.entry-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.entry-title { font-size: 13.5px; font-weight: 600; color: #111; }
+.entry-org { font-size: 12px; color: #555; margin-top: 1px; }
+.entry-date { font-size: 11px; color: #777; white-space: nowrap; }
+.entry-desc { font-size: 12px; color: #333; margin: 4px 0 0; white-space: pre-wrap; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { border: 1px solid #d4d4d4; border-radius: 9999px; padding: 3px 10px; font-size: 11px; color: #333; }
+</style>
+</head>
+<body>
+<header>
+  <h1>${esc(resume.fullName || "Your Name")}</h1>
+  ${contactItems ? `<div class="contact">${contactItems}</div>` : ""}
+</header>
+${parts.join("")}
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=1100");
+    if (!win) {
+      // Popup blocked — fall back to in-page print so the action still works
+      window.print();
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    // Give the new doc a tick to layout, then print
+    setTimeout(() => {
+      win.print();
+      // Close shortly after so user keeps the original tab focused
+      setTimeout(() => win.close(), 500);
+    }, 250);
+  }, [resume, formatDate]);
+
   const addBtnStyle: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
@@ -484,7 +618,7 @@ export default function MyResumePage() {
                     </div>
                   </div>
                   <div style={{ fontSize: "12px", color: colors.textMuted, whiteSpace: "nowrap" }}>
-                    {formatDate(exp.startDate)} \u2013 {exp.current ? "Present" : formatDate(exp.endDate || "")}
+                    {formatDate(exp.startDate)}{" \u2013 "}{exp.current ? "Present" : formatDate(exp.endDate || "")}
                   </div>
                 </div>
                 {exp.description && (
@@ -514,7 +648,7 @@ export default function MyResumePage() {
                   <div style={{ fontSize: "13px", color: colors.textSecondary }}>{edu.institution}</div>
                 </div>
                 <div style={{ fontSize: "12px", color: colors.textMuted, whiteSpace: "nowrap" }}>
-                  {formatDate(edu.startDate)} \u2013 {edu.current ? "Present" : formatDate(edu.endDate || "")}
+                  {formatDate(edu.startDate)}{" \u2013 "}{edu.current ? "Present" : formatDate(edu.endDate || "")}
                 </div>
               </div>
             ))}
@@ -1325,36 +1459,11 @@ export default function MyResumePage() {
                 {/* Edit/Preview area — only show when user clicks Preview or Edit on a resume */}
                 {mode === "preview" && resumeVersions.length > 0 && (
                   <div className="resume-preview-section" style={{ marginBottom: "20px" }}>
-                    <style>{`
-                      @media print {
-                        body * { visibility: hidden !important; }
-                        #resume-print-area, #resume-print-area * { visibility: visible !important; }
-                        #resume-print-area {
-                          position: absolute !important;
-                          left: 0 !important;
-                          top: 0 !important;
-                          width: 100% !important;
-                          background: #ffffff !important;
-                          color: #111111 !important;
-                          padding: 24px !important;
-                          box-shadow: none !important;
-                          border: none !important;
-                        }
-                        #resume-print-area * {
-                          background: transparent !important;
-                          color: #111111 !important;
-                          border-color: #d4d4d4 !important;
-                          box-shadow: none !important;
-                        }
-                        #resume-print-area a { text-decoration: none !important; }
-                        @page { margin: 12mm; }
-                      }
-                    `}</style>
                     <div className="resume-preview-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "8px", flexWrap: "wrap" }}>
                       <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: 0 }}>Resume Preview</h3>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                         <button
-                          onClick={() => window.print()}
+                          onClick={downloadResumeAsPdf}
                           aria-label="Download resume as PDF"
                           style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: "none", background: "#FFD600", color: "#000", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}
                         >
