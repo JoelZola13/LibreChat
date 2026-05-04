@@ -180,6 +180,48 @@ const refreshController = async (req, res) => {
   }
 };
 
+const socialSessionController = async (req, res) => {
+  const bridgeSecret = process.env.LIBRECHAT_AUTH_BRIDGE_SECRET;
+  if (bridgeSecret && req.get('x-librechat-social-secret') !== bridgeSecret) {
+    return res.status(403).json({ message: 'Invalid social auth bridge secret' });
+  }
+
+  const parsedCookies = req.headers.cookie ? cookies.parse(req.headers.cookie) : {};
+  const refreshToken = parsedCookies.refreshToken;
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'LibreChat session not found' });
+  }
+
+  try {
+    const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    const user = await getUserById(payload.id, '-password -__v -totpSecret -backupCodes');
+    if (!user) {
+      return res.status(401).json({ message: 'LibreChat user not found' });
+    }
+
+    const session = await findSession(
+      {
+        userId: payload.id,
+        refreshToken,
+      },
+      { lean: false },
+    );
+
+    if (!session || session.expiration <= new Date()) {
+      return res.status(401).json({ message: 'LibreChat session expired' });
+    }
+
+    const userData = user.toObject != null ? user.toObject() : { ...user };
+    delete userData.password;
+    delete userData.totpSecret;
+    delete userData.backupCodes;
+    return res.status(200).json({ user: userData });
+  } catch (error) {
+    logger.warn('[socialSessionController] Invalid LibreChat session for Social bridge', error);
+    return res.status(401).json({ message: 'Invalid LibreChat session' });
+  }
+};
+
 const graphTokenController = async (req, res) => {
   try {
     // Validate user is authenticated via Entra ID
@@ -226,6 +268,7 @@ const graphTokenController = async (req, res) => {
 
 module.exports = {
   refreshController,
+  socialSessionController,
   registrationController,
   resetPasswordController,
   resetPasswordRequestController,

@@ -23,12 +23,13 @@
   }
 
   var BASE = 'http://localhost:18790/shared/';
+  var VERSIONS = { 'unified-nav.js': 88, 'mission-control.js': 5, 'marketplace.js': 1 };
   var scripts = ['unified-nav.js', 'mission-control.js', 'marketplace.js'];
 
   scripts.forEach(function (name) {
     if (document.querySelector('script[src*="' + name + '"]')) return;
     var s = document.createElement('script');
-    s.src = BASE + name;
+    s.src = BASE + name + '?v=' + (VERSIONS[name] || 1);
     s.defer = true;
     document.head.appendChild(s);
   });
@@ -436,14 +437,22 @@
 
   nukeChangelog();
 
+  function getElementClassName(node) {
+    if (!node || !node.className) return '';
+    if (typeof node.className === 'string') return node.className;
+    if (typeof node.className.baseVal === 'string') return node.className.baseVal;
+    return '';
+  }
+
   var changelogObserver = new MutationObserver(function (mutations) {
     for (var i = 0; i < mutations.length; i++) {
       var added = mutations[i].addedNodes;
       for (var j = 0; j < added.length; j++) {
         var node = added[j];
         if (node.nodeType !== 1) continue;
+        var className = getElementClassName(node);
         if (node.getAttribute && (node.getAttribute('role') === 'dialog' ||
-            (node.className && (node.className.includes('modal') || node.className.includes('Modal'))))) {
+            (className && (className.includes('modal') || className.includes('Modal'))))) {
           setTimeout(nukeChangelog, 50);
           setTimeout(nukeChangelog, 200);
           return;

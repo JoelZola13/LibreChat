@@ -38,7 +38,7 @@ function getMap(): Record<string, PrefetchEntry> {
     '/learning': { chunk: () => import('~/components/streetbot/academy/AcademyPage') },
     '/forum': { chunk: () => import('~/components/streetbot/forum/ForumPage') },
     '/groups': { chunk: () => import('~/components/streetbot/groups/GroupsPage') },
-    '/messages': { chunk: () => import('~/components/streetbot/messages/MessagesPage') },
+    '/messages': { chunk: () => import('~/components/streetbot/messages/SocialMessagesPage') },
     '/calendar': { chunk: () => import('~/components/streetbot/calendar/CalendarPage') },
     '/case-management': { chunk: () => import('~/components/streetbot/case-management/CaseManagementPage') },
     '/documents': { chunk: () => import('~/components/streetbot/documents/DocumentsPage') },

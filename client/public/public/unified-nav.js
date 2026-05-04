@@ -175,6 +175,69 @@
     return btn;
   }
 
+  function getStreetVoicesNavItems(idPrefix, basePath) {
+    var base = basePath || '';
+    return [
+      { id: idPrefix + 'profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: base + '/profile' },
+      { id: idPrefix + 'forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: base + '/forum' },
+      { id: idPrefix + 'gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: base + '/gallery' },
+      { id: idPrefix + 'groups', label: 'Groups', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', path: base + '/groups' },
+      { id: idPrefix + 'news', label: 'News', icon: '/images/sidebar-icons/news.svg', path: base + '/news' },
+      { id: idPrefix + 'messages', label: 'Messages', icon: '/images/sidebar-icons/messages-bubble.svg', path: '/messages' },
+      { id: idPrefix + 'directory', label: 'Directory', icon: '/images/sidebar-icons/directory-grid.svg', path: base + '/directory' },
+      { id: idPrefix + 'jobs', label: 'Job Board', icon: '/images/sidebar-icons/job-briefcase.svg', path: base + '/jobs' },
+      { id: idPrefix + 'academy', label: 'Academy', icon: '/images/sidebar-icons/lms-cap.svg', path: base + '/academy' },
+      { id: idPrefix + 'calendar', label: 'Calendar', icon: '/images/sidebar-icons/calendar-square.svg', path: base + '/calendar' },
+      { id: idPrefix + 'case-management', label: 'Case Management', icon: '/images/sidebar-icons/case-management-suitcase.svg', path: base + '/case-management' },
+      { id: idPrefix + 'social', label: 'Social Media', icon: '/images/sidebar-icons/social-media.svg', path: base + '/social-media' },
+      { id: idPrefix + 'tasks', label: 'Tasks', icon: '/images/sidebar-icons/tasks-clipboard.svg', path: base + '/tasks' },
+      { id: idPrefix + 'documents', label: 'Documents', icon: '/images/sidebar-icons/documents.svg', path: base + '/documents' },
+      { id: idPrefix + 'storage', label: 'Storage', icon: '/images/sidebar-icons/storage.svg', path: base + '/storage' },
+      { id: idPrefix + 'database', label: 'Database', icon: '/images/sidebar-icons/database-grid.svg', path: base + '/data' },
+      { id: idPrefix + 'grantwriter', label: 'Grant Writer', icon: '/images/sidebar-icons/grantwriter.svg', path: base + '/grantwriter' },
+    ];
+  }
+
+  function initialsFromName(name, email) {
+    var raw = String(name || email || 'User').trim();
+    var parts = raw.split(/\s+/).filter(Boolean);
+    if (parts.length > 1) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return raw.slice(0, 2).toUpperCase();
+  }
+
+  function updateStandaloneProfileFooter(user) {
+    var footer = document.getElementById('sv-sa-profile-footer');
+    if (!footer) return;
+    var name = (user && (user.name || user.username || user.email)) || 'Profile';
+    var email = user && user.email;
+    var avatar = user && (user.avatar || user.image);
+    var initials = initialsFromName(name, email);
+    var avatarEl = footer.querySelector('.sv-sa-profile-avatar');
+    var nameEl = footer.querySelector('.sv-sa-profile-name');
+    if (nameEl) nameEl.textContent = name;
+    if (avatarEl) {
+      avatarEl.textContent = initials;
+      if (avatar) {
+        avatarEl.innerHTML = '<img src="' + avatar + '" alt="" style="width:100%;height:100%;border-radius:999px;object-fit:cover;" />';
+      }
+    }
+  }
+
+  function hydrateStandaloneProfileFooter() {
+    fetch('/api/user', { credentials: 'include' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (user) {
+        if (user) {
+          updateStandaloneProfileFooter(user);
+          return null;
+        }
+        return fetch('/social/api/auth/session', { credentials: 'include' })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (session) { updateStandaloneProfileFooter(session && session.user); });
+      })
+      .catch(function () {});
+  }
+
   function injectSidebarButtons() {
     try { _injectSidebarButtonsInner(); } catch (e) {
       // Swallow DOM errors — React may be mid-reconciliation
@@ -507,27 +570,9 @@
       wrap.id = WRAP_ID;
       wrap.style.cssText = 'width:100%;flex-shrink:1;box-sizing:border-box;padding:0 0.25rem;order:4;';
 
-      // Social button removed — Messages now links to /social/dm
+      // Social button removed — Messages now opens in the real app shell.
 
-      var SB_ITEMS = [
-        { id: 'sv-sb-profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: '/social/signup' },
-        { id: 'sv-sb-forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: SB_BASE + '/forum' },
-        { id: 'sv-sb-gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: SB_BASE + '/gallery' },
-        { id: 'sv-sb-groups', label: 'Groups', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', path: SB_BASE + '/groups' },
-        { id: 'sv-sb-news', label: 'News', icon: '/images/sidebar-icons/news.svg', path: SB_BASE + '/news' },
-        { id: 'sv-sb-messages', label: 'Messages', icon: '/images/sidebar-icons/messages-bubble.svg', path: '/social/dm' },
-        { id: 'sv-sb-directory', label: 'Directory', icon: '/images/sidebar-icons/directory-grid.svg', path: SB_BASE + '/directory' },
-        { id: 'sv-sb-jobs', label: 'Job Board', icon: '/images/sidebar-icons/job-briefcase.svg', path: SB_BASE + '/jobs' },
-        { id: 'sv-sb-academy', label: 'Academy', icon: '/images/sidebar-icons/lms-cap.svg', path: SB_BASE + '/academy' },
-        { id: 'sv-sb-calendar', label: 'Calendar', icon: '/images/sidebar-icons/calendar-square.svg', path: SB_BASE + '/calendar' },
-        { id: 'sv-sb-case-management', label: 'Case Management', icon: '/images/sidebar-icons/case-management-suitcase.svg', path: SB_BASE + '/case-management' },
-        { id: 'sv-sb-social', label: 'Social Media', icon: '/images/sidebar-icons/social-media.svg', path: '/social' },
-        { id: 'sv-sb-tasks', label: 'Tasks', icon: '/images/sidebar-icons/tasks-clipboard.svg', path: SB_BASE + '/tasks' },
-        { id: 'sv-sb-documents', label: 'Documents', icon: '/images/sidebar-icons/documents.svg', path: SB_BASE + '/documents' },
-        { id: 'sv-sb-storage', label: 'Storage', icon: '/images/sidebar-icons/storage.svg', path: SB_BASE + '/storage' },
-        { id: 'sv-sb-database', label: 'Database', icon: '/images/sidebar-icons/database-grid.svg', path: SB_BASE + '/data' },
-        { id: 'sv-sb-grantwriter', label: 'Grant Writer', icon: '/images/sidebar-icons/grantwriter.svg', path: SB_BASE + '/grantwriter' },
-      ];
+      var SB_ITEMS = getStreetVoicesNavItems('sv-sb-', SB_BASE);
       SB_ITEMS.forEach(function (item) {
         var iconHtml = item.svg ? item.svg : '<img src="' + item.icon + '" alt="" width="20" height="20" class="sv-sidebar-icon" style="opacity:0.7;flex-shrink:0;" />';
         wrap.appendChild(createSidebarBtn(item.id, item.label, iconHtml, item.path));
@@ -609,6 +654,8 @@
         '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-header { cursor: pointer; }',
         '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-nav-wrap { padding: 0 !important; scrollbar-width: none !important; }',
         '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-static { padding: 0 !important; }',
+        '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-profile-footer { padding: 10px 0 !important; justify-content: center !important; }',
+        '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-profile-name { display: none !important; }',
         // Dark mode icon fix
         '.dark #' + STANDALONE_ID + ' svg { color: white !important; }',
         '.dark #' + STANDALONE_ID + ' .sv-sidebar-icon { filter: brightness(0) invert(1) !important; opacity: 1 !important; }',
@@ -618,12 +665,10 @@
         // Shift Social app content
         '.sv-has-standalone-sidebar { margin-left: 260px !important; transition: margin-left 0.2s ease !important; }',
         '.sv-has-standalone-sidebar-collapsed { margin-left: 56px !important; transition: margin-left 0.2s ease !important; }',
-        // Hide Social app\'s own sidebar when standalone sidebar is present
-        'body:has(#' + STANDALONE_ID + ') aside.w-64 { display: none !important; }',
         'body:has(#' + STANDALONE_ID + ') .flex.h-screen.overflow-hidden { margin-left: 260px; width: calc(100vw - 260px); transition: margin-left 0.2s ease, width 0.2s ease; }',
         'body:has(#' + STANDALONE_ID + '.sv-collapsed) .flex.h-screen.overflow-hidden { margin-left: 56px; width: calc(100vw - 56px); }',
         // Scrollbar on the nav wrap
-        '#' + STANDALONE_ID + ' .sv-sa-nav-wrap { overflow-y: auto; scrollbar-width: thin; scrollbar-color: transparent transparent; }',
+        '#' + STANDALONE_ID + ' .sv-sa-nav-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: transparent transparent; mask-image: linear-gradient(to bottom, black calc(100% - 42px), transparent 100%); -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 42px), transparent 100%); }',
         '#' + STANDALONE_ID + ':hover .sv-sa-nav-wrap { scrollbar-color: rgba(128,128,128,0.3) transparent; }',
         '#' + STANDALONE_ID + ' .sv-sa-nav-wrap::-webkit-scrollbar { width: 4px; background: transparent; }',
         '#' + STANDALONE_ID + ' .sv-sa-nav-wrap::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }',
@@ -666,7 +711,7 @@
 
     sidebar.appendChild(header);
 
-    // Static section: Home, New Chat, Notifications, Agent Marketplace, Automations, IG Template
+    // Static section: Home, New Chat, Notifications, Agent Marketplace
     var staticSection = document.createElement('div');
     staticSection.className = 'sv-sa-static';
     staticSection.style.cssText = 'width:100%;flex-shrink:0;box-sizing:border-box;padding:0 0.25rem;';
@@ -685,32 +730,29 @@
     // Nav wrap: all the menu items
     var navWrap = document.createElement('div');
     navWrap.className = 'sv-sa-nav-wrap';
-    navWrap.style.cssText = 'width:100%;flex:1 1 auto;box-sizing:border-box;padding:0 0.25rem;overflow-y:auto;';
+    navWrap.style.cssText = 'width:100%;flex:1 1 auto;min-height:0;box-sizing:border-box;padding:0 0.25rem;overflow-y:auto;overflow-x:hidden;';
 
-    var SB_ITEMS = [
-      { id: 'sv-sa-profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: '/social/signup' },
-      { id: 'sv-sa-forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: '/forum' },
-      { id: 'sv-sa-gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: '/gallery' },
-      { id: 'sv-sa-groups', label: 'Groups', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', path: '/groups' },
-      { id: 'sv-sa-news', label: 'News', icon: '/images/sidebar-icons/news.svg', path: '/news' },
-      { id: 'sv-sa-messages', label: 'Messages', icon: '/images/sidebar-icons/messages-bubble.svg', path: '/social/dm' },
-      { id: 'sv-sa-directory', label: 'Directory', icon: '/images/sidebar-icons/directory-grid.svg', path: '/directory' },
-      { id: 'sv-sa-jobs', label: 'Job Board', icon: '/images/sidebar-icons/job-briefcase.svg', path: '/jobs' },
-      { id: 'sv-sa-academy', label: 'Academy', icon: '/images/sidebar-icons/lms-cap.svg', path: '/academy' },
-      { id: 'sv-sa-calendar', label: 'Calendar', icon: '/images/sidebar-icons/calendar-square.svg', path: '/calendar' },
-      { id: 'sv-sa-case-management', label: 'Case Management', icon: '/images/sidebar-icons/case-management-suitcase.svg', path: '/case-management' },
-      { id: 'sv-sa-social', label: 'Social Media', icon: '/images/sidebar-icons/social-media.svg', path: '/social' },
-      { id: 'sv-sa-tasks', label: 'Tasks', icon: '/images/sidebar-icons/tasks-clipboard.svg', path: '/tasks' },
-      { id: 'sv-sa-documents', label: 'Documents', icon: '/images/sidebar-icons/documents.svg', path: '/documents' },
-      { id: 'sv-sa-storage', label: 'Storage', icon: '/images/sidebar-icons/storage.svg', path: '/storage' },
-      { id: 'sv-sa-database', label: 'Database', icon: '/images/sidebar-icons/database-grid.svg', path: '/data' },
-      { id: 'sv-sa-grantwriter', label: 'Grant Writer', icon: '/images/sidebar-icons/grantwriter.svg', path: '/grantwriter' },
-    ];
+    var SB_ITEMS = getStreetVoicesNavItems('sv-sa-', '');
     SB_ITEMS.forEach(function (item) {
       var iconHtml = item.svg ? item.svg : '<img src="' + item.icon + '" alt="" width="20" height="20" class="sv-sidebar-icon" style="opacity:0.7;flex-shrink:0;" />';
       navWrap.appendChild(createSidebarBtn(item.id, item.label, iconHtml, item.path));
     });
     sidebar.appendChild(navWrap);
+
+    var profileFooter = document.createElement('button');
+    profileFooter.id = 'sv-sa-profile-footer';
+    profileFooter.className = 'sv-sa-profile-footer';
+    profileFooter.type = 'button';
+    profileFooter.setAttribute('aria-label', 'Profile');
+    profileFooter.style.cssText = 'display:flex;align-items:center;gap:0.75rem;width:100%;border:none;background:transparent;color:var(--text-primary);cursor:pointer;padding:0.75rem 1.25rem 1rem 1.25rem;border-top:1px solid rgba(128,128,128,0.14);flex-shrink:0;text-align:left;';
+    profileFooter.innerHTML =
+      '<span class="sv-sa-profile-avatar" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:999px;background:#b66a00;color:white;font-weight:700;font-size:0.75rem;flex-shrink:0;">P</span>' +
+      '<span class="sv-sa-profile-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.875rem;">Profile</span>';
+    profileFooter.addEventListener('mouseenter', function () { profileFooter.style.background = 'var(--surface-active-alt, rgba(255,255,255,0.06))'; });
+    profileFooter.addEventListener('mouseleave', function () { profileFooter.style.background = 'transparent'; });
+    profileFooter.addEventListener('click', function (e) { e.stopPropagation(); window.location.href = '/profile'; }, true);
+    sidebar.appendChild(profileFooter);
+    hydrateStandaloneProfileFooter();
 
     document.body.appendChild(sidebar);
 
@@ -719,7 +761,8 @@
       document.documentElement.classList.add('dark');
     }
 
-    // Hide Social app's own sidebar and shift content
+    // Shift Social app content so the standalone platform rail can coexist
+    // with Social's own workspace sidebar.
     applyStandaloneState();
   }
 
@@ -737,20 +780,6 @@
     // Social app: div.flex.h-screen.overflow-hidden
     var socialRoot = document.querySelector('.flex.h-screen.overflow-hidden');
     if (socialRoot) {
-      // Hide Social's internal sidebar (first child if it's the sidebar component)
-      var socialSidebar = socialRoot.querySelector('aside') || socialRoot.querySelector('nav:first-child');
-      // The Social sidebar is the first direct child that's not <main>
-      for (var i = 0; i < socialRoot.children.length; i++) {
-        var child = socialRoot.children[i];
-        if (child.tagName !== 'MAIN' && child.id !== STANDALONE_ID) {
-          // Check if it looks like a sidebar (narrow, fixed width)
-          if (child.tagName === 'ASIDE' || child.tagName === 'NAV' ||
-              (child.classList.contains('w-64') || child.classList.contains('w-60') ||
-               child.querySelector('[class*="sidebar"]') || child.querySelector('nav'))) {
-            child.style.display = 'none';
-          }
-        }
-      }
       socialRoot.style.marginLeft = standaloneSidebarCollapsed ? '56px' : '260px';
       socialRoot.style.transition = 'margin-left 0.2s ease';
       socialRoot.style.width = standaloneSidebarCollapsed ? 'calc(100% - 56px)' : 'calc(100% - 260px)';

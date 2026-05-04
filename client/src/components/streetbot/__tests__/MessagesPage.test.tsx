@@ -31,7 +31,7 @@ describe('MessagesPage', () => {
   it('iframe points to the SBP messages URL', () => {
     render(<MessagesPage />);
     const iframe = screen.getByTitle('Messages') as HTMLIFrameElement;
-    expect(iframe.src).toContain('http://localhost:3000/messages');
+    expect(iframe.src).toContain('/social/dm?embed=true');
   });
 
   it('iframe has no border', () => {

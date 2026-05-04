@@ -100,6 +100,26 @@ This violates RFC 7235 and may cause issues with strict OAuth clients. Removing 
 let openidConfig = null;
 
 /**
+ * @param {URL} issuerUrl
+ * @returns {client.DiscoveryRequestOptions}
+ */
+function getOpenIDDiscoveryOptions(issuerUrl) {
+  const execute = [];
+
+  if (issuerUrl.protocol === 'http:') {
+    execute.push(client.allowInsecureRequests);
+    logger.warn(
+      `[openidStrategy] OPENID_ISSUER is using HTTP (${issuerUrl.origin}); allowing insecure OpenID requests for this configured issuer.`,
+    );
+  }
+
+  return {
+    [client.customFetch]: customFetch,
+    ...(execute.length ? { execute } : {}),
+  };
+}
+
+/**
  * Custom OpenID Strategy
  *
  * Note: Originally overrode currentUrl() to work around Express 4's req.host not including port.
@@ -675,14 +695,14 @@ async function setupOpenId() {
     }
 
     /** @type {Configuration} */
+    const issuerUrl = new URL(process.env.OPENID_ISSUER);
+
     openidConfig = await client.discovery(
-      new URL(process.env.OPENID_ISSUER),
+      issuerUrl,
       process.env.OPENID_CLIENT_ID,
       clientMetadata,
       undefined,
-      {
-        [client.customFetch]: customFetch,
-      },
+      getOpenIDDiscoveryOptions(issuerUrl),
     );
 
     logger.info(`[openidStrategy] OpenID authentication configuration`, {

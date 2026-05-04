@@ -65,6 +65,7 @@ jest.mock('openid-client', () => {
       return Promise.resolve({});
     }),
     customFetch: Symbol('customFetch'),
+    allowInsecureRequests: jest.fn(),
   };
 });
 
@@ -206,6 +207,19 @@ describe('setupOpenId', () => {
       true,
       true,
     );
+  });
+
+  it('allows OpenID discovery against the local HTTP Casdoor issuer', async () => {
+    const openidClient = require('openid-client');
+    openidClient.discovery.mockClear();
+    process.env.OPENID_ISSUER = 'http://localhost:8380';
+
+    await setupOpenId();
+
+    const discoveryOptions = openidClient.discovery.mock.calls.at(-1)[4];
+    expect(openidClient.discovery.mock.calls.at(-1)[0]).toEqual(new URL('http://localhost:8380'));
+    expect(discoveryOptions[openidClient.customFetch]).toEqual(expect.any(Function));
+    expect(discoveryOptions.execute).toContain(openidClient.allowInsecureRequests);
   });
 
   it('should use username as username when preferred_username claim is missing', async () => {

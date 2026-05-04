@@ -6,6 +6,7 @@ const {
   registrationController,
   graphTokenController,
   refreshController,
+  socialSessionController,
 } = require('~/server/controllers/AuthController');
 const {
   regenerateBackupCodes,
@@ -31,6 +32,7 @@ const router = express.Router();
 const ldapAuth = !!process.env.LDAP_URL && !!process.env.LDAP_USER_SEARCH_BASE;
 //Local
 router.post('/logout', middleware.requireJwtAuth, logoutController);
+router.post('/social-session', socialSessionController);
 router.post(
   '/login',
   middleware.logHeaders,
