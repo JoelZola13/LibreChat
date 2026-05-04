@@ -24401,6 +24401,97 @@ export default function CaseManagementPage() {
 	              detail: 'Primary source backlink for citation inspection.',
 	            },
 	          ];
+	          const promotionGateRows = [
+	            {
+	              detail: `${boundaryReviewedCount}/${activeArchiveReviewSelectionReceiptSources.length} selected sources have a saved or resolved boundary decision.`,
+	              label: 'Source boundaries',
+	              state:
+	                boundaryReviewedCount === activeArchiveReviewSelectionReceiptSources.length
+	                  ? 'Ready'
+	                  : 'Needs review',
+	            },
+	            {
+	              detail: `${evidenceCounts.approved} approved chunk${evidenceCounts.approved === 1 ? '' : 's'} available for citation-backed claims.`,
+	              label: 'Reviewed evidence',
+	              state: evidenceCounts.approved > 0 ? 'Ready' : 'Needs evidence',
+	            },
+	            {
+	              detail: `${citationRows.length} visible source citation${citationRows.length === 1 ? '' : 's'} carried into the draft packet.`,
+	              label: 'Citation ledger',
+	              state: citationRows.some((row) => row.approvedCount > 0) ? 'Ready' : 'Draft only',
+	            },
+	            {
+	              detail: `${draftArticleSections.length} readable section${draftArticleSections.length === 1 ? '' : 's'} generated from the selected lane.`,
+	              label: 'Article body',
+	              state: 'Draft ready',
+	            },
+	            {
+	              detail: `${draftBacklinkRows.length} backlinks preserve the domain, collection, lane, and source notebook context.`,
+	              label: 'Backlinks',
+	              state: 'Mapped',
+	            },
+	            {
+	              detail: 'Promotion, embedding, Neo4j write, attachment, cleanup, move, and delete gates remain locked until a separate human confirmation.',
+	              label: 'Durable writes',
+	              state: 'Locked',
+	            },
+	          ];
+	          const promotionPacketBlockedReasons = [
+	            boundaryReviewedCount < activeArchiveReviewSelectionReceiptSources.length
+	              ? 'Finish source boundary review for every selected source.'
+	              : '',
+	            evidenceCounts.approved <= 0 ? 'Approve at least one evidence chunk before publication.' : '',
+	            exclusionRows.length ? 'Resolve visible holdbacks before durable wiki publication.' : '',
+	          ].filter(Boolean);
+	          const promotionPacketStatus = promotionPacketBlockedReasons.length
+	            ? 'Blocked before promotion'
+	            : 'Ready for human promotion review';
+	          const sourceManifestRows = activeArchiveReviewSelectionReceiptSources.slice(0, 8).map((source, index) => {
+	            const review = archiveReviewForIngestion(source);
+	            const embedding = embeddingReviewForIngestion(source);
+	            const approvedCount = (embedding.chunks ?? []).filter(
+	              (chunk) => chunk.status === 'approved-for-embedding',
+	            ).length;
+	            const sourcePageId = source.pageId?.trim();
+	            return {
+	              approvedCount,
+	              id: source.id,
+	              label: `Source ${index + 1}`,
+	              pageId: sourcePageId && !sourcePageId.startsWith('domain:') ? sourcePageId : `ingest:${source.id}`,
+	              reviewLabel: archiveReviewLabel(review.reviewStatus),
+	              title: review.suggestedWikiTitle || source.title || source.fileName,
+	            };
+	          });
+	          const promotionPacketMarkdown = [
+	            `# ${candidateTitle}`,
+	            '',
+	            ...[
+	              sourceLead,
+	              'This draft is assembled from a selected Case Wiki review lane. It is not promoted until a human confirms the citation packet, boundary receipts, and write gates.',
+	            ],
+	            '',
+	            '## Contents',
+	            ...draftArticleSections.map((section, index) => `${index + 1}. ${section.heading}`),
+	            '',
+	            ...draftArticleSections.flatMap((section, index) => [
+	              `## ${section.heading}`,
+	              `${section.text}${citationRows[index] ? ` [${index + 1}]` : ''}`,
+	              '',
+	            ]),
+	            '## References',
+	            ...(citationRows.length
+	              ? citationRows.map((citation, index) => `[${index + 1}] ${citation.title} (${citation.reviewLabel}; ${citation.approvedCount} approved chunks)`)
+	              : ['No visible citations yet.']),
+	            '',
+	            '## Backlinks',
+	            ...draftBacklinkRows.map((backlink) => `- ${backlink.label}: ${backlink.target}`),
+	            '',
+	            '## Locked write gates',
+	            '- Promotion: separate human confirmation required.',
+	            '- Embedding / Weaviate: separate vector write gate required.',
+	            '- Neo4j: separate graph sync gate required.',
+	            '- Attachments / cleanup / moves / deletes: separate explicit gates required.',
+	          ].join('\n');
 	          return {
 	            candidateTitle,
 	            citationRows,
@@ -24416,6 +24507,10 @@ export default function CaseManagementPage() {
 	              'This page is a readable draft generated from a selected review lane. It is not a promoted article yet; it is the human-checkable bridge between source receipts, citations, and durable wiki publication.',
 	            ],
 	            metadataOnlyCount,
+	            promotionGateRows,
+	            promotionPacketBlockedReasons,
+	            promotionPacketMarkdown,
+	            promotionPacketStatus,
 	            reviewStatus: `${boundaryReviewedCount}/${activeArchiveReviewSelectionReceiptSources.length} boundaries reviewed`,
 	            sections: [
 	              {
@@ -24444,6 +24539,7 @@ export default function CaseManagementPage() {
 	              },
 	            ],
 	            sourceKindLabel: sourceKindLabels.join(', ') || 'source documents',
+	            sourceManifestRows,
 	            tableOfContents: draftArticleSections.map((section) => section.heading),
 	          };
 	        })()
@@ -40848,6 +40944,171 @@ export default function CaseManagementPage() {
 								                          </div>
 								                          <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
 								                            This preview is a readable wiki draft only. It shows how the selected lane can become an article before any promotion, embedding, Neo4j write, attachment, cleanup, move, or delete gate is opened.
+								                          </span>
+								                        </div>
+								                        <div
+								                          data-testid="case-wiki-archive-review-selected-lane-promotion-packet"
+								                          style={{
+								                            background: 'rgba(17,24,39,0.035)',
+								                            border: `1px solid ${colors.border}`,
+								                            borderRadius: 8,
+								                            display: 'grid',
+								                            gap: 10,
+								                            padding: 10,
+								                          }}
+								                        >
+								                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start' }}>
+								                            <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
+								                              <strong style={{ color: colors.text, fontSize: 12, textTransform: 'uppercase' }}>
+								                                Human promotion packet
+								                              </strong>
+								                              <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                                Article markdown, citation ledger, source manifest, backlinks, and write gates gathered in one review packet.
+								                              </span>
+								                            </div>
+								                            <span
+								                              style={{
+								                                background: activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionPacketBlockedReasons.length
+								                                  ? 'rgba(239,68,68,0.08)'
+								                                  : 'rgba(16,185,129,0.1)',
+								                                border: activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionPacketBlockedReasons.length
+								                                  ? '1px solid rgba(239,68,68,0.2)'
+								                                  : '1px solid rgba(16,185,129,0.24)',
+								                                borderRadius: 8,
+								                                color: activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionPacketBlockedReasons.length
+								                                  ? '#b91c1c'
+								                                  : '#047857',
+								                                fontSize: 10,
+								                                fontWeight: 950,
+								                                padding: '5px 7px',
+								                                textTransform: 'uppercase',
+								                              }}
+								                            >
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionPacketStatus}
+								                            </span>
+								                          </div>
+								                          <div style={{ display: 'grid', gap: 7, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 145px), 1fr))' }}>
+								                            {activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionGateRows.map((gate) => {
+								                              const isReady = ['Ready', 'Draft ready', 'Mapped'].includes(gate.state);
+								                              const isLocked = gate.state === 'Locked';
+								                              const tone = isReady
+								                                ? {
+								                                    background: 'rgba(16,185,129,0.09)',
+								                                    border: 'rgba(16,185,129,0.2)',
+								                                    color: '#047857',
+								                                  }
+								                                : isLocked
+								                                  ? {
+								                                      background: 'rgba(17,24,39,0.04)',
+								                                      border: 'rgba(17,24,39,0.09)',
+								                                      color: colors.textMuted,
+								                                    }
+								                                  : {
+								                                      background: 'rgba(255,212,0,0.13)',
+								                                      border: 'rgba(202,138,4,0.24)',
+								                                      color: '#92400e',
+								                                    };
+								                              return (
+								                                <article
+								                                  key={`${activeArchiveReviewSelectionReceipt.id}-promotion-gate-${gate.label}`}
+								                                  data-testid="case-wiki-archive-review-selected-lane-promotion-packet-gate"
+								                                  style={{
+								                                    background: tone.background,
+								                                    border: `1px solid ${tone.border}`,
+								                                    borderRadius: 8,
+								                                    display: 'grid',
+								                                    gap: 4,
+								                                    padding: 7,
+								                                  }}
+								                                >
+								                                  <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                    {gate.label}
+								                                  </span>
+								                                  <strong style={{ color: tone.color, fontSize: 10 }}>
+								                                    {gate.state}
+								                                  </strong>
+								                                  <span style={{ color: colors.textMuted, fontSize: 9, lineHeight: 1.35 }}>
+								                                    {gate.detail}
+								                                  </span>
+								                                </article>
+								                              );
+								                            })}
+								                          </div>
+								                          {activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionPacketBlockedReasons.length ? (
+								                            <div style={{ display: 'grid', gap: 5 }}>
+								                              <strong style={{ color: colors.text, fontSize: 11 }}>Before this becomes a durable article</strong>
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionPacketBlockedReasons.map((reason) => (
+								                                <span
+								                                  key={`${activeArchiveReviewSelectionReceipt.id}-promotion-blocker-${reason}`}
+								                                  data-testid="case-wiki-archive-review-selected-lane-promotion-packet-blocker"
+								                                  style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}
+								                                >
+								                                  {reason}
+								                                </span>
+								                              ))}
+								                            </div>
+								                          ) : (
+								                            <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                              This packet has the visible ingredients for a human promotion review. The publish action is still a separate explicit gate.
+								                            </span>
+								                          )}
+								                          <div style={{ display: 'grid', gap: 7, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))' }}>
+								                            <div
+								                              style={{
+								                                background: 'rgba(255,255,255,0.68)',
+								                                border: `1px solid ${colors.border}`,
+								                                borderRadius: 8,
+								                                display: 'grid',
+								                                gap: 6,
+								                                padding: 8,
+								                              }}
+								                            >
+								                              <strong style={{ color: colors.text, fontSize: 11 }}>Source manifest</strong>
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.sourceManifestRows.map((source) => (
+								                                <div
+								                                  key={`${activeArchiveReviewSelectionReceipt.id}-promotion-source-${source.id}`}
+								                                  data-testid="case-wiki-archive-review-selected-lane-promotion-packet-source"
+								                                  style={{
+								                                    borderTop: `1px solid ${colors.border}`,
+								                                    display: 'grid',
+								                                    gap: 4,
+								                                    paddingTop: 6,
+								                                  }}
+								                                >
+								                                  <span style={{ color: colors.textMuted, fontSize: 8.5, fontWeight: 950, textTransform: 'uppercase' }}>
+								                                    {source.label}
+								                                  </span>
+								                                  <strong style={{ color: colors.textSecondary, fontSize: 10, overflowWrap: 'anywhere' }}>
+								                                    {source.title}
+								                                  </strong>
+								                                  <span style={{ color: colors.textMuted, fontSize: 9, lineHeight: 1.35 }}>
+								                                    {source.reviewLabel} · {source.approvedCount} approved chunks · {source.pageId}
+								                                  </span>
+								                                </div>
+								                              ))}
+								                            </div>
+								                            <pre
+								                              data-testid="case-wiki-archive-review-selected-lane-promotion-packet-markdown"
+								                              style={{
+								                                background: '#fff',
+								                                border: `1px solid ${colors.border}`,
+								                                borderRadius: 8,
+								                                color: colors.textSecondary,
+								                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+								                                fontSize: 10,
+								                                lineHeight: 1.45,
+								                                margin: 0,
+								                                maxHeight: 360,
+								                                overflow: 'auto',
+								                                padding: 10,
+								                                whiteSpace: 'pre-wrap',
+								                              }}
+								                            >
+								                              {activeArchiveReviewSelectionReceiptArticleWorkupPreview.promotionPacketMarkdown}
+								                            </pre>
+								                          </div>
+								                          <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+								                            The packet is review material only. It does not publish the article, write vectors, sync Neo4j, attach source documents, move files, clean files, or delete anything.
 								                          </span>
 								                        </div>
 								                        <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
