@@ -215,8 +215,10 @@ export default function MyApplicationsPage() {
               const cfg = STATUS_CONFIG[statusKey];
               const Icon = cfg.icon;
               return (
-                <div
+                <Link
                   key={app.id}
+                  to={`/jobs/${app.jobId}?apply=1`}
+                  aria-label={`Open application for ${app.jobSnapshot.title}`}
                   style={{
                     ...glassCard,
                     padding: "20px 24px",
@@ -224,6 +226,9 @@ export default function MyApplicationsPage() {
                     gap: "16px",
                     alignItems: "flex-start",
                     transition: "all 0.2s",
+                    textDecoration: "none",
+                    color: "inherit",
+                    cursor: "pointer",
                   }}
                 >
                   {/* Timeline dot */}
@@ -283,7 +288,11 @@ export default function MyApplicationsPage() {
                       {confirmWithdraw === app.id ? (
                         <div style={{ display: "flex", gap: "8px" }}>
                           <button
-                            onClick={() => handleWithdraw(app.id)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleWithdraw(app.id);
+                            }}
                             style={{
                               padding: "6px 14px",
                               borderRadius: "8px",
@@ -298,7 +307,11 @@ export default function MyApplicationsPage() {
                             Confirm
                           </button>
                           <button
-                            onClick={() => setConfirmWithdraw(null)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setConfirmWithdraw(null);
+                            }}
                             style={{
                               padding: "6px 14px",
                               borderRadius: "8px",
@@ -315,7 +328,11 @@ export default function MyApplicationsPage() {
                         </div>
                       ) : (
                         <button
-                          onClick={() => setConfirmWithdraw(app.id)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setConfirmWithdraw(app.id);
+                          }}
                           style={{
                             padding: "6px 14px",
                             borderRadius: "8px",
@@ -333,7 +350,7 @@ export default function MyApplicationsPage() {
                       )}
                     </div>
                   )}
-                </div>
+                </Link>
               );
             })}
           </div>
