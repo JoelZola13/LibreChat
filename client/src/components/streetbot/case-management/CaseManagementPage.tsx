@@ -24008,6 +24008,32 @@ export default function CaseManagementPage() {
 	            } ${activeArchiveReviewSelectionReceiptPrimaryGateMove.lockedCount === 1 ? 'is' : 'are'} locked behind earlier gates. Open the first one to inspect the blocker before writing graph or vector memory.`
 	          : `All ${activeArchiveReviewSelectionReceiptPrimaryGateMove.label} gates are complete for this selected lane. Review the first completed source before moving the batch forward.`
 	      : '';
+	    const activeArchiveReviewSelectionReceiptRunwayRows = activeArchiveReviewSelectionReceiptGateSummaryRows.map(
+	      (gate, index) => {
+	        const state = gate.activeCount > 0 ? 'active' : gate.lockedCount > 0 ? 'locked' : 'done';
+	        const phaseLabel = state === 'active' ? 'Current gate' : state === 'locked' ? 'Waiting gate' : 'Cleared gate';
+	        const sourceWord = gate.totalCount === 1 ? 'source' : 'sources';
+	        const detail =
+	          state === 'active'
+	            ? `${gate.activeCount} of ${gate.totalCount} ${sourceWord} ${
+	                gate.activeCount === 1 ? 'needs' : 'need'
+	              } ${gate.label.toLowerCase()} review. First: ${gate.firstTitle}.`
+	            : state === 'locked'
+	              ? `${gate.lockedCount} of ${gate.totalCount} ${sourceWord} ${
+	                  gate.lockedCount === 1 ? 'unlocks' : 'unlock'
+	                } after earlier gates are reviewed.`
+	              : `${gate.doneCount} of ${gate.totalCount} ${sourceWord} ${
+	                  gate.doneCount === 1 ? 'has' : 'have'
+	                } cleared this gate.`;
+	        return {
+	          ...gate,
+	          detail,
+	          phaseLabel,
+	          state,
+	          stepLabel: `Step ${index + 1}`,
+	        };
+	      },
+	    );
 	    const isExtractableLocalArchiveSource = (ingestion: WikiIngestionRecord) => {
 	      const review = archiveReviewForIngestion(ingestion);
 	      return Boolean(
@@ -39258,11 +39284,106 @@ export default function CaseManagementPage() {
 	                            {activeArchiveReviewSelectionReceiptPrimaryGateActionLabel}
 	                          </button>
 	                        </div>
-	                      </div>
-	                    )}
-	                    <div
-	                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
-	                      style={{
+		                      </div>
+		                    )}
+		                    <div
+		                      data-testid="case-wiki-archive-review-selected-lane-runway"
+		                      style={{
+		                        background: 'rgba(255,255,255,0.58)',
+		                        border: `1px solid ${colors.border}`,
+		                        borderRadius: 8,
+		                        display: 'grid',
+		                        gap: 8,
+		                        padding: 9,
+		                      }}
+		                    >
+		                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+		                        <strong style={{ color: colors.text, fontSize: 11, textTransform: 'uppercase' }}>
+		                          Source-to-wiki review runway
+		                        </strong>
+		                        <span style={{ color: colors.textMuted, fontSize: 10, fontWeight: 900 }}>
+		                          {activeArchiveReviewSelectionReceiptRunwayRows.length} review gates
+		                        </span>
+		                      </div>
+		                      <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))' }}>
+		                        {activeArchiveReviewSelectionReceiptRunwayRows.map((step) => {
+		                          const stepTone =
+		                            step.state === 'active'
+		                              ? {
+		                                  background: 'rgba(255,212,0,0.16)',
+		                                  border: 'rgba(202,138,4,0.28)',
+		                                  color: '#92400e',
+		                                }
+		                              : step.state === 'locked'
+		                                ? {
+		                                    background: 'rgba(17,24,39,0.035)',
+		                                    border: 'rgba(17,24,39,0.08)',
+		                                    color: colors.textMuted,
+		                                  }
+		                                : {
+		                                    background: 'rgba(16,185,129,0.09)',
+		                                    border: 'rgba(16,185,129,0.2)',
+		                                    color: '#047857',
+		                                  };
+		                          return (
+		                            <article
+		                              key={`${activeArchiveReviewSelectionReceipt.id}-runway-${step.id}`}
+		                              data-testid="case-wiki-archive-review-selected-lane-runway-step"
+		                              style={{
+		                                background: stepTone.background,
+		                                border: `1px solid ${stepTone.border}`,
+		                                borderRadius: 8,
+		                                display: 'grid',
+		                                gap: 5,
+		                                padding: 8,
+		                              }}
+		                            >
+		                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'start' }}>
+		                                <span style={{ color: colors.textMuted, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+		                                  {step.stepLabel}
+		                                </span>
+		                                <span style={{ color: stepTone.color, fontSize: 9, fontWeight: 950, textTransform: 'uppercase' }}>
+		                                  {step.phaseLabel}
+		                                </span>
+		                              </div>
+		                              <strong style={{ color: colors.text, fontSize: 11 }}>{step.label}</strong>
+		                              <span style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 1.35 }}>
+		                                {step.detail}
+		                              </span>
+		                              <button
+		                                type="button"
+		                                data-testid="case-wiki-archive-review-selected-lane-runway-open"
+		                                onClick={() => {
+		                                  if (!step.firstSource) return;
+		                                  openWikiPage(
+		                                    wikiSourcePageIdForIngestion(step.firstSource),
+		                                    `Opened ${step.label.toLowerCase()} runway source: ${step.firstTitle}.`,
+		                                  );
+		                                }}
+		                                disabled={!step.firstSource}
+		                                style={{
+		                                  ...buttonStyle,
+		                                  fontSize: 9,
+		                                  justifySelf: 'start',
+		                                  minHeight: 25,
+		                                  opacity: step.firstSource ? 1 : 0.56,
+		                                  padding: '3px 6px',
+		                                }}
+		                                {...buttonHoverHandlers}
+		                              >
+		                                Open runway source
+		                              </button>
+		                            </article>
+		                          );
+		                        })}
+		                      </div>
+		                      <span style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.35 }}>
+		                        Runway actions only navigate to review surfaces. They do not save receipt decisions, attach records, write Weaviate vectors, sync Neo4j, promote articles, clean, move, or delete files.
+		                      </span>
+		                    </div>
+		                    <div
+		                      data-testid="case-wiki-archive-review-selected-lane-gate-summary"
+		                      style={{
                         background: 'rgba(17,24,39,0.035)',
                         border: `1px solid ${colors.border}`,
                         borderRadius: 8,
