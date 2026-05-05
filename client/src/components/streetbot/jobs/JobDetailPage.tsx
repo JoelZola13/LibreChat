@@ -442,6 +442,7 @@ export default function JobDetailPage() {
       return;
     }
     const userId = getOrCreateUserId();
+    const wasAlreadyApplied = isApplied;
     const nextApplication = addApplication(userId, job, {
       applicantName: applicationName.trim(),
       applicantEmail: applicationEmail.trim(),
@@ -450,8 +451,12 @@ export default function JobDetailPage() {
     });
     setCurrentApplication(nextApplication);
     setIsApplied(true);
-    setToast("Application submitted and employer notified!");
-  }, [applicationEmail, applicationName, coverNote, job, uploadedDocuments]);
+    setToast(
+      wasAlreadyApplied
+        ? "Application updated!"
+        : "Application submitted and employer notified!",
+    );
+  }, [applicationEmail, applicationName, coverNote, isApplied, job, uploadedDocuments]);
 
   const handleQuickApply = useCallback(() => {
     if (!job) return;
@@ -1541,12 +1546,18 @@ export default function JobDetailPage() {
                     margin: "0 0 8px 0",
                   }}
                 >
-                  {isFromSnapshot ? "Your Application" : "Apply for This Role"}
+                  {isFromSnapshot
+                    ? "Your Application"
+                    : isApplied
+                      ? "Edit Your Application"
+                      : "Apply for This Role"}
                 </h2>
                 <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: colors.textSecondary }}>
                   {isFromSnapshot
                     ? "Reviewing the application you submitted before this listing was removed. Your details are below."
-                    : "Submit your documents here and we'll package them with this job listing so you can review the application and notification status in one place."}
+                    : isApplied
+                      ? "Update your name, email, cover note, or attached documents below, then click Update Application to save your changes."
+                      : "Submit your documents here and we'll package them with this job listing so you can review the application and notification status in one place."}
                 </p>
               </div>
               {!isFromSnapshot && (<>
@@ -1834,6 +1845,9 @@ export default function JobDetailPage() {
                       <div><strong style={{ color: colors.text }}>Applicant:</strong> {currentApplication.applicantName || "Not provided"}</div>
                       <div><strong style={{ color: colors.text }}>Email:</strong> {currentApplication.applicantEmail || "Not provided"}</div>
                       <div><strong style={{ color: colors.text }}>Submitted:</strong> {formatDateTime(currentApplication.appliedAt)}</div>
+                      {currentApplication.updatedAt && currentApplication.updatedAt !== currentApplication.appliedAt && (
+                        <div><strong style={{ color: colors.text }}>Last updated:</strong> {formatDateTime(currentApplication.updatedAt)}</div>
+                      )}
                       <div><strong style={{ color: colors.text }}>Status:</strong> {currentApplication.status.replace("_", " ")}</div>
                       {currentApplication.coverNote && (
                         <div><strong style={{ color: colors.text }}>Cover Note:</strong> {currentApplication.coverNote}</div>
