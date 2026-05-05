@@ -1351,7 +1351,11 @@ ${parts.join("")}
             ) : resumeView === "upload" ? (
               <ResumeUploader
                 userId={userId} kind="resume"
-                onComplete={() => { setResumeView("main"); setUploadedDocs(getUploadedDocuments(userId)); }}
+                onComplete={() => {
+                  setResumeView("main");
+                  setUploadedDocs(getUploadedDocuments(userId));
+                  setToast("Resume saved!");
+                }}
                 onCancel={() => setResumeView("main")}
                 colors={colors} isDark={isDark} glassCard={glassCard}
               />
@@ -1595,7 +1599,11 @@ ${parts.join("")}
             ) : coverLetterView === "upload" ? (
               <ResumeUploader
                 userId={userId} kind="cover_letter"
-                onComplete={() => { setCoverLetterView("main"); setUploadedDocs(getUploadedDocuments(userId)); }}
+                onComplete={() => {
+                  setCoverLetterView("main");
+                  setUploadedDocs(getUploadedDocuments(userId));
+                  setToast("Cover letter saved!");
+                }}
                 onCancel={() => setCoverLetterView("main")}
                 colors={colors} isDark={isDark} glassCard={glassCard}
               />
