@@ -58,29 +58,35 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
     base64DataRef.current = "";
     setReadState("reading");
 
-    // Read immediately while the File reference is still fresh. Store the
-    // result in a ref so it survives parent re-renders.
-    const reader = new FileReader();
-    reader.onload = () => {
-      const r = reader.result;
-      if (typeof r === "string" && r.length > 0) {
-        base64DataRef.current = r;
+    // Use the modern Promise-based File API (file.arrayBuffer) instead of
+    // FileReader. FileReader hits NotReadableError on macOS for iCloud /
+    // Downloads-folder / sandboxed files. arrayBuffer is more reliable.
+    (async () => {
+      try {
+        const buf = await f.arrayBuffer();
+        // Chunked base64 encoding so large files don't blow the call stack on
+        // String.fromCharCode.
+        const bytes = new Uint8Array(buf);
+        const chunkSize = 0x8000; // 32 KB
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode.apply(
+            null,
+            Array.from(bytes.subarray(i, i + chunkSize)) as unknown as number[],
+          );
+        }
+        const base64 = btoa(binary);
+        const dataUrl = `data:${f.type || "application/octet-stream"};base64,${base64}`;
+        base64DataRef.current = dataUrl;
         setReadState("ready");
-      } else {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         setReadState("error");
-        setError("File came back empty. Try selecting it again.");
+        setError(
+          `Couldn't read file: ${msg}. Try copying the file to your Desktop or Downloads folder and re-selecting it (iCloud-synced files sometimes block browser reads).`,
+        );
       }
-    };
-    reader.onerror = () => {
-      setReadState("error");
-      const msg = reader.error?.message || "unknown error";
-      setError(`Couldn't read file: ${msg}. Try selecting it again — make sure it isn't moved or modified after picking.`);
-    };
-    reader.onabort = () => {
-      setReadState("error");
-      setError("File read was aborted. Try selecting it again.");
-    };
-    reader.readAsDataURL(f);
+    })();
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
