@@ -20,12 +20,21 @@ const ACCEPTED_TYPES = [
 ];
 const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
 
+type ReadState = "idle" | "reading" | "ready" | "error";
+
 export default function ResumeUploader({ userId, kind, onComplete, onCancel, colors, isDark, glassCard }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [readState, setReadState] = useState<ReadState>("idle");
+  // Store base64 in a ref, not state. Re-renders never blow it away, and
+  // setting it doesn't trigger another render. Read happens immediately on
+  // selection so we use a fresh File reference — Safari / Chrome on macOS
+  // revoke File-object access if you delay too long, which throws
+  // NotReadableError on a later read.
+  const base64DataRef = useRef<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docLabel = kind === "resume" ? "Resume" : "Cover Letter";
 
@@ -46,6 +55,32 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
     }
     setFile(f);
     setLabel(f.name.replace(/\.[^.]+$/, "")); // Default label = filename without extension
+    base64DataRef.current = "";
+    setReadState("reading");
+
+    // Read immediately while the File reference is still fresh. Store the
+    // result in a ref so it survives parent re-renders.
+    const reader = new FileReader();
+    reader.onload = () => {
+      const r = reader.result;
+      if (typeof r === "string" && r.length > 0) {
+        base64DataRef.current = r;
+        setReadState("ready");
+      } else {
+        setReadState("error");
+        setError("File came back empty. Try selecting it again.");
+      }
+    };
+    reader.onerror = () => {
+      setReadState("error");
+      const msg = reader.error?.message || "unknown error";
+      setError(`Couldn't read file: ${msg}. Try selecting it again — make sure it isn't moved or modified after picking.`);
+    };
+    reader.onabort = () => {
+      setReadState("error");
+      setError("File read was aborted. Try selecting it again.");
+    };
+    reader.readAsDataURL(f);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -55,24 +90,17 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
     if (f) handleFile(f);
   }, [handleFile]);
 
-  // Read a File into a base64 data URL. Promise-wrapped so we can `await` it
-  // inside handleSave without any race-conditiony component-state machinery.
-  const readFileAsDataUrl = (f: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const r = reader.result;
-        if (typeof r === "string" && r.length > 0) resolve(r);
-        else reject(new Error("File read returned empty result"));
-      };
-      reader.onerror = () => reject(reader.error || new Error("Could not read file"));
-      reader.onabort = () => reject(new Error("File read was aborted"));
-      reader.readAsDataURL(f);
-    });
-
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!file) {
       setError("Please choose a file first.");
+      return;
+    }
+    if (readState === "reading") {
+      setError("Still reading the file — try again in a moment.");
+      return;
+    }
+    if (readState === "error" || !base64DataRef.current) {
+      setError("File isn't readable. Click the X above and select the file again.");
       return;
     }
     if (!label.trim()) {
@@ -84,16 +112,6 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
     setError("");
     setIsSaving(true);
 
-    let base64Data: string;
-    try {
-      base64Data = await readFileAsDataUrl(file);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(`Couldn't read file: ${msg}`);
-      setIsSaving(false);
-      return;
-    }
-
     const doc: UploadedDocument = {
       id: `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       userId,
@@ -102,7 +120,7 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
-      base64Data,
+      base64Data: base64DataRef.current,
       keywords: extractBasicKeywords(label.trim()),
       isDefault: false,
       createdAt: new Date().toISOString(),
@@ -239,26 +257,34 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
         >
           Cancel
         </button>
-        {file && (
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            aria-disabled={isSaving}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: "8px",
-              padding: "12px 28px", borderRadius: "12px", border: "none",
-              background: isSaving
-                ? (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")
-                : "linear-gradient(135deg, #FFD600, #E6C200)",
-              color: isSaving ? colors.textMuted : "#000",
-              fontWeight: 700, fontSize: "0.85rem",
-              cursor: isSaving ? "wait" : "pointer",
-              boxShadow: isSaving ? "none" : "0 4px 14px rgba(255,214,0,0.3)",
-            }}
-          >
-            <Check size={16} /> {isSaving ? "Saving…" : `Save ${docLabel}`}
-          </button>
-        )}
+        {file && (() => {
+          const busy = isSaving || readState === "reading";
+          const buttonLabel = isSaving
+            ? "Saving…"
+            : readState === "reading"
+              ? "Reading file…"
+              : `Save ${docLabel}`;
+          return (
+            <button
+              onClick={handleSave}
+              disabled={busy}
+              aria-disabled={busy}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "8px",
+                padding: "12px 28px", borderRadius: "12px", border: "none",
+                background: busy
+                  ? (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")
+                  : "linear-gradient(135deg, #FFD600, #E6C200)",
+                color: busy ? colors.textMuted : "#000",
+                fontWeight: 700, fontSize: "0.85rem",
+                cursor: busy ? "wait" : "pointer",
+                boxShadow: busy ? "none" : "0 4px 14px rgba(255,214,0,0.3)",
+              }}
+            >
+              <Check size={16} /> {buttonLabel}
+            </button>
+          );
+        })()}
       </div>
     </div>
   );
