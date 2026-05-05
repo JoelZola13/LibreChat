@@ -116,8 +116,8 @@ const ORGANIZATION_LOGOS: Record<string, string> = {
   "Regent Park Arts Collective": "/job-logos/regent-park-arts.svg",
   "Safe Haven Community Center": "/job-logos/safe-haven.svg",
   "Social Planning Council": "/job-logos/social-planning.svg",
-  "Street Voices": "/job-logos/street-voices.svg?v=3",
-  "Street Voices Community Services": "/job-logos/street-voices.svg?v=3",
+  "Street Voices": "/job-logos/street-voices.svg?v=4",
+  "Street Voices Community Services": "/job-logos/street-voices.svg?v=4",
   "TechForGood Initiative": "/job-logos/techforgood.svg",
   "The Stop Community Food Centre": "/job-logos/the-stop.svg",
   "Youth Achievement Center": "/job-logos/youth-achievement.svg",
@@ -1012,18 +1012,20 @@ function JobCard({
           alignItems: "center",
           justifyContent: "center",
           borderBottom: `1px solid ${colors.border}`,
+          overflow: "hidden",
         }}
       >
-        {/* Large Logo */}
+        {/* Large Logo — fills the banner edge-to-edge for branded covers (e.g.
+            Street Voices yellow), so no white margin is visible around it. */}
         <img loading="lazy" decoding="async"
           src={getLogoForJob(job)}
           alt={`${job.organization} logo`}
           style={{
-            maxWidth: "85%",
-            maxHeight: "120px",
-            width: "auto",
-            height: "auto",
-            objectFit: "contain",
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
           }}
           onError={(e) => {
             (e.target as HTMLImageElement).src = "/job-logos/default-job.svg";
@@ -1416,18 +1418,19 @@ function FeaturedJobCard({ job, colors, isDark }: { job: Job; colors: JobColors;
             alignItems: "center",
             justifyContent: "center",
             borderBottom: `1px solid ${colors.border}`,
+            overflow: "hidden",
           }}
         >
-          {/* Large Logo */}
+          {/* Large Logo — fills the banner edge-to-edge */}
           <img loading="lazy" decoding="async"
             src={getLogoForJob(job)}
             alt={`${job.organization} logo`}
             style={{
-              maxWidth: "80%",
-              maxHeight: "100px",
-              width: "auto",
-              height: "auto",
-              objectFit: "contain",
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
             }}
             onError={(e) => {
               (e.target as HTMLImageElement).src = "/job-logos/default-job.svg";
