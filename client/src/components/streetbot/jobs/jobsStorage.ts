@@ -56,6 +56,17 @@ export function getApplicationByJob(userId: string, jobId: string): JobApplicati
   );
 }
 
+// Returns ANY application for this jobId — including withdrawn ones.
+// Used to render the application's stored jobSnapshot when the underlying
+// job listing has since been deleted from the backend.
+export function getAnyApplicationByJob(userId: string, jobId: string): JobApplication | null {
+  return (
+    read<JobApplication>(APPS_KEY).find(
+      (a) => a.userId === userId && a.jobId === jobId,
+    ) || null
+  );
+}
+
 export function addApplication(
   userId: string,
   job: Job,

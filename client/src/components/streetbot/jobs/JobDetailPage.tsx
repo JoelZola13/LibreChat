@@ -5,7 +5,7 @@ import { useGlassStyles } from "../shared/useGlassStyles";
 import { useResponsive } from "../hooks/useResponsive";
 import { getAboutThisJob, getRequirementsList, getResponsibilitiesList } from "./jobContent";
 import { enrichJobSchedule, enrichJobsSchedule } from "./jobSchedule";
-import { addApplication, getApplicationByJob, getResume, getDefaultResume, getCoverLetters } from "./jobsStorage";
+import { addApplication, getApplicationByJob, getAnyApplicationByJob, getResume, getDefaultResume, getCoverLetters } from "./jobsStorage";
 import type { ApplicationDocument, Job, JobApplication, CoverLetter } from "./types";
 import {
   ArrowLeft,
@@ -31,6 +31,7 @@ import {
   UserCheck,
   FileText,
   Upload,
+  AlertCircle,
 } from "lucide-react";
 
 // ── Helpers ──
@@ -260,6 +261,7 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [isFromSnapshot, setIsFromSnapshot] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isApplied, setIsApplied] = useState(false);
   const [showApplicationSection, setShowApplicationSection] = useState(searchParams.get("apply") === "1");
@@ -281,6 +283,26 @@ export default function JobDetailPage() {
     if (!jobId) return;
     let cancelled = false;
 
+    const synthesizeFromApplication = (): Job | null => {
+      // The job might have been removed from the backend but the user has
+      // an application referencing it. Render the application's stored
+      // jobSnapshot so withdrawn applications can still be opened.
+      const userId = getOrCreateUserId();
+      const app = getAnyApplicationByJob(userId, jobId);
+      if (!app) return null;
+      const snapshot = app.jobSnapshot;
+      const synthetic: Job = {
+        id: jobId,
+        title: snapshot.title,
+        organization: snapshot.organization,
+        logo_url: snapshot.logo_url,
+        opportunity_type: snapshot.opportunity_type,
+        location: snapshot.location,
+        compensation: snapshot.compensation,
+      };
+      return synthetic;
+    };
+
     (async () => {
       setIsLoading(true);
       try {
@@ -290,21 +312,38 @@ export default function JobDetailPage() {
           const data = await resp.json();
           if (!cancelled) setJob(enrichJobSchedule(data));
         } else {
-          // Fallback: fetch all jobs and find by id
+          // Fallback 1: fetch all jobs and find by id
           const allResp = await fetch(JOBS_API_URL);
+          let found: Job | undefined;
           if (allResp.ok) {
             const allJobs = enrichJobsSchedule(await allResp.json());
-            const found = allJobs.find((j) => j.id === jobId);
-            if (!cancelled) {
-              if (found) setJob(found);
-              else setNotFound(true);
+            found = allJobs.find((j) => j.id === jobId);
+          }
+          if (cancelled) return;
+          if (found) {
+            setJob(found);
+          } else {
+            // Fallback 2: render from application's stored jobSnapshot if
+            // the user has applied (or withdrawn) for this job before.
+            const synthetic = synthesizeFromApplication();
+            if (synthetic) {
+              setJob(synthetic);
+              setIsFromSnapshot(true);
+            } else {
+              setNotFound(true);
             }
-          } else if (!cancelled) {
-            setNotFound(true);
           }
         }
       } catch {
-        if (!cancelled) setNotFound(true);
+        if (cancelled) return;
+        // Network error — try the application snapshot as a last resort
+        const synthetic = synthesizeFromApplication();
+        if (synthetic) {
+          setJob(synthetic);
+          setIsFromSnapshot(true);
+        } else {
+          setNotFound(true);
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -319,10 +358,14 @@ export default function JobDetailPage() {
   useEffect(() => {
     if (!job) return;
     const userId = getOrCreateUserId();
-    const existingApplication = getApplicationByJob(userId, job.id);
+    // For orphaned listings (rendered from a stored application snapshot),
+    // also surface withdrawn applications so the user can review them.
+    const existingApplication = isFromSnapshot
+      ? getAnyApplicationByJob(userId, job.id)
+      : getApplicationByJob(userId, job.id);
     const resume = getResume(userId);
     setCurrentApplication(existingApplication);
-    setIsApplied(Boolean(existingApplication));
+    setIsApplied(Boolean(existingApplication) && !existingApplication?.withdrawn);
     setApplicationName(existingApplication?.applicantName || resume?.fullName || "");
     setApplicationEmail(existingApplication?.applicantEmail || resume?.email || "");
     setCoverNote(existingApplication?.coverNote || "");
@@ -346,7 +389,7 @@ export default function JobDetailPage() {
         /* ignore */
       }
     })();
-  }, [job]);
+  }, [job, isFromSnapshot]);
 
   useEffect(() => {
     const shouldShowApply = searchParams.get("apply") === "1";
@@ -821,6 +864,27 @@ export default function JobDetailPage() {
           >
             {/* Title & Org */}
             <div style={{ textAlign: "center" }}>
+              {isFromSnapshot && (
+                <div
+                  role="status"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    margin: "0 auto 14px",
+                    padding: "8px 14px",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(245, 158, 11, 0.4)",
+                    background: "rgba(245, 158, 11, 0.12)",
+                    color: "#f59e0b",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                  }}
+                >
+                  <AlertCircle style={{ width: "14px", height: "14px" }} aria-hidden="true" />
+                  This listing has been removed. You can still review your application below.
+                </div>
+              )}
               <h1
                 style={{
                   fontSize: isMobile ? "24px" : "32px",
@@ -850,7 +914,8 @@ export default function JobDetailPage() {
               )}
             </div>
 
-            {/* Action Buttons Row */}
+            {/* Action Buttons Row — hidden when the underlying listing has been removed */}
+            {!isFromSnapshot && (
             <div
               style={{
                 display: "flex",
@@ -1006,6 +1071,7 @@ export default function JobDetailPage() {
               </button>
 
             </div>
+            )}
 
             {/* Special Badges */}
             {specialBadges.length > 0 && (
@@ -1452,7 +1518,7 @@ export default function JobDetailPage() {
               </section>
             )}
 
-            {showApplicationSection && (
+            {showApplicationSection && !isFromSnapshot && (
             <section
               ref={applicationSectionRef}
               id="application-section"
