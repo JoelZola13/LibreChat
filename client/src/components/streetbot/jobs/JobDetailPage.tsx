@@ -1518,7 +1518,7 @@ export default function JobDetailPage() {
               </section>
             )}
 
-            {showApplicationSection && !isFromSnapshot && (
+            {(showApplicationSection || isFromSnapshot) && (
             <section
               ref={applicationSectionRef}
               id="application-section"
@@ -1541,12 +1541,16 @@ export default function JobDetailPage() {
                     margin: "0 0 8px 0",
                   }}
                 >
-                  Apply for This Role
+                  {isFromSnapshot ? "Your Application" : "Apply for This Role"}
                 </h2>
                 <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: colors.textSecondary }}>
-                  Submit your documents here and we&apos;ll package them with this job listing so you can review the application and notification status in one place.
+                  {isFromSnapshot
+                    ? "Reviewing the application you submitted before this listing was removed. Your details are below."
+                    : "Submit your documents here and we'll package them with this job listing so you can review the application and notification status in one place."}
                 </p>
               </div>
+              {!isFromSnapshot && (<>
+              {/* APPLY FORM START */}
 
               <div
                 style={{
@@ -1801,6 +1805,8 @@ export default function JobDetailPage() {
                   {isApplied ? "Update Application" : "Submit Application"}
                 </button>
               </div>
+              {/* APPLY FORM END */}
+              </>)}
 
               {currentApplication && (
                 <div
