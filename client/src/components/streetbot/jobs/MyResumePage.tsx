@@ -1507,16 +1507,60 @@ ${parts.join("")}
 
                 {mode === "edit" && resumeVersions.length > 0 && (
                   <div style={{ marginBottom: "20px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "8px", flexWrap: "wrap" }}>
                       <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: 0 }}>
                         Editing: {resumeVersions.find((v) => v.id === activeVersionId)?.label || "Resume"}
                       </h3>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                         {lastSaved && (
                           <span style={{ fontSize: "0.7rem", color: colors.textMuted, display: "inline-flex", alignItems: "center", gap: "4px" }}>
                             <Save style={{ width: "11px", height: "11px" }} /> {lastSaved}
                           </span>
                         )}
+                        <button
+                          onClick={() => {
+                            saveResume(resume);
+                            if (activeVersionId) {
+                              const versions = getResumeVersions(userId);
+                              const v = versions.find((ver) => ver.id === activeVersionId);
+                              if (v) saveResumeVersion({ ...v, resume });
+                              setResumeVersions(getResumeVersions(userId));
+                            }
+                            setLastSaved(new Date().toLocaleTimeString());
+                            setToast("Resume saved!");
+                          }}
+                          aria-label="Save resume"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: "none", background: "#FFD600", color: "#000", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 8px rgba(255, 214, 0, 0.25)" }}
+                        >
+                          <Save size={14} /> Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            const label = window.prompt("Name this resume version:", `Copy of ${resumeVersions.find((v) => v.id === activeVersionId)?.label || "Resume"}`);
+                            if (!label || !label.trim()) return;
+                            const now = new Date().toISOString();
+                            const newVersion = {
+                              id: `resume_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                              userId,
+                              label: label.trim(),
+                              isDefault: false,
+                              createdAt: now,
+                              updatedAt: now,
+                              resume,
+                            };
+                            saveResumeVersion(newVersion);
+                            const refreshed = getResumeVersions(userId);
+                            setResumeVersions(refreshed);
+                            setActiveVersionId(newVersion.id);
+                            setLastSaved(new Date().toLocaleTimeString());
+                            setToast(`Saved as "${label.trim()}"`);
+                          }}
+                          aria-label="Save as new version"
+                          title="Save current edits as a brand new resume version"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
+                        >
+                          <Plus size={13} /> Save as new
+                        </button>
                         <button
                           onClick={() => setMode("preview")}
                           style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
