@@ -1429,6 +1429,30 @@ ${parts.join("")}
                           >
                             <Pencil size={13} /> Edit
                           </button>
+                          <button
+                            onClick={() => {
+                              if (!window.confirm(`Delete "${v.label}"? This can't be undone.`)) return;
+                              deleteResumeVersion(userId, v.id);
+                              const remaining = getResumeVersions(userId);
+                              setResumeVersions(remaining);
+                              // If the deleted version was active, switch to another or clear.
+                              if (activeVersionId === v.id) {
+                                const next = remaining.find((r) => r.isDefault) || remaining[0] || null;
+                                setActiveVersionId(next?.id ?? null);
+                                if (next) {
+                                  setResume(next.resume);
+                                } else {
+                                  setMode("preview");
+                                }
+                              }
+                              setLastSaved(`Deleted "${v.label}"`);
+                            }}
+                            aria-label={`Delete ${v.label}`}
+                            title="Delete resume"
+                            style={{ padding: "6px 10px", borderRadius: "10px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#EF4444", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       ))}
                       {/* Uploaded resumes */}
