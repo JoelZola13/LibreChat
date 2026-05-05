@@ -64,7 +64,16 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
   }, [handleFile]);
 
   const handleSave = () => {
-    if (!file || !base64Data) return;
+    if (!file) {
+      setError("Please choose a file first.");
+      return;
+    }
+    if (!base64Data) {
+      // FileReader is still running asynchronously. Tell the user instead of
+      // silently dropping their click.
+      setError("Still reading the file — try again in a second.");
+      return;
+    }
     if (!label.trim()) {
       setError("Please provide a label for your document.");
       return;
@@ -85,7 +94,15 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
       updatedAt: new Date().toISOString(),
     };
 
-    saveUploadedDocument(doc);
+    try {
+      saveUploadedDocument(doc);
+    } catch (err) {
+      // localStorage QuotaExceededError shows up here when the browser is full.
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Couldn't save: ${msg}. Try deleting older documents and uploading again.`);
+      return;
+    }
+    setError(null);
     onComplete();
   };
 
@@ -209,15 +226,21 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
         {file && (
           <button
             onClick={handleSave}
+            disabled={!base64Data}
+            aria-disabled={!base64Data}
             style={{
               display: "inline-flex", alignItems: "center", gap: "8px",
               padding: "12px 28px", borderRadius: "12px", border: "none",
-              background: "linear-gradient(135deg, #FFD600, #E6C200)",
-              color: "#000", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer",
-              boxShadow: "0 4px 14px rgba(255,214,0,0.3)",
+              background: !base64Data
+                ? (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")
+                : "linear-gradient(135deg, #FFD600, #E6C200)",
+              color: !base64Data ? colors.textMuted : "#000",
+              fontWeight: 700, fontSize: "0.85rem",
+              cursor: !base64Data ? "wait" : "pointer",
+              boxShadow: !base64Data ? "none" : "0 4px 14px rgba(255,214,0,0.3)",
             }}
           >
-            <Check size={16} /> Save {docLabel}
+            <Check size={16} /> {!base64Data ? "Reading file…" : `Save ${docLabel}`}
           </button>
         )}
       </div>
