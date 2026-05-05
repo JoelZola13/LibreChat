@@ -22,10 +22,10 @@ const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
 
 export default function ResumeUploader({ userId, kind, onComplete, onCancel, colors, isDark, glassCard }: Props) {
   const [file, setFile] = useState<File | null>(null);
-  const [base64Data, setBase64Data] = useState<string>("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docLabel = kind === "resume" ? "Resume" : "Cover Letter";
 
@@ -46,14 +46,6 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
     }
     setFile(f);
     setLabel(f.name.replace(/\.[^.]+$/, "")); // Default label = filename without extension
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setBase64Data(e.target.result as string);
-      }
-    };
-    reader.readAsDataURL(f);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -63,19 +55,42 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
     if (f) handleFile(f);
   }, [handleFile]);
 
-  const handleSave = () => {
+  // Read a File into a base64 data URL. Promise-wrapped so we can `await` it
+  // inside handleSave without any race-conditiony component-state machinery.
+  const readFileAsDataUrl = (f: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const r = reader.result;
+        if (typeof r === "string" && r.length > 0) resolve(r);
+        else reject(new Error("File read returned empty result"));
+      };
+      reader.onerror = () => reject(reader.error || new Error("Could not read file"));
+      reader.onabort = () => reject(new Error("File read was aborted"));
+      reader.readAsDataURL(f);
+    });
+
+  const handleSave = async () => {
     if (!file) {
       setError("Please choose a file first.");
       return;
     }
-    if (!base64Data) {
-      // FileReader is still running asynchronously. Tell the user instead of
-      // silently dropping their click.
-      setError("Still reading the file — try again in a second.");
-      return;
-    }
     if (!label.trim()) {
       setError("Please provide a label for your document.");
+      return;
+    }
+    if (isSaving) return;
+
+    setError("");
+    setIsSaving(true);
+
+    let base64Data: string;
+    try {
+      base64Data = await readFileAsDataUrl(file);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Couldn't read file: ${msg}`);
+      setIsSaving(false);
       return;
     }
 
@@ -100,9 +115,10 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
       // localStorage QuotaExceededError shows up here when the browser is full.
       const msg = err instanceof Error ? err.message : String(err);
       setError(`Couldn't save: ${msg}. Try deleting older documents and uploading again.`);
+      setIsSaving(false);
       return;
     }
-    setError(null);
+    setIsSaving(false);
     onComplete();
   };
 
@@ -226,21 +242,21 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
         {file && (
           <button
             onClick={handleSave}
-            disabled={!base64Data}
-            aria-disabled={!base64Data}
+            disabled={isSaving}
+            aria-disabled={isSaving}
             style={{
               display: "inline-flex", alignItems: "center", gap: "8px",
               padding: "12px 28px", borderRadius: "12px", border: "none",
-              background: !base64Data
+              background: isSaving
                 ? (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")
                 : "linear-gradient(135deg, #FFD600, #E6C200)",
-              color: !base64Data ? colors.textMuted : "#000",
+              color: isSaving ? colors.textMuted : "#000",
               fontWeight: 700, fontSize: "0.85rem",
-              cursor: !base64Data ? "wait" : "pointer",
-              boxShadow: !base64Data ? "none" : "0 4px 14px rgba(255,214,0,0.3)",
+              cursor: isSaving ? "wait" : "pointer",
+              boxShadow: isSaving ? "none" : "0 4px 14px rgba(255,214,0,0.3)",
             }}
           >
-            <Check size={16} /> {!base64Data ? "Reading file…" : `Save ${docLabel}`}
+            <Check size={16} /> {isSaving ? "Saving…" : `Save ${docLabel}`}
           </button>
         )}
       </div>
