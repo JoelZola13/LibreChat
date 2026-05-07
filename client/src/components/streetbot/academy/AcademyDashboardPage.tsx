@@ -313,7 +313,6 @@ export default function AcademyDashboardPage() {
   );
 
   const isInstructor = academyRole === "instructor";
-  const activeDashboardView = isInstructor ? "instructor" : "student";
   const hasEnrollment = activeEnrollments.length > 0;
 
   const enrollmentByCourseId = useMemo(
@@ -646,7 +645,7 @@ export default function AcademyDashboardPage() {
           <div className="flex h-16 items-center justify-between gap-4">
             <div className="hidden min-w-[140px] md:block">
               <span className="text-sm font-semibold" style={{ color: colors.text }}>
-                {activeDashboardView === "instructor" ? "Instructor Dashboard" : "Student Dashboard"}
+                Academy Dashboard
               </span>
             </div>
 
@@ -690,7 +689,7 @@ export default function AcademyDashboardPage() {
 
             <div className="w-10 min-w-[140px] text-right md:w-auto">
               <span className="hidden text-sm font-medium md:inline" style={{ color: colors.textSecondary }}>
-                {isInstructor ? "Instructor view" : hasEnrollment ? "Student view" : ""}
+                {isInstructor ? "Instructor account" : hasEnrollment ? "Student account" : ""}
               </span>
             </div>
           </div>
@@ -712,12 +711,12 @@ export default function AcademyDashboardPage() {
         }}
       >
         <div className="w-full min-w-0" style={{ maxWidth: contentMaxWidth, margin: "0 auto" }}>
-          {isInstructor ? (
-            <AcademyInstructorPage embedded />
-          ) : loading ? (
-            <DashboardSkeleton />
+          {loading ? (
+            <section id="student-dashboard">
+              <DashboardSkeleton />
+            </section>
           ) : !hasEnrollment ? (
-            <section>
+            <section id="student-dashboard">
               <div
                 className="rounded-[28px] border p-8 text-center md:p-10"
                 style={{
@@ -750,7 +749,7 @@ export default function AcademyDashboardPage() {
               </div>
             </section>
           ) : (
-            <>
+            <section id="student-dashboard">
               <section className="mb-8">
                 <div
                   className="rounded-[28px] border p-6 md:p-8"
@@ -1310,8 +1309,12 @@ export default function AcademyDashboardPage() {
                   </section>
                 </>
               )}
-            </>
+            </section>
           )}
+
+          <section id="instructor-dashboard" className="mt-10">
+            <AcademyInstructorPage embedded />
+          </section>
         </div>
       </div>
     </UnifiedLayout>
