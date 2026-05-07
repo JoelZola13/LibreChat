@@ -136,10 +136,11 @@ const SBPageFallback = () => (
 function AcademyInstructorDashboardRedirect({ basePath }: { basePath: '/academy' | '/learning' }) {
   const location = useLocation();
   const fromPrefix = `${basePath}/instructor`;
-  const suffix = location.pathname.startsWith(fromPrefix)
-    ? location.pathname.slice(fromPrefix.length)
-    : '';
-  const target = `${basePath}/dashboard/instructor${suffix}${location.search}${location.hash}`;
+  const suffix = location.pathname.startsWith(fromPrefix) ? location.pathname.slice(fromPrefix.length) : '';
+  const normalizedSuffix = suffix === '' || suffix === '/' ? '' : suffix;
+  const target = normalizedSuffix
+    ? `${basePath}/dashboard/instructor${normalizedSuffix}${location.search}${location.hash}`
+    : `${basePath}/dashboard${location.search}${location.hash}`;
   return <Navigate to={target} replace />;
 }
 
@@ -426,22 +427,11 @@ export const router = createBrowserRouter(
                   { path: 'academy/paths/:slug/enroll', element: sbPage(AcademyEnrollmentPage) },
                   { path: 'academy/saved', element: sbPage(AcademySavedPage) },
                   { path: 'academy/live-sessions', element: sbPage(AcademyLivePage) },
-                  {
-                    path: 'academy/live-sessions/:sessionId',
-                    element: sbPage(AcademyLiveSessionDetailPage),
-                  },
-                  {
-                    path: 'academy/dashboard/instructor/courses/:courseId',
-                    element: sbPage(AcademyInstructorCoursePage),
-                  },
-                  {
-                    path: 'academy/dashboard/instructor/courses/:courseId/submissions/quizzes',
-                    element: sbPage(AcademyInstructorSubmissionListPage),
-                  },
-                  {
-                    path: 'academy/dashboard/instructor/courses/:courseId/submissions/assignments',
-                    element: sbPage(AcademyInstructorSubmissionListPage),
-                  },
+                  { path: 'academy/live-sessions/:sessionId', element: sbPage(AcademyLiveSessionDetailPage) },
+                  { path: 'academy/dashboard/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
+                  { path: 'academy/dashboard/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'academy/dashboard/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'academy/dashboard/instructor', element: <Navigate to="/academy/dashboard" replace /> },
                   { path: 'academy/dashboard', element: sbPage(AcademyDashboardPage) },
                   { path: 'academy/dashboard/*', element: sbPage(AcademyDashboardPage) },
                   { path: 'academy/certificates', element: sbPage(AcademyCertificatesPage) },
@@ -476,22 +466,11 @@ export const router = createBrowserRouter(
                   { path: 'learning/paths/:slug/enroll', element: sbPage(AcademyEnrollmentPage) },
                   { path: 'learning/saved', element: sbPage(AcademySavedPage) },
                   { path: 'learning/live-sessions', element: sbPage(AcademyLivePage) },
-                  {
-                    path: 'learning/live-sessions/:sessionId',
-                    element: sbPage(AcademyLiveSessionDetailPage),
-                  },
-                  {
-                    path: 'learning/dashboard/instructor/courses/:courseId',
-                    element: sbPage(AcademyInstructorCoursePage),
-                  },
-                  {
-                    path: 'learning/dashboard/instructor/courses/:courseId/submissions/quizzes',
-                    element: sbPage(AcademyInstructorSubmissionListPage),
-                  },
-                  {
-                    path: 'learning/dashboard/instructor/courses/:courseId/submissions/assignments',
-                    element: sbPage(AcademyInstructorSubmissionListPage),
-                  },
+                  { path: 'learning/live-sessions/:sessionId', element: sbPage(AcademyLiveSessionDetailPage) },
+                  { path: 'learning/dashboard/instructor/courses/:courseId', element: sbPage(AcademyInstructorCoursePage) },
+                  { path: 'learning/dashboard/instructor/courses/:courseId/submissions/quizzes', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'learning/dashboard/instructor/courses/:courseId/submissions/assignments', element: sbPage(AcademyInstructorSubmissionListPage) },
+                  { path: 'learning/dashboard/instructor', element: <Navigate to="/learning/dashboard" replace /> },
                   { path: 'learning/dashboard', element: sbPage(AcademyDashboardPage) },
                   { path: 'learning/dashboard/*', element: sbPage(AcademyDashboardPage) },
                   { path: 'learning/certificates', element: sbPage(AcademyCertificatesPage) },

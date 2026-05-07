@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Award, Compass, LayoutDashboard, BookOpen, ClipboardCheck, Map, ChevronLeft } from "lucide-react";
+import { Compass, LayoutDashboard, BookOpen, Map, ChevronLeft } from "lucide-react";
 
 interface AcademySidebarProps {
   isCollapsed?: boolean;
@@ -26,13 +26,6 @@ export function AcademySidebar({
         { href: `${basePath}/paths`, label: "Programs", icon: Map, color: "#8B5CF6" },
         { href: `${basePath}/courses`, label: "Courses", icon: BookOpen, color: "#FFD600" },
         { href: `${basePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard, color: "#FACC15" },
-        { href: `${basePath}/certificates`, label: "Certificates", icon: Award, color: "#F59E0B" },
-      ],
-    },
-    {
-      title: "Instructor",
-      items: [
-        { href: `${basePath}/dashboard/instructor`, label: "Instructor", icon: ClipboardCheck, color: "#F97316" },
       ],
     },
   ];

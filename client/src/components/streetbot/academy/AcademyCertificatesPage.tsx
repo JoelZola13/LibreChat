@@ -326,7 +326,6 @@ export default function AcademyCertificatesPage() {
     { href: `${academyBasePath}/paths`, label: "Programs", icon: Target },
     { href: `${academyBasePath}/courses`, label: "Courses", icon: BookOpen },
     { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-    { href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award },
   ];
 
   const copyCode = async (certificateId: string, code: string) => {
@@ -462,11 +461,11 @@ export default function AcademyCertificatesPage() {
 
           <div className="w-10 min-w-[140px] text-right md:w-auto">
             <a
-              href={`${academyBasePath}/dashboard/instructor`}
+              href={`${academyBasePath}/dashboard`}
               className="hidden text-sm font-medium md:inline-flex"
               style={{ color: "#C084FC" }}
             >
-              Instructor Dashboard
+              Dashboard
             </a>
           </div>
         </div>

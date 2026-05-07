@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useOutletContext } from "react-router-dom";
 import {
   ArrowRight,
-  Award,
   BookOpen,
   CalendarDays,
   Compass,
@@ -516,7 +515,6 @@ export default function AcademyClient() {
     ...(hasEnrollment || isInstructor
       ? [
           { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-          ...(hasEnrollment ? [{ href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award }] : []),
         ]
       : []),
   ];

@@ -48,6 +48,22 @@ type Enrollment = {
   last_accessed_at?: string | null;
 };
 
+type Certificate = {
+  id: string;
+  user_id: string;
+  recipient_name?: string | null;
+  course_id?: string | null;
+  learning_path_id?: string | null;
+  target_type?: "course" | "learning_path";
+  target_id?: string | null;
+  target_title?: string | null;
+  certificate_title?: string | null;
+  issuer_name?: string | null;
+  verification_code: string;
+  issued_at: string;
+  updated_at?: string | null;
+};
+
 type Module = {
   id: string;
   title?: string | null;
@@ -117,6 +133,30 @@ function formatCountdown(isoDate: string) {
   return `Starts in ${totalDays}d ${totalHours % 24}h`;
 }
 
+function formatCertificateDate(isoDate?: string | null) {
+  if (!isoDate) {
+    return "Recently issued";
+  }
+
+  return new Date(isoDate).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function dedupeCertificates(certificates: Certificate[]) {
+  return Array.from(
+    new Map(
+      certificates.map((certificate) => {
+        const type = certificate.target_type || (certificate.learning_path_id ? "learning_path" : "course");
+        const targetId = certificate.target_id || certificate.learning_path_id || certificate.course_id || certificate.id;
+        return [`${type}:${targetId}`, certificate];
+      }),
+    ).values(),
+  );
+}
+
 async function fetchCourses(): Promise<Course[]> {
   const response = await sbFetch("/api/academy/courses");
   if (!response.ok) {
@@ -141,6 +181,7 @@ export default function AcademyDashboardPage() {
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
@@ -162,9 +203,10 @@ export default function AcademyDashboardPage() {
 
     async function load() {
       try {
-        const [courseData, enrollmentsResp, sessionResponse] = await Promise.all([
+        const [courseData, enrollmentsResp, certificatesResp, sessionResponse] = await Promise.all([
           fetchCourses().catch(() => []),
           sbFetch(`/api/academy/enrollments?user_id=${encodeURIComponent(userId)}`),
+          sbFetch(`/api/academy/certificates/${encodeURIComponent(userId)}`),
           listSessions({ userId }).catch(() => ({ sessions: [], total: 0, upcoming_count: 0, live_count: 0 })),
         ]);
 
@@ -175,12 +217,49 @@ export default function AcademyDashboardPage() {
         setCourses(courseData);
         setSessions(sessionResponse.sessions || []);
 
+        let enrollmentData: Enrollment[] = [];
         if (enrollmentsResp.ok) {
-          const enrollmentData = await enrollmentsResp.json();
-          setEnrollments(Array.isArray(enrollmentData) ? enrollmentData : []);
+          const enrollmentsJson = await enrollmentsResp.json();
+          enrollmentData = Array.isArray(enrollmentsJson) ? enrollmentsJson : [];
+          setEnrollments(enrollmentData);
         } else {
           setEnrollments([]);
         }
+
+        const completedCourseIds = enrollmentData
+          .filter(
+            (enrollment) =>
+              enrollment.status !== "dropped" &&
+              (enrollment.status === "completed" || enrollment.progress_percent >= 100),
+          )
+          .map((enrollment) => enrollment.course_id);
+
+        let certificateData = certificatesResp.ok ? await certificatesResp.json() : [];
+        certificateData = Array.isArray(certificateData) ? certificateData : [];
+
+        const existingCertificateIds = new Set(
+          certificateData.map((certificate: Certificate) => certificate.course_id),
+        );
+        const missingCertificateIds = completedCourseIds.filter((courseId) => !existingCertificateIds.has(courseId));
+
+        if (missingCertificateIds.length > 0) {
+          const autoIssuedCertificates = await Promise.all(
+            missingCertificateIds.map(async (courseId) => {
+              const response = await sbFetch(
+                `/api/academy/certificates/auto-issue?user_id=${encodeURIComponent(userId)}&course_id=${encodeURIComponent(courseId)}`,
+                { method: "POST" },
+              );
+              return response.ok ? ((await response.json()) as Certificate) : null;
+            }),
+          );
+
+          certificateData = dedupeCertificates([
+            ...certificateData,
+            ...(autoIssuedCertificates.filter(Boolean) as Certificate[]),
+          ]);
+        }
+
+        setCertificates(certificateData);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -234,8 +313,7 @@ export default function AcademyDashboardPage() {
   );
 
   const isInstructor = academyRole === "instructor";
-  const isInstructorViewRoute = location.pathname.includes("/dashboard/instructor");
-  const activeDashboardView = isInstructorViewRoute || (isInstructor && activeEnrollments.length === 0) ? "instructor" : "student";
+  const activeDashboardView = isInstructor ? "instructor" : "student";
   const hasEnrollment = activeEnrollments.length > 0;
 
   const enrollmentByCourseId = useMemo(
@@ -299,6 +377,16 @@ export default function AcademyDashboardPage() {
   const completedCourses = useMemo(
     () => activeEnrollments.filter((enrollment) => enrollment.progress_percent >= 100).length,
     [activeEnrollments],
+  );
+
+  const earnedCertificates = useMemo(
+    () =>
+      [...certificates].sort(
+        (left, right) =>
+          new Date(right.updated_at || right.issued_at).getTime() -
+          new Date(left.updated_at || left.issued_at).getTime(),
+      ),
+    [certificates],
   );
 
   const inProgressCourses = useMemo(
@@ -476,16 +564,9 @@ export default function AcademyDashboardPage() {
     ...(hasEnrollment || isInstructor
       ? [
           { href: `${academyBasePath}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-          ...(hasEnrollment ? [{ href: `${academyBasePath}/certificates`, label: "Certificates", icon: Award }] : []),
         ]
       : []),
   ];
-
-  const dashboardViewTabs =
-    isInstructor ? [
-      { href: `${academyBasePath}/dashboard`, label: "Student Dashboard", active: activeDashboardView === "student" },
-      { href: `${academyBasePath}/dashboard/instructor`, label: "Instructor Dashboard", active: activeDashboardView === "instructor" },
-    ] : [];
 
   const backgroundOrbs = (
     <>
@@ -608,24 +689,9 @@ export default function AcademyDashboardPage() {
             </div>
 
             <div className="w-10 min-w-[140px] text-right md:w-auto">
-              {isInstructor ? (
-                <div className="hidden items-center gap-2 md:inline-flex">
-                  {dashboardViewTabs.map((item) => (
-                    <a
-                      key={item.href}
-                      href={item.href}
-                      className="rounded-full px-3 py-1.5 text-xs font-semibold transition-colors"
-                      style={{
-                        background: item.active ? colors.accent : colors.surface,
-                        color: item.active ? "#000" : colors.textSecondary,
-                        border: `1px solid ${item.active ? colors.accent : colors.border}`,
-                      }}
-                    >
-                      {item.label}
-                    </a>
-                  ))}
-                </div>
-              ) : null}
+              <span className="hidden text-sm font-medium md:inline" style={{ color: colors.textSecondary }}>
+                {isInstructor ? "Instructor view" : hasEnrollment ? "Student view" : ""}
+              </span>
             </div>
           </div>
         </div>
@@ -646,66 +712,8 @@ export default function AcademyDashboardPage() {
         }}
       >
         <div className="w-full min-w-0" style={{ maxWidth: contentMaxWidth, margin: "0 auto" }}>
-          {isInstructor && (
-            <section className="mb-6">
-              <div
-                className="inline-flex flex-wrap items-center gap-2 rounded-full border p-1"
-                style={{ borderColor: colors.border, background: colors.cardBgStrong }}
-              >
-                {dashboardViewTabs.map((item) => (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    className="rounded-full px-4 py-2 text-sm font-semibold transition-colors"
-                    style={{
-                      background: item.active ? colors.accent : "transparent",
-                      color: item.active ? "#000" : colors.textSecondary,
-                    }}
-                  >
-                    {item.label}
-                  </a>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {activeDashboardView === "instructor" ? (
-            isInstructor ? (
-              <AcademyInstructorPage embedded />
-            ) : (
-              <section>
-                <div
-                  className="rounded-[28px] border p-8 text-center md:p-10"
-                  style={{
-                    borderColor: colors.border,
-                    background: colors.cardBg,
-                    backdropFilter: "blur(24px)",
-                    boxShadow: colors.glassShadow,
-                  }}
-                >
-                  <div
-                    className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
-                    style={{ background: "rgba(249,115,22,0.12)" }}
-                  >
-                    <LayoutDashboard className="h-7 w-7" style={{ color: "#F97316" }} />
-                  </div>
-                  <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
-                    Instructor dashboard not available
-                  </h1>
-                  <p className="mx-auto mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
-                    This Academy account is not set up as an instructor yet. Switch back to the student dashboard or contact an admin if that should change.
-                  </p>
-                  <a
-                    href={`${academyBasePath}/dashboard`}
-                    className="mt-6 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-                    style={{ background: colors.accent, color: "#000" }}
-                  >
-                    Open Student Dashboard
-                    <ArrowRight className="h-4 w-4" />
-                  </a>
-                </div>
-              </section>
-            )
+          {isInstructor ? (
+            <AcademyInstructorPage embedded />
           ) : loading ? (
             <DashboardSkeleton />
           ) : !hasEnrollment ? (
@@ -1234,6 +1242,70 @@ export default function AcademyDashboardPage() {
                           contentType="assignment"
                         />
                       </div>
+                    </div>
+                  </section>
+
+                  <section className="mb-8">
+                    <div
+                      className="rounded-[28px] border p-6"
+                      style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.glassShadow }}
+                    >
+                      <div className="mb-4 flex items-center justify-between gap-4">
+                        <div>
+                          <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                            Certificates
+                          </h2>
+                          <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+                            Your passed courses and earned certificates live here inside the student dashboard.
+                          </p>
+                        </div>
+                        <span className="text-sm font-semibold" style={{ color: colors.accent }}>
+                          {earnedCertificates.length} earned
+                        </span>
+                      </div>
+
+                      {earnedCertificates.length === 0 ? (
+                        <div
+                          className="rounded-[22px] border p-5 text-sm"
+                          style={{ borderColor: colors.border, color: colors.textSecondary, background: colors.cardBgStrong }}
+                        >
+                          Finish a course to unlock your first certificate here.
+                        </div>
+                      ) : (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {earnedCertificates.map((certificate) => (
+                            <div
+                              key={certificate.id}
+                              className="rounded-[22px] border p-5"
+                              style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                                    {certificate.target_type === "learning_path" || certificate.learning_path_id ? "Program certificate" : "Course certificate"}
+                                  </p>
+                                  <p className="mt-2 text-lg font-semibold" style={{ color: colors.text }}>
+                                    {certificate.certificate_title || certificate.target_title || "Certificate of Achievement"}
+                                  </p>
+                                </div>
+                                <div
+                                  className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                                  style={{ background: "rgba(245,158,11,0.14)" }}
+                                >
+                                  <Award className="h-5 w-5" style={{ color: "#F59E0B" }} />
+                                </div>
+                              </div>
+                              <p className="mt-3 text-sm" style={{ color: colors.textSecondary }}>
+                                {certificate.target_title || "Street Voices Academy"}
+                              </p>
+                              <div className="mt-4 flex flex-wrap gap-3 text-xs" style={{ color: colors.textMuted }}>
+                                <span>Issued {formatCertificateDate(certificate.updated_at || certificate.issued_at)}</span>
+                                <span>Code: {certificate.verification_code}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </section>
                 </>
