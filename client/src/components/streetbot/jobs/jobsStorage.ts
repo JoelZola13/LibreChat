@@ -351,8 +351,6 @@ export function saveResumeVersion(version: ResumeVersion): void {
 
 export function deleteResumeVersion(userId: string, versionId: string): void {
   const all = read<ResumeVersion>(RESUME_VERSIONS_KEY);
-  const userVersions = all.filter((v) => v.userId === userId);
-  if (userVersions.length <= 1) return; // Don't delete the last version
   const filtered = all.filter((v) => !(v.id === versionId && v.userId === userId));
   // If we deleted the default, make the first remaining version default
   const remaining = filtered.filter((v) => v.userId === userId);
@@ -360,6 +358,21 @@ export function deleteResumeVersion(userId: string, versionId: string): void {
     remaining[0].isDefault = true;
   }
   write(RESUME_VERSIONS_KEY, filtered);
+  // If the user has no versions left, also clear the legacy resume key for
+  // this user so getResumeVersions() doesn't auto-migrate it back as "My Resume".
+  if (remaining.length === 0) {
+    try {
+      const raw = localStorage.getItem(RESUME_KEY);
+      if (raw) {
+        const legacy = JSON.parse(raw) as Partial<Resume>;
+        if (legacy && legacy.userId === userId) {
+          localStorage.removeItem(RESUME_KEY);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export function setDefaultResumeVersion(userId: string, versionId: string): void {

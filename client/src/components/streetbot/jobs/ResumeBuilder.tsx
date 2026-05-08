@@ -268,7 +268,7 @@ export default function ResumeBuilder({ userId, existingResume, onComplete, onCa
 
   const canProceed = () => {
     switch (step) {
-      case 0: return fullName.trim().length > 0 && email.trim().length > 0;
+      case 0: return fullName.trim().split(/\s+/).filter(Boolean).length >= 2 && email.trim().length > 0;
       case 1: return objective.trim().length > 0;
       default: return true;
     }
@@ -311,6 +311,11 @@ export default function ResumeBuilder({ userId, existingResume, onComplete, onCa
         <div>
           <label style={labelStyle}>Full Name *</label>
           <input style={inputStyle} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Jordan Mitchell" />
+          {fullName.trim().length > 0 && fullName.trim().split(/\s+/).filter(Boolean).length < 2 && (
+            <div style={{ fontSize: "0.72rem", color: "#EF4444", marginTop: "6px" }}>
+              Please enter both your first and last name.
+            </div>
+          )}
         </div>
         <div>
           <label style={labelStyle}>Email Address *</label>

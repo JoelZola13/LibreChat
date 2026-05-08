@@ -1552,8 +1552,8 @@ export default function JobsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [paginationMode, setPaginationMode] = useState<"paginated" | "infinite">("paginated");
   const [currentPage, setCurrentPage] = useState(1);
-  const [loadedCount, setLoadedCount] = useState(20);
-  const PAGE_SIZE = 20;
+  const [loadedCount, setLoadedCount] = useState(9);
+  const PAGE_SIZE = 9;
   const { isAdmin } = useUserRole();
 
   const availableTags = useMemo(() => {
@@ -1794,7 +1794,7 @@ export default function JobsPage() {
     setFilterSalaryMax("");
     setJobQuery("");
     setCurrentPage(1);
-    setLoadedCount(20);
+    setLoadedCount(9);
   }, []);
 
   // Load applied job IDs from localStorage
@@ -2460,7 +2460,7 @@ export default function JobsPage() {
                     Pages
                   </button>
                   <button
-                    onClick={() => { setPaginationMode("infinite"); setLoadedCount(20); }}
+                    onClick={() => { setPaginationMode("infinite"); setLoadedCount(9); }}
                     style={{
                       padding: "6px 14px", fontSize: "0.75rem", fontWeight: 600, border: "none", cursor: "pointer",
                       background: paginationMode === "infinite" ? colors.accent : "transparent",
@@ -2536,7 +2536,7 @@ export default function JobsPage() {
                     const observer = new IntersectionObserver(
                       (entries) => {
                         if (entries[0].isIntersecting) {
-                          setLoadedCount((prev) => prev + 20);
+                          setLoadedCount((prev) => prev + 9);
                           observer.disconnect();
                         }
                       },
