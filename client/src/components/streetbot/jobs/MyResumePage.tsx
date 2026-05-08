@@ -1194,6 +1194,29 @@ ${parts.join("")}
         </div>
       </div>
 
+      {!isLoadingJobs && recommendedJobs.length > 0 && recommendedJobs.every((r) => r.match.score <= 28) && (
+        <div
+          style={{
+            marginBottom: "16px",
+            padding: "12px 16px",
+            borderRadius: "14px",
+            border: `1px solid rgba(245,158,11,0.3)`,
+            background: "rgba(245,158,11,0.08)",
+            color: colors.text,
+            fontSize: "13px",
+            lineHeight: 1.5,
+            display: "flex",
+            gap: "10px",
+            alignItems: "flex-start",
+          }}
+        >
+          <Sparkles style={{ width: "16px", height: "16px", color: "#F59E0B", flexShrink: 0, marginTop: "2px" }} />
+          <div>
+            <strong>These percentages aren't personalized yet.</strong> Add your skills, interests, and experience to your resume so we can calculate real match scores. Until then, every match falls back to our minimum (28%).
+          </div>
+        </div>
+      )}
+
       {isLoadingJobs ? (
         <p style={{ margin: 0, fontSize: "14px", color: colors.textSecondary }}>Loading recommendations...</p>
       ) : recommendedJobs.length === 0 ? (
@@ -1428,7 +1451,15 @@ ${parts.join("")}
                             <Eye size={13} /> Preview
                           </button>
                           <button
-                            onClick={() => { setActiveVersionId(v.id); setResume(v.resume); setMode("edit"); }}
+                            onClick={() => {
+                              setActiveVersionId(v.id);
+                              setResume(v.resume);
+                              setMode("edit");
+                              // Scroll the editor into view so the click has visible feedback.
+                              requestAnimationFrame(() => {
+                                document.getElementById("resume-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              });
+                            }}
                             style={{ padding: "6px 12px", borderRadius: "10px", border: "none", background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", color: colors.textMuted, fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
                           >
                             <Pencil size={13} /> Edit
@@ -1510,7 +1541,7 @@ ${parts.join("")}
                 )}
 
                 {mode === "edit" && resumeVersions.length > 0 && (
-                  <div style={{ marginBottom: "20px" }}>
+                  <div id="resume-editor" style={{ marginBottom: "20px", scrollMarginTop: "16px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "8px", flexWrap: "wrap" }}>
                       <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: 0 }}>
                         Editing: {resumeVersions.find((v) => v.id === activeVersionId)?.label || "Resume"}
@@ -1657,6 +1688,58 @@ ${parts.join("")}
                 {hasCoverLetters && (
                   <div style={{ ...glassCard, padding: "20px 24px", borderRadius: "20px" }}>
                     <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: "0 0 16px" }}>Your Saved Cover Letters</h3>
+                    {/* Uploaded cover letter files */}
+                    {uploadedDocs.filter((d) => d.kind === "cover_letter").length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+                        {uploadedDocs.filter((d) => d.kind === "cover_letter").map((doc) => (
+                          <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", borderRadius: "14px", background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", border: `1px solid ${colors.border}` }}>
+                            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(59,130,246,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <Copy size={16} color="#3B82F6" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.text }}>{doc.label}</div>
+                              <div style={{ fontSize: "0.7rem", color: colors.textMuted }}>Uploaded \u00b7 {doc.fileName}{doc.isDefault ? " \u00b7 Default" : ""}</div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                try {
+                                  const byteString = atob(doc.base64Data);
+                                  const bytes = new Uint8Array(byteString.length);
+                                  for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
+                                  const blob = new Blob([bytes], { type: doc.mimeType || "application/octet-stream" });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = doc.fileName || doc.label;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  document.body.removeChild(a);
+                                  setTimeout(() => URL.revokeObjectURL(url), 0);
+                                } catch (err) {
+                                  setToast("Could not download file");
+                                }
+                              }}
+                              aria-label={`Download ${doc.label}`}
+                              title="Download"
+                              style={{ padding: "6px 10px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.75rem", fontWeight: 600 }}
+                            >
+                              <Download size={13} /> Download
+                            </button>
+                            <button
+                              onClick={() => {
+                                deleteUploadedDocument(userId, doc.id);
+                                setUploadedDocs(getUploadedDocuments(userId));
+                              }}
+                              aria-label={`Delete ${doc.label}`}
+                              title="Delete"
+                              style={{ padding: "6px", borderRadius: "8px", border: "none", background: "rgba(239,68,68,0.06)", color: "#EF4444", cursor: "pointer", display: "flex", alignItems: "center" }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <CoverLetterEditor userId={userId} colors={colors} isDark={isDark} glassCard={glassCard} glassSurface={glassSurface} />
                   </div>
                 )}

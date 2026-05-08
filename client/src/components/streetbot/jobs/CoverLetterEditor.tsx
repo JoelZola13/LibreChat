@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, FileText, Save, Clock } from "lucide-react";
+import { Plus, Trash2, FileText, Save, Clock, Download } from "lucide-react";
 import { getCoverLetters, saveCoverLetter, deleteCoverLetter } from "./jobsStorage";
 import type { CoverLetter } from "./types";
 
@@ -88,6 +88,52 @@ export default function CoverLetterEditor({ userId, colors, isDark, glassCard, g
     try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
     catch { return iso; }
   };
+
+  // Print clean cover letter to a popup window so PDF export ignores live styling
+  const downloadAsPdf = useCallback(() => {
+    const title = editTitle.trim() || "Cover Letter";
+    const content = editContent;
+    const esc = (s?: string | null) =>
+      String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(title)}</title>
+<style>
+@page { margin: 0.75in; }
+* { box-sizing: border-box; }
+html, body { background: #fff; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #111; line-height: 1.6; padding: 0; font-size: 12pt; }
+h1 { font-size: 14pt; font-weight: 700; margin: 0 0 18px; letter-spacing: -0.005em; }
+.body { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>${esc(title)}</h1>
+<div class="body">${esc(content)}</div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=1100");
+    if (!win) {
+      window.print();
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+      setTimeout(() => win.close(), 500);
+    }, 250);
+  }, [editTitle, editContent]);
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -192,8 +238,23 @@ export default function CoverLetterEditor({ userId, colors, isDark, glassCard, g
                   style={{ ...inputStyle, resize: "vertical" }}
                 />
               </div>
-              <div style={{ fontSize: "0.7rem", color: colors.textMuted, marginTop: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                <Save size={10} /> Auto-saved
+              <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                <div style={{ fontSize: "0.7rem", color: colors.textMuted, display: "flex", alignItems: "center", gap: "4px" }}>
+                  <Save size={10} /> Auto-saved
+                </div>
+                <button
+                  onClick={downloadAsPdf}
+                  aria-label="Download cover letter as PDF"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    padding: "8px 14px", borderRadius: "10px", border: `1px solid ${colors.border}`,
+                    background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
+                    color: colors.text, fontWeight: 600, fontSize: "0.78rem",
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  <Download size={14} /> Download PDF
+                </button>
               </div>
             </div>
           )}
