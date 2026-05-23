@@ -147,6 +147,11 @@
       '.dark nav#chat-history-nav svg { color: white !important; }',
       '.dark img[src*="mdi/svg"] { filter: brightness(0) invert(1) !important; }',
       '.dark #sv-sidebar-nav-wrap img { filter: brightness(0) invert(1) !important; opacity: 1 !important; }',
+      'nav#chat-history-nav, #sv-standalone-sidebar { font-family: Rubik, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }',
+      'html[data-theme="dark"] .nav, html.dark .nav, html[data-theme="dark"] nav#chat-history-nav, html.dark nav#chat-history-nav, html[data-theme="dark"] #sv-standalone-sidebar, html.dark #sv-standalone-sidebar { background: #000 !important; border-right: 0.5px solid rgba(255,255,255,0.10) !important; }',
+      'html[data-theme="light"] .nav, html.light .nav, html:not(.dark) .nav, html[data-theme="light"] nav#chat-history-nav, html.light nav#chat-history-nav, html:not(.dark) nav#chat-history-nav, html[data-theme="light"] #sv-standalone-sidebar, html.light #sv-standalone-sidebar { background: #fff !important; border-right: 0.5px solid rgba(0,0,0,0.10) !important; }',
+      'html[data-theme="dark"] nav#chat-history-nav > .flex-1.flex-col, html.dark nav#chat-history-nav > .flex-1.flex-col { background: #000 !important; }',
+      'html[data-theme="light"] nav#chat-history-nav > .flex-1.flex-col, html.light nav#chat-history-nav > .flex-1.flex-col, html:not(.dark) nav#chat-history-nav > .flex-1.flex-col { background: #fff !important; }',
     ].join(' ');
     document.head.appendChild(s);
   })();
@@ -297,7 +302,8 @@
         '#sv-sidebar-nav-wrap { order: 4 !important; flex-shrink: 0 !important; max-height: 240px !important; overflow-y: auto !important; overflow-x: hidden !important; scrollbar-width: none !important; mask-image: linear-gradient(to bottom, black 80%, transparent 100%) !important; -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%) !important; }',
         '#sv-sidebar-nav-wrap::-webkit-scrollbar { width: 0 !important; display: none !important; }',
         // Pin the SV header at top while everything else scrolls
-        '#sv-sidebar-header { position: sticky !important; top: 0 !important; z-index: 10 !important; background: var(--surface-primary-alt, #fff) !important; }',
+        'html[data-theme="dark"] #sv-sidebar-header, html.dark #sv-sidebar-header { position: sticky !important; top: 0 !important; z-index: 10 !important; background: #000 !important; }',
+        'html[data-theme="light"] #sv-sidebar-header, html.light #sv-sidebar-header, html:not(.dark) #sv-sidebar-header { position: sticky !important; top: 0 !important; z-index: 10 !important; background: #fff !important; }',
         // Chat section: fill remaining space, hide ITS scrollbar (outer handles it)
         '.flex.min-h-0.flex-grow.flex-col.overflow-hidden { flex: 1 1 auto !important; min-height: 200px !important; overflow: hidden !important; }',
         // Hide ALL internal scrollbars — only the outer wrapper scrollbar shows
@@ -641,8 +647,8 @@
       css.textContent = [
         '#' + STANDALONE_ID + ' { position: fixed; left: 0; top: 0; bottom: 0; width: 260px; z-index: 110; display: flex; flex-direction: column; transition: width 0.2s ease; overflow: hidden; }',
         '#' + STANDALONE_ID + '.sv-collapsed { width: 56px; }',
-        '.dark #' + STANDALONE_ID + ' { background: var(--surface-primary-alt, #171717); border-right: 1px solid rgba(255,255,255,0.08); }',
-        'html:not(.dark) #' + STANDALONE_ID + ' { background: var(--surface-primary-alt, #f9f9f9); border-right: 1px solid rgba(0,0,0,0.08); }',
+        '.dark #' + STANDALONE_ID + ' { background: #000; border-right: 0.5px solid rgba(255,255,255,0.10); }',
+        'html:not(.dark) #' + STANDALONE_ID + ' { background: #fff; border-right: 0.5px solid rgba(0,0,0,0.10); }',
         // Hide text in collapsed mode
         '#' + STANDALONE_ID + '.sv-collapsed [role="button"] span { display: none !important; }',
         '#' + STANDALONE_ID + '.sv-collapsed [role="button"] > div { padding-right: 0 !important; justify-content: center !important; flex: unset !important; }',

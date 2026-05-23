@@ -31,7 +31,7 @@ function HomepageTopNav() {
 
   return (
     <>
-    <style>{`.sv-login-btn { background: transparent; border: 2px solid #FFD600; color: #000; transition: 0.3s ease-in-out; } html.dark .sv-login-btn { color: #fff; } .sv-login-btn:hover { background: rgb(255, 198, 0) !important; color: #000 !important; }`}</style>
+    <style>{`.sv-login-btn { background: transparent; border: 2px solid #FFD600; color: #000; transition: 0.3s ease-in-out; } html.dark .sv-login-btn { color: #fff; } .sv-login-btn:hover { background: rgb(255, 198, 0) !important; color: #000 !important; } .sv-home-nav-link { transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; } html.dark .sv-home-nav-link, html.light .sv-home-nav-link, [data-theme="dark"] .sv-home-nav-link, [data-theme="light"] .sv-home-nav-link { border-radius: 999px !important; } html.dark .sv-home-nav-link:hover, html.dark .sv-home-nav-link:focus-visible, [data-theme="dark"] .sv-home-nav-link:hover, [data-theme="dark"] .sv-home-nav-link:focus-visible { background: #28292C !important; color: #E6E7F2 !important; box-shadow: none; } html.light .sv-home-nav-link:hover, html.light .sv-home-nav-link:focus-visible, [data-theme="light"] .sv-home-nav-link:hover, [data-theme="light"] .sv-home-nav-link:focus-visible { background: var(--surface-hover) !important; color: var(--text-primary) !important; box-shadow: 0 0 0 1px rgba(227, 227, 227, 0.18); } .sv-home-donate-btn { border-radius: 999px; transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; } html.light .sv-home-donate-btn, [data-theme="light"] .sv-home-donate-btn { background: transparent !important; color: var(--text-primary) !important; border: 2px solid var(--text-primary) !important; padding: 6px 28px !important; box-shadow: 0 0 0 1px rgba(33, 33, 33, 0.08); } html.dark .sv-home-donate-btn, [data-theme="dark"] .sv-home-donate-btn { background: transparent !important; color: #E1E3EB !important; border: 2px solid #E1E3EB !important; padding: 6px 28px !important; } html.light .sv-home-donate-btn:hover, html.light .sv-home-donate-btn:focus-visible, [data-theme="light"] .sv-home-donate-btn:hover, [data-theme="light"] .sv-home-donate-btn:focus-visible, html.dark .sv-home-donate-btn:hover, html.dark .sv-home-donate-btn:focus-visible, [data-theme="dark"] .sv-home-donate-btn:hover, [data-theme="dark"] .sv-home-donate-btn:focus-visible { background: #FFD600 !important; border-color: #FFD600 !important; color: #000 !important; box-shadow: 0 0 0 1px rgba(255, 214, 0, 0.14); }`}</style>
     <div className="absolute top-0 z-10 w-full px-4 sm:px-6">
       <div className="relative flex h-[60px] w-full items-center justify-between">
         {/* Left: phone (mobile) */}
@@ -70,7 +70,7 @@ function HomepageTopNav() {
                 href={item.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded-lg px-2 py-2 text-text-primary transition-colors hover:bg-surface-hover xl:px-3"
+                className="sv-home-nav-link flex items-center gap-1 rounded-lg px-2 py-2 text-text-primary transition-colors hover:bg-surface-hover xl:px-3"
                 style={{ fontSize: 14, fontFamily: 'Rubik, sans-serif', whiteSpace: 'nowrap' }}
               >
                 {item.label}
@@ -79,7 +79,7 @@ function HomepageTopNav() {
               <Link
                 key={item.label}
                 to={item.href}
-                className="flex items-center gap-1 rounded-lg px-2 py-2 text-text-primary transition-colors hover:bg-surface-hover xl:px-3"
+                className="sv-home-nav-link flex items-center gap-1 rounded-lg px-2 py-2 text-text-primary transition-colors hover:bg-surface-hover xl:px-3"
                 style={{ fontSize: 14, fontFamily: 'Rubik, sans-serif', whiteSpace: 'nowrap' }}
               >
                 {item.label}
@@ -92,7 +92,7 @@ function HomepageTopNav() {
         <div className="flex items-center gap-2">
           <Link
             to="/donate"
-            className="hidden font-bold text-black transition-opacity hover:opacity-90 lg:inline-flex"
+            className="sv-home-donate-btn hidden font-bold text-black transition-opacity hover:opacity-90 lg:inline-flex"
             style={{ fontSize: 14, fontFamily: 'Rubik, sans-serif', background: '#FFD600', borderRadius: 25, padding: '8px 18px', border: '2px solid #FFD600' }}
           >
             Donate

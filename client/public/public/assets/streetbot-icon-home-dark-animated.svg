@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 326.56 321.24" overflow="visible">
+  <defs>
+    <style>
+      .sv-dark-logo-shell {
+        fill: #e1e3eb;
+      }
+
+      .sv-dark-logo-face {
+        fill: #ffd600;
+      }
+
+      .sv-dark-logo-face-stroke {
+        fill: #cea600;
+      }
+
+      .sv-dark-logo-ink {
+        fill: #262930;
+      }
+
+      .eye {
+        animation: blink 5s infinite;
+        transform-origin: center;
+        transform-box: fill-box;
+      }
+
+      .eye-track {
+        will-change: transform;
+      }
+
+      .antenna {
+        animation: antennaBob 3s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+        transform-origin: bottom center;
+        transform-box: fill-box;
+      }
+
+      .bot-head {
+        animation: headBounce 3s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+      }
+
+      .smile {
+        animation: smilePulse 4s ease-in-out infinite;
+        transform-origin: center;
+        transform-box: fill-box;
+      }
+
+      @keyframes blink {
+        0%, 100% { transform: scaleY(1); }
+        14% { transform: scaleY(1); }
+        15% { transform: scaleY(0.05); }
+        17% { transform: scaleY(1); }
+        18% { transform: scaleY(1); }
+        19% { transform: scaleY(0.05); }
+        21% { transform: scaleY(1); }
+        70% { transform: scaleY(1); }
+        71% { transform: scaleY(0.05); }
+        73% { transform: scaleY(1); }
+      }
+
+      @keyframes antennaBob {
+        0%, 100% { transform: rotate(0deg) translateY(0); }
+        25% { transform: rotate(2deg) translateY(-2px); }
+        50% { transform: rotate(0deg) translateY(-4px); }
+        75% { transform: rotate(-2deg) translateY(-2px); }
+      }
+
+      @keyframes headBounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-12px); }
+      }
+
+      @keyframes smilePulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.03); opacity: 0.95; }
+      }
+    </style>
+  </defs>
+  <script><![CDATA[
+    (function () {
+      var script = document.currentScript;
+      var svg = script && (script.ownerSVGElement || (script.closest ? script.closest('svg') : null));
+
+      if (!svg && document.documentElement && document.documentElement.nodeName.toLowerCase() === 'svg') {
+        svg = document.documentElement;
+      }
+
+      if (!svg || typeof svg.createSVGPoint !== 'function') {
+        return;
+      }
+
+      var eyes = Array.prototype.slice.call(svg.querySelectorAll('.eye-track'));
+      if (!eyes.length) {
+        return;
+      }
+
+      var doc = svg.ownerDocument || document;
+      var win = doc.defaultView || window;
+      if (win.matchMedia && !win.matchMedia('(pointer: fine)').matches) {
+        return;
+      }
+
+      var point = svg.createSVGPoint();
+      var frameId = null;
+      var resetTimer = null;
+
+      function readNumber(node, name, fallback) {
+        var value = parseFloat(node.getAttribute(name));
+        return isNaN(value) ? fallback : value;
+      }
+
+      var state = eyes.map(function (eye) {
+        return {
+          node: eye,
+          centerX: readNumber(eye, 'data-eye-x', 0),
+          centerY: readNumber(eye, 'data-eye-y', 0),
+          maxX: readNumber(eye, 'data-eye-max-x', 4.5),
+          maxY: readNumber(eye, 'data-eye-max-y', 3.2),
+          currentX: 0,
+          currentY: 0,
+          targetX: 0,
+          targetY: 0
+        };
+      });
+
+      function render() {
+        var shouldContinue = false;
+
+        state.forEach(function (eye) {
+          eye.currentX += (eye.targetX - eye.currentX) * 0.18;
+          eye.currentY += (eye.targetY - eye.currentY) * 0.18;
+
+          if (Math.abs(eye.targetX - eye.currentX) > 0.01 || Math.abs(eye.targetY - eye.currentY) > 0.01) {
+            shouldContinue = true;
+          }
+
+          eye.node.setAttribute(
+            'transform',
+            'translate(' + eye.currentX.toFixed(2) + ' ' + eye.currentY.toFixed(2) + ')'
+          );
+        });
+
+        frameId = shouldContinue ? win.requestAnimationFrame(render) : null;
+      }
+
+      function queueRender() {
+        if (frameId === null) {
+          frameId = win.requestAnimationFrame(render);
+        }
+      }
+
+      function resetEyes() {
+        state.forEach(function (eye) {
+          eye.targetX = 0;
+          eye.targetY = 0;
+        });
+        queueRender();
+      }
+
+      function scheduleReset() {
+        if (resetTimer !== null) {
+          win.clearTimeout(resetTimer);
+        }
+        resetTimer = win.setTimeout(function () {
+          resetTimer = null;
+          resetEyes();
+        }, 140);
+      }
+
+      function updateTargets(clientX, clientY) {
+        var ctm = svg.getScreenCTM();
+        if (!ctm) {
+          return;
+        }
+
+        point.x = clientX;
+        point.y = clientY;
+
+        var local = point.matrixTransform(ctm.inverse());
+
+        state.forEach(function (eye) {
+          var dx = local.x - eye.centerX;
+          var dy = local.y - eye.centerY;
+          var angle = Math.atan2(dy, dx);
+          var strength = Math.min(1, Math.hypot(dx, dy) / 120);
+
+          eye.targetX = Math.cos(angle) * eye.maxX * strength;
+          eye.targetY = Math.sin(angle) * eye.maxY * strength;
+        });
+
+        queueRender();
+      }
+
+      function handlePointerMove(event) {
+        if (event.pointerType === 'touch') {
+          return;
+        }
+
+        if (resetTimer !== null) {
+          win.clearTimeout(resetTimer);
+          resetTimer = null;
+        }
+
+        updateTargets(event.clientX, event.clientY);
+      }
+
+      function handlePointerOut(event) {
+        if (!event.relatedTarget) {
+          scheduleReset();
+        }
+      }
+
+      doc.addEventListener('pointermove', handlePointerMove, { passive: true });
+      doc.addEventListener('pointerout', handlePointerOut, { passive: true });
+      win.addEventListener('blur', resetEyes);
+    })();
+  ]]></script>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <g transform="translate(0 16)">
+      <g class="bot-head">
+        <path class="sv-dark-logo-shell" d="M296.05,133.64c-7.44-28.95-33.76-50.42-65-50.42h-61.57v-16.23c6.41-2.44,10.98-8.62,10.98-15.89,0-9.4-7.62-17.01-17.01-17.01s-17.01,7.62-17.01,17.01c0,7.27,4.57,13.45,10.98,15.89v16.23h-60.24c-31.1,0-57.32,21.27-64.89,50.03C13.56,136.98,0,151.13,0,167.78v16.7c0,17.16,14.42,31.67,34.03,34.85,8.23,22.82,28.48,39.95,53.08,43.66l-.84,30.18c-.1,3.49,1.67,6.77,4.64,8.61,1.58.98,3.37,1.47,5.16,1.47,1.58,0,3.17-.38,4.61-1.15l71.91-38.35h58.45c29.16,0,54.02-18.7,63.26-44.74,18.7-3.74,32.25-17.88,32.25-34.52v-16.7c0-16.12-12.71-29.9-30.51-34.14ZM267.13,189.61c0,25.53-20.7,46.23-46.23,46.23h-113.17c-25.53,0-46.23-20.7-46.23-46.23v-31.66c0-25.53,20.7-46.23,46.23-46.23h113.17c25.53,0,46.23,20.7,46.23,46.23v31.66Z"/>
+        <rect class="sv-dark-logo-face-stroke" x="56.76" y="107.27" width="207.05" height="124.98" rx="46.55" ry="46.55"/>
+        <path class="sv-dark-logo-shell antenna" d="M161.78,21.72h2.66c2.6,0,4.71-1.83,4.71-4.08V4.08c0-2.25-2.11-4.08-4.71-4.08h-2.66c-2.6,0-4.71,1.83-4.71,4.08v13.56c0,2.25,2.11,4.08,4.71,4.08Z"/>
+        <path class="sv-dark-logo-shell antenna" d="M132.68,35.19l1.95-1.81c1.91-1.77,2.21-4.54.67-6.19l-9.22-9.94c-1.53-1.65-4.32-1.56-6.22.21l-1.95,1.81c-1.91,1.77-2.21,4.54-.67,6.19l9.22,9.94c1.53,1.65,4.32,1.56,6.22-.21Z"/>
+        <path class="sv-dark-logo-shell antenna" d="M194.17,35.19l-1.95-1.81c-1.91-1.77-2.21-4.54-.67-6.19l9.22-9.94c1.53-1.65,4.32-1.56,6.22.21l1.95,1.81c1.91,1.77,2.21,4.54.67,6.19l-9.22,9.94c-1.53,1.65-4.32,1.56-6.22-.21Z"/>
+        <rect class="sv-dark-logo-face" x="60.79" y="111.31" width="207.05" height="124.98" rx="46.55" ry="46.55"/>
+        <g>
+          <path class="sv-dark-logo-ink smile" d="M193.27,195.99c-2.58-2.36-6.58-2.31-9.1.11-5.56,5.33-12.76,8.27-20.27,8.27s-14.7-2.94-20.27-8.27c-2.52-2.42-6.52-2.46-9.1-.11-1.36,1.24-2.15,3.01-2.18,4.85-.02,1.84.73,3.63,2.06,4.91,8.05,7.72,18.52,11.97,29.49,11.97s21.43-4.25,29.49-11.97c1.33-1.28,2.08-3.06,2.06-4.91-.02-1.84-.82-3.61-2.17-4.85h0Z"/>
+          <g class="eye-track" data-eye-x="115.45" data-eye-y="157.96" data-eye-max-x="4.5" data-eye-max-y="3.2">
+            <path class="sv-dark-logo-ink eye" d="M132.48,152.11c0-9.41-7.63-17.03-17.03-17.03h0c-9.41,0-17.03,7.62-17.03,17.03v11.7c0,9.41,7.62,17.03,17.03,17.03h0c9.41,0,17.03-7.62,17.03-17.03v-11.7Z"/>
+          </g>
+          <g class="eye-track" data-eye-x="211.77" data-eye-y="157.95" data-eye-max-x="4.5" data-eye-max-y="3.2">
+            <path class="sv-dark-logo-ink eye" d="M211.77,135.07h0c-9.41,0-17.03,7.62-17.03,17.03v11.7c0,9.41,7.63,17.03,17.03,17.03h0c9.41,0,17.03-7.62,17.03-17.03v-11.7c0-9.41-7.63-17.03-17.03-17.03Z"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
