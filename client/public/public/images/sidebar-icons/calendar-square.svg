@@ -1,10 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect width="24" height="24" fill="none"/>
-  <g fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="5" width="18" height="16" rx="2"/>
-    <path d="M9 3v3"/>
-    <path d="M15 3v3"/>
-    <path d="M3 10h18"/>
-    <circle cx="12" cy="15" r="2.3"/>
-  </g>
+<svg id="Huge-icon_time_and_date_outline_calendar-add" data-name="Huge-icon/time and date/outline/calendar-add" xmlns="http://www.w3.org/2000/svg" width="19.5" height="21.5" viewBox="0 0 19.5 21.5">
+  <path id="Vector_1100" data-name="Vector 1100" d="M1.5.75A.75.75,0,0,0,0,.75ZM0,3.75a.75.75,0,0,0,1.5,0Zm0-3v3H1.5v-3Z" transform="translate(5)" fill="#28303f"/>
+  <path id="Vector_1101" data-name="Vector 1101" d="M1.5.75A.75.75,0,0,0,0,.75ZM0,3.75a.75.75,0,0,0,1.5,0Zm0-3v3H1.5v-3Z" transform="translate(13)" fill="#28303f"/>
+  <path id="Rectangle_418" data-name="Rectangle 418" d="M4.75,1.5h10V0h-10ZM18,4.75v10.5h1.5V4.75ZM14.75,18.5h-10V20h10ZM1.5,15.25V4.75H0v10.5ZM4.75,18.5A3.25,3.25,0,0,1,1.5,15.25H0A4.75,4.75,0,0,0,4.75,20ZM18,15.25a3.25,3.25,0,0,1-3.25,3.25V20a4.75,4.75,0,0,0,4.75-4.75ZM14.75,1.5A3.25,3.25,0,0,1,18,4.75h1.5A4.75,4.75,0,0,0,14.75,0ZM4.75,0A4.75,4.75,0,0,0,0,4.75H1.5A3.25,3.25,0,0,1,4.75,1.5Z" transform="translate(0 1.5)" fill="#28303f"/>
+  <path id="Vector_2524" data-name="Vector 2524" d="M.75,0a.75.75,0,0,0,0,1.5Zm18,1.5a.75.75,0,0,0,0-1.5Zm-18,0h18V0H.75Z" transform="translate(0 7)" fill="#28303f"/>
+  <path id="Vector_1084" data-name="Vector 1084" d="M1.5.75A.75.75,0,0,0,0,.75ZM0,6.75a.75.75,0,0,0,1.5,0Zm0-6v6H1.5v-6Z" transform="translate(9 10)" fill="#28303f"/>
+  <path id="Vector_1085" data-name="Vector 1085" d="M6.75,1.5a.75.75,0,0,0,0-1.5ZM.75,0a.75.75,0,0,0,0,1.5Zm6,0h-6V1.5h6Z" transform="translate(6 13)" fill="#28303f"/>
 </svg>

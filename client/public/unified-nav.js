@@ -179,11 +179,16 @@
   // ── Sidebar buttons ──
   var MC_ID = 'sv-sidebar-mc';
   var SOCIAL_ID = 'sv-sidebar-social';
+  var SIDEBAR_ASSET_VERSION = 'sidebar-icons-20260523';
   var MC_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
   var SOCIAL_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
 
+  function assetUrl(path) {
+    return path + (path.indexOf('?') === -1 ? '?' : '&') + 'v=' + SIDEBAR_ASSET_VERSION;
+  }
+
   function iconImg(path) {
-    return '<img src="' + path + '" alt="" width="18" height="18" class="sv-sidebar-icon" style="opacity:0.78;flex-shrink:0;display:block;" />';
+    return '<img src="' + assetUrl(path) + '" alt="" width="18" height="18" class="sv-sidebar-icon" style="opacity:0.78;flex-shrink:0;display:block;" />';
   }
 
   function createSidebarBtn(id, label, icon, url) {
@@ -452,7 +457,7 @@
         // Logo + text
         var logoWrap = document.createElement('div');
         logoWrap.style.cssText = 'display:flex;align-items:center;gap:12px;cursor:pointer;background:transparent;box-shadow:none;border:none;';
-        logoWrap.innerHTML = '<img class="sv-logo-img sv-sidebar-logo-mark" src="/images/streetbot/megaphone-icon.svg" alt="Street Voices" width="30" height="30" style="width:30px;height:30px;min-width:30px;flex-shrink:0;" /><img class="sv-logo-img sv-sidebar-logo-expanded" src="/images/streetbot/sidebar-streetvoices-lockup.svg" alt="Street Voices" width="160" height="28" style="max-width:100%;height:auto;" />';
+        logoWrap.innerHTML = '<img class="sv-logo-img sv-sidebar-logo-mark" src="' + assetUrl('/images/streetbot/megaphone-icon.svg') + '" alt="Street Voices" width="30" height="30" style="width:30px;height:30px;min-width:30px;flex-shrink:0;" /><img class="sv-logo-img sv-sidebar-logo-expanded" src="' + assetUrl('/images/streetbot/sidebar-streetvoices-lockup.svg') + '" alt="Street Voices" width="160" height="28" style="max-width:100%;height:auto;" />';
         logoWrap.addEventListener('click', function() { window.location.href = '/'; });
         svHeader.appendChild(logoWrap);
         // Custom collapse button (React keeps recreating the native one, so we make our own)
@@ -700,7 +705,7 @@
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:18px 16px 14px 16px;width:100%;flex-shrink:0;background:transparent;border:none;box-shadow:none;';
     var logoWrap = document.createElement('div');
     logoWrap.style.cssText = 'display:flex;align-items:center;gap:12px;cursor:pointer;background:transparent;box-shadow:none;border:none;';
-    logoWrap.innerHTML = '<img class="sv-logo-img sv-sidebar-logo-mark" src="/images/streetbot/megaphone-icon.svg" alt="Street Voices" width="30" height="30" style="width:30px;height:30px;min-width:30px;flex-shrink:0;" /><img class="sv-logo-img sv-sidebar-logo-expanded" src="/images/streetbot/sidebar-streetvoices-lockup.svg" alt="Street Voices" width="160" height="28" style="max-width:100%;height:auto;" />';
+    logoWrap.innerHTML = '<img class="sv-logo-img sv-sidebar-logo-mark" src="' + assetUrl('/images/streetbot/megaphone-icon.svg') + '" alt="Street Voices" width="30" height="30" style="width:30px;height:30px;min-width:30px;flex-shrink:0;" /><img class="sv-logo-img sv-sidebar-logo-expanded" src="' + assetUrl('/images/streetbot/sidebar-streetvoices-lockup.svg') + '" alt="Street Voices" width="160" height="28" style="max-width:100%;height:auto;" />';
     logoWrap.addEventListener('click', function() { window.location.href = '/'; });
     header.appendChild(logoWrap);
 
