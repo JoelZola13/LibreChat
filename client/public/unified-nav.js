@@ -77,7 +77,7 @@
 
   // Detect streetbot (non-home) pages and toggle body class to hide theme/profile controls
   var SB_PATHS = ['/jobs','/agents','/groups','/news','/gallery','/directory','/social',
-    '/how-it-works','/about','/terms','/privacy','/manage','/notifications','/academy','/learning','/profile','/street-profile','/messages','/analytics'];
+    '/how-it-works','/about','/terms','/privacy','/manage','/notifications','/academy','/learning','/profile','/street-profile','/messages'];
   function isStreetbotPage() {
     var p = window.location.pathname;
     for (var i = 0; i < SB_PATHS.length; i++) {
@@ -152,6 +152,26 @@
       'html[data-theme="light"] .nav, html.light .nav, html:not(.dark) .nav, html[data-theme="light"] nav#chat-history-nav, html.light nav#chat-history-nav, html:not(.dark) nav#chat-history-nav, html[data-theme="light"] #sv-standalone-sidebar, html.light #sv-standalone-sidebar { background: #fff !important; border-right: 0.5px solid rgba(0,0,0,0.10) !important; }',
       'html[data-theme="dark"] nav#chat-history-nav > .flex-1.flex-col, html.dark nav#chat-history-nav > .flex-1.flex-col { background: #000 !important; }',
       'html[data-theme="light"] nav#chat-history-nav > .flex-1.flex-col, html.light nav#chat-history-nav > .flex-1.flex-col, html:not(.dark) nav#chat-history-nav > .flex-1.flex-col { background: #fff !important; }',
+      '#sv-sidebar-header { padding: 18px 16px 14px 16px !important; min-height: 64px !important; background: transparent !important; box-shadow: none !important; border: none !important; }',
+      '#sv-sidebar-header > div { background: transparent !important; box-shadow: none !important; }',
+      '#sv-sidebar-header .sv-logo-img { background: transparent !important; box-shadow: none !important; }',
+      '#sv-sidebar-header .sv-sidebar-logo-expanded { display: block; width: 160px; height: auto; }',
+      '#sv-sidebar-header .sv-sidebar-logo-mark { display: none; width: 30px; height: 30px; flex-shrink: 0; }',
+      '#sv-sidebar-static { padding: 4px 10px 0 !important; }',
+      '#sv-sidebar-search { order: 3 !important; margin: 2px 10px 0 !important; min-height: 40px !important; border-radius: 14px !important; padding: 0 14px !important; }',
+      '#sv-sidebar-search input { font-family: Rubik, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; font-size: 14px !important; font-weight: 400 !important; }',
+      '#sv-sidebar-search svg { width: 18px !important; height: 18px !important; }',
+      '#sv-sidebar-nav-wrap { padding: 12px 10px 0 !important; margin-top: 10px !important; max-height: calc(100vh - 318px) !important; border-top: 1px solid rgba(127,127,136,0.18) !important; mask-image: none !important; -webkit-mask-image: none !important; }',
+      '.sv-sidebar-btn { position: relative; display: flex; width: 100%; cursor: pointer; align-items: center; justify-content: space-between; border-radius: 14px; padding: 9px 12px; min-height: 40px; font-size: 14px; line-height: 1.125rem; outline: none; color: var(--text-primary); font-family: Rubik, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 400; }',
+      '.sv-sidebar-btn + .sv-sidebar-btn { margin-top: 2px; }',
+      '.sv-sidebar-btn-inner { display: flex; flex: 1; align-items: center; overflow: hidden; padding-right: 0 !important; }',
+      '.sv-sidebar-btn-icon { margin-right: 12px !important; width: 18px !important; height: 18px !important; display: flex !important; align-items: center !important; justify-content: center !important; flex-shrink: 0 !important; }',
+      '.sv-sidebar-btn-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
+      'nav#chat-history-nav h3 { font-family: Rubik, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; font-size: 13px !important; font-weight: 600 !important; letter-spacing: 0 !important; }',
+      'nav#chat-history-nav > .flex-1.flex-col > div:last-child { border-top: none !important; margin-top: auto !important; padding: 12px 10px 14px !important; }',
+      'nav#chat-history-nav > .flex-1.flex-col > div:last-child, nav#chat-history-nav > .flex-1.flex-col > div:last-child > div, nav#chat-history-nav > .flex-1.flex-col > div:last-child::before, nav#chat-history-nav > .flex-1.flex-col > div:last-child > div::before { border-top: none !important; box-shadow: none !important; }',
+      '[data-testid="nav-user"] { border-radius: 14px !important; padding: 10px 12px !important; font-family: Rubik, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }',
+      '[data-testid="nav-user"] > div:first-child { margin-right: 12px !important; }',
     ].join(' ');
     document.head.appendChild(s);
   })();
@@ -162,85 +182,28 @@
   var MC_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
   var SOCIAL_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
 
+  function iconImg(path) {
+    return '<img src="' + path + '" alt="" width="18" height="18" class="sv-sidebar-icon" style="opacity:0.78;flex-shrink:0;display:block;" />';
+  }
+
   function createSidebarBtn(id, label, icon, url) {
     var btn = document.createElement('div');
     btn.id = id;
+    btn.className = 'sv-sidebar-btn';
     btn.setAttribute('role', 'button');
     btn.setAttribute('tabindex', '0');
     btn.setAttribute('aria-label', label);
-    btn.style.cssText = 'position:relative;display:flex;width:100%;cursor:pointer;align-items:center;justify-content:space-between;border-radius:0.5rem;padding:0.5rem 0.75rem;font-size:0.875rem;line-height:1.25rem;outline:none;color:var(--text-primary);';
+    btn.setAttribute('data-sv-label', label);
+    btn.style.cssText = 'position:relative;display:flex;width:100%;cursor:pointer;align-items:center;justify-content:space-between;border-radius:14px;padding:9px 12px;min-height:40px;font-size:14px;line-height:1.125rem;outline:none;color:var(--text-primary);font-family:Rubik,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-weight:400;';
     btn.innerHTML =
-      '<div style="display:flex;flex:1;align-items:center;overflow:hidden;padding-right:1.5rem">' +
-        '<div style="margin-right:0.5rem;width:1.25rem;height:1.25rem;flex-shrink:0">' + icon + '</div>' +
-        '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + label + '</span>' +
+      '<div class="sv-sidebar-btn-inner" style="display:flex;flex:1;align-items:center;overflow:hidden;padding-right:0">' +
+        '<div class="sv-sidebar-btn-icon" style="margin-right:12px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + icon + '</div>' +
+        '<span class="sv-sidebar-btn-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + label + '</span>' +
       '</div>';
     btn.addEventListener('mouseenter', function () { btn.style.background = 'var(--surface-active-alt, rgba(255,255,255,0.06))'; });
     btn.addEventListener('mouseleave', function () { btn.style.background = ''; });
     btn.addEventListener('click', function (e) { e.stopPropagation(); window.location.href = url; }, true);
     return btn;
-  }
-
-  function getStreetVoicesNavItems(idPrefix, basePath) {
-    var base = basePath || '';
-    return [
-      { id: idPrefix + 'profile', label: 'Street Profile', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', path: base + '/profile' },
-      { id: idPrefix + 'forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: base + '/forum' },
-      { id: idPrefix + 'gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: base + '/gallery' },
-      { id: idPrefix + 'groups', label: 'Groups', svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', path: base + '/groups' },
-      { id: idPrefix + 'news', label: 'News', icon: '/images/sidebar-icons/news.svg', path: base + '/news' },
-      { id: idPrefix + 'messages', label: 'Messages', icon: '/images/sidebar-icons/messages-bubble.svg', path: '/messages' },
-      { id: idPrefix + 'directory', label: 'Directory', icon: '/images/sidebar-icons/directory-grid.svg', path: base + '/directory' },
-      { id: idPrefix + 'jobs', label: 'Job Board', icon: '/images/sidebar-icons/job-briefcase.svg', path: base + '/jobs' },
-      { id: idPrefix + 'academy', label: 'Academy', icon: '/images/sidebar-icons/lms-cap.svg', path: base + '/academy' },
-      { id: idPrefix + 'calendar', label: 'Calendar', icon: '/images/sidebar-icons/calendar-square.svg', path: base + '/calendar' },
-      { id: idPrefix + 'case-management', label: 'Case Management', icon: '/images/sidebar-icons/case-management-suitcase.svg', path: base + '/case-management' },
-      { id: idPrefix + 'social', label: 'Social Media', icon: '/images/sidebar-icons/social-media.svg', path: base + '/social-media' },
-      { id: idPrefix + 'tasks', label: 'Tasks', icon: '/images/sidebar-icons/tasks-clipboard.svg', path: base + '/tasks' },
-      { id: idPrefix + 'documents', label: 'Documents', icon: '/images/sidebar-icons/documents.svg', path: base + '/documents' },
-      { id: idPrefix + 'storage', label: 'Storage', icon: '/images/sidebar-icons/storage.svg', path: base + '/storage' },
-      { id: idPrefix + 'database', label: 'Database', icon: '/images/sidebar-icons/database-grid.svg', path: base + '/data' },
-      { id: idPrefix + 'grantwriter', label: 'Grant Writer', icon: '/images/sidebar-icons/grantwriter.svg', path: base + '/grantwriter' },
-    ];
-  }
-
-  function initialsFromName(name, email) {
-    var raw = String(name || email || 'User').trim();
-    var parts = raw.split(/\s+/).filter(Boolean);
-    if (parts.length > 1) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return raw.slice(0, 2).toUpperCase();
-  }
-
-  function updateStandaloneProfileFooter(user) {
-    var footer = document.getElementById('sv-sa-profile-footer');
-    if (!footer) return;
-    var name = (user && (user.name || user.username || user.email)) || 'Profile';
-    var email = user && user.email;
-    var avatar = user && (user.avatar || user.image);
-    var initials = initialsFromName(name, email);
-    var avatarEl = footer.querySelector('.sv-sa-profile-avatar');
-    var nameEl = footer.querySelector('.sv-sa-profile-name');
-    if (nameEl) nameEl.textContent = name;
-    if (avatarEl) {
-      avatarEl.textContent = initials;
-      if (avatar) {
-        avatarEl.innerHTML = '<img src="' + avatar + '" alt="" style="width:100%;height:100%;border-radius:999px;object-fit:cover;" />';
-      }
-    }
-  }
-
-  function hydrateStandaloneProfileFooter() {
-    fetch('/api/user', { credentials: 'include' })
-      .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (user) {
-        if (user) {
-          updateStandaloneProfileFooter(user);
-          return null;
-        }
-        return fetch('/social/api/auth/session', { credentials: 'include' })
-          .then(function (res) { return res.ok ? res.json() : null; })
-          .then(function (session) { updateStandaloneProfileFooter(session && session.user); });
-      })
-      .catch(function () {});
   }
 
   function injectSidebarButtons() {
@@ -302,8 +265,7 @@
         '#sv-sidebar-nav-wrap { order: 4 !important; flex-shrink: 0 !important; max-height: 240px !important; overflow-y: auto !important; overflow-x: hidden !important; scrollbar-width: none !important; mask-image: linear-gradient(to bottom, black 80%, transparent 100%) !important; -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%) !important; }',
         '#sv-sidebar-nav-wrap::-webkit-scrollbar { width: 0 !important; display: none !important; }',
         // Pin the SV header at top while everything else scrolls
-        'html[data-theme="dark"] #sv-sidebar-header, html.dark #sv-sidebar-header { position: sticky !important; top: 0 !important; z-index: 10 !important; background: #000 !important; }',
-        'html[data-theme="light"] #sv-sidebar-header, html.light #sv-sidebar-header, html:not(.dark) #sv-sidebar-header { position: sticky !important; top: 0 !important; z-index: 10 !important; background: #fff !important; }',
+        '#sv-sidebar-header { position: sticky !important; top: 0 !important; z-index: 10 !important; background: var(--surface-primary-alt, #fff) !important; }',
         // Chat section: fill remaining space, hide ITS scrollbar (outer handles it)
         '.flex.min-h-0.flex-grow.flex-col.overflow-hidden { flex: 1 1 auto !important; min-height: 200px !important; overflow: hidden !important; }',
         // Hide ALL internal scrollbars — only the outer wrapper scrollbar shows
@@ -486,11 +448,11 @@
         var closeSidebarBtn = origHeader.querySelector('button[aria-label="Close sidebar"]');
         svHeader = document.createElement('div');
         svHeader.id = 'sv-sidebar-header';
-        svHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.25rem 0.5rem 0.75rem;width:100%;';
+        svHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:18px 16px 14px 16px;width:100%;background:transparent;border:none;box-shadow:none;';
         // Logo + text
         var logoWrap = document.createElement('div');
-        logoWrap.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:4px;';
-        logoWrap.innerHTML = '<img class="sv-logo-img" src="/images/streetbot/megaphone-icon.svg" alt="Street Voices" width="32" height="32" style="width:32px;height:32px;min-width:28px;flex-shrink:0;" /><img class="sv-logo-img" src="/images/streetbot/streetvoices-text.svg" alt="Street Voices" width="130" height="19" style="max-width:100%;height:auto;" />';
+        logoWrap.style.cssText = 'display:flex;align-items:center;gap:12px;cursor:pointer;background:transparent;box-shadow:none;border:none;';
+        logoWrap.innerHTML = '<img class="sv-logo-img sv-sidebar-logo-mark" src="/images/streetbot/megaphone-icon.svg" alt="Street Voices" width="30" height="30" style="width:30px;height:30px;min-width:30px;flex-shrink:0;" /><img class="sv-logo-img sv-sidebar-logo-expanded" src="/images/streetbot/sidebar-streetvoices-lockup.svg" alt="Street Voices" width="160" height="28" style="max-width:100%;height:auto;" />';
         logoWrap.addEventListener('click', function() { window.location.href = '/'; });
         svHeader.appendChild(logoWrap);
         // Custom collapse button (React keeps recreating the native one, so we make our own)
@@ -517,8 +479,8 @@
 
     var SB_BASE = '';
     var STATIC_ID = 'sv-sidebar-static';
-    var homeIcon = '<img src="/images/sidebar-icons/home.svg" alt="" width="20" height="20" class="sv-sidebar-icon" style="opacity:0.7;flex-shrink:0;" />';
-    var notifIcon = '<img src="/images/sidebar-icons/notifications.svg" alt="" width="20" height="20" class="sv-sidebar-icon" style="opacity:0.7;flex-shrink:0;" />';
+    var homeIcon = iconImg('/images/sidebar-icons/home.svg');
+    var notifIcon = iconImg('/images/sidebar-icons/notifications.svg');
 
     // ── STATIC section: Home, New Chat, Notifications, Agent Marketplace ──
     // Visual order: Header → Home → New Chat → Search → Notifications → Marketplace → ...
@@ -526,14 +488,14 @@
     // to visually position it after Home + New Chat
     var staticSection = document.getElementById(STATIC_ID);
     if (!staticSection) {
-      var NEW_CHAT_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M16.7929 2.79289C18.0118 1.57394 19.9882 1.57394 21.2071 2.79289C22.4261 4.01184 22.4261 5.98815 21.2071 7.20711L12.7071 15.7071C12.5196 15.8946 12.2652 16 12 16H9C8.44772 16 8 15.5523 8 15V12C8 11.7348 8.10536 11.4804 8.29289 11.2929L16.7929 2.79289ZM19.7929 4.20711C19.355 3.7692 18.645 3.7692 18.2071 4.2071L10 12.4142V14H11.5858L19.7929 5.79289C20.2308 5.35499 20.2308 4.64501 19.7929 4.20711ZM6 5C5.44772 5 5 5.44771 5 6V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V14C19 13.4477 19.4477 13 20 13C20.5523 13 21 13.4477 21 14V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V6C3 4.34314 4.34315 3 6 3H10C10.5523 3 11 3.44771 11 4C11 4.55228 10.5523 5 10 5H6Z" fill="currentColor"></path></svg>';
+      var NEW_CHAT_SVG = iconImg('/images/sidebar-icons/new-chat.svg');
       staticSection = document.createElement('div');
       staticSection.id = STATIC_ID;
       staticSection.style.cssText = 'width:100%;flex-shrink:0;box-sizing:border-box;padding:0 0.25rem;order:2;';
       staticSection.appendChild(createSidebarBtn('sv-sb-home', 'Home', homeIcon, SB_BASE + '/home'));
-      staticSection.appendChild(createSidebarBtn('sv-new-chat-btn', 'New chat', NEW_CHAT_SVG, '/c/new'));
+      staticSection.appendChild(createSidebarBtn('sv-new-chat-btn', 'New Chat', NEW_CHAT_SVG, '/c/new'));
       staticSection.appendChild(createSidebarBtn('sv-sb-notifications', 'Notifications', notifIcon, SB_BASE + '/notifications'));
-      staticSection.appendChild(createSidebarBtn(MKT_ID, 'Agent Marketplace', MKT_SVG, '/agents'));
+      staticSection.appendChild(createSidebarBtn(MKT_ID, 'Agent Marketplace', iconImg('/images/sidebar-icons/agent-marketplace.svg'), '/agents'));
       // scrollContainer must be a child of outerWrapper for insertBefore to work
       if (scrollContainer.parentElement === outerWrapper) {
         outerWrapper.insertBefore(staticSection, scrollContainer);
@@ -556,7 +518,15 @@
         }
       }
     }
-    if (searchBar) searchBar.style.order = '3';
+    if (searchBar) {
+      searchBar.id = 'sv-sidebar-search';
+      searchBar.style.order = '3';
+      var searchInput = searchBar.querySelector('input[placeholder]');
+      if (searchInput) {
+        searchInput.placeholder = 'Search messages';
+        searchInput.setAttribute('aria-label', 'Search messages');
+      }
+    }
 
     // Move Automations into static section (after Agent Marketplace)
     // IG Template is now inside the Automations panel — hide its separate button
@@ -576,11 +546,29 @@
       wrap.id = WRAP_ID;
       wrap.style.cssText = 'width:100%;flex-shrink:1;box-sizing:border-box;padding:0 0.25rem;order:4;';
 
-      // Social button removed — Messages now opens in the real app shell.
+      // Social button removed — Messages now links to /social/dm
 
-      var SB_ITEMS = getStreetVoicesNavItems('sv-sb-', SB_BASE);
+      var SB_ITEMS = [
+        { id: 'sv-sb-profile', label: 'Street Profile', icon: '/images/sidebar-icons/profile-avatar.svg', path: SB_BASE + '/profile' },
+        { id: 'sv-sb-forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: SB_BASE + '/forum' },
+        { id: 'sv-sb-gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: SB_BASE + '/gallery' },
+        { id: 'sv-sb-groups', label: 'Groups', icon: '/images/sidebar-icons/groups.svg', path: SB_BASE + '/groups' },
+        { id: 'sv-sb-news', label: 'News', icon: '/images/sidebar-icons/news.svg', path: SB_BASE + '/news' },
+        { id: 'sv-sb-messages', label: 'Messages', icon: '/images/sidebar-icons/messages-bubble.svg', path: '/social/dm' },
+        { id: 'sv-sb-directory', label: 'Directory', icon: '/images/sidebar-icons/directory-grid.svg', path: SB_BASE + '/directory' },
+        { id: 'sv-sb-jobs', label: 'Job Board', icon: '/images/sidebar-icons/job-briefcase.svg', path: SB_BASE + '/jobs' },
+        { id: 'sv-sb-academy', label: 'Academy', icon: '/images/sidebar-icons/lms-cap.svg', path: SB_BASE + '/academy' },
+        { id: 'sv-sb-calendar', label: 'Calendar', icon: '/images/sidebar-icons/calendar-square.svg', path: SB_BASE + '/calendar' },
+        { id: 'sv-sb-case-management', label: 'Case Management', icon: '/images/sidebar-icons/case-management.svg', path: SB_BASE + '/directory?categories=Case%20Management' },
+        { id: 'sv-sb-social', label: 'Social Media', icon: '/images/sidebar-icons/social-media.svg', path: SB_BASE + '/social-media' },
+        { id: 'sv-sb-tasks', label: 'Task', icon: '/images/sidebar-icons/tasks-clipboard.svg', path: SB_BASE + '/tasks' },
+        { id: 'sv-sb-documents', label: 'Documents', icon: '/images/sidebar-icons/documents.svg', path: SB_BASE + '/documents' },
+        { id: 'sv-sb-storage', label: 'Storage', icon: '/images/sidebar-icons/storage.svg', path: SB_BASE + '/storage' },
+        { id: 'sv-sb-database', label: 'Database', icon: '/images/sidebar-icons/database-grid.svg', path: SB_BASE + '/data' },
+        { id: 'sv-sb-grantwriter', label: 'Grant Writer', icon: '/images/sidebar-icons/grantwriter.svg', path: SB_BASE + '/grantwriter' },
+      ];
       SB_ITEMS.forEach(function (item) {
-        var iconHtml = item.svg ? item.svg : '<img src="' + item.icon + '" alt="" width="20" height="20" class="sv-sidebar-icon" style="opacity:0.7;flex-shrink:0;" />';
+        var iconHtml = item.svg ? item.svg : iconImg(item.icon);
         wrap.appendChild(createSidebarBtn(item.id, item.label, iconHtml, item.path));
       });
 
@@ -636,9 +624,17 @@
     // Don't inject if LibreChat's sidebar already exists
     if (document.getElementById('chat-history-nav')) return;
 
-    var isDark = document.documentElement.classList.contains('dark') ||
-                 document.body.classList.contains('dark') ||
-                 (window.localStorage && localStorage.getItem('theme') === 'dark');
+    var documentTheme = document.documentElement.getAttribute('data-theme');
+    var isDark = documentTheme === 'dark' ||
+                 (documentTheme !== 'light' && (
+                   document.documentElement.classList.contains('dark') ||
+                   document.body.classList.contains('dark') ||
+                   (window.localStorage && localStorage.getItem('theme') === 'dark')
+                 ));
+
+    if (!documentTheme) {
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    }
 
     // Inject standalone sidebar CSS
     if (!document.getElementById('sv-standalone-css')) {
@@ -647,8 +643,8 @@
       css.textContent = [
         '#' + STANDALONE_ID + ' { position: fixed; left: 0; top: 0; bottom: 0; width: 260px; z-index: 110; display: flex; flex-direction: column; transition: width 0.2s ease; overflow: hidden; }',
         '#' + STANDALONE_ID + '.sv-collapsed { width: 56px; }',
-        '.dark #' + STANDALONE_ID + ' { background: #000; border-right: 0.5px solid rgba(255,255,255,0.10); }',
-        'html:not(.dark) #' + STANDALONE_ID + ' { background: #fff; border-right: 0.5px solid rgba(0,0,0,0.10); }',
+        'html[data-theme="dark"] #' + STANDALONE_ID + ', html.dark #' + STANDALONE_ID + ' { background: #000; border-right: 0.5px solid rgba(255,255,255,0.10); }',
+        'html[data-theme="light"] #' + STANDALONE_ID + ', html.light #' + STANDALONE_ID + ' { background: #fff; border-right: 0.5px solid rgba(0,0,0,0.10); }',
         // Hide text in collapsed mode
         '#' + STANDALONE_ID + '.sv-collapsed [role="button"] span { display: none !important; }',
         '#' + STANDALONE_ID + '.sv-collapsed [role="button"] > div { padding-right: 0 !important; justify-content: center !important; flex: unset !important; }',
@@ -660,21 +656,32 @@
         '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-header { cursor: pointer; }',
         '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-nav-wrap { padding: 0 !important; scrollbar-width: none !important; }',
         '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-static { padding: 0 !important; }',
-        '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-profile-footer { padding: 10px 0 !important; justify-content: center !important; }',
-        '#' + STANDALONE_ID + '.sv-collapsed .sv-sa-profile-name { display: none !important; }',
         // Dark mode icon fix
-        '.dark #' + STANDALONE_ID + ' svg { color: white !important; }',
-        '.dark #' + STANDALONE_ID + ' .sv-sidebar-icon { filter: brightness(0) invert(1) !important; opacity: 1 !important; }',
-        'html:not(.dark) #' + STANDALONE_ID + ' .sv-sidebar-icon { filter: brightness(0) !important; }',
-        'html:not(.dark) #' + STANDALONE_ID + ' .sv-logo-img { filter: brightness(0) !important; }',
-        '.dark #' + STANDALONE_ID + ' .sv-logo-img { filter: none !important; }',
+        'html[data-theme="dark"] #' + STANDALONE_ID + ' svg, html.dark #' + STANDALONE_ID + ' svg { color: white !important; }',
+        'html[data-theme="dark"] #' + STANDALONE_ID + ' .sv-sidebar-icon, html.dark #' + STANDALONE_ID + ' .sv-sidebar-icon { filter: brightness(0) invert(1) !important; opacity: 1 !important; }',
+        'html[data-theme="light"] #' + STANDALONE_ID + ' .sv-sidebar-icon, html.light #' + STANDALONE_ID + ' .sv-sidebar-icon { filter: brightness(0) !important; }',
+        'html[data-theme="light"] #' + STANDALONE_ID + ' .sv-logo-img, html.light #' + STANDALONE_ID + ' .sv-logo-img { filter: brightness(0) !important; }',
+        'html[data-theme="dark"] #' + STANDALONE_ID + ' .sv-logo-img, html.dark #' + STANDALONE_ID + ' .sv-logo-img { filter: none !important; }',
+        'html[data-theme="dark"] #' + STANDALONE_ID + ', html.dark #' + STANDALONE_ID + ' { background: #000 !important; border-right: 0.5px solid rgba(255,255,255,0.10) !important; }',
+        'html[data-theme="light"] #' + STANDALONE_ID + ', html.light #' + STANDALONE_ID + ' { background: #fff !important; border-right: 0.5px solid rgba(0,0,0,0.10) !important; }',
+        '#' + STANDALONE_ID + ' .sv-sa-header { padding: 18px 16px 14px 16px !important; min-height: 64px !important; background: transparent !important; box-shadow: none !important; border: none !important; }',
+        '#' + STANDALONE_ID + ' .sv-sa-header > div { background: transparent !important; box-shadow: none !important; }',
+        '#' + STANDALONE_ID + ' .sv-sa-header .sv-logo-img { background: transparent !important; box-shadow: none !important; }',
+        '#' + STANDALONE_ID + ' .sv-sidebar-logo-expanded { display: block; width: 160px; height: auto; }',
+        '#' + STANDALONE_ID + ' .sv-sidebar-logo-mark { display: none; width: 30px; height: 30px; flex-shrink: 0; }',
+        '#' + STANDALONE_ID + ' .sv-sa-static { padding: 4px 10px 0 !important; }',
+        '#' + STANDALONE_ID + ' .sv-sa-nav-wrap { padding: 12px 10px 0 !important; margin-top: 10px !important; border-top: 1px solid rgba(127,127,136,0.18) !important; }',
+        '#' + STANDALONE_ID + '.sv-collapsed .sv-sidebar-logo-expanded { display: none !important; }',
+        '#' + STANDALONE_ID + '.sv-collapsed .sv-sidebar-logo-mark { display: block !important; }',
         // Shift Social app content
         '.sv-has-standalone-sidebar { margin-left: 260px !important; transition: margin-left 0.2s ease !important; }',
         '.sv-has-standalone-sidebar-collapsed { margin-left: 56px !important; transition: margin-left 0.2s ease !important; }',
+        // Hide Social app\'s own sidebar when standalone sidebar is present
+        'body:has(#' + STANDALONE_ID + ') aside.w-64 { display: none !important; }',
         'body:has(#' + STANDALONE_ID + ') .flex.h-screen.overflow-hidden { margin-left: 260px; width: calc(100vw - 260px); transition: margin-left 0.2s ease, width 0.2s ease; }',
         'body:has(#' + STANDALONE_ID + '.sv-collapsed) .flex.h-screen.overflow-hidden { margin-left: 56px; width: calc(100vw - 56px); }',
         // Scrollbar on the nav wrap
-        '#' + STANDALONE_ID + ' .sv-sa-nav-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: transparent transparent; mask-image: linear-gradient(to bottom, black calc(100% - 42px), transparent 100%); -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 42px), transparent 100%); }',
+        '#' + STANDALONE_ID + ' .sv-sa-nav-wrap { overflow-y: auto; scrollbar-width: thin; scrollbar-color: transparent transparent; }',
         '#' + STANDALONE_ID + ':hover .sv-sa-nav-wrap { scrollbar-color: rgba(128,128,128,0.3) transparent; }',
         '#' + STANDALONE_ID + ' .sv-sa-nav-wrap::-webkit-scrollbar { width: 4px; background: transparent; }',
         '#' + STANDALONE_ID + ' .sv-sa-nav-wrap::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }',
@@ -690,10 +697,10 @@
     // Header with SV logo + collapse button
     var header = document.createElement('div');
     header.className = 'sv-sa-header';
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.25rem 0.5rem 0.75rem;width:100%;flex-shrink:0;';
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:18px 16px 14px 16px;width:100%;flex-shrink:0;background:transparent;border:none;box-shadow:none;';
     var logoWrap = document.createElement('div');
-    logoWrap.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:4px;';
-    logoWrap.innerHTML = '<img class="sv-logo-img" src="/images/streetbot/megaphone-icon.svg" alt="Street Voices" width="32" height="32" style="width:32px;height:32px;min-width:28px;flex-shrink:0;" /><img class="sv-logo-img" src="/images/streetbot/streetvoices-text.svg" alt="Street Voices" width="130" height="19" style="max-width:100%;height:auto;" />';
+    logoWrap.style.cssText = 'display:flex;align-items:center;gap:12px;cursor:pointer;background:transparent;box-shadow:none;border:none;';
+    logoWrap.innerHTML = '<img class="sv-logo-img sv-sidebar-logo-mark" src="/images/streetbot/megaphone-icon.svg" alt="Street Voices" width="30" height="30" style="width:30px;height:30px;min-width:30px;flex-shrink:0;" /><img class="sv-logo-img sv-sidebar-logo-expanded" src="/images/streetbot/sidebar-streetvoices-lockup.svg" alt="Street Voices" width="160" height="28" style="max-width:100%;height:auto;" />';
     logoWrap.addEventListener('click', function() { window.location.href = '/'; });
     header.appendChild(logoWrap);
 
@@ -717,48 +724,50 @@
 
     sidebar.appendChild(header);
 
-    // Static section: Home, New Chat, Notifications, Agent Marketplace
+    // Static section: Home, New Chat, Notifications, Agent Marketplace, Automations, IG Template
     var staticSection = document.createElement('div');
     staticSection.className = 'sv-sa-static';
     staticSection.style.cssText = 'width:100%;flex-shrink:0;box-sizing:border-box;padding:0 0.25rem;';
 
-    var homeIcon = '<img src="/images/sidebar-icons/home.svg" alt="" width="20" height="20" class="sv-sidebar-icon" style="opacity:0.7;flex-shrink:0;" />';
-    var notifIcon = '<img src="/images/sidebar-icons/notifications.svg" alt="" width="20" height="20" class="sv-sidebar-icon" style="opacity:0.7;flex-shrink:0;" />';
-    var NEW_CHAT_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M16.7929 2.79289C18.0118 1.57394 19.9882 1.57394 21.2071 2.79289C22.4261 4.01184 22.4261 5.98815 21.2071 7.20711L12.7071 15.7071C12.5196 15.8946 12.2652 16 12 16H9C8.44772 16 8 15.5523 8 15V12C8 11.7348 8.10536 11.4804 8.29289 11.2929L16.7929 2.79289ZM19.7929 4.20711C19.355 3.7692 18.645 3.7692 18.2071 4.2071L10 12.4142V14H11.5858L19.7929 5.79289C20.2308 5.35499 20.2308 4.64501 19.7929 4.20711ZM6 5C5.44772 5 5 5.44771 5 6V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V14C19 13.4477 19.4477 13 20 13C20.5523 13 21 13.4477 21 14V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V6C3 4.34314 4.34315 3 6 3H10C10.5523 3 11 3.44771 11 4C11 4.55228 10.5523 5 10 5H6Z" fill="currentColor"></path></svg>';
-    var MKT_SVG2 = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
+    var homeIcon = iconImg('/images/sidebar-icons/home.svg');
+    var notifIcon = iconImg('/images/sidebar-icons/notifications.svg');
+    var NEW_CHAT_SVG = iconImg('/images/sidebar-icons/new-chat.svg');
 
     staticSection.appendChild(createSidebarBtn('sv-sa-home', 'Home', homeIcon, '/home'));
-    staticSection.appendChild(createSidebarBtn('sv-sa-newchat', 'New chat', NEW_CHAT_SVG, '/c/new'));
+    staticSection.appendChild(createSidebarBtn('sv-sa-newchat', 'New Chat', NEW_CHAT_SVG, '/c/new'));
     staticSection.appendChild(createSidebarBtn('sv-sa-notif', 'Notifications', notifIcon, '/notifications'));
-    staticSection.appendChild(createSidebarBtn('sv-sa-mkt', 'Agent Marketplace', MKT_SVG2, '/agents'));
+    staticSection.appendChild(createSidebarBtn('sv-sa-mkt', 'Agent Marketplace', iconImg('/images/sidebar-icons/agent-marketplace.svg'), '/agents'));
     sidebar.appendChild(staticSection);
 
     // Nav wrap: all the menu items
     var navWrap = document.createElement('div');
     navWrap.className = 'sv-sa-nav-wrap';
-    navWrap.style.cssText = 'width:100%;flex:1 1 auto;min-height:0;box-sizing:border-box;padding:0 0.25rem;overflow-y:auto;overflow-x:hidden;';
+    navWrap.style.cssText = 'width:100%;flex:1 1 auto;box-sizing:border-box;padding:0 0.25rem;overflow-y:auto;';
 
-    var SB_ITEMS = getStreetVoicesNavItems('sv-sa-', '');
+    var SB_ITEMS = [
+      { id: 'sv-sa-profile', label: 'Street Profile', icon: '/images/sidebar-icons/profile-avatar.svg', path: '/profile' },
+      { id: 'sv-sa-forum', label: 'Word On The Street', icon: '/images/sidebar-icons/word.svg', path: '/forum' },
+      { id: 'sv-sa-gallery', label: 'Street Gallery', icon: '/images/sidebar-icons/gallery.svg', path: '/gallery' },
+      { id: 'sv-sa-groups', label: 'Groups', icon: '/images/sidebar-icons/groups.svg', path: '/groups' },
+      { id: 'sv-sa-news', label: 'News', icon: '/images/sidebar-icons/news.svg', path: '/news' },
+      { id: 'sv-sa-messages', label: 'Messages', icon: '/images/sidebar-icons/messages-bubble.svg', path: '/social/dm' },
+      { id: 'sv-sa-directory', label: 'Directory', icon: '/images/sidebar-icons/directory-grid.svg', path: '/directory' },
+      { id: 'sv-sa-jobs', label: 'Job Board', icon: '/images/sidebar-icons/job-briefcase.svg', path: '/jobs' },
+      { id: 'sv-sa-academy', label: 'Academy', icon: '/images/sidebar-icons/lms-cap.svg', path: '/academy' },
+      { id: 'sv-sa-calendar', label: 'Calendar', icon: '/images/sidebar-icons/calendar-square.svg', path: '/calendar' },
+      { id: 'sv-sa-case-management', label: 'Case Management', icon: '/images/sidebar-icons/case-management.svg', path: '/directory?categories=Case%20Management' },
+      { id: 'sv-sa-social', label: 'Social Media', icon: '/images/sidebar-icons/social-media.svg', path: '/social-media' },
+      { id: 'sv-sa-tasks', label: 'Task', icon: '/images/sidebar-icons/tasks-clipboard.svg', path: '/tasks' },
+      { id: 'sv-sa-documents', label: 'Documents', icon: '/images/sidebar-icons/documents.svg', path: '/documents' },
+      { id: 'sv-sa-storage', label: 'Storage', icon: '/images/sidebar-icons/storage.svg', path: '/storage' },
+      { id: 'sv-sa-database', label: 'Database', icon: '/images/sidebar-icons/database-grid.svg', path: '/data' },
+      { id: 'sv-sa-grantwriter', label: 'Grant Writer', icon: '/images/sidebar-icons/grantwriter.svg', path: '/grantwriter' },
+    ];
     SB_ITEMS.forEach(function (item) {
-      var iconHtml = item.svg ? item.svg : '<img src="' + item.icon + '" alt="" width="20" height="20" class="sv-sidebar-icon" style="opacity:0.7;flex-shrink:0;" />';
+      var iconHtml = item.svg ? item.svg : iconImg(item.icon);
       navWrap.appendChild(createSidebarBtn(item.id, item.label, iconHtml, item.path));
     });
     sidebar.appendChild(navWrap);
-
-    var profileFooter = document.createElement('button');
-    profileFooter.id = 'sv-sa-profile-footer';
-    profileFooter.className = 'sv-sa-profile-footer';
-    profileFooter.type = 'button';
-    profileFooter.setAttribute('aria-label', 'Profile');
-    profileFooter.style.cssText = 'display:flex;align-items:center;gap:0.75rem;width:100%;border:none;background:transparent;color:var(--text-primary);cursor:pointer;padding:0.75rem 1.25rem 1rem 1.25rem;border-top:1px solid rgba(128,128,128,0.14);flex-shrink:0;text-align:left;';
-    profileFooter.innerHTML =
-      '<span class="sv-sa-profile-avatar" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:999px;background:#b66a00;color:white;font-weight:700;font-size:0.75rem;flex-shrink:0;">P</span>' +
-      '<span class="sv-sa-profile-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.875rem;">Profile</span>';
-    profileFooter.addEventListener('mouseenter', function () { profileFooter.style.background = 'var(--surface-active-alt, rgba(255,255,255,0.06))'; });
-    profileFooter.addEventListener('mouseleave', function () { profileFooter.style.background = 'transparent'; });
-    profileFooter.addEventListener('click', function (e) { e.stopPropagation(); window.location.href = '/profile'; }, true);
-    sidebar.appendChild(profileFooter);
-    hydrateStandaloneProfileFooter();
 
     document.body.appendChild(sidebar);
 
@@ -767,8 +776,7 @@
       document.documentElement.classList.add('dark');
     }
 
-    // Shift Social app content so the standalone platform rail can coexist
-    // with Social's own workspace sidebar.
+    // Hide Social app's own sidebar and shift content
     applyStandaloneState();
   }
 
@@ -786,6 +794,20 @@
     // Social app: div.flex.h-screen.overflow-hidden
     var socialRoot = document.querySelector('.flex.h-screen.overflow-hidden');
     if (socialRoot) {
+      // Hide Social's internal sidebar (first child if it's the sidebar component)
+      var socialSidebar = socialRoot.querySelector('aside') || socialRoot.querySelector('nav:first-child');
+      // The Social sidebar is the first direct child that's not <main>
+      for (var i = 0; i < socialRoot.children.length; i++) {
+        var child = socialRoot.children[i];
+        if (child.tagName !== 'MAIN' && child.id !== STANDALONE_ID) {
+          // Check if it looks like a sidebar (narrow, fixed width)
+          if (child.tagName === 'ASIDE' || child.tagName === 'NAV' ||
+              (child.classList.contains('w-64') || child.classList.contains('w-60') ||
+               child.querySelector('[class*="sidebar"]') || child.querySelector('nav'))) {
+            child.style.display = 'none';
+          }
+        }
+      }
       socialRoot.style.marginLeft = standaloneSidebarCollapsed ? '56px' : '260px';
       socialRoot.style.transition = 'margin-left 0.2s ease';
       socialRoot.style.width = standaloneSidebarCollapsed ? 'calc(100% - 56px)' : 'calc(100% - 260px)';
@@ -826,7 +848,8 @@
         '.nav.sv-collapsed nav#chat-history-nav kbd { display: none !important; }',
         // SV header: hide text logo, center megaphone
         '.nav.sv-collapsed #sv-sidebar-header { padding: 8px 0 !important; justify-content: center !important; }',
-        '.nav.sv-collapsed #sv-sidebar-header img[width="130"] { display: none !important; }',
+        '.nav.sv-collapsed #sv-sidebar-header .sv-sidebar-logo-expanded { display: none !important; }',
+        '.nav.sv-collapsed #sv-sidebar-header .sv-sidebar-logo-mark { display: block !important; }',
         '.nav.sv-collapsed #sv-sidebar-header button { display: none !important; }',
         // Buttons: center icons, shrink padding
         '.nav.sv-collapsed nav#chat-history-nav [role="button"] { justify-content: center !important; padding: 8px 0 !important; }',
@@ -978,9 +1001,4 @@
   })();
 
   // /agents route now handled natively by React router — no redirect needed
-
-  // Street Profile CTA is now built into ProfilePage.tsx — no JS injection needed
-
-  // ── "Street Profile" dropdown item removed ──
-  // Avatar click now navigates directly to Street Profile (handled by sp-dropdown.js)
 })();
