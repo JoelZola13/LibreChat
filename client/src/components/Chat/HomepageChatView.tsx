@@ -19,6 +19,7 @@ import ChatForm from './Input/ChatForm';
 import Landing from './Landing';
 import { cn } from '~/utils';
 import store from '~/store';
+import { GlassBackground } from '~/components/streetbot/shared/GlassBackground';
 
 function HomepageChatView({ index = 0 }: { index?: number }) {
   const { conversationId } = useParams();
@@ -58,11 +59,12 @@ function HomepageChatView({ index = 0 }: { index?: number }) {
         <AddedChatContext.Provider value={addedChatHelpers}>
           <Presentation>
             <div className="relative flex h-full w-full flex-col">
+              {isLandingPage && <GlassBackground />}
               {isLandingPage && <HomepageTopNav />}
               <>
                 <div
                   className={cn(
-                    'flex flex-col',
+                    'relative z-[1] flex flex-col',
                     'flex-1 items-center justify-end sm:justify-center lg:justify-start lg:pt-[30vh] 2xl:justify-center 2xl:pt-0',
                   )}
                 >

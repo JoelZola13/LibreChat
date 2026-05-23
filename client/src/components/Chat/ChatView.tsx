@@ -18,6 +18,7 @@ import Header from './Header';
 import Footer from './Footer';
 import { cn } from '~/utils';
 import store from '~/store';
+import { GlassBackground } from '~/components/streetbot/shared/GlassBackground';
 
 function LoadingSpinner() {
   return (
@@ -82,11 +83,12 @@ function ChatView({ index = 0 }: { index?: number }) {
         <AddedChatContext.Provider value={addedChatHelpers}>
           <Presentation>
             <div className="relative flex h-full w-full flex-col">
+              {isLandingPage && <GlassBackground />}
               {!isLoading && <Header />}
               <>
                 <div
                   className={cn(
-                    'flex flex-col',
+                    'relative z-[1] flex flex-col',
                     isLandingPage
                       ? 'flex-1 items-center justify-end sm:justify-center'
                       : 'h-full overflow-y-auto',
