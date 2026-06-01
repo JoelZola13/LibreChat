@@ -11,7 +11,7 @@ type RealtimeEvent = {
   };
 };
 
-const REALTIME_MODEL_FALLBACK = 'gpt-realtime-mini';
+const REALTIME_MODEL_FALLBACK = 'gpt-realtime-2';
 
 function getPeerConnectionCtor(): typeof RTCPeerConnection | undefined {
   if (typeof window === 'undefined') {

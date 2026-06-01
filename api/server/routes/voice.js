@@ -5,8 +5,8 @@ const { requireJwtAuth } = require('~/server/middleware');
 const router = express.Router();
 
 const REALTIME_ENDPOINT = 'https://api.openai.com/v1/realtime/calls';
-const DEFAULT_REALTIME_MODEL = process.env.STREETBOT_REALTIME_MODEL || 'gpt-realtime-mini';
-const DEFAULT_REALTIME_VOICE = process.env.STREETBOT_REALTIME_VOICE || 'verse';
+const DEFAULT_REALTIME_MODEL = process.env.STREETBOT_REALTIME_MODEL || 'gpt-realtime-2';
+const DEFAULT_REALTIME_VOICE = process.env.STREETBOT_REALTIME_VOICE || 'marin';
 const DEFAULT_TRANSCRIPTION_MODEL =
   process.env.STREETBOT_REALTIME_TRANSCRIPTION_MODEL || 'gpt-4o-mini-transcribe';
 
@@ -75,7 +75,7 @@ router.post(
     const voice = requestedVoice || DEFAULT_REALTIME_VOICE;
     const formData = new FormData();
 
-    formData.set('sdp', new Blob([sdp], { type: 'application/sdp' }), 'offer.sdp');
+    formData.set('sdp', sdp);
     formData.set('session', JSON.stringify(createStreetBotRealtimeSession(model, voice)));
 
     try {
