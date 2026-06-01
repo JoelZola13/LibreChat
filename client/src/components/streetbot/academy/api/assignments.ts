@@ -280,17 +280,115 @@ function transformSubmission(api: any): Submission {
 
 function getMockAssignments(courseId: string): Assignment[] {
   const now = new Date();
+  const tomorrow = new Date(now.getTime() + 86400000);
   const nextWeek = new Date(now.getTime() + 7 * 86400000);
   const lastWeek = new Date(now.getTime() - 7 * 86400000);
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000);
   return [
-    { id: 'assign-1', courseId, title: 'Introduction Reflection Paper', description: 'Write a 500-word reflection.', assignmentType: 'file_upload', maxPoints: 100, passingScore: 70, dueDate: nextWeek.toISOString(), availableFrom: lastWeek.toISOString(), allowLateSubmissions: true, latePenaltyPercent: 10, maxLateDays: 7, maxAttempts: 2, peerReviewEnabled: false, peerReviewsRequired: 0, allowedFileTypes: ['pdf','docx'], maxFileSizeMb: 10, maxFiles: 1, isPublished: true, createdBy: 'instructor-1', createdAt: lastWeek.toISOString(), updatedAt: lastWeek.toISOString(), submissionCount: 12, gradedCount: 8, averageScore: 85 },
-    { id: 'assign-2', courseId, title: 'Case Study Analysis', description: 'Analyze the provided case study.', assignmentType: 'text', maxPoints: 50, passingScore: 60, dueDate: new Date(now.getTime() + 14 * 86400000).toISOString(), allowLateSubmissions: true, latePenaltyPercent: 5, maxLateDays: 3, maxAttempts: 1, peerReviewEnabled: true, peerReviewsRequired: 2, allowedFileTypes: [], maxFileSizeMb: 0, maxFiles: 0, isPublished: true, createdBy: 'instructor-1', createdAt: lastWeek.toISOString(), updatedAt: lastWeek.toISOString(), submissionCount: 5, gradedCount: 0 },
+    { id: `sample-${courseId}-quiz-1`, courseId, title: 'Know Your Rights Checkpoint Quiz', description: 'Ten questions covering core rights, safe documentation, and community support steps.', instructions: 'Complete the quiz after reviewing Module 1. You can use your notes.', assignmentType: 'quiz', maxPoints: 20, passingScore: 70, dueDate: tomorrow.toISOString(), availableFrom: lastWeek.toISOString(), allowLateSubmissions: false, latePenaltyPercent: 0, maxLateDays: 0, maxAttempts: 2, peerReviewEnabled: false, peerReviewsRequired: 0, allowedFileTypes: [], maxFileSizeMb: 0, maxFiles: 0, isPublished: true, createdBy: 'instructor-1', createdAt: twoWeeksAgo.toISOString(), updatedAt: lastWeek.toISOString(), submissionCount: 18, gradedCount: 16, averageScore: 88, quizQuestions: ['When should you ask for clarification?', 'What should you document after an encounter?', 'Which support contact should be used first?'] },
+    { id: `sample-${courseId}-assignment-1`, courseId, title: 'Rights Scenario Reflection', description: 'Write a 500-word reflection using one real-world scenario from class.', instructions: 'Name the scenario, explain the decision points, and identify two supports you would use.', assignmentType: 'file_upload', maxPoints: 100, passingScore: 70, dueDate: nextWeek.toISOString(), availableFrom: lastWeek.toISOString(), allowLateSubmissions: true, latePenaltyPercent: 10, maxLateDays: 7, maxAttempts: 2, peerReviewEnabled: false, peerReviewsRequired: 0, allowedFileTypes: ['pdf','docx'], maxFileSizeMb: 10, maxFiles: 1, isPublished: true, createdBy: 'instructor-1', createdAt: twoWeeksAgo.toISOString(), updatedAt: lastWeek.toISOString(), submissionCount: 15, gradedCount: 11, averageScore: 84 },
+    { id: `sample-${courseId}-assignment-2`, courseId, title: 'Community Resource Map', description: 'Build a small resource map with legal, wellness, and media support contacts.', instructions: 'Submit a short list or visual map. Include why each resource is useful.', assignmentType: 'text', maxPoints: 50, passingScore: 60, dueDate: new Date(now.getTime() + 14 * 86400000).toISOString(), allowLateSubmissions: true, latePenaltyPercent: 5, maxLateDays: 3, maxAttempts: 1, peerReviewEnabled: true, peerReviewsRequired: 2, allowedFileTypes: [], maxFileSizeMb: 0, maxFiles: 0, isPublished: true, createdBy: 'instructor-1', createdAt: lastWeek.toISOString(), updatedAt: lastWeek.toISOString(), submissionCount: 9, gradedCount: 4, averageScore: 79 },
+    { id: `sample-${courseId}-quiz-2`, courseId, title: 'Media Literacy Mini Test', description: 'A short test on source checking, bias signals, and responsible sharing.', instructions: 'Answer each question in one or two sentences.', assignmentType: 'quiz', maxPoints: 30, passingScore: 70, dueDate: new Date(now.getTime() - 2 * 86400000).toISOString(), availableFrom: twoWeeksAgo.toISOString(), allowLateSubmissions: true, latePenaltyPercent: 5, maxLateDays: 5, maxAttempts: 1, peerReviewEnabled: false, peerReviewsRequired: 0, allowedFileTypes: [], maxFileSizeMb: 0, maxFiles: 0, isPublished: true, createdBy: 'instructor-1', createdAt: twoWeeksAgo.toISOString(), updatedAt: lastWeek.toISOString(), submissionCount: 21, gradedCount: 21, averageScore: 91, quizQuestions: ['What makes a source credible?', 'Name one sign of bias.', 'When should you pause before sharing?'] },
   ];
 }
 
 function getMockSubmission(assignmentId: string, userId: string): Submission {
   const now = new Date();
-  return { id: `sub-${assignmentId}`, assignmentId, userId, attemptNumber: 1, status: 'draft', submissionType: 'text', textContent: '', fileUrls: [], isLate: false, daysLate: 0, latePenaltyApplied: 0, feedbackAttachments: [], createdAt: now.toISOString(), updatedAt: now.toISOString() };
+  const isQuiz = assignmentId.includes('quiz');
+  const isSecondAssignment = assignmentId.includes('assignment-2');
+  const isGraded = assignmentId.includes('quiz-2') || assignmentId.includes('assignment-1');
+  const score = assignmentId.includes('quiz-2') ? 27 : assignmentId.includes('assignment-1') ? 86 : undefined;
+  return {
+    id: `sub-${assignmentId}`,
+    assignmentId,
+    userId,
+    attemptNumber: 1,
+    status: isGraded ? 'graded' : isSecondAssignment ? 'submitted' : 'draft',
+    submissionType: isQuiz ? 'text' : 'mixed',
+    textContent: isGraded
+      ? 'Sample learner response with specific examples from class and a clear next-step reflection.'
+      : isSecondAssignment
+        ? 'Drafted resource list with legal aid, wellness support, and media literacy contacts.'
+        : '',
+    fileUrls: isQuiz ? [] : [{
+      url: '#',
+      filename: isGraded ? 'rights-scenario-reflection.docx' : 'community-resource-map.pdf',
+      sizeBytes: 248000,
+      mimeType: isGraded ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf',
+      uploadedAt: now.toISOString(),
+    }],
+    wordCount: isQuiz ? 220 : 540,
+    submittedAt: isGraded || isSecondAssignment ? new Date(now.getTime() - 2 * 86400000).toISOString() : undefined,
+    isLate: false,
+    daysLate: 0,
+    latePenaltyApplied: 0,
+    gradedAt: isGraded ? new Date(now.getTime() - 86400000).toISOString() : undefined,
+    gradedBy: isGraded ? 'instructor-1' : undefined,
+    score,
+    adjustedScore: score,
+    letterGrade: score ? (score >= 90 ? 'A' : 'B+') : undefined,
+    feedback: isGraded
+      ? 'Strong work. You named the decision points clearly and connected them to practical support options.'
+      : undefined,
+    feedbackAttachments: [],
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    quizAnswers: isQuiz ? ['Ask for clarification calmly.', 'Document time, location, and badge details.', 'Use the class resource sheet.'] : [],
+  };
+}
+
+function getMockCourseSubmissions(
+  courseId: string,
+  assignmentType: 'quiz' | 'assignment',
+): CourseSubmissionListItem[] {
+  const now = new Date();
+  const assignments = getMockAssignments(courseId).filter((assignment) =>
+    assignmentType === 'quiz'
+      ? assignment.assignmentType === 'quiz'
+      : assignment.assignmentType !== 'quiz',
+  );
+  const learners = [
+    { userId: 'learner-joel', userName: 'Joel Zola', userEmail: 'joel@example.com' },
+    { userId: 'learner-amara', userName: 'Amara Reid', userEmail: 'amara@example.com' },
+    { userId: 'learner-miles', userName: 'Miles Carter', userEmail: 'miles@example.com' },
+  ];
+
+  return assignments.flatMap((assignment, assignmentIndex) =>
+    learners.map((learner, learnerIndex) => {
+      const graded = learnerIndex !== 2 || assignment.assignmentType === 'quiz';
+      const score = graded
+        ? Math.max(
+            Math.round(assignment.maxPoints * (0.92 - learnerIndex * 0.06 - assignmentIndex * 0.03)),
+            Math.round(assignment.maxPoints * 0.72),
+          )
+        : undefined;
+
+      return {
+        submissionId: `sample-submission-${assignment.id}-${learner.userId}`,
+        assignmentId: assignment.id,
+        assignmentTitle: assignment.title,
+        assignmentType: assignment.assignmentType === 'quiz' ? 'quiz' : 'assignment',
+        courseId,
+        courseTitle: 'Sample Academy Course',
+        userId: learner.userId,
+        userName: learner.userName,
+        userEmail: learner.userEmail,
+        attemptNumber: 1,
+        status: graded ? 'graded' : 'submitted',
+        submittedAt: new Date(now.getTime() - (learnerIndex + 1) * 86400000).toISOString(),
+        gradedAt: graded ? new Date(now.getTime() - learnerIndex * 43200000).toISOString() : undefined,
+        score,
+        letterGrade: score
+          ? score / assignment.maxPoints >= 0.9
+            ? 'A'
+            : score / assignment.maxPoints >= 0.8
+              ? 'B+'
+              : 'B'
+          : undefined,
+        maxPoints: assignment.maxPoints,
+      };
+    }),
+  );
 }
 
 // =============================================================================
@@ -304,7 +402,9 @@ export async function getCourseAssignments(courseId: string, includeUnpublished 
     const response = await sbFetch(url);
     if (!response.ok) return getMockAssignments(courseId);
     const data = await response.json();
-    return data.map(transformAssignment);
+    const list = Array.isArray(data) ? data : data.assignments || [];
+    const assignments = list.map(transformAssignment);
+    return assignments.length > 0 ? assignments : getMockAssignments(courseId);
   } catch (error) {
     console.warn('Assignments API unavailable:', error);
     return getMockAssignments(courseId);
@@ -413,9 +513,9 @@ export async function createSubmission(assignmentId: string, userId: string): Pr
 export async function getMySubmission(assignmentId: string, userId: string): Promise<Submission | null> {
   try {
     const response = await sbFetch(`${BASE}/assignments/${assignmentId}/my-submission?user_id=${userId}`);
-    if (!response.ok) return response.status === 404 ? null : getMockSubmission(assignmentId, userId);
+    if (!response.ok) return getMockSubmission(assignmentId, userId);
     return transformSubmission(await response.json());
-  } catch { return null; }
+  } catch { return getMockSubmission(assignmentId, userId); }
 }
 
 export async function updateSubmission(submissionId: string, data: SubmissionCreate): Promise<Submission | null> {
@@ -482,9 +582,9 @@ export async function getCourseSubmissionList(
     const response = await sbFetch(
       `${BASE}/courses/${courseId}/submissions?assignment_type=${encodeURIComponent(assignmentType)}`,
     );
-    if (!response.ok) return [];
+    if (!response.ok) return getMockCourseSubmissions(courseId, assignmentType);
     const data = await response.json();
-    return data.map((api: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    const submissions = data.map((api: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
       submissionId: api.submission_id,
       assignmentId: api.assignment_id,
       assignmentTitle: api.assignment_title,
@@ -502,8 +602,9 @@ export async function getCourseSubmissionList(
       letterGrade: api.letter_grade,
       maxPoints: api.max_points,
     }));
+    return submissions.length > 0 ? submissions : getMockCourseSubmissions(courseId, assignmentType);
   } catch {
-    return [];
+    return getMockCourseSubmissions(courseId, assignmentType);
   }
 }
 

@@ -28,6 +28,14 @@ const clearDraft = (conversationId?: string | null) => {
   }
 };
 
+const parseStreamPayload = (value: unknown) => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw || raw.startsWith('<')) {
+    throw new Error('Stream returned a non-JSON response.');
+  }
+  return JSON.parse(raw);
+};
+
 type ChatHelpers = Pick<
   EventHandlerParams,
   | 'setMessages'
@@ -117,7 +125,21 @@ export default function useSSE(
     });
 
     sse.addEventListener('message', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
+      let data;
+      try {
+        data = parseStreamPayload(e.data);
+      } catch (error) {
+        console.error('[SSE] Failed to parse stream message:', error);
+        setIsSubmitting(false);
+        setShowStopButton(false);
+        errorHandler({
+          data: {
+            text: 'Street Bot had trouble reading the server response. Please try again.',
+          } as unknown as Parameters<typeof errorHandler>[0]['data'],
+          submission: { ...submission, userMessage } as EventSubmission,
+        });
+        return;
+      }
 
       if (data.final != null) {
         clearDraft(submission.conversation?.conversationId);
@@ -234,7 +256,7 @@ export default function useSSE(
 
       let data: TResData | undefined = undefined;
       try {
-        data = JSON.parse(e.data) as TResData;
+        data = parseStreamPayload(e.data) as TResData;
       } catch (error) {
         console.error(error);
         console.log(e);

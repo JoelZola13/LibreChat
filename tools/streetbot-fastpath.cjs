@@ -1,0 +1,4210 @@
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const { logger } = require('@librechat/data-schemas');
+const { Constants } = require('librechat-data-provider');
+const {
+  GenerationJobManager,
+  decrementPendingRequest,
+  sanitizeMessageForTransmit,
+  checkAndIncrementPendingRequest,
+  getViolationInfo,
+} = require('@librechat/api');
+const { saveMessage, saveConvo, getMessages } = require('~/models');
+const {
+  annotateStreetBotRequestTrace,
+  applyStreetBotSpanAttributes,
+  buildPostHogTextMessage,
+  captureStreetBotPostHogGeneration,
+  captureStreetBotPostHogSpan,
+  getStreetBotTraceIdentifiers,
+  summarizeStreetBotText,
+  withStreetBotSpan,
+} = require('/app/tools/streetbot-telemetry.cjs');
+
+const SERVICE_KEYWORDS = [
+  'service',
+  'services',
+  'resource',
+  'resources',
+  'referral',
+  'referrals',
+  'housing',
+  'shelter',
+  'eviction',
+  'rent',
+  'food',
+  'meal',
+  'meals',
+  'hungry',
+  'hunger',
+  'grocery',
+  'groceries',
+  'food bank',
+  'legal',
+  'clinic',
+  'doctor',
+  'doctors',
+  'medical',
+  'healthcare',
+  'dentist',
+  'dental',
+  'pharmacy',
+  'medication',
+  'benefit',
+  'benefits',
+  'support',
+  'supports',
+  'mental health',
+  'health',
+  'newcomer',
+  'youth',
+  'senior',
+  'seniors',
+  'employment',
+  'drop-in',
+  'drop in',
+  'help',
+  'program',
+  'programs',
+];
+const CONVERSATIONAL_SERVICE_KEYWORDS = new Set(['help', 'support', 'supports']);
+const FINDER_ONLY_SERVICE_KEYWORDS = new Set(['program', 'programs', 'health']);
+const DIRECT_BROWSE_CATEGORY_HINTS = [
+  ['program', 'Programs'],
+  ['programs', 'Programs'],
+];
+const BROWSE_LOCATION_LABELS = [
+  ['toronto', 'Toronto'],
+  ['scarborough', 'Scarborough'],
+  ['etobicoke', 'Etobicoke'],
+  ['north york', 'North York'],
+  ['mississauga', 'Mississauga'],
+  ['brampton', 'Brampton'],
+  ['hamilton', 'Hamilton'],
+  ['ottawa', 'Ottawa'],
+  ['london', 'London'],
+  ['windsor', 'Windsor'],
+  ['barrie', 'Barrie'],
+  ['guelph', 'Guelph'],
+  ['oshawa', 'Oshawa'],
+  ['kingston', 'Kingston'],
+  ['sudbury', 'Sudbury'],
+  ['thunder bay', 'Thunder Bay'],
+  ['markham', 'Markham'],
+  ['vaughan', 'Vaughan'],
+  ['richmond hill', 'Richmond Hill'],
+  ['oakville', 'Oakville'],
+  ['burlington', 'Burlington'],
+  ['ajax', 'Ajax'],
+  ['pickering', 'Pickering'],
+  ['newmarket', 'Newmarket'],
+  ['waterloo', 'Waterloo'],
+  ['kitchener', 'Kitchener'],
+  ['cambridge', 'Cambridge'],
+  ['ontario', 'Ontario'],
+  ['quebec', 'Quebec'],
+  ['british columbia', 'British Columbia'],
+  ['alberta', 'Alberta'],
+  ['manitoba', 'Manitoba'],
+  ['saskatchewan', 'Saskatchewan'],
+  ['nova scotia', 'Nova Scotia'],
+  ['new brunswick', 'New Brunswick'],
+  ['newfoundland', 'Newfoundland'],
+  ['pei', 'PEI'],
+  ['prince edward island', 'Prince Edward Island'],
+];
+
+const FINDER_PATTERNS = [
+  /\b(find|search|look for|looking for|where|need|want|get|show|list|return|recommend)\b/i,
+  /\bnear me\b/i,
+  /\bin\b.+\b(toronto|ontario|hamilton|ottawa|mississauga|brampton|scarborough|etobicoke|north york)\b/i,
+];
+const NAMED_SERVICE_DETAIL_PATTERNS = [
+  /\b(tell me more about|more about)\b/i,
+  /\b(hours|eligibility|contact|phone|email|website|program details?|application details?)\b/i,
+  /\b(open|visit|show|preview|navigate to|pull up|bring up)\b.*\b(application|form|website|site|page)\b/i,
+];
+const GENERIC_PROVIDER_PLACE_PATTERN =
+  /\b(?:cent(?:re|er)s?|offices?|hubs?|drop[\s-]?ins?|banks?)\b/i;
+const NUMBER_WORDS = new Map([
+  ['one', 1],
+  ['two', 2],
+  ['three', 3],
+  ['four', 4],
+  ['five', 5],
+  ['six', 6],
+  ['seven', 7],
+  ['eight', 8],
+  ['nine', 9],
+  ['ten', 10],
+  ['eleven', 11],
+  ['twelve', 12],
+]);
+
+const MORE_PATTERNS = [
+  /^\s*(more|more please|show more|keep going|continue|next|next page|another page)\s*$/i,
+  /\b(show|give|list)\b.*\bmore\b/i,
+];
+
+const CATEGORY_PATTERNS = [
+  /\b(categories|category|types|service types|browse)\b/i,
+  /\bwhat kinds of services\b/i,
+];
+const SERVICE_META_CONVERSATION_PATTERNS = [
+  /^(do you (know|remember|recall))\b.*\b(services?|resources?|supports?|programs?|referrals?)\b/i,
+  /^(what do you know about)\b.*\b(services?|resources?|supports?|programs?|referrals?)\b/i,
+  /^(what (have|did) i)\b.*\b(search(?:ed|ing)?|look(?:ed|ing)? for|ask(?:ed|ing)? about|need(?:ed)?|want(?:ed)?)\b/i,
+  /^(do i (usually|normally|tend to))\b.*\b(search|look for|ask for|need|want)\b/i,
+  /^(what kind(?:s)? of)\b.*\b(services?|resources?|supports?|programs?|referrals?)\b.*\b(do i|have i|did i|i)\b/i,
+  /^(what (services?|resources?|supports?|programs?|referrals?))\b.*\b(have i|did i|do i)\b/i,
+  /^(can you tell me)\b.*\b(what|which)\b.*\b(services?|resources?|supports?|programs?|referrals?)\b.*\b(i|me|my)\b/i,
+];
+const EVALUATION_CONVERSATION_PATTERNS = [
+  /\bstreet bot\b.*\b(stack|system|retrieval|transition|eval|evaluation|diagnostic|diagnostics|health|status|probe|corpus|weaviate|redis|postgres|latency)\b/i,
+  /\b(stack health|system health|retrieval benchmark|transition guardrails|service corpus|corpus sync|stack doctor|admin check|probe run|weaviate status|redis status|postgres status|backup ops)\b/i,
+];
+const STACK_STATUS_FASTPATH_PATTERNS = [
+  /\b(current|latest)\b.*\b(stack health|system health|stack doctor)\b/i,
+  /\bgive me\b.*\b(stack health|system health)\b/i,
+  /\b(weaviate status|redis status|postgres status|service corpus)\b/i,
+];
+const IMPROVEMENT_REVIEW_PATTERNS = [
+  /\b(review|summari[sz]e|assess|inspect)\b.*\b(latest|current)\b.*\b(reports?|scorecards?|checks?)\b/i,
+  /\b(top|latest|current)\s+(improvement|priorities|issues|regressions)\b/i,
+  /\bwhat should street bot improve\b/i,
+  /\bself[- ]improvement\b/i,
+];
+const STREETBOT_LOG_ROOT_CANDIDATES = [
+  process.env.STREETBOT_WORKSPACE_ROOT,
+  '/workspace',
+  process.cwd(),
+].filter(Boolean);
+const LIMIT_WORD_PATTERN = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve';
+const REFINEMENT_PATTERNS = [
+  /\b(what about|how about|instead|make it|change it|switch it|same search|same area|only)\b/i,
+  /^\s*(in|around)\s+[a-z]/i,
+  /^\s*\d{1,2}\s*(?:results?|services?|options?|matches?|cards?)?\s*(?:in\s+[a-z].*)?$/i,
+  new RegExp(
+    `^\\s*(?:${LIMIT_WORD_PATTERN})\\s*(?:results?|services?|options?|matches?|cards?)?\\s*(?:in\\s+[a-z].*)?$`,
+    'i',
+  ),
+];
+const REFINEMENT_CONTEXT_ONLY_PATTERNS = [/\bsame search\b/i, /\bsame area\b/i];
+const SERVICE_REFINEMENT_GEO_PATTERNS = [
+  /\bnear me\b/i,
+  /\bnearby\b/i,
+  /\bclose(?:r)? to me\b/i,
+  /\baround me\b/i,
+];
+const SERVICE_REFINEMENT_FILTER_PATTERNS = [
+  /\b(women|woman|female|men|male|youth|teen|teens|senior|seniors|children|kids|families|family)\b/i,
+  /\b(newcomer|immigrant|refugee|indigenous|lgbtq|disabled|disability|accessible)\b/i,
+  /\b(open now|24\/7|walk[-\s]?in|drop[-\s]?in|appointment|free|low[-\s]?cost)\b/i,
+];
+
+const EMOTIONAL_PATTERNS = [
+  /\bsuicid/i,
+  /\bkill myself\b/i,
+  /\bhurt myself\b/i,
+  /\bself.?harm\b/i,
+  /\bwant to die\b/i,
+  /\bend (it|my life)\b/i,
+  /\bcrisis\b/i,
+  /\bemergency\b/i,
+  /\babuse[d]?\b/i,
+  /\bdomestic violence\b/i,
+  /\boverdos/i,
+  /\bfeel\b.*\b(suicidal|hopeless)\b/i,
+];
+
+const GREETING_PATTERNS = [
+  /^(hi|hello|hey|hey there|hello there|yo|hiya|good morning|good afternoon|good evening)[!.?]*$/i,
+  /^(hi|hello|hey)\s+(street bot|streetbot)(?:\s+0\.1)?[!.?]*$/i,
+];
+
+const CHECKIN_PATTERNS = [
+  /^(how are you|how are you doing|how you doin'?|how you doing|how's it going|hows it going|what's up|whats up)[?.!]*$/i,
+  /^(how(?:'s| is| was) your day|hows your day|how has your day been|how are things|you good|are you good)[?.!]*$/i,
+];
+
+const IDENTITY_PATTERNS = [
+  /^(who are you|what are you|what do you do|tell me about yourself|what(?:'s| is) your name|whats your name|your name)[?.!]*$/i,
+  /^(who am i talking to|who's this|whos this)[?.!]*$/i,
+  /^(are you (street bot|streetbot))(?:\s+0\.1)?[?.!]*$/i,
+];
+
+const THANKS_PATTERNS = [/^(thanks|thank you|thx|appreciate it|thanks street bot)[!.?]*$/i];
+
+const FAREWELL_PATTERNS = [/^(bye|goodbye|see ya|see you|talk soon|later)[!.?]*$/i];
+const SERVICE_FEEDBACK_PATTERNS = [
+  /\b(you only gave me|you just gave me|you only showed me|you just showed me|why only|only gave me|only showed me)\b/i,
+  /\b(not enough|too few|thats all|that's all|just one|only one)\b.*\b(result|results|service|services|option|options|match|matches|card|cards)\b/i,
+  /\b(i asked for more|i wanted more|need more than that)\b/i,
+];
+const ACKNOWLEDGMENT_PATTERNS = [
+  /^(ok|okay|kk|k|cool|nice|awesome|perfect|great|sweet|solid|fair enough|understood|got it|makes sense|sounds good|all good|alright|all right|sure)[!.?]*$/i,
+  /^(that helps|this helps|helpful|good to know|good point|good call|works for me|im with you|i'm with you)[!.?]*$/i,
+  /^(wow|oh wow|damn|thats cool|that's cool|thats helpful|that's helpful|thats good|that's good)[!.?]*$/i,
+];
+const ACKNOWLEDGMENT_FILLER_WORDS = new Set([
+  'aight',
+  'alright',
+  'all',
+  'awesome',
+  'cool',
+  'dope',
+  'fair',
+  'fine',
+  'good',
+  'got',
+  'great',
+  'helpful',
+  'it',
+  'k',
+  'kk',
+  'makes',
+  'nice',
+  'okay',
+  'ok',
+  'perfect',
+  'sense',
+  'solid',
+  'sounds',
+  'sure',
+  'sweet',
+  'that',
+  'thanks',
+  'this',
+  'understood',
+  'well',
+  'works',
+  'wow',
+  'ya',
+  'yep',
+  'yes',
+]);
+const PREFERENCE_PATTERNS = [
+  /^(what(?:'s| is)?|whats)\s+your\s+(favorite|favourite)\s+(.+?)[?.!]*$/i,
+  /^(do you have\s+(?:a|an)\s+(favorite|favourite)\s+(.+?))[?.!]*$/i,
+];
+const BOT_DIRECTED_TOPIC_CHAT_PATTERNS = [
+  /^(what do you think about|how do you feel about)\s+(.+?)[?.!]*$/i,
+  /^(do you (like|prefer|hate|love|enjoy))\s+(.+?)[?.!]*$/i,
+  /^(are you (into|a fan of))\s+(.+?)[?.!]*$/i,
+  /^(can you tell me about)\s+(.+?)[?.!]*$/i,
+];
+const RELATIONAL_PATTERNS = [
+  /^(you(?:'re| are|re|r| seem| sound)\s+(?:really\s+|so\s+|very\s+)?(?:smart|helpful|kind|nice|good|great|awesome|cool|amazing|sweet|thoughtful|funny|the best|wonderful))[!.?]*$/i,
+  /^(good job|nice job|great job|well done|you did good|you did well)[!.?]*$/i,
+  /^(i\s+(?:like|appreciate|trust|love)\s+you)[!.?]*$/i,
+  /^(i\s+(?:like|love|enjoy)\s+talking\s+to\s+you)[!.?]*$/i,
+  /^(that(?:'s| is|s)\s+(?:kind|sweet|nice|helpful|smart|thoughtful))[!.?]*$/i,
+  /^(you\s+helped\s+(?:a lot|me a lot)|you(?:'re| are)\s+(?:helpful|smart|kind))[!.?]*$/i,
+];
+const PLAYFUL_PATTERNS = [
+  /^(?:ha)+[!.?]*$/i,
+  /^(?:ha(?:ha)+|he(?:he)+|lol|lmao|lmfao|rofl|bahaha|bwahaha)[!.?]*$/i,
+  /^(thats funny|that's funny|youre funny|you're funny|thats cute|that's cute|youre sweet|you're sweet)[!.?]*$/i,
+];
+const INFORMATIONAL_SERVICE_PATTERNS = [
+  /^(what(?:'s| is)|whats)\s+(?:a|an|the)?\s*(.+?)[?.!]*$/i,
+  /^(what are)\s+(.+?)[?.!]*$/i,
+  /^(what do|what does)\s+(.+?)\s+do[?.!]*$/i,
+  /^(how do|how does)\s+(.+?)\s+work[?.!]*$/i,
+  /^(explain|define)\s+(.+?)[?.!]*$/i,
+  /^(tell me about)\s+(.+?)[?.!]*$/i,
+];
+const SUPPORT_PATTERNS = [
+  /\b(?:i\s+)?need\s+help\b/i,
+  /\bhelp\s+me\b/i,
+  /\b(overwhelmed|stressed|stress out|burnt out|burned out)\b/i,
+  /\b(anxious|anxiety|panicking|panic)\b/i,
+  /\b(sad|down|lonely)\b/i,
+  /\b(replaying|ruminating|overthinking)\b/i,
+  /\b(thoughts?|mind)\b.*\b(won't|wont|can't|cant|don't|dont)\s+(slow down|quiet down|settle)\b/i,
+  /\b(can't|cant|won't|wont)\b.*\b(slow down|calm down|settle)\b/i,
+  /\b(restless|spiraling|spiralling|racing thoughts)\b/i,
+];
+const WELLNESS_TIP_PATTERNS = [
+  /\b(simple|quick|gentle|easy)\s+(way|step|thing)\b.*\b(reset|ground|calm|unwind|slow down)\b/i,
+  /\b(reset|ground myself|calm down|slow down|unwind)\b.*\b(long day|hard day|stress|overwhelm|overwhelmed)\b/i,
+  /^(what|what's|whats|how)\b.*\b(reset|ground myself|calm down|slow down|unwind)\b/i,
+];
+const JOKE_PATTERNS = [
+  /^(tell me )?(a )?(quick )?joke(?: about .+)?[!.?]*$/i,
+  /^(can you )?(tell me )?(something )?funny(?: about .+)?[!.?]*$/i,
+  /^(make me laugh)(?: about .+)?[!.?]*$/i,
+];
+const GENERIC_SERVICE_BROWSE_WORDS = new Set([
+  'i',
+  'im',
+  "i'm",
+  'me',
+  'my',
+  'need',
+  'needs',
+  'want',
+  'wants',
+  'looking',
+  'look',
+  'for',
+  'find',
+  'show',
+  'give',
+  'list',
+  'return',
+  'recommend',
+  'please',
+  'some',
+  'a',
+  'an',
+  'the',
+  'service',
+  'services',
+  'resource',
+  'resources',
+  'support',
+  'supports',
+  'help',
+  'program',
+  'programs',
+  'option',
+  'options',
+  'match',
+  'matches',
+  'card',
+  'cards',
+  'in',
+  'near',
+  'around',
+]);
+const NAMED_SERVICE_DETAIL_STOPWORDS = new Set([
+  'a',
+  'about',
+  'an',
+  'application',
+  'apply',
+  'details',
+  'email',
+  'for',
+  'form',
+  'hours',
+  'me',
+  'more',
+  'open',
+  'page',
+  'phone',
+  'program',
+  'programs',
+  'site',
+  'tell',
+  'the',
+  'visit',
+  'website',
+]);
+function truthyEnv(value) {
+  return /^(1|true|yes|on)$/i.test(String(value || '').trim());
+}
+
+const STREETBOT_FASTPATH_STREAMING_ENABLED = truthyEnv(
+  process.env.STREETBOT_FASTPATH_STREAMING_ENABLED || process.env.STREETBOT_STREAMING_ENABLED,
+);
+const STREETBOT_BACKEND_STREAMING_ENABLED = !truthyEnv(
+  process.env.STREETBOT_BACKEND_STREAMING_DISABLED,
+);
+const STREETBOT_FASTPATH_KEEPALIVE_ENABLED = !truthyEnv(
+  process.env.STREETBOT_FASTPATH_KEEPALIVE_DISABLED,
+);
+const STREETBOT_CONVERSATION_TIMEOUT_MS = Math.max(
+  5000,
+  Number(process.env.STREETBOT_CONVERSATION_TIMEOUT_MS || 15000) || 15000,
+);
+const STREETBOT_TEXT_STREAM_CHUNK_SIZE = 96;
+const STREETBOT_TEXT_STREAM_DELAY_MS = 38;
+const TITLECASE_SERVICE_NAME_PATTERN =
+  /\b(?:[A-Z][A-Za-z'’&.-]*)(?:\s+(?:[A-Z][A-Za-z'’&.-]*|of|the|and|for|to|at|on)){1,5}\b/;
+
+let ragModulePromise;
+
+function isStreetBotEndpoint(endpoint) {
+  return /^Street Bot(?: 0\.1(?: Pro)?| Pro)?$/i.test(String(endpoint || '').trim());
+}
+
+function cloneContentPart(part) {
+  if (!part || typeof part !== 'object') {
+    return part;
+  }
+  return Array.isArray(part) ? part.slice() : { ...part };
+}
+
+function normalizeStreetBotResponseText(value) {
+  const text = String(value || '');
+  if (!text || text.includes('```streetbot-service-results')) {
+    return text;
+  }
+
+  const introPattern = /Street Bot(?: 0\.1(?: Pro)?| Pro)?(?: here)?\s*:\s*/gi;
+  const matches = [...text.matchAll(introPattern)];
+  if (matches.length < 2) {
+    return text;
+  }
+
+  const lastMatch = matches[matches.length - 1];
+  if (!lastMatch || lastMatch.index == null) {
+    return text;
+  }
+
+  return text.slice(lastMatch.index).trim();
+}
+
+function looksLikeStreetBotModelFailureText(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes('having trouble reaching my model') ||
+    normalized.includes('api call failed') ||
+    normalized.includes('request requires more credits') ||
+    normalized.includes('exceeded your current quota') ||
+    normalized.includes('model_rate_limit') ||
+    normalized.includes('openrouter.ai/settings/credits')
+  );
+}
+
+function normalizeStreetBotResponse(req, endpointOption, response) {
+  const endpoint =
+    endpointOption?.endpoint ??
+    req?.params?.endpoint ??
+    req?.body?.endpoint ??
+    req?.body?.endpointOption?.endpoint ??
+    '';
+
+  if (!isStreetBotEndpoint(endpoint) || !response || typeof response !== 'object') {
+    return response;
+  }
+
+  let changed = false;
+  const nextResponse = { ...response };
+
+  if (typeof response.text === 'string' && response.text.trim()) {
+    const normalizedText = normalizeStreetBotResponseText(response.text);
+    if (normalizedText !== response.text) {
+      nextResponse.text = normalizedText;
+      changed = true;
+    }
+  }
+
+  if (Array.isArray(response.content) && response.content.length > 0) {
+    const nextContent = response.content.map((part) => cloneContentPart(part));
+    for (let i = 0; i < nextContent.length; i += 1) {
+      const part = nextContent[i];
+      if (
+        !part ||
+        typeof part !== 'object' ||
+        part.type !== 'text' ||
+        typeof part.text !== 'string'
+      ) {
+        continue;
+      }
+      const normalizedText = normalizeStreetBotResponseText(part.text);
+      if (normalizedText !== part.text) {
+        nextContent[i] = { ...part, text: normalizedText };
+        changed = true;
+      }
+    }
+    if (changed) {
+      nextResponse.content = nextContent;
+    }
+  }
+
+  return nextResponse;
+}
+
+function normalizeStreetBotMessagePayload(endpoint, message) {
+  if (!isStreetBotEndpoint(endpoint) || !message || typeof message !== 'object') {
+    return message;
+  }
+
+  let changed = false;
+  const nextMessage = { ...message };
+
+  if (typeof message.text === 'string' && message.text.trim()) {
+    const normalizedText = normalizeStreetBotResponseText(message.text);
+    if (normalizedText !== message.text) {
+      nextMessage.text = normalizedText;
+      changed = true;
+    }
+  }
+
+  if (Array.isArray(message.content) && message.content.length > 0) {
+    const nextContent = message.content.map((part) => cloneContentPart(part));
+    for (let i = 0; i < nextContent.length; i += 1) {
+      const part = nextContent[i];
+      if (
+        !part ||
+        typeof part !== 'object' ||
+        part.type !== 'text' ||
+        typeof part.text !== 'string'
+      ) {
+        continue;
+      }
+      const normalizedText = normalizeStreetBotResponseText(part.text);
+      if (normalizedText !== part.text) {
+        nextContent[i] = { ...part, text: normalizedText };
+        changed = true;
+      }
+    }
+    if (changed) {
+      nextMessage.content = nextContent;
+    }
+  }
+
+  return changed ? nextMessage : message;
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function emitStreetBotMessageDelta(streamId, responseMessageId, value) {
+  const text = String(value || '');
+  if (!STREETBOT_FASTPATH_STREAMING_ENABLED || !streamId || !responseMessageId || !text) {
+    return;
+  }
+  GenerationJobManager.emitChunk(streamId, {
+    event: 'on_message_delta',
+    data: {
+      id: responseMessageId,
+      delta: {
+        content: [{ type: 'text', text }],
+      },
+    },
+  });
+}
+
+function emitStreetBotResponseStepStart(streamId, runId, index = 1) {
+  if (!STREETBOT_FASTPATH_STREAMING_ENABLED || !streamId || !runId) {
+    return null;
+  }
+
+  const stepId = `step_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
+  GenerationJobManager.emitChunk(streamId, {
+    event: 'on_run_step',
+    data: {
+      id: stepId,
+      runId,
+      index,
+      stepDetails: {
+        type: 'message_creation',
+        message_creation: {
+          message_id: runId,
+        },
+      },
+    },
+  });
+
+  return {
+    stepId,
+    runId,
+    index,
+  };
+}
+
+function splitStreetBotTextChunks(value, preferredSize = STREETBOT_TEXT_STREAM_CHUNK_SIZE) {
+  const source = String(value || '');
+  if (!source) {
+    return [];
+  }
+
+  const chunks = [];
+  let remaining = source;
+  while (remaining.length > preferredSize) {
+    const newlineBoundary = remaining.lastIndexOf('\n', preferredSize);
+    const spaceBoundary = remaining.lastIndexOf(' ', preferredSize);
+    let boundary = Math.max(newlineBoundary, spaceBoundary);
+    if (boundary < Math.floor(preferredSize * 0.5)) {
+      boundary = preferredSize;
+    } else {
+      boundary += 1;
+    }
+
+    chunks.push(remaining.slice(0, boundary));
+    remaining = remaining.slice(boundary);
+  }
+
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  return chunks.filter(Boolean);
+}
+
+async function emitStreetBotMessageText(
+  streamId,
+  responseTargetId,
+  value,
+  {
+    preferredSize = STREETBOT_TEXT_STREAM_CHUNK_SIZE,
+    delayMs = STREETBOT_TEXT_STREAM_DELAY_MS,
+  } = {},
+) {
+  if (!STREETBOT_FASTPATH_STREAMING_ENABLED) {
+    return;
+  }
+
+  const chunks = splitStreetBotTextChunks(value, preferredSize);
+  for (let index = 0; index < chunks.length; index += 1) {
+    emitStreetBotMessageDelta(streamId, responseTargetId, chunks[index]);
+    if (delayMs > 0 && index < chunks.length - 1) {
+      await sleep(delayMs);
+    }
+  }
+}
+
+function toStringList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function hasExplicitResultLimit(value) {
+  return extractRequestedLimit(value, true) != null;
+}
+
+function extractRequestedLimit(value, allowLoose = false) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const exactMoreMatch = normalized.match(
+    new RegExp(`\\b(\\d{1,2}|${LIMIT_WORD_PATTERN})\\s+more\\b`, 'i'),
+  );
+  if (exactMoreMatch) {
+    const raw = exactMoreMatch[1].toLowerCase();
+    return /^\d+$/.test(raw) ? Number(raw) : NUMBER_WORDS.get(raw) || null;
+  }
+
+  const exactMatch = normalized.match(
+    new RegExp(
+      `\\b(\\d{1,2}|${LIMIT_WORD_PATTERN})\\s+(?:results?|services?|options?|matches?|cards?)\\b`,
+      'i',
+    ),
+  );
+  if (exactMatch) {
+    const raw = exactMatch[1].toLowerCase();
+    return /^\d+$/.test(raw) ? Number(raw) : NUMBER_WORDS.get(raw) || null;
+  }
+
+  if (!allowLoose) {
+    return null;
+  }
+
+  const looseMatch = normalized.match(
+    new RegExp(
+      `^(?:show|give|list|return|make it|make them|make those|make this)?\\s*(\\d{1,2}|${LIMIT_WORD_PATTERN})\\s*(?:in\\b|around\\b|for\\b|$)`,
+      'i',
+    ),
+  );
+  if (!looseMatch) {
+    return null;
+  }
+
+  const raw = looseMatch[1].toLowerCase();
+  return /^\d+$/.test(raw) ? Number(raw) : NUMBER_WORDS.get(raw) || null;
+}
+
+function textContainsAny(text, keywords) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function getMatchedKeywords(text, keywords) {
+  return keywords.filter((keyword) => text.includes(keyword));
+}
+
+function dedupeStrings(values = []) {
+  return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+function inferDirectBrowseCategories(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return [];
+  }
+
+  return dedupeStrings(
+    DIRECT_BROWSE_CATEGORY_HINTS.filter(([keyword]) => normalized.includes(keyword)).map(
+      ([, category]) => category,
+    ),
+  );
+}
+
+function hasExplicitServiceLocation(candidateArgs = null) {
+  return Boolean(candidateArgs?.city || candidateArgs?.province);
+}
+
+function looksLikeNearbyBrowseWithoutLocation(value, candidateArgs = null) {
+  const normalized = normalizeText(value);
+  if (!normalized || hasExplicitServiceLocation(candidateArgs)) {
+    return false;
+  }
+
+  return /\bnear me\b/i.test(normalized);
+}
+
+function stripBrowseSearchScaffolding(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^\s*(i am|i'm|im)\s+/i, '')
+    .replace(
+      /^\s*(i need|i'm looking for|im looking for|looking for|can you find|could you find|find me|show me|give me|list|show|give|return|recommend)\s+/i,
+      '',
+    )
+    .replace(/^\s*(need|want)\s+/i, '')
+    .replace(/^\s*(what about|how about)\s+/i, '')
+    .replace(/^\s*(a|an|the|some)\s+/i, '')
+    .replace(/\bplease\b/gi, ' ')
+    .replace(
+      /\b(show|give|list|return)\s+\d{1,2}\s+(?:results?|services?|options?|matches?|cards?)\b/gi,
+      ' ',
+    )
+    .replace(
+      /\b(show|give|list|return)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:results?|services?|options?|matches?|cards?)\b/gi,
+      ' ',
+    )
+    .replace(/\b\d{1,2}\s+more\b/gi, ' ')
+    .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+more\b/gi, ' ')
+    .replace(/[!?.,;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildDirectBrowseSearchArgs(userText, candidateArgs = null) {
+  const baseArgs = candidateArgs && typeof candidateArgs === 'object' ? candidateArgs : {};
+  return {
+    ...baseArgs,
+    query:
+      stripBrowseSearchScaffolding(userText) || String(baseArgs.query || userText || '').trim(),
+    categories: dedupeStrings([
+      ...(Array.isArray(baseArgs.categories) ? baseArgs.categories : []),
+      ...inferDirectBrowseCategories(userText),
+    ]),
+  };
+}
+
+function canDirectSearchBroadBrowse(value, candidateArgs = null) {
+  return hasExplicitServiceLocation(candidateArgs) && inferDirectBrowseCategories(value).length > 0;
+}
+
+function inferBrowseTopicLabel(userText = '', payload = null) {
+  const normalized = normalizeText(userText);
+  if (normalized.includes('program')) {
+    return 'programs';
+  }
+  if (normalized.includes('service')) {
+    return 'services';
+  }
+
+  const categories = Array.isArray(payload?.category_facets)
+    ? payload.category_facets.map((entry) => String(entry?.value || '').trim()).filter(Boolean)
+    : [];
+  if (categories.length > 0) {
+    return categories[0].toLowerCase();
+  }
+
+  return 'services';
+}
+
+function normalizeBrowseCategoryHint(value = '') {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return '';
+  }
+  if (/\bhous|shelter|rent|evict|warming/.test(normalized)) {
+    return 'Housing';
+  }
+  if (/\bfood|meal|grocery|hungr|food bank|breakfast|lunch|dinner/.test(normalized)) {
+    return 'Food';
+  }
+  if (
+    /\bhealth|doctor|clinic|medical|mental health|health centre|health center|counsell|therapy/.test(
+      normalized,
+    )
+  ) {
+    return 'Health';
+  }
+  if (/\blegal|law|advocacy|rights|tenant|immigration/.test(normalized)) {
+    return 'Legal';
+  }
+  if (/\bemploy|job|career|resume|work/.test(normalized)) {
+    return 'Employment';
+  }
+  if (/\bbenefit|income|odsp|ontario works|disability/.test(normalized)) {
+    return 'Benefits';
+  }
+  if (/\bnewcomer|settlement|immigrant|refugee/.test(normalized)) {
+    return 'Newcomer';
+  }
+  if (/\bprogram/.test(normalized)) {
+    return 'Programs';
+  }
+  return String(value || '').trim();
+}
+
+function buildBrowseCategoryHints(payload = null) {
+  const rawCategories = Array.isArray(payload?.category_facets)
+    ? payload.category_facets
+        .slice(0, 8)
+        .map((entry) => entry?.value)
+        .filter(Boolean)
+    : [];
+  const normalizedCategories = dedupeStrings(
+    rawCategories.map((value) => normalizeBrowseCategoryHint(value)).filter(Boolean),
+  );
+  return normalizedCategories.slice(0, 5);
+}
+
+function inferExplicitBrowseLocationLabel(value = '') {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return '';
+  }
+
+  const match = BROWSE_LOCATION_LABELS.find(([keyword]) =>
+    new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i').test(normalized),
+  );
+  return match ? match[1] : '';
+}
+
+function getStreetBotUserContext(rawContext) {
+  if (!rawContext || typeof rawContext !== 'object') {
+    return {};
+  }
+  const latitude = Number(rawContext.latitude ?? rawContext.lat);
+  const longitude = Number(rawContext.longitude ?? rawContext.lon);
+  return {
+    preferred_city: String(rawContext.preferred_city || rawContext.city || '').trim(),
+    preferred_province: String(rawContext.preferred_province || rawContext.province || '').trim(),
+    location_label: String(rawContext.location_label || '').trim(),
+    latitude: Number.isFinite(latitude) ? latitude : null,
+    longitude: Number.isFinite(longitude) ? longitude : null,
+    updated_at: String(rawContext.updated_at || '').trim(),
+    source: String(rawContext.source || '').trim(),
+  };
+}
+
+function hasStreetBotPreferredLocation(userContext = {}) {
+  return Boolean(
+    userContext.preferred_city ||
+      userContext.preferred_province ||
+      (Number.isFinite(userContext.latitude) && Number.isFinite(userContext.longitude)),
+  );
+}
+
+function getStreetBotPreferredLocationLabel(userContext = {}) {
+  if (userContext.location_label) {
+    return userContext.location_label;
+  }
+  return [userContext.preferred_city, userContext.preferred_province].filter(Boolean).join(', ');
+}
+
+function applyStreetBotUserContextToSearchArgs(args, userContext = {}) {
+  if (!args || typeof args !== 'object') {
+    return args;
+  }
+
+  const nextArgs = { ...args };
+  if (!nextArgs.city && userContext.preferred_city) {
+    nextArgs.city = userContext.preferred_city;
+  }
+  if (!nextArgs.province && userContext.preferred_province) {
+    nextArgs.province = userContext.preferred_province;
+  }
+  if (nextArgs.latitude == null && Number.isFinite(userContext.latitude)) {
+    nextArgs.latitude = userContext.latitude;
+  }
+  if (nextArgs.longitude == null && Number.isFinite(userContext.longitude)) {
+    nextArgs.longitude = userContext.longitude;
+  }
+
+  const currentUserContext =
+    nextArgs.user_context && typeof nextArgs.user_context === 'object' ? nextArgs.user_context : {};
+  nextArgs.user_context = {
+    ...currentUserContext,
+    ...(userContext.preferred_city ? { preferred_city: userContext.preferred_city } : {}),
+    ...(userContext.preferred_province
+      ? { preferred_province: userContext.preferred_province }
+      : {}),
+    ...(Number.isFinite(userContext.latitude) ? { latitude: userContext.latitude } : {}),
+    ...(Number.isFinite(userContext.longitude) ? { longitude: userContext.longitude } : {}),
+  };
+
+  return nextArgs;
+}
+
+function finiteDistanceKm(...values) {
+  for (const value of values) {
+    if (value == null || value === '') {
+      continue;
+    }
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue) && numberValue >= 0) {
+      return numberValue;
+    }
+  }
+  return null;
+}
+
+function normalizeStreetBotDistanceFields(searchResult) {
+  if (!searchResult || typeof searchResult !== 'object' || !Array.isArray(searchResult.items)) {
+    return searchResult;
+  }
+
+  let changed = false;
+  const items = searchResult.items.map((item) => {
+    if (!item || typeof item !== 'object') {
+      return item;
+    }
+
+    const vectorDistance = finiteDistanceKm(item.vector_distance, item.vectorDistance);
+    const geoDistanceKm = finiteDistanceKm(
+      item.geo_distance_km,
+      item.geoDistanceKm,
+      item._geo_distance_km,
+      item.geodistancekm,
+    );
+    const rawDistanceKm = finiteDistanceKm(
+      item.distance_km,
+      item.distanceKm,
+      item.distancekm,
+      item.distance,
+    );
+    const nonVectorDistanceKm =
+      rawDistanceKm != null &&
+      (vectorDistance == null || Math.abs(rawDistanceKm - vectorDistance) > 0.000001)
+        ? rawDistanceKm
+        : null;
+    const distanceKm = geoDistanceKm ?? nonVectorDistanceKm;
+
+    if (
+      distanceKm == null &&
+      item.distance_km == null &&
+      (vectorDistance == null || item.distance !== vectorDistance)
+    ) {
+      return item;
+    }
+
+    changed = true;
+    const nextItem = {
+      ...item,
+      geo_distance_km: distanceKm,
+      distance_km: distanceKm,
+    };
+
+    if (distanceKm != null) {
+      nextItem.distance = distanceKm;
+    } else if (vectorDistance != null && item.distance === vectorDistance) {
+      nextItem.distance = null;
+    }
+
+    return nextItem;
+  });
+
+  return changed ? { ...searchResult, items } : searchResult;
+}
+
+function matchesAny(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function extractPreferenceSubject(value) {
+  const text = String(value || '').trim();
+  for (const pattern of PREFERENCE_PATTERNS) {
+    const match = text.match(pattern);
+    if (!match) {
+      continue;
+    }
+    const subject = String(match[match.length - 1] || '')
+      .trim()
+      .toLowerCase();
+    if (subject) {
+      return subject.replace(/[?.!]+$/g, '').trim();
+    }
+  }
+  return '';
+}
+
+function looksLikePersonalPreferenceQuestion(value) {
+  return Boolean(extractPreferenceSubject(value));
+}
+
+function looksLikeRelationalTurn(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+  return matchesAny(text, RELATIONAL_PATTERNS);
+}
+
+function looksLikePlayfulSocialTurn(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+  if (countTokens(text) > 8) {
+    return false;
+  }
+  return matchesAny(text, PLAYFUL_PATTERNS);
+}
+
+function looksLikeBotDirectedTopicChat(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+  if (looksLikePersonalPreferenceQuestion(text)) {
+    return true;
+  }
+  return matchesAny(text, BOT_DIRECTED_TOPIC_CHAT_PATTERNS);
+}
+
+function extractBotDirectedTopicSubject(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return '';
+  }
+  for (const pattern of BOT_DIRECTED_TOPIC_CHAT_PATTERNS) {
+    const match = text.match(pattern);
+    if (!match) {
+      continue;
+    }
+    const subject = String(match[match.length - 1] || '')
+      .trim()
+      .replace(/[?.!]+$/g, '')
+      .trim();
+    if (subject) {
+      return subject;
+    }
+  }
+  return '';
+}
+
+function buildBotDirectedTopicChatResponse(value) {
+  if (!looksLikeBotDirectedTopicChat(value)) {
+    return null;
+  }
+
+  const normalized = normalizeText(value);
+  const subject = extractBotDirectedTopicSubject(value);
+  if (!subject) {
+    return null;
+  }
+
+  if (/^do you\b/i.test(normalized) || /^are you\b/i.test(normalized)) {
+    return `I don't like things the way a person does, but ${subject} is definitely something I can talk about. Tell me if you want the basics, my quick take, or the social side of it.`;
+  }
+
+  if (/^can you tell me about\b/i.test(normalized)) {
+    return `Sure. ${subject} can mean very different things depending on the context, so it helps to narrow the angle. Tell me if you want the basics, why people care about it, or a more personal take.`;
+  }
+
+  return `I can talk about ${subject}. My quick take is that it can be meaningful, fun, stressful, or deeply personal depending on the context. Tell me whether you want a quick opinion, the basics, or a deeper conversation about it.`;
+}
+
+function extractInformationalServiceSubject(value) {
+  const text = String(value || '').trim();
+  for (const pattern of INFORMATIONAL_SERVICE_PATTERNS) {
+    const match = text.match(pattern);
+    if (!match) {
+      continue;
+    }
+    const subject = String(match[match.length - 1] || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[?.!]+$/g, '')
+      .trim();
+    if (subject) {
+      return subject;
+    }
+  }
+  return '';
+}
+
+function looksLikeInformationalServiceQuestion(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+  if (looksLikeServiceMetaConversation(text)) {
+    return false;
+  }
+
+  const normalized = normalizeText(text);
+  if (matchesAny(text, FINDER_PATTERNS)) {
+    return false;
+  }
+
+  const subject = extractInformationalServiceSubject(text);
+  if (!subject || !textContainsAny(subject, SERVICE_KEYWORDS)) {
+    return false;
+  }
+
+  if (
+    /\b(near me|open now|available|closest|tonight|today)\b/i.test(normalized) ||
+    /\bin\s+(toronto|ontario|hamilton|ottawa|mississauga|brampton|scarborough|etobicoke|north york)\b/i.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function looksLikeStreetBotEvaluationConversation(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+  return matchesAny(text, EVALUATION_CONVERSATION_PATTERNS);
+}
+
+function looksLikeStreetBotStackStatusPrompt(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+  return matchesAny(text, STACK_STATUS_FASTPATH_PATTERNS);
+}
+
+function looksLikeStreetBotImprovementReviewPrompt(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+  return matchesAny(text, IMPROVEMENT_REVIEW_PATTERNS);
+}
+
+function getStreetBotLogRoot() {
+  for (const candidate of STREETBOT_LOG_ROOT_CANDIDATES) {
+    const normalized = String(candidate || '').trim();
+    if (!normalized) {
+      continue;
+    }
+    const logRoot = path.join(normalized, '.streetbot-host', 'logs');
+    if (fs.existsSync(logRoot)) {
+      return logRoot;
+    }
+  }
+  return '';
+}
+
+function readLatestStreetBotJsonReport(reportDirectory) {
+  const logRoot = getStreetBotLogRoot();
+  if (!logRoot) {
+    return { payload: null, reportPath: '' };
+  }
+
+  const targetDir = path.join(logRoot, reportDirectory);
+  if (!fs.existsSync(targetDir)) {
+    return { payload: null, reportPath: '' };
+  }
+
+  try {
+    const entries = fs
+      .readdirSync(targetDir)
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => {
+        const reportPath = path.join(targetDir, name);
+        const stats = fs.statSync(reportPath);
+        return { name, reportPath, mtimeMs: Number(stats.mtimeMs || 0) };
+      })
+      .sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+    if (!entries.length) {
+      return { payload: null, reportPath: '' };
+    }
+
+    const latest = entries[0];
+    const payload = JSON.parse(fs.readFileSync(latest.reportPath, 'utf8'));
+    return {
+      payload: payload && typeof payload === 'object' ? payload : null,
+      reportPath: latest.reportPath,
+    };
+  } catch (error) {
+    logger.warn(`[streetbot-fastpath] failed to read ${reportDirectory}: ${error.message}`);
+    return { payload: null, reportPath: '' };
+  }
+}
+
+function getStreetBotStatusRank(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+  if (!normalized || normalized === 'excellent' || normalized === 'ok') {
+    return 0;
+  }
+  if (normalized === 'good' || normalized === 'warning') {
+    return 1;
+  }
+  if (normalized === 'mixed' || normalized === 'degraded') {
+    return 2;
+  }
+  return 3;
+}
+
+function inferPriorityLabel(status, score) {
+  const rank = getStreetBotStatusRank(status);
+  if (rank >= 2 || Number(score || 0) <= 75) {
+    return 'High';
+  }
+  if (rank === 1 || Number(score || 0) <= 90) {
+    return 'Medium';
+  }
+  return 'Low';
+}
+
+function buildStreetBotStackStatusFastPathResponse() {
+  const stackReport = readLatestStreetBotJsonReport('stack-checks');
+  const payload = stackReport.payload;
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const retrieval =
+    payload.retrieval && typeof payload.retrieval === 'object' ? payload.retrieval : {};
+  const transition =
+    payload.transition && typeof payload.transition === 'object' ? payload.transition : {};
+  const serviceCorpus =
+    payload.service_corpus && typeof payload.service_corpus === 'object'
+      ? payload.service_corpus
+      : {};
+  const summary =
+    transition.summary && typeof transition.summary === 'object' ? transition.summary : {};
+
+  const lines = [
+    'Current Street Bot stack health:',
+    '',
+    `- Overall: ${String(payload.overall || 'unknown')}`,
+    `- Weaviate: ${String(payload.weaviate?.status || 'unknown')}`,
+    `- Service corpus: ${String(serviceCorpus.sync || 'unknown')} (${Number(serviceCorpus.count || 0)} records)`,
+    `- Retrieval: ${String(retrieval.overall || 'unknown')}`,
+    `- Transition guardrails: ${String(transition.overall || 'unknown')} (${Number(summary.passed || 0)}/${Number(summary.total || 0)})`,
+    `- Public probe: ${String(payload.probe?.status || 'unknown')}`,
+  ];
+
+  if (payload.recommended_area && payload.recommended_area !== 'none') {
+    lines.push('', `Recommended area: ${String(payload.recommended_area)}`);
+  } else {
+    lines.push('', 'No active stack-level failures are showing in the latest saved check.');
+  }
+
+  return lines.join('\n').trim();
+}
+
+function buildStreetBotImprovementFastPathResponse() {
+  const adminReport = readLatestStreetBotJsonReport('admin-checks');
+  const retrievalReport = readLatestStreetBotJsonReport('retrieval-checks');
+  const stackReport = readLatestStreetBotJsonReport('stack-checks');
+
+  const admin =
+    adminReport.payload && typeof adminReport.payload === 'object' ? adminReport.payload : {};
+  const retrieval =
+    retrievalReport.payload && typeof retrievalReport.payload === 'object'
+      ? retrievalReport.payload
+      : {};
+  const stack =
+    stackReport.payload && typeof stackReport.payload === 'object' ? stackReport.payload : {};
+
+  const scorecards =
+    admin.scorecards && typeof admin.scorecards === 'object' ? admin.scorecards : {};
+  const attentionCards = Object.entries(scorecards)
+    .map(([key, value]) => ({ key, ...(value && typeof value === 'object' ? value : {}) }))
+    .filter((card) => getStreetBotStatusRank(card.status) > 0)
+    .sort((left, right) => {
+      const rankDiff = getStreetBotStatusRank(right.status) - getStreetBotStatusRank(left.status);
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return Number(left.score || 100) - Number(right.score || 100);
+    });
+
+  const priorityLines = [];
+
+  for (const card of attentionCards.slice(0, 2)) {
+    const label =
+      card.key === 'hybrid_search'
+        ? 'Tighten search routing quality'
+        : card.key === 'routing_balance'
+          ? 'Re-check routing balance after recent changes'
+          : `Improve ${String(card.key || 'system quality').replace(/_/g, ' ')}`;
+    priorityLines.push(
+      `${priorityLines.length + 1}. ${label} - ${inferPriorityLabel(card.status, card.score)} impact.\n- ${String(card.focus || card.summary || '').trim()}`,
+    );
+  }
+
+  const retrievalEngines =
+    retrieval.engines && typeof retrieval.engines === 'object' ? retrieval.engines : {};
+  const pythonMetrics =
+    retrievalEngines.python && typeof retrievalEngines.python === 'object'
+      ? retrievalEngines.python
+      : {};
+  const jsMetrics =
+    retrievalEngines.js && typeof retrievalEngines.js === 'object' ? retrievalEngines.js : {};
+  const pythonAvg = Number(pythonMetrics.average_duration_ms || 0);
+  const jsAvg = Number(jsMetrics.average_duration_ms || 0);
+  if (pythonAvg > 0 && jsAvg > 0 && pythonAvg > jsAvg * 1.5) {
+    priorityLines.push(
+      `${priorityLines.length + 1}. Reduce Python retrieval latency - Medium impact.\n- Retrieval quality is green, but Python is still slower than JS (${pythonAvg.toFixed(1)} ms vs ${jsAvg.toFixed(1)} ms).`,
+    );
+  }
+
+  const serviceCorpus =
+    stack.service_corpus && typeof stack.service_corpus === 'object' ? stack.service_corpus : {};
+  const weaviate = stack.weaviate && typeof stack.weaviate === 'object' ? stack.weaviate : {};
+  const transition =
+    stack.transition && typeof stack.transition === 'object' ? stack.transition : {};
+  const transitionSummary =
+    transition.summary && typeof transition.summary === 'object' ? transition.summary : {};
+
+  if (!priorityLines.length) {
+    priorityLines.push('1. No major improvement blockers are active in the latest saved reports.');
+  }
+
+  return [
+    'Top improvement priorities right now:',
+    '',
+    ...priorityLines,
+    '',
+    'Current health context:',
+    `- Stack: ${String(stack.overall || 'unknown')}`,
+    `- Weaviate: ${String(weaviate.status || 'unknown')}`,
+    `- Service corpus: ${String(serviceCorpus.sync || 'unknown')} (${Number(serviceCorpus.count || 0)} records)`,
+    `- Transition guardrails: ${String(transition.overall || 'unknown')} (${Number(transitionSummary.passed || 0)}/${Number(transitionSummary.total || 0)})`,
+    '',
+    'Bottom line:',
+    'The biggest practical priority is still routing quality. Performance and operator visibility are secondary unless one of the saved checks turns red.',
+  ]
+    .join('\n')
+    .trim();
+}
+
+async function buildStreetBotEvaluationFastPathResponse(detectedIntent) {
+  const kind = String(detectedIntent?.evaluationArgs?.kind || '').trim();
+  if (kind === 'improvement_snapshot') {
+    return buildStreetBotImprovementFastPathResponse();
+  }
+  if (kind === 'stack_status') {
+    return buildStreetBotStackStatusFastPathResponse();
+  }
+  return '';
+}
+
+function buildInformationalServiceResponse(value) {
+  if (!looksLikeInformationalServiceQuestion(value)) {
+    return null;
+  }
+
+  const subject = extractInformationalServiceSubject(value);
+  const normalizedSubject = normalizeText(subject);
+
+  if (
+    normalizedSubject.includes('food bank') ||
+    normalizedSubject.includes('food') ||
+    normalizedSubject.includes('grocery') ||
+    normalizedSubject.includes('meal')
+  ) {
+    return 'A food bank is a community service that provides free food, groceries, or meal support to people who need help with food access. If you want, I can also look up food banks near you.';
+  }
+
+  if (normalizedSubject.includes('shelter') || normalizedSubject.includes('housing')) {
+    return 'A shelter or housing support service helps people find safer short-term or longer-term places to stay, plus related supports like referrals, meals, or case help. If you want, I can look up options near you.';
+  }
+
+  if (
+    normalizedSubject.includes('legal') ||
+    normalizedSubject.includes('clinic') ||
+    normalizedSubject.includes('doctor') ||
+    normalizedSubject.includes('medical') ||
+    normalizedSubject.includes('health')
+  ) {
+    return `A ${subject} is a support service people use when they need practical help, advice, or care from a community or professional provider. If you want, I can look up matching services near you.`;
+  }
+
+  return `A ${subject} is a community support service or resource people can use when they need help. If you want, I can also look up matching services near you.`;
+}
+
+function countTokens(value) {
+  return String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function looksLikeServiceMetaConversation(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return false;
+  }
+
+  if (matchesAny(text, SERVICE_META_CONVERSATION_PATTERNS)) {
+    return true;
+  }
+
+  const normalized = normalizeText(text);
+  if (!/\b(i|me|my)\b/i.test(normalized)) {
+    return false;
+  }
+
+  const mentionsServiceSpace =
+    /\b(service|services|resource|resources|support|supports|program|programs|referral|referrals)\b/i.test(
+      normalized,
+    );
+  const mentionsSearchHistory =
+    /\b(search(?:ed|ing)?|look(?:ed|ing)?\s+for|ask(?:ed|ing)?\s+about|need(?:ed)?|want(?:ed)?)\b/i.test(
+      normalized,
+    );
+  const hasReflectiveFrame =
+    /\b(know|remember|recall|history|usually|normally|tend)\b/i.test(normalized) ||
+    /\bwhat (?:have|did) i\b/i.test(normalized) ||
+    /\bwhat do you know about\b/i.test(normalized);
+
+  return hasReflectiveFrame && (mentionsServiceSpace || mentionsSearchHistory);
+}
+
+function hasActiveServiceContext(serviceContext = {}) {
+  return Boolean(serviceContext?.session_id || serviceContext?.query);
+}
+
+function looksLikeConversationalAcknowledgment(value, serviceContext = {}) {
+  const text = String(value || '').trim();
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return false;
+  }
+  if (
+    matchesAny(text, MORE_PATTERNS) ||
+    matchesAny(text, CATEGORY_PATTERNS) ||
+    matchesAny(text, FINDER_PATTERNS) ||
+    matchesAny(text, EMOTIONAL_PATTERNS)
+  ) {
+    return false;
+  }
+  if (looksLikeBotDirectedTopicChat(text) || looksLikeInformationalServiceQuestion(text)) {
+    return false;
+  }
+  if (hasActiveServiceContext(serviceContext) && looksLikeServiceRefinement(text, serviceContext)) {
+    return false;
+  }
+  if (looksLikeStreetBotServiceRequest(text)) {
+    return false;
+  }
+  if (matchesAny(text, ACKNOWLEDGMENT_PATTERNS)) {
+    return true;
+  }
+
+  const words = normalized
+    .replace(/[^\w\s']/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length || words.length > 5) {
+    return false;
+  }
+
+  return words.every((word) => ACKNOWLEDGMENT_FILLER_WORDS.has(word));
+}
+
+function buildAcknowledgmentResponse(serviceContext = {}) {
+  if (hasActiveServiceContext(serviceContext)) {
+    return 'Got it. What do you want to do next?';
+  }
+  return "Got it. I'm here if you want to keep talking.";
+}
+
+function buildRelationalResponse() {
+  return "Thank you. I'm glad that helped. What do you want to do next?";
+}
+
+function buildPlayfulResponse() {
+  return "I'm glad that landed. What do you want to do next?";
+}
+
+function buildServiceMetaConversationResponse(serviceContext = {}) {
+  const scope = inferServiceContextScopeLabel(serviceContext);
+  if (hasActiveServiceContext(serviceContext) && scope && scope !== 'that search') {
+    return `From this chat so far, you've asked me about ${scope}. If you want, I can keep talking about that or help with something different.`;
+  }
+  return "Not really yet. In this chat, I only know the service topics you've asked me about directly. If you want, I can tell you what I remember or help with something new.";
+}
+
+function inferServiceContextTopicLabel(serviceContext = {}) {
+  const query = String(serviceContext.query || '').trim();
+  if (query) {
+    return query;
+  }
+  if (Array.isArray(serviceContext.categories) && serviceContext.categories.length > 0) {
+    return String(serviceContext.categories[0] || '')
+      .trim()
+      .toLowerCase();
+  }
+  if (serviceContext.service_type) {
+    return String(serviceContext.service_type).trim().toLowerCase();
+  }
+  return 'services';
+}
+
+function inferServiceContextScopeLabel(serviceContext = {}) {
+  const topic = inferServiceContextTopicLabel(serviceContext);
+  const location = [serviceContext.city, serviceContext.province].filter(Boolean).join(', ');
+  if (topic && location) {
+    return `${topic} in ${location}`;
+  }
+  return topic || location || 'that search';
+}
+
+function looksLikeServiceFeedback(value, rawContext = null) {
+  const text = String(value || '').trim();
+  const serviceContext = getServiceContext(rawContext);
+  if (!text || !hasActiveServiceContext(serviceContext)) {
+    return false;
+  }
+  if (matchesAny(text, MORE_PATTERNS) || matchesAny(text, CATEGORY_PATTERNS)) {
+    return false;
+  }
+  if (matchesAny(text, SERVICE_FEEDBACK_PATTERNS)) {
+    return true;
+  }
+
+  const normalized = normalizeText(text);
+  if (
+    /\b(only|just)\s+(one|1|two|2|three|3)\b/i.test(normalized) &&
+    /\b(result|results|service|services|option|options|match|matches|card|cards)\b/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function buildServiceFeedbackResponse(serviceContext = {}) {
+  const returnedCount = Number(serviceContext.returned_count || 0) || 0;
+  const totalCount = Number(serviceContext.count || 0) || 0;
+  const scope = inferServiceContextScopeLabel(serviceContext);
+
+  if (
+    serviceContext.has_more ||
+    (totalCount > 0 && returnedCount > 0 && totalCount > returnedCount)
+  ) {
+    return `You're right. I only showed ${returnedCount} so far for ${scope}. I can show more now, narrow it differently, or switch cities if you want.`;
+  }
+
+  if (returnedCount <= 1) {
+    return `You're right. That search only surfaced ${returnedCount || 1} strong match${returnedCount === 1 || returnedCount === 0 ? '' : 'es'} for ${scope}. I can widen the area, broaden the search, or look in a different city if you want.`;
+  }
+
+  return `You're right. That search only surfaced ${returnedCount} matches for ${scope}. I can widen the area, broaden the category, or try a different city if you want.`;
+}
+
+function stripRefinementPhrases(value) {
+  let text = String(value || '').trim();
+  if (!text) {
+    return '';
+  }
+
+  text = text
+    .replace(/^\s*(what about|how about)\s+/i, '')
+    .replace(/^\s*(show|give|list|find)\s+me\s+/i, '')
+    .replace(/^\s*(show|give|list|find)\s+/i, '')
+    .replace(/^\s*make it\s+/i, '')
+    .replace(/\s+\bplease\b/gi, '')
+    .replace(/\s+\binstead\b/gi, '')
+    .replace(/\s+\bonly\b/gi, '')
+    .trim();
+
+  return text;
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripLocationFromQuery(value, serviceContext) {
+  let text = String(value || '').trim();
+  const locations = [serviceContext?.city, serviceContext?.province].filter(Boolean);
+  if (!text || !locations.length) {
+    return text;
+  }
+
+  for (const location of locations) {
+    const escaped = escapeRegExp(location);
+    text = text.replace(new RegExp(`\\bin\\s+${escaped}\\b`, 'ig'), ' ');
+    text = text.replace(new RegExp(`\\b${escaped}\\b`, 'ig'), ' ');
+  }
+
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;!?])/g, '$1')
+    .trim();
+}
+
+function refinementMentionsLocation(value, serviceContext) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return [serviceContext?.city, serviceContext?.province]
+    .filter(Boolean)
+    .some((location) => normalized.includes(normalizeText(location)));
+}
+
+function buildRefinementQuery(cleanedText, serviceContext, candidateArgs, filterOnly) {
+  const previousQuery = String(serviceContext?.query || '').trim();
+  const refinedText = String(cleanedText || '').trim();
+  const locationChanged = Boolean(
+    (candidateArgs.city &&
+      normalizeText(candidateArgs.city) !== normalizeText(serviceContext?.city)) ||
+      (candidateArgs.province &&
+        normalizeText(candidateArgs.province) !== normalizeText(serviceContext?.province)),
+  );
+
+  if (filterOnly) {
+    const base = locationChanged
+      ? stripLocationFromQuery(previousQuery, serviceContext)
+      : previousQuery;
+    return base || previousQuery || refinedText;
+  }
+
+  if (!refinedText) {
+    return previousQuery;
+  }
+
+  const needsLocationHint =
+    !candidateArgs.city &&
+    !candidateArgs.province &&
+    !refinementMentionsLocation(refinedText, serviceContext) &&
+    (serviceContext?.city || serviceContext?.province);
+
+  if (!needsLocationHint) {
+    return refinedText;
+  }
+
+  return [refinedText, serviceContext.city, serviceContext.province]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+}
+
+function extractNamedServiceDetailSubject(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^\s*(tell me more about|more about)\s+/i, '')
+    .replace(
+      /^\s*(open|visit|show|preview|navigate to|pull up|bring up)\s+(?:the\s+)?(?:application\s+)?(?:form|website|site|page)\s+(?:for\s+)?/i,
+      '',
+    )
+    .replace(
+      /\b(hours|eligibility|contact|phone|email|website|program details?|application details?|application|form|page|site)\b/gi,
+      ' ',
+    )
+    .replace(/[!?.,;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function looksLikeNamedServiceDetailRequest(value) {
+  const text = String(value || '').trim();
+  if (!text || !matchesAny(text, NAMED_SERVICE_DETAIL_PATTERNS)) {
+    return false;
+  }
+  if (
+    looksLikeStreetBotEvaluationConversation(text) ||
+    looksLikeInformationalServiceQuestion(text)
+  ) {
+    return false;
+  }
+
+  const subject = extractNamedServiceDetailSubject(text);
+  const normalizedSubject = normalizeText(subject);
+  if (!normalizedSubject) {
+    return false;
+  }
+
+  const meaningfulTokens = normalizedSubject
+    .split(/[^a-z0-9'’&.-]+/i)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .filter((token) => !NAMED_SERVICE_DETAIL_STOPWORDS.has(token))
+    .filter((token) => !GENERIC_SERVICE_BROWSE_WORDS.has(token))
+    .filter((token) => !SERVICE_KEYWORDS.includes(token));
+
+  return TITLECASE_SERVICE_NAME_PATTERN.test(text) || meaningfulTokens.length >= 2;
+}
+
+function looksLikeStreetBotServiceRequest(value) {
+  const text = normalizeText(value);
+  if (!text || text.startsWith('/')) {
+    return false;
+  }
+  if (text.includes('streetbot-service-results')) {
+    return false;
+  }
+  if (looksLikeNamedServiceDetailRequest(value)) {
+    return false;
+  }
+  if (looksLikeBotDirectedTopicChat(text) && !matchesAny(text, FINDER_PATTERNS)) {
+    return false;
+  }
+  if (looksLikeServiceMetaConversation(text)) {
+    return false;
+  }
+  if (looksLikeStreetBotEvaluationConversation(text)) {
+    return false;
+  }
+  if (looksLikeInformationalServiceQuestion(text)) {
+    return false;
+  }
+
+  const hasFinderLanguage = matchesAny(text, FINDER_PATTERNS);
+  if (hasFinderLanguage && GENERIC_PROVIDER_PLACE_PATTERN.test(text)) {
+    return true;
+  }
+
+  const matchedKeywords = getMatchedKeywords(text, SERVICE_KEYWORDS);
+  if (!matchedKeywords.length) {
+    return false;
+  }
+
+  const tokenCount = text.split(/\s+/).filter(Boolean).length;
+  const looksCompact = tokenCount <= 10;
+  const hasConversationalOnlyKeywords = matchedKeywords.every((keyword) =>
+    CONVERSATIONAL_SERVICE_KEYWORDS.has(keyword),
+  );
+  if (hasConversationalOnlyKeywords) {
+    return false;
+  }
+
+  const hasConcreteKeyword = matchedKeywords.some(
+    (keyword) =>
+      !CONVERSATIONAL_SERVICE_KEYWORDS.has(keyword) && !FINDER_ONLY_SERVICE_KEYWORDS.has(keyword),
+  );
+  if (hasConcreteKeyword) {
+    return hasFinderLanguage || looksCompact;
+  }
+
+  return hasFinderLanguage;
+}
+
+function hasServiceRefinementSignal(value) {
+  const text = normalizeText(value);
+  const cleaned = normalizeText(stripRefinementPhrases(value))
+    .replace(/[!?.,;:]+/g, ' ')
+    .trim();
+  const candidate = cleaned || text;
+  if (!text) {
+    return false;
+  }
+
+  if (matchesAny(text, REFINEMENT_CONTEXT_ONLY_PATTERNS)) {
+    return true;
+  }
+  if (hasExplicitResultLimit(text) || hasExplicitResultLimit(candidate)) {
+    return true;
+  }
+  if (textContainsAny(candidate, SERVICE_KEYWORDS)) {
+    return true;
+  }
+  if (inferExplicitBrowseLocationLabel(text) || inferExplicitBrowseLocationLabel(candidate)) {
+    return true;
+  }
+  if (matchesAny(text, SERVICE_REFINEMENT_GEO_PATTERNS)) {
+    return true;
+  }
+  if (matchesAny(candidate, SERVICE_REFINEMENT_FILTER_PATTERNS)) {
+    return true;
+  }
+
+  return false;
+}
+
+function looksLikeServiceRefinement(value, rawContext = null) {
+  const text = normalizeText(value);
+  const serviceContext = getServiceContext(rawContext);
+  if (!text || text.startsWith('/')) {
+    return false;
+  }
+  if (!serviceContext.session_id && !serviceContext.query) {
+    return false;
+  }
+  if (
+    matchesAny(text, MORE_PATTERNS) ||
+    matchesAny(text, CATEGORY_PATTERNS) ||
+    matchesAny(text, EMOTIONAL_PATTERNS)
+  ) {
+    return false;
+  }
+  if (matchesAny(text, REFINEMENT_PATTERNS)) {
+    return hasServiceRefinementSignal(text);
+  }
+  if (
+    countTokens(text) <= 6 &&
+    (hasExplicitResultLimit(text) || textContainsAny(text, SERVICE_KEYWORDS))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function stripBroadServiceBrowseQuery(value) {
+  let text = normalizeText(value)
+    .replace(/[!?.,;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!text) {
+    return '';
+  }
+
+  for (const word of GENERIC_SERVICE_BROWSE_WORDS) {
+    text = text.replace(new RegExp(`\\b${escapeRegExp(word)}\\b`, 'ig'), ' ');
+  }
+
+  for (const [word] of BROWSE_LOCATION_LABELS) {
+    text = text.replace(new RegExp(`\\b${escapeRegExp(word)}\\b`, 'ig'), ' ');
+  }
+
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function looksLikeBroadServiceBrowseRequest(value, candidateArgs = null) {
+  const normalized = normalizeText(value);
+  if (!normalized || !looksLikeStreetBotServiceRequest(normalized)) {
+    return false;
+  }
+  if (matchesAny(normalized, MORE_PATTERNS) || matchesAny(normalized, EMOTIONAL_PATTERNS)) {
+    return false;
+  }
+
+  const hasSpecificFilters = Boolean(
+    candidateArgs &&
+      (candidateArgs.service_type ||
+        candidateArgs.ages_served ||
+        candidateArgs.gender_served ||
+        (Array.isArray(candidateArgs.categories) && candidateArgs.categories.length > 0) ||
+        (Array.isArray(candidateArgs.tags) && candidateArgs.tags.length > 0)),
+  );
+  if (hasSpecificFilters) {
+    return false;
+  }
+
+  return stripBroadServiceBrowseQuery(value).length === 0;
+}
+
+async function getRagModule() {
+  if (!ragModulePromise) {
+    ragModulePromise = import('/app/tools/streetbot-rag-mcp.mjs');
+  }
+  return ragModulePromise;
+}
+
+function getServiceContext(rawContext) {
+  if (!rawContext || typeof rawContext !== 'object') {
+    return {};
+  }
+  return {
+    session_id: String(rawContext.session_id || '').trim(),
+    has_more: Boolean(rawContext.has_more),
+    query: String(rawContext.query || '').trim(),
+    count: Number.isFinite(Number(rawContext.count)) ? Number(rawContext.count) : null,
+    returned_count: Number.isFinite(Number(rawContext.returned_count))
+      ? Number(rawContext.returned_count)
+      : null,
+    offset: Number.isFinite(Number(rawContext.offset)) ? Number(rawContext.offset) : 0,
+    city: String(rawContext.city || '').trim(),
+    province: String(rawContext.province || '').trim(),
+    service_type: String(rawContext.service_type || '').trim(),
+    categories: toStringList(rawContext.categories),
+    tags: toStringList(rawContext.tags),
+    ages_served: String(rawContext.ages_served || '').trim(),
+    gender_served: String(rawContext.gender_served || '').trim(),
+    active_only: typeof rawContext.active_only === 'boolean' ? rawContext.active_only : true,
+  };
+}
+
+function detectSmalltalkResponse(value, options = {}) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return null;
+  }
+  const normalized = normalizeText(text);
+  const serviceContext = getServiceContext(options.serviceContext);
+  const preferenceSubject = extractPreferenceSubject(text);
+
+  if (matchesAny(text, GREETING_PATTERNS)) {
+    return {
+      text: 'Street Bot here. How can I help?',
+      kind: 'greeting',
+    };
+  }
+  if (matchesAny(text, IDENTITY_PATTERNS)) {
+    return {
+      text: "I'm Street Bot. I'm here to listen, support, and help connect you to services when you need them. What's on your mind?",
+      kind: 'identity',
+    };
+  }
+  if (matchesAny(text, CHECKIN_PATTERNS)) {
+    return {
+      text: "Pretty steady. I've been helping people find support, answer questions, and keep things moving. How's your day going?",
+      kind: 'checkin',
+    };
+  }
+  if (preferenceSubject) {
+    if (
+      preferenceSubject.includes('food') ||
+      preferenceSubject.includes('meal') ||
+      preferenceSubject.includes('snack') ||
+      preferenceSubject.includes('dish')
+    ) {
+      return {
+        text: "I don't eat, but warm comfort food feels like the right answer. What about you?",
+        kind: 'preference',
+      };
+    }
+    return {
+      text: "I don't really have personal favorites the way people do, but I can still chat with you about it. What's yours?",
+      kind: 'preference',
+    };
+  }
+  const informationalServiceResponse = buildInformationalServiceResponse(text);
+  if (informationalServiceResponse) {
+    return {
+      text: informationalServiceResponse,
+      kind: 'informational_service',
+    };
+  }
+  const topicChatResponse = buildBotDirectedTopicChatResponse(text);
+  if (topicChatResponse) {
+    return {
+      text: topicChatResponse,
+      kind: 'topic_chat',
+    };
+  }
+  if (matchesAny(text, THANKS_PATTERNS)) {
+    return {
+      text: hasActiveServiceContext(serviceContext)
+        ? 'Glad that helped. What do you want to do next?'
+        : 'Anytime. What do you want to do next?',
+      kind: 'thanks',
+    };
+  }
+  if (looksLikeRelationalTurn(text)) {
+    return {
+      text: buildRelationalResponse(),
+      kind: 'relational',
+    };
+  }
+  if (looksLikePlayfulSocialTurn(text)) {
+    return {
+      text: buildPlayfulResponse(),
+      kind: 'playful',
+    };
+  }
+  if (matchesAny(text, FAREWELL_PATTERNS)) {
+    return {
+      text: 'Talk soon.',
+      kind: 'farewell',
+    };
+  }
+  if (looksLikeConversationalAcknowledgment(text, serviceContext)) {
+    return {
+      text: buildAcknowledgmentResponse(serviceContext),
+      kind: hasActiveServiceContext(serviceContext) ? 'service_acknowledgment' : 'acknowledgment',
+    };
+  }
+  if (
+    countTokens(text) <= 30 &&
+    matchesAny(text, SUPPORT_PATTERNS) &&
+    !looksLikeStreetBotServiceRequest(text)
+  ) {
+    if (normalized.includes('anx')) {
+      return {
+        text: 'I hear you. Try one slow reset with me: unclench your jaw, drop your shoulders, and take one long breath out. If you want, we can slow this down together.',
+        kind: 'support',
+      };
+    }
+    if (
+      normalized.includes("thoughts won't slow down") ||
+      normalized.includes('thoughts wont slow down') ||
+      normalized.includes("mind won't slow down") ||
+      normalized.includes('mind wont slow down') ||
+      normalized.includes('quiet down') ||
+      normalized.includes('restless') ||
+      normalized.includes('racing thoughts') ||
+      normalized.includes('spiral')
+    ) {
+      return {
+        text: 'I hear you. Try this now: plant both feet on the floor, do one long exhale, and name 3 things you can see. If you want, I can stay with you and help slow it down one step at a time.',
+        kind: 'support',
+      };
+    }
+    if (
+      normalized.includes('sad') ||
+      normalized.includes('down') ||
+      normalized.includes('lonely')
+    ) {
+      return {
+        text: "I'm here with you. One gentle step right now is to do one grounding thing in the room around you, then tell me what feels heaviest if you want to keep talking.",
+        kind: 'support',
+      };
+    }
+    return {
+      text: 'I hear you. Pick one tiny next step: drink some water, sit down, and take one slow breath. If you want, we can break things down together.',
+      kind: 'support',
+    };
+  }
+  if (countTokens(text) <= 18 && matchesAny(text, WELLNESS_TIP_PATTERNS)) {
+    return {
+      text: 'Try one 60-second reset: put both feet on the floor, take one long slow exhale, and name 3 things you can see. If you want, I can give you a version for anxiety, exhaustion, or sleep.',
+      kind: 'wellness_tip',
+    };
+  }
+  if (matchesAny(text, JOKE_PATTERNS)) {
+    if (
+      normalized.includes('toronto transit') ||
+      normalized.includes('ttc') ||
+      normalized.includes('streetcar') ||
+      normalized.includes('subway')
+    ) {
+      return {
+        text: 'Sure. Why did the Toronto streetcar get a promotion? Because it really knew how to stay on track.',
+        kind: 'joke',
+      };
+    }
+    return {
+      text: 'Sure. Why did the community centre start telling jokes? Because everyone needed a little support group.',
+      kind: 'joke',
+    };
+  }
+
+  return null;
+}
+
+function buildStreetBotGeneralFallback(userText = '', error = null) {
+  const text = String(userText || '').trim();
+  if (!text) {
+    return "I'm Street Bot. I'm here to listen, support, and help connect you to services when you need them.";
+  }
+
+  const smalltalkResponse = detectSmalltalkResponse(text);
+  if (smalltalkResponse?.text) {
+    return smalltalkResponse.text;
+  }
+
+  if (
+    /\bcapital\b/i.test(text) &&
+    /\b(congo|drc|democratic republic of congo|republic of the congo)\b/i.test(text)
+  ) {
+    return 'If you mean the Republic of the Congo, the capital is Brazzaville. If you mean the Democratic Republic of the Congo, the capital is Kinshasa.';
+  }
+
+  if (/\b(how are you|how are you doing|how(?:'s| is| was) your day|hows your day)\b/i.test(text)) {
+    return "Pretty steady. I've been helping people find support, answer questions, and keep things moving. How's your day going?";
+  }
+
+  if (/^\s*(what|who|where|when|why|how)\b/i.test(text)) {
+    return "I can help think that through. Tell me the angle you care about, and I'll keep it clear and practical.";
+  }
+
+  logger.warn('[streetbot-fastpath] using general fallback after model failure', {
+    error: error?.message || String(error || ''),
+  });
+  return "I'm here with you. We can talk it through, or I can help you look for shelter, food, legal, health, or other support services.";
+}
+
+function buildStreetBotConversationIntentResult(normalized, options = {}) {
+  return {
+    normalized,
+    fastPath: false,
+    toolBase: 'conversation',
+    isEmotional: Boolean(options.isEmotional),
+    ...(options.smalltalkKind ? { smalltalkKind: options.smalltalkKind } : {}),
+  };
+}
+
+function buildStreetBotSmalltalkIntentResult(normalized, smalltalkResponse) {
+  return {
+    normalized,
+    fastPath: true,
+    toolBase: 'smalltalk',
+    isEmotional: false,
+    responseText: smalltalkResponse.text,
+    smalltalkKind: smalltalkResponse.kind || 'conversation',
+  };
+}
+
+async function buildStreetBotServiceIntentResult(
+  userText,
+  normalized,
+  userContext,
+  isEmotional = false,
+) {
+  const { buildSearchArgsFromUserText } = await getRagModule();
+  const searchArgs = applyStreetBotUserContextToSearchArgs(
+    buildSearchArgsFromUserText(userText),
+    userContext,
+  );
+
+  if (looksLikeBroadServiceBrowseRequest(userText, searchArgs)) {
+    if (canDirectSearchBroadBrowse(userText, searchArgs)) {
+      return {
+        normalized,
+        fastPath: true,
+        toolBase: 'services_search',
+        isEmotional,
+        searchArgs: applyStreetBotUserContextToSearchArgs(
+          buildDirectBrowseSearchArgs(userText, searchArgs),
+          userContext,
+        ),
+      };
+    }
+
+    return {
+      normalized,
+      fastPath: true,
+      toolBase: 'services_categories',
+      isEmotional,
+      categoryArgs: applyStreetBotUserContextToSearchArgs(
+        {
+          limit: 8,
+          active_only: true,
+        },
+        userContext,
+      ),
+    };
+  }
+
+  return {
+    normalized,
+    fastPath: true,
+    toolBase: 'services_search',
+    isEmotional,
+    searchArgs,
+  };
+}
+
+async function detectStreetBotIntent(userText, rawContext = null, rawUserContext = null) {
+  const normalized = normalizeText(userText);
+  const serviceContext = getServiceContext(rawContext);
+  const userContext = getStreetBotUserContext(rawUserContext);
+  if (!normalized) {
+    return { normalized, fastPath: false, toolBase: null, isEmotional: false };
+  }
+
+  return withStreetBotSpan(
+    'streetbot.intent.detect',
+    {
+      observation: {
+        input: summarizeStreetBotText(userText),
+        metadata: {
+          hasServiceContext: Boolean(serviceContext.session_id),
+          hasContextQuery: Boolean(serviceContext.query),
+          hasMoreContext: Boolean(serviceContext.has_more),
+          hasUserLocation: hasStreetBotPreferredLocation(userContext),
+        },
+      },
+      attributes: {
+        'streetbot.intent.service_context': Boolean(serviceContext.session_id),
+        'streetbot.intent.context_has_more': Boolean(serviceContext.has_more),
+        'streetbot.intent.user_location': hasStreetBotPreferredLocation(userContext),
+      },
+    },
+    async (span) => {
+      let result;
+
+      if (matchesAny(normalized, EMOTIONAL_PATTERNS)) {
+        if (looksLikeStreetBotServiceRequest(userText)) {
+          result = await buildStreetBotServiceIntentResult(userText, normalized, userContext, true);
+        } else {
+          result = buildStreetBotConversationIntentResult(normalized, { isEmotional: true });
+        }
+      } else if (looksLikeStreetBotEvaluationConversation(userText)) {
+        result = buildStreetBotConversationIntentResult(normalized);
+      } else if (looksLikeServiceMetaConversation(userText)) {
+        result = buildStreetBotConversationIntentResult(normalized, {
+          smalltalkKind: 'service_meta',
+        });
+      } else if (looksLikeNamedServiceDetailRequest(userText)) {
+        result = {
+          normalized,
+          fastPath: true,
+          toolBase: 'conversation',
+          isEmotional: false,
+        };
+      } else if (matchesAny(normalized, MORE_PATTERNS)) {
+        if (!serviceContext.session_id && !serviceContext.query) {
+          result = buildStreetBotConversationIntentResult(normalized);
+        } else {
+          const { buildSearchArgsFromUserText } = await getRagModule();
+          const explicitLimit = hasExplicitResultLimit(userText)
+            ? buildSearchArgsFromUserText(userText).limit
+            : null;
+          const nextOffset = Math.max(
+            0,
+            Number(serviceContext.offset || 0) + Number(serviceContext.returned_count || 0),
+          );
+          const baseQuery = serviceContext.query || userText;
+          const fallbackSearchArgs = buildSearchArgsFromUserText(baseQuery, {
+            query: baseQuery,
+            offset: nextOffset,
+            city: serviceContext.city,
+            province: serviceContext.province,
+            service_type: serviceContext.service_type,
+            categories: serviceContext.categories,
+            tags: serviceContext.tags,
+            ages_served: serviceContext.ages_served,
+            gender_served: serviceContext.gender_served,
+            active_only: serviceContext.active_only,
+            ...(explicitLimit ? { limit: explicitLimit } : {}),
+          });
+          const hydratedFallbackSearchArgs = applyStreetBotUserContextToSearchArgs(
+            fallbackSearchArgs,
+            userContext,
+          );
+          result = {
+            normalized,
+            fastPath: true,
+            toolBase: 'services_more',
+            isEmotional: false,
+            moreArgs: {
+              session_id: serviceContext.session_id,
+              limit: explicitLimit,
+              fallback_search_args: hydratedFallbackSearchArgs,
+            },
+          };
+        }
+      } else if (matchesAny(normalized, CATEGORY_PATTERNS)) {
+        result = {
+          normalized,
+          fastPath: true,
+          toolBase: 'services_categories',
+          isEmotional: false,
+          categoryArgs: applyStreetBotUserContextToSearchArgs(
+            {
+              limit: 8,
+              active_only: true,
+            },
+            userContext,
+          ),
+        };
+      } else if (looksLikeServiceFeedback(userText, serviceContext)) {
+        result = buildStreetBotConversationIntentResult(normalized, {
+          smalltalkKind: 'service_feedback',
+        });
+      } else if (looksLikeServiceRefinement(userText, serviceContext)) {
+        const { buildSearchArgsFromUserText } = await getRagModule();
+        const cleanedText = stripRefinementPhrases(userText);
+        const candidateArgs = buildSearchArgsFromUserText(cleanedText || userText);
+        const requestedLimit = extractRequestedLimit(userText, true);
+        const querySignal =
+          candidateArgs.categories.length > 0 ||
+          candidateArgs.tags.length > 0 ||
+          textContainsAny(normalized, SERVICE_KEYWORDS);
+        const filterOnly =
+          !querySignal &&
+          Boolean(
+            candidateArgs.city ||
+              candidateArgs.province ||
+              candidateArgs.service_type ||
+              candidateArgs.ages_served ||
+              candidateArgs.gender_served ||
+              requestedLimit != null,
+          );
+
+        const baseQuery = buildRefinementQuery(
+          cleanedText || userText,
+          serviceContext,
+          candidateArgs,
+          filterOnly,
+        );
+
+        const refinedArgs = buildSearchArgsFromUserText(baseQuery, {
+          query: baseQuery,
+          limit: requestedLimit != null ? requestedLimit : undefined,
+          offset: 0,
+          city: candidateArgs.city || serviceContext.city,
+          province: candidateArgs.province || serviceContext.province,
+          service_type: filterOnly
+            ? candidateArgs.service_type || serviceContext.service_type
+            : candidateArgs.service_type,
+          categories: filterOnly
+            ? candidateArgs.categories.length
+              ? candidateArgs.categories
+              : serviceContext.categories
+            : candidateArgs.categories,
+          tags: filterOnly
+            ? candidateArgs.tags.length
+              ? candidateArgs.tags
+              : serviceContext.tags
+            : candidateArgs.tags,
+          ages_served: candidateArgs.ages_served || serviceContext.ages_served,
+          gender_served: candidateArgs.gender_served || serviceContext.gender_served,
+          active_only: serviceContext.active_only,
+        });
+        const hydratedRefinedArgs = applyStreetBotUserContextToSearchArgs(refinedArgs, userContext);
+
+        result = {
+          normalized,
+          fastPath: true,
+          toolBase: 'services_search',
+          isEmotional: false,
+          searchArgs: hydratedRefinedArgs,
+        };
+      } else {
+        const smalltalkResponse = detectSmalltalkResponse(userText, { serviceContext });
+        if (smalltalkResponse) {
+          result = buildStreetBotSmalltalkIntentResult(normalized, smalltalkResponse);
+        } else if (!looksLikeStreetBotServiceRequest(normalized)) {
+          result = buildStreetBotConversationIntentResult(normalized);
+        } else {
+          result = await buildStreetBotServiceIntentResult(
+            userText,
+            normalized,
+            userContext,
+            false,
+          );
+        }
+      }
+
+      applyStreetBotSpanAttributes(span, {
+        observation: {
+          output: {
+            fastPath: Boolean(result.fastPath),
+            toolBase: result.toolBase || null,
+            isEmotional: Boolean(result.isEmotional),
+            hasSearchArgs: Boolean(result.searchArgs),
+            hasMoreArgs: Boolean(result.moreArgs),
+            hasCategoryArgs: Boolean(result.categoryArgs),
+            smalltalkKind: result.smalltalkKind || null,
+          },
+        },
+        attributes: {
+          'streetbot.intent.fast_path': Boolean(result.fastPath),
+          'streetbot.intent.is_emotional': Boolean(result.isEmotional),
+          'streetbot.intent.has_search_args': Boolean(result.searchArgs),
+          'streetbot.intent.has_more_args': Boolean(result.moreArgs),
+          'streetbot.intent.has_category_args': Boolean(result.categoryArgs),
+          ...(result.smalltalkKind
+            ? { 'streetbot.intent.smalltalk_kind': result.smalltalkKind }
+            : {}),
+          ...(result.toolBase ? { 'streetbot.intent.tool_base': result.toolBase } : {}),
+        },
+      });
+
+      return result;
+    },
+  );
+}
+
+function generateTitle(query) {
+  if (!query || typeof query !== 'string') {
+    return 'New Chat';
+  }
+  const trimmed = query.trim();
+  if (trimmed.length <= 80) {
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  }
+  return `${trimmed.slice(0, 77)}...`;
+}
+
+const SERVICE_RESULT_OPTION_HINTS = [
+  [
+    /\b(housing|shelter|evict(?:ion)?|rent|homeless|rooming|warming (?:centre|center))\b/i,
+    'housing support options',
+  ],
+  [
+    /\b(food|hungry|meal|meals|grocery|grocer|food bank|breakfast|lunch|dinner)\b/i,
+    'food support options',
+  ],
+  [
+    /\b(doctor|medical|health|clinic|hospital|nurse|mental health|counselling|counseling|therapy)\b/i,
+    'health support options',
+  ],
+  [/\b(legal|lawyer|law|tenant|immigration|rights)\b/i, 'legal support options'],
+  [
+    /\b(benefit|benefits|odsp|ontario works|income support|income help|income assistance|disability)\b/i,
+    'benefits support options',
+  ],
+  [/\b(job|jobs|work|employment|resume|career)\b/i, 'employment support options'],
+  [/\b(newcomer|settlement|refugee|immigrant)\b/i, 'newcomer support options'],
+  [/\b(community cent(?:er|re)|drop-?in|program|programs)\b/i, 'community support options'],
+];
+
+const SERVICE_RESULT_SUMMARY_LABELS = new Map([
+  ['housing', 'housing'],
+  ['shelter', 'housing'],
+  ['food', 'food'],
+  ['health', 'health'],
+  ['mental health', 'health'],
+  ['legal', 'legal'],
+  ['benefits', 'benefits'],
+  ['disability', 'benefits'],
+  ['employment', 'employment'],
+  ['newcomer', 'newcomer'],
+  ['community', 'community'],
+]);
+
+function inferServiceResultLocationLabel(searchResult = {}) {
+  const directLabel = String(
+    searchResult?.location_label || searchResult?.locationLabel || '',
+  ).trim();
+  if (directLabel) {
+    return directLabel;
+  }
+
+  const directScope = [searchResult?.city, searchResult?.province]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(', ');
+  if (directScope) {
+    return directScope;
+  }
+
+  const firstItem = Array.isArray(searchResult?.items) ? searchResult.items.find(Boolean) : null;
+  if (!firstItem || typeof firstItem !== 'object') {
+    return '';
+  }
+
+  const itemLabel = String(firstItem.location_label || firstItem.locationLabel || '').trim();
+  if (itemLabel) {
+    return itemLabel;
+  }
+
+  return [firstItem.city, firstItem.province]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
+function inferServiceResultOptionLabel(searchResult = {}, userText = '') {
+  const multiLabel = inferMultiNeedOptionLabel(searchResult, userText);
+  if (multiLabel) {
+    return multiLabel;
+  }
+
+  const categories = dedupeStrings([
+    ...(Array.isArray(searchResult?.categories) ? searchResult.categories : []),
+    ...(Array.isArray(searchResult?.categoryNames) ? searchResult.categoryNames : []),
+    ...(Array.isArray(searchResult?.items)
+      ? searchResult.items.flatMap((item) =>
+          Array.isArray(item?.categoryNames) ? item.categoryNames : [],
+        )
+      : []),
+  ]);
+
+  const haystack = normalizeText(
+    [
+      userText,
+      searchResult?.query,
+      searchResult?.service_type,
+      searchResult?.serviceType,
+      categories.join(' '),
+    ]
+      .filter(Boolean)
+      .join(' '),
+  );
+
+  const hint = SERVICE_RESULT_OPTION_HINTS.find(([pattern]) => pattern.test(haystack));
+  if (hint) {
+    return hint[1];
+  }
+
+  const fallbackLabel = String(
+    searchResult?.service_type || searchResult?.serviceType || categories[0] || '',
+  )
+    .trim()
+    .toLowerCase();
+
+  if (fallbackLabel) {
+    return `${fallbackLabel} options`;
+  }
+
+  return 'support options';
+}
+
+function humanJoin(values = []) {
+  const items = values.filter(Boolean);
+  if (!items.length) {
+    return '';
+  }
+  if (items.length === 1) {
+    return items[0];
+  }
+  if (items.length === 2) {
+    return `${items[0]} and ${items[1]}`;
+  }
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
+function normalizeServiceNeedFamilyLabel(value = '') {
+  const normalized = SERVICE_RESULT_SUMMARY_LABELS.get(normalizeText(value));
+  return normalized || normalizeText(value) || '';
+}
+
+function extractRenderedNeedGroups(searchResult = {}) {
+  const groups = Array.isArray(searchResult?.need_groups)
+    ? searchResult.need_groups
+    : Array.isArray(searchResult?.needGroups)
+      ? searchResult.needGroups
+      : [];
+
+  return dedupeStrings(
+    groups
+      .map((group) => {
+        const label = normalizeServiceNeedFamilyLabel(group?.label || group?.id);
+        const count = Math.max(
+          0,
+          Number(
+            group?.requested_count ??
+              group?.requestedCount ??
+              group?.count ??
+              (Array.isArray(group?.items) ? group.items.length : 0),
+          ) || 0,
+        );
+        if (!label || count < 1) {
+          return '';
+        }
+        return `${count} ${label} support option${count === 1 ? '' : 's'}`;
+      })
+      .filter(Boolean),
+  ).slice(0, 3);
+}
+
+function inferMultiNeedOptionLabel(searchResult = {}, userText = '') {
+  const explicitLabels = extractMultiNeedLabelsFromHints(searchResult, userText);
+  const summaryLabels = new Set(extractMultiNeedLabelsFromSummary(searchResult));
+  const labels = (
+    summaryLabels.size ? explicitLabels.filter((label) => summaryLabels.has(label)) : explicitLabels
+  ).slice(0, 3);
+
+  if (labels.length < 2) {
+    return '';
+  }
+  return `options across ${humanJoin(labels)} support`;
+}
+
+function extractMultiNeedLabelsFromSummary(searchResult = {}) {
+  const summary = Array.isArray(searchResult?.need_family_summary)
+    ? searchResult.need_family_summary
+    : Array.isArray(searchResult?.needFamilySummary)
+      ? searchResult.needFamilySummary
+      : [];
+  return dedupeStrings(
+    summary
+      .map((entry) => SERVICE_RESULT_SUMMARY_LABELS.get(normalizeText(entry?.label || entry?.id)))
+      .filter(Boolean),
+  );
+}
+
+function extractMultiNeedLabelsFromHints(searchResult = {}, userText = '') {
+  const haystack = normalizeText(
+    [userText, searchResult?.query, searchResult?.service_type, searchResult?.serviceType]
+      .filter(Boolean)
+      .join(' '),
+  );
+
+  return dedupeStrings(
+    SERVICE_RESULT_OPTION_HINTS.filter(([pattern]) => pattern.test(haystack)).map(([, label]) =>
+      normalizeText(label).replace(/\s+support options$/, ''),
+    ),
+  );
+}
+
+function formatServiceOptionScope(optionLabel, locationLabel = '') {
+  const base = String(optionLabel || 'support options').trim();
+  const location = String(locationLabel || '').trim();
+  return location ? `${base} in ${location}` : base;
+}
+
+function buildRenderedServiceResponse(searchResult, userText = '') {
+  if (searchResult?.browse) {
+    return String(searchResult.message || 'Tell me what kind of service you want.');
+  }
+  const returnedCount = Number(
+    searchResult?.returned_count ?? searchResult?.items?.length ?? searchResult?.count ?? 0,
+  );
+
+  const normalizedUserText = normalizeText(userText);
+  const supportivePrefix =
+    matchesAny(normalizedUserText, EMOTIONAL_PATTERNS) ||
+    matchesAny(normalizedUserText, SUPPORT_PATTERNS)
+      ? 'That sounds like a lot to carry. '
+      : '';
+  const broadenedCount = Number(searchResult?.relaxed?.broader_count ?? 0) || 0;
+  const locationLabel = inferServiceResultLocationLabel(searchResult);
+  const optionLabel = inferServiceResultOptionLabel(searchResult, userText);
+  const groupedOptionPhrases = extractRenderedNeedGroups(searchResult);
+  const scopedPluralLabel = formatServiceOptionScope(optionLabel, locationLabel);
+  const scopedSingularLabel = formatServiceOptionScope(
+    optionLabel.replace(/\boptions\b/i, 'option'),
+    locationLabel,
+  );
+  let intro = `${supportivePrefix}Here are ${returnedCount || 'a few'} ${scopedPluralLabel} to start with.`;
+  if (returnedCount === 0) {
+    intro = `${supportivePrefix}I couldn't find a strong match yet, but we can tighten the search together.`;
+  } else if (groupedOptionPhrases.length >= 2) {
+    const groupedScope = locationLabel
+      ? `${humanJoin(groupedOptionPhrases)} in ${locationLabel}`
+      : humanJoin(groupedOptionPhrases);
+    intro = `${supportivePrefix}I pulled together ${groupedScope} to start with.`;
+  } else if (broadenedCount > 0 && returnedCount > 1) {
+    intro = `${supportivePrefix}I kept the closest ${scopedPluralLabel} first and widened the search so you still have ${returnedCount} to choose from.`;
+  } else if (returnedCount === 1) {
+    intro = `${supportivePrefix}Here's the strongest ${scopedSingularLabel} I found to start with.`;
+  }
+
+  return `${intro}\n\n\`\`\`streetbot-service-results\n${JSON.stringify(searchResult, null, 2)}\n\`\`\``;
+}
+
+function buildRenderedCategoryResponse(payload, userText = '', rawUserContext = null) {
+  const userContext = getStreetBotUserContext(rawUserContext);
+  const topicLabel = inferBrowseTopicLabel(userText, payload);
+  if (looksLikeNearbyBrowseWithoutLocation(userText)) {
+    return `I can help with that. What city or neighborhood should I look in for ${topicLabel}?`;
+  }
+
+  const categories = buildBrowseCategoryHints(payload);
+  const explicitLocationLabel = inferExplicitBrowseLocationLabel(userText);
+  const preferredLocationLabel =
+    !explicitLocationLabel && hasStreetBotPreferredLocation(userContext)
+      ? getStreetBotPreferredLocationLabel(userContext)
+      : '';
+  const locationHint = explicitLocationLabel
+    ? ` in ${explicitLocationLabel}`
+    : preferredLocationLabel
+      ? ` in ${preferredLocationLabel}`
+      : '';
+  const categoryHint = categories.length
+    ? categories.join(', ')
+    : 'housing, food, legal, health, or benefits';
+
+  return `I can help with that. Tell me what kind of service you want${locationHint}, like ${categoryHint}.`;
+}
+
+function getStreetBotDisplayLabel(endpoint = '', fallback = '') {
+  const normalized = String(endpoint || '').trim();
+  if (/^Street Bot(?: 0\.1(?: Pro)?| Pro)?$/i.test(normalized)) {
+    return 'Street Bot';
+  }
+  return String(fallback || '').trim() || 'Street Bot';
+}
+
+function getStreetBotEnvEndpointConfig(endpoint = '') {
+  const envBaseURL = String(
+    process.env.STREETBOT_DEEPAGENTS_API_BASE_URL ||
+      process.env.STREETBOT_DEEPAGENTS_BASE_URL ||
+      process.env.HERMES_CONVERSATION_API_BASE_URL ||
+      process.env.RAILWAY_SERVICE_STREETBOT_DEEPAGENTS_URL ||
+      '',
+  ).trim();
+  if (!envBaseURL) {
+    return null;
+  }
+
+  const baseURL = /^https?:\/\//i.test(envBaseURL) ? envBaseURL : `https://${envBaseURL}`;
+  return {
+    name: endpoint || 'Street Bot',
+    apiKey: String(
+      process.env.STREETBOT_DEEPAGENTS_API_KEY ||
+        process.env.STREETBOT_DEEPAGENTS_PRO_API_KEY ||
+        process.env.HERMES_CONVERSATION_API_SERVER_KEY ||
+        process.env.HERMES_ADMIN_API_SERVER_KEY ||
+        '',
+    ).trim(),
+    baseURL,
+    models: {
+      fetch: false,
+      default: ['streetbot-0.1'],
+    },
+    titleConvo: true,
+    titleModel: 'streetbot-0.1',
+    summarize: false,
+    modelDisplayLabel: 'Street Bot 0.1',
+  };
+}
+
+function getStreetBotEndpointConfig(req, endpoint = '') {
+  const customEndpoints = Array.isArray(req?.config?.endpoints?.custom)
+    ? req.config.endpoints.custom
+    : [];
+  const matchedEndpoint = customEndpoints.find(
+    (config) =>
+      String(config?.name || '')
+        .trim()
+        .toLowerCase() ===
+      String(endpoint || '')
+        .trim()
+        .toLowerCase(),
+  );
+  const envEndpoint = getStreetBotEnvEndpointConfig(endpoint);
+  if (matchedEndpoint) {
+    if (envEndpoint?.baseURL) {
+      return {
+        ...matchedEndpoint,
+        baseURL: envEndpoint.baseURL,
+        apiKey: envEndpoint.apiKey || matchedEndpoint.apiKey,
+      };
+    }
+    return matchedEndpoint;
+  }
+
+  return envEndpoint;
+}
+
+function summarizeStreetBotServicePayload(payloadText) {
+  let payload = null;
+  try {
+    payload = JSON.parse(String(payloadText || '').trim());
+  } catch (_) {
+    payload = null;
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return 'Street Bot previously shared grounded service search results.';
+  }
+
+  const returnedCount =
+    Number(payload.returned_count ?? payload.items?.length ?? payload.count ?? 0) || 0;
+  const query = String(payload.query || '').trim();
+  const location = [payload.city, payload.province]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(', ');
+  const topNames = Array.isArray(payload.items)
+    ? payload.items
+        .map((item) => String(item?.name || item?.title || item?.organization || '').trim())
+        .filter(Boolean)
+        .slice(0, 3)
+    : [];
+
+  if (payload.browse) {
+    const browseTopic = query || 'services';
+    return `Street Bot asked the user to narrow a service search for ${browseTopic}.`;
+  }
+
+  const scope = [query, location].filter(Boolean).join(' in ');
+  if (returnedCount > 0) {
+    const suffix = topNames.length
+      ? ` Top matches: ${topNames.join(', ')}${returnedCount > topNames.length ? ', and more.' : '.'}`
+      : '';
+    return `Street Bot shared ${returnedCount} grounded service result${returnedCount === 1 ? '' : 's'}${scope ? ` for ${scope}` : ''}.${suffix}`.trim();
+  }
+
+  if (payload.ok === false) {
+    return `Street Bot's service search did not return a usable result yet${scope ? ` for ${scope}` : ''}.`;
+  }
+
+  return `Street Bot ran a grounded service search${scope ? ` for ${scope}` : ''}.`;
+}
+
+function sanitizeStreetBotConversationHistoryText(value) {
+  const text = String(value || '').trim();
+  if (!text || !text.includes('```streetbot-service-results')) {
+    return text;
+  }
+
+  const summaries = [];
+  const stripped = text.replace(
+    /```streetbot-service-results\s*([\s\S]*?)```/gi,
+    (_match, payloadText) => {
+      const summary = summarizeStreetBotServicePayload(payloadText);
+      if (summary) {
+        summaries.push(summary);
+      }
+      return '';
+    },
+  );
+
+  return [stripped.trim(), ...summaries]
+    .filter(Boolean)
+    .join('\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function stripStreetBotServicePayloadForDisplay(value) {
+  const text = String(value || '').trim();
+  if (!text || !text.includes('```streetbot-service-results')) {
+    return text;
+  }
+
+  return text
+    .replace(/```streetbot-service-results\s*[\s\S]*?```/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function extractMessageTextForModel(message) {
+  if (!message) {
+    return '';
+  }
+  if (typeof message.text === 'string' && message.text.trim()) {
+    return sanitizeStreetBotConversationHistoryText(message.text);
+  }
+  if (typeof message.content === 'string') {
+    return sanitizeStreetBotConversationHistoryText(message.content);
+  }
+  if (Array.isArray(message.content)) {
+    const content = message.content
+      .map((part) => {
+        if (!part) {
+          return '';
+        }
+        if (typeof part === 'string') {
+          return part;
+        }
+        if (typeof part.text === 'string') {
+          return part.text;
+        }
+        if (part.text && typeof part.text.value === 'string') {
+          return part.text.value;
+        }
+        return '';
+      })
+      .join('\n')
+      .trim();
+    return sanitizeStreetBotConversationHistoryText(content);
+  }
+  return '';
+}
+
+function buildStreetBotConversationGuardrail(serviceContext = {}) {
+  if (!hasActiveServiceContext(serviceContext)) {
+    return '';
+  }
+  return [
+    'A prior service search exists in this chat.',
+    'Stay in the conversation lane unless the newest user message clearly asks to search, refine, or continue service results.',
+    'For thanks, acknowledgments, casual check-ins, identity questions, topic changes, or social replies, answer normally.',
+    'Do not call service-search/RAG tools or emit streetbot-service-results for those conversation turns.',
+    'If the user asks what they searched for before, what kinds of services they usually ask about, or what you know about their service needs, answer from chat history instead of starting a new directory search.',
+  ].join(' ');
+}
+
+function buildStreetBotConversationSystemPrompt(userContext = {}) {
+  const locationLabel = getStreetBotPreferredLocationLabel(userContext);
+  return [
+    'Operating mode: I am Street Bot, the main Street Voices conversation agent.',
+    'I am the only user-facing production agent.',
+    'I default to warm, capable general conversation and answer ordinary questions, identity questions, casual check-ins, factual questions, and topic changes directly.',
+    'I stay conversational by default and do not use RAG just because it exists.',
+    'Directory/resource lookup is handled by a separate Street Bot route when the latest user message clearly asks for local resources.',
+    'If a prior service result is followed by thanks, acknowledgments, praise, a check-in, or a new non-service topic, I keep that turn in normal conversation.',
+    'If the user clearly needs resource lookup but this message reached me, I ask one concise clarifying question instead of pretending to have searched.',
+    'Keep answers natural and useful. Do not collapse general conversation into canned service-navigation prompts.',
+    locationLabel
+      ? `The user's saved service-search location is ${locationLabel}; only use it if location matters.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildStreetBotConversationStyleNote(userText = '') {
+  const normalized = normalizeText(userText);
+  if (!normalized) {
+    return '';
+  }
+
+  if (/\b(your name|who are you|what are you|introduce yourself)\b/i.test(normalized)) {
+    return 'Conversation style note: answer as Street Bot in a friendly sentence or two, not as a one-word label.';
+  }
+
+  return 'Conversation style note: answer naturally and directly in one to three useful sentences, with the same warm Street Bot voice.';
+}
+
+const STREAM_PROGRESS_PHASES = {
+  thinking_through_request: 'Thinking through your request',
+  reviewing_recent_context: 'Reviewing recent context',
+  checking_directory: 'Looking for services',
+  browsing_service_categories: 'Looking for services',
+  loading_more_results: 'Looking for more services',
+  checking_official_site: 'Checking the official site',
+  opening_official_page: 'Opening the official page',
+  reviewing_system_state: 'Reviewing the current system state',
+};
+
+function buildStreetBotProgressToolName(phaseKey) {
+  const safeKey =
+    String(phaseKey || 'working')
+      .trim()
+      .replace(/[^a-z0-9]+/gi, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase() || 'working';
+  return `${safeKey}${Constants.mcp_delimiter}streetbot-status`;
+}
+
+function emitStreetBotProgressStart(streamId, runId, phaseKey, index = 0, metadata = {}) {
+  if (!STREETBOT_FASTPATH_STREAMING_ENABLED || !streamId || !runId) {
+    return null;
+  }
+
+  const label = STREAM_PROGRESS_PHASES[phaseKey] || STREAM_PROGRESS_PHASES.thinking_through_request;
+  const toolCallId = `call_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
+  const stepId = `step_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
+  const args = JSON.stringify({
+    label,
+    phase: phaseKey,
+    ...metadata,
+  });
+
+  GenerationJobManager.emitChunk(streamId, {
+    event: 'on_run_step',
+    data: {
+      id: stepId,
+      runId,
+      index,
+      stepDetails: {
+        type: 'tool_calls',
+        tool_calls: [
+          {
+            id: toolCallId,
+            name: buildStreetBotProgressToolName(phaseKey),
+            args,
+          },
+        ],
+      },
+    },
+  });
+
+  return {
+    stepId,
+    toolCallId,
+    phaseKey,
+    label,
+    args,
+  };
+}
+
+function emitStreetBotProgressComplete(streamId, progress, status = 'ok') {
+  if (!STREETBOT_FASTPATH_STREAMING_ENABLED || !progress?.stepId || !progress?.toolCallId) {
+    return;
+  }
+  const output = JSON.stringify({
+    status,
+    label: progress.label,
+    phase: progress.phaseKey,
+  });
+  GenerationJobManager.emitChunk(streamId, {
+    event: 'on_run_step_completed',
+    data: {
+      result: {
+        id: progress.stepId,
+        tool_call: {
+          name: buildStreetBotProgressToolName(progress.phaseKey),
+          args: progress.args,
+          output,
+          id: progress.toolCallId,
+        },
+      },
+    },
+  });
+}
+
+function emitStreetBotKeepalive(streamId, phaseKey, metadata = {}) {
+  if (!STREETBOT_FASTPATH_KEEPALIVE_ENABLED || !streamId) {
+    return;
+  }
+
+  GenerationJobManager.emitChunk(streamId, {
+    event: 'streetbot_keepalive',
+    data: {
+      phase: phaseKey,
+      label: STREAM_PROGRESS_PHASES[phaseKey] || STREAM_PROGRESS_PHASES.thinking_through_request,
+      at: Date.now(),
+      ...metadata,
+    },
+  });
+}
+
+async function withStreetBotStreamKeepalive(streamId, phaseKey, work, options = {}) {
+  if (!STREETBOT_FASTPATH_KEEPALIVE_ENABLED || !streamId) {
+    return work();
+  }
+
+  const intervalMs = Number(options?.intervalMs) > 0 ? Number(options.intervalMs) : 2500;
+  const metadata = options?.metadata || {};
+  const timer = setInterval(() => {
+    emitStreetBotKeepalive(streamId, phaseKey, metadata);
+  }, intervalMs);
+  if (typeof timer?.unref === 'function') {
+    timer.unref();
+  }
+  try {
+    return await work();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+async function withStreetBotProgressStep(streamId, runId, phaseKey, index, work, metadata = {}) {
+  if (!STREETBOT_FASTPATH_STREAMING_ENABLED || !streamId || !runId) {
+    return withStreetBotStreamKeepalive(streamId, phaseKey, work, {
+      metadata,
+    });
+  }
+
+  const progress = emitStreetBotProgressStart(streamId, runId, phaseKey, index, metadata);
+  try {
+    const value = await work();
+    emitStreetBotProgressComplete(streamId, progress, 'ok');
+    return value;
+  } catch (error) {
+    emitStreetBotProgressComplete(streamId, progress, 'error');
+    throw error;
+  }
+}
+
+function inferStreetBotConversationPhase(userText = '') {
+  const normalized = String(userText || '').trim();
+  if (!normalized) {
+    return 'thinking_through_request';
+  }
+  if (
+    /\b(open|visit|show|preview|navigate to|pull up|bring up)\b.*\b(application|form|website|site|page)\b/i.test(
+      normalized,
+    )
+  ) {
+    return 'opening_official_page';
+  }
+  if (
+    /\b(tell me more about|hours|eligibility|contact|phone|email|website|program details?|application details?)\b/i.test(
+      normalized,
+    )
+  ) {
+    return 'checking_official_site';
+  }
+  if (
+    /\b(stack|system|retrieval|transition|eval|evaluation|diagnostic|diagnostics|health|status|probe|corpus|weaviate|redis|postgres|latency)\b/i.test(
+      normalized,
+    )
+  ) {
+    return 'reviewing_system_state';
+  }
+  return 'thinking_through_request';
+}
+
+async function buildStreetBotConversationMessages(req, conversationId, userText) {
+  const messages = [];
+  const userId = req?.user?.id;
+  const userContext = getStreetBotUserContext(req?.body?._streetbotUserContext);
+  const serviceContext = getServiceContext(req?._streetbotServiceContext);
+  const systemSegments = [
+    buildStreetBotConversationSystemPrompt(userContext),
+    buildStreetBotConversationGuardrail(serviceContext),
+    buildStreetBotConversationStyleNote(userText),
+  ];
+  if (hasStreetBotPreferredLocation(userContext) && looksLikeStreetBotServiceRequest(userText)) {
+    const locationLabel = getStreetBotPreferredLocationLabel(userContext);
+    const locationContext = locationLabel
+      ? `Saved Street Bot location for nearby services: ${locationLabel}.`
+      : 'A saved Street Bot city and province are available for nearby services.';
+    systemSegments.push(
+      `${locationContext} Use that saved location by default unless the user gives a different location.`,
+    );
+  }
+  const systemPrompt = systemSegments.filter(Boolean).join('\n\n');
+  if (systemPrompt) {
+    messages.push({
+      role: 'system',
+      content: systemPrompt,
+    });
+  }
+  if (conversationId && conversationId !== 'new' && userId) {
+    try {
+      const history = await getMessages({ conversationId, user: userId });
+      for (const message of history || []) {
+        const content = extractMessageTextForModel(message);
+        if (!content) {
+          continue;
+        }
+        messages.push({
+          role:
+            message.isCreatedByUser || /^User$/i.test(String(message.sender || ''))
+              ? 'user'
+              : 'assistant',
+          content,
+        });
+      }
+    } catch (error) {
+      logger.warn(
+        `[streetbot-fastpath] failed to load conversation history for ${conversationId}: ${error.message}`,
+      );
+    }
+  }
+
+  messages.push({ role: 'user', content: String(userText || '').trim() });
+  if (messages.length <= 16) {
+    return messages;
+  }
+  return [messages[0], ...messages.slice(-15)];
+}
+
+async function runStreetBotConversationModel(
+  req,
+  endpointOption,
+  conversationId,
+  userText,
+  phaseRunner = async (_phaseKey, work) => work(),
+  streamId = '',
+  responseMessageId = '',
+  allocateResponseStepIndex = () => 1,
+) {
+  const endpoint =
+    endpointOption?.endpoint || req?.body?.endpoint || req?.params?.endpoint || 'Street Bot';
+  const endpointConfig = getStreetBotEndpointConfig(req, endpoint);
+  const baseURL = String(endpointConfig?.baseURL || '').replace(/\/+$/, '');
+  const apiKey = String(endpointConfig?.apiKey || '').trim();
+  const model =
+    String(
+      endpointOption?.modelOptions?.model ||
+        endpointOption?.model_parameters?.model ||
+        req?.body?.model ||
+        'streetbot-0.1',
+    ).trim() || 'streetbot-0.1';
+
+  if (!baseURL) {
+    throw new Error(`Street Bot endpoint ${endpoint} is missing a baseURL`);
+  }
+
+  const apiBaseURL = /\/v1$/i.test(baseURL) ? baseURL : `${baseURL}/v1`;
+  const hasPriorConversationContext = Boolean(conversationId && conversationId !== 'new');
+  const messages = hasPriorConversationContext
+    ? await phaseRunner('reviewing_recent_context', () =>
+        buildStreetBotConversationMessages(req, conversationId, userText),
+      )
+    : await buildStreetBotConversationMessages(req, conversationId, userText);
+  const primaryPhase = inferStreetBotConversationPhase(userText);
+  return phaseRunner(primaryPhase, async () => {
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), STREETBOT_CONVERSATION_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(`${apiBaseURL}/chat/completions`, {
+        method: 'POST',
+        signal: abortController.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model,
+          stream: STREETBOT_BACKEND_STREAMING_ENABLED,
+          messages,
+          temperature: Number.isFinite(Number(req?.body?.temperature))
+            ? Number(req.body.temperature)
+            : 0.7,
+          max_tokens: Number.isFinite(Number(req?.body?.max_tokens))
+            ? Number(req.body.max_tokens)
+            : 600,
+        }),
+      });
+
+      if (!response.ok) {
+        const bodyText = await response.text();
+        throw new Error(
+          `Street Bot API request failed with ${response.status}: ${bodyText.slice(0, 240)}`,
+        );
+      }
+
+      if (!STREETBOT_BACKEND_STREAMING_ENABLED) {
+        const payload = await response.json();
+        const content = payload?.choices?.[0]?.message?.content ?? payload?.output_text ?? '';
+        const responseText = (
+          Array.isArray(content)
+            ? content
+                .map((entry) =>
+                  typeof entry === 'string'
+                    ? entry
+                    : String(entry?.text?.value || entry?.text || entry?.value || ''),
+                )
+                .join('')
+            : String(content || '')
+        ).trim();
+        if (!responseText) {
+          throw new Error('Street Bot API response was empty');
+        }
+        if (looksLikeStreetBotModelFailureText(responseText)) {
+          throw new Error(`Street Bot provider returned a model failure response: ${responseText.slice(0, 180)}`);
+        }
+        return responseText;
+      }
+
+      const processStreamPayload = (dataStr, state) => {
+        if (!dataStr) {
+          return false;
+        }
+        if (dataStr === '[DONE]') {
+          return true;
+        }
+        try {
+          const parsed = JSON.parse(dataStr);
+          const deltaContent = parsed?.choices?.[0]?.delta?.content;
+          const nextText =
+            typeof deltaContent === 'string'
+              ? deltaContent
+              : Array.isArray(deltaContent)
+                ? deltaContent
+                    .map((entry) =>
+                      typeof entry === 'string'
+                        ? entry
+                        : String(entry?.text?.value || entry?.text || entry?.value || ''),
+                    )
+                    .join('')
+                : '';
+          if (!nextText) {
+            return;
+          }
+          if (looksLikeStreetBotModelFailureText(nextText)) {
+            state.modelFailureText = `${state.modelFailureText || ''}${nextText}`;
+            return;
+          }
+          if (STREETBOT_FASTPATH_STREAMING_ENABLED && !state.responseStep) {
+            state.responseStep = emitStreetBotResponseStepStart(
+              streamId,
+              responseMessageId,
+              allocateResponseStepIndex(),
+            );
+          }
+          state.fullText += nextText;
+          emitStreetBotMessageDelta(
+            streamId,
+            state.responseStep?.stepId || responseMessageId,
+            nextText,
+          );
+        } catch (error) {
+          /* ignore malformed or partial SSE frames */
+        }
+        return false;
+      };
+
+      const streamState = { fullText: '', responseStep: null, modelFailureText: '' };
+      const body = response.body;
+
+      if (body && typeof body.getReader === 'function') {
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let sawDone = false;
+
+        while (!sawDone) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() || '';
+
+          for (const rawLine of lines) {
+            if (!rawLine.startsWith('data:')) {
+              continue;
+            }
+            sawDone = processStreamPayload(rawLine.slice(5).trimStart(), streamState);
+            if (sawDone) {
+              break;
+            }
+          }
+        }
+
+        if (!sawDone) {
+          buffer += decoder.decode();
+          for (const rawLine of buffer.split(/\r?\n/)) {
+            if (!rawLine.startsWith('data:')) {
+              continue;
+            }
+            sawDone = processStreamPayload(rawLine.slice(5).trimStart(), streamState);
+            if (sawDone) {
+              break;
+            }
+          }
+        }
+      }
+
+      const responseText = String(streamState.fullText || '').trim();
+      if (!responseText) {
+        if (streamState.modelFailureText) {
+          throw new Error(
+            `Street Bot provider returned a model failure response: ${streamState.modelFailureText.slice(0, 180)}`,
+          );
+        }
+        throw new Error('Street Bot API response was empty');
+      }
+      if (looksLikeStreetBotModelFailureText(responseText)) {
+        throw new Error(`Street Bot provider returned a model failure response: ${responseText.slice(0, 180)}`);
+      }
+      return responseText;
+    } catch (error) {
+      if (abortController.signal.aborted || error?.name === 'AbortError') {
+        throw new Error(
+          `Street Bot conversation request timed out after ${STREETBOT_CONVERSATION_TIMEOUT_MS}ms`,
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
+}
+
+function clampReward(value) {
+  if (!Number.isFinite(Number(value))) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, Number(value)));
+}
+
+function buildPromptFingerprint(value) {
+  const normalized = normalizeText(value).replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+  return crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+}
+
+function buildStreetBotOutcome(toolBase, detectedIntent, searchResult, durationMs) {
+  const returnedCount =
+    Number(searchResult?.returned_count ?? searchResult?.items?.length ?? 0) || 0;
+  const browse = Boolean(searchResult?.browse);
+  const hasMore = Boolean(searchResult?.has_more);
+  const ok = searchResult == null ? true : searchResult?.ok !== false;
+  let kind = 'conversation';
+  let success = true;
+  let rewardProxy = 0.82;
+
+  if (toolBase === 'smalltalk') {
+    kind = detectedIntent?.smalltalkKind || 'conversation';
+    if (kind === 'support') {
+      rewardProxy = 0.96;
+    } else if (kind === 'wellness_tip') {
+      rewardProxy = 0.93;
+    } else if (kind === 'service_feedback') {
+      rewardProxy = 0.92;
+    } else if (kind === 'service_acknowledgment') {
+      rewardProxy = 0.91;
+    } else if (kind === 'identity' || kind === 'greeting' || kind === 'checkin') {
+      rewardProxy = 0.9;
+    } else if (kind === 'topic_chat') {
+      rewardProxy = 0.89;
+    } else if (kind === 'joke' || kind === 'preference') {
+      rewardProxy = 0.87;
+    }
+  } else if (toolBase === 'conversation') {
+    kind = 'conversation';
+    success = ok;
+    rewardProxy = 0.9;
+  } else if (toolBase === 'services_categories' || browse) {
+    kind = 'service_clarify';
+    rewardProxy = 0.88;
+  } else if (toolBase === 'services_more') {
+    kind = 'service_followup';
+    success = ok && returnedCount > 0;
+    rewardProxy = success ? 0.92 : 0.28;
+  } else {
+    kind = 'service_search';
+    success = ok && returnedCount > 0;
+    rewardProxy = success ? 1 : browse ? 0.88 : 0.22;
+  }
+
+  if (!ok) {
+    success = false;
+    rewardProxy = Math.min(rewardProxy, 0.08);
+  }
+
+  if (durationMs > 5000) {
+    rewardProxy -= 0.25;
+  } else if (durationMs > 2500) {
+    rewardProxy -= 0.1;
+  }
+
+  return {
+    kind,
+    success,
+    rewardProxy: clampReward(rewardProxy),
+    returnedCount,
+    browse,
+    hasMore,
+  };
+}
+
+function normalizeLocationTelemetryAction(rawAction) {
+  if (!rawAction || typeof rawAction !== 'object') {
+    return null;
+  }
+
+  const kind = String(rawAction.kind || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (!kind) {
+    return null;
+  }
+
+  const emittedAt = String(rawAction.emitted_at || rawAction.emittedAt || '').trim();
+  return {
+    kind,
+    emittedAt,
+    locationLabel: String(rawAction.location_label || rawAction.locationLabel || '').trim(),
+    source: String(rawAction.source || '').trim(),
+    bridgeKind: String(rawAction.bridge_kind || rawAction.bridgeKind || '').trim(),
+    endpoint: String(rawAction.endpoint || '').trim(),
+    status: String(rawAction.status || '').trim(),
+    preserveExisting: Boolean(rawAction.preserve_existing),
+    hadExistingLocation: Boolean(rawAction.had_existing_location),
+    autoReused: Boolean(rawAction.auto_reused),
+    hadExplicitLocation: Boolean(rawAction.had_explicit_location),
+  };
+}
+
+function extractLocationTelemetry(req) {
+  const rawTelemetry = req?.body?._streetbotLocationTelemetry;
+  if (!rawTelemetry || typeof rawTelemetry !== 'object') {
+    return null;
+  }
+
+  const actions = Array.isArray(rawTelemetry.actions)
+    ? rawTelemetry.actions.map((action) => normalizeLocationTelemetryAction(action)).filter(Boolean)
+    : [];
+  const savedLocationUsed = Boolean(rawTelemetry.saved_location_used);
+  const savedLocationLabel = String(rawTelemetry.saved_location_label || '').trim();
+
+  if (actions.length === 0 && !savedLocationUsed && !savedLocationLabel) {
+    return null;
+  }
+
+  return {
+    actionKinds: actions.map((action) => action.kind).filter(Boolean),
+    actions,
+    savedLocationUsed,
+    savedLocationLabel,
+  };
+}
+
+function buildRewardLogEvent(
+  req,
+  resolvedConversationId,
+  toolBase,
+  detectedIntent,
+  searchResult,
+  durationMs,
+  outcome,
+) {
+  const endpoint =
+    req?.body?.endpointOption?.endpoint ||
+    req?.body?.endpoint ||
+    req?.params?.endpoint ||
+    'unknown';
+  const promptText = req?._streetbotFastPath?.userText || req?.body?.text || '';
+  const promptSummary = summarizeStreetBotText(promptText);
+  const conversationId = String(resolvedConversationId || req?.body?.conversationId || '').trim();
+  const traceIdentifiers = getStreetBotTraceIdentifiers(req);
+  const locationTelemetry = extractLocationTelemetry(req);
+
+  return {
+    version: 'v1',
+    emittedAt: new Date().toISOString(),
+    endpoint,
+    mode: /^Street Bot(?: 0\.1 Pro| Pro)$/i.test(endpoint) ? 'pro' : 'public',
+    conversationId: conversationId && conversationId !== 'new' ? conversationId : '',
+    conversationUrl:
+      conversationId && conversationId !== 'new' ? `/c/${encodeURIComponent(conversationId)}` : '',
+    traceId: traceIdentifiers.traceId,
+    spanId: traceIdentifiers.spanId,
+    traceFlags: traceIdentifiers.traceFlags,
+    traceSynthetic: Boolean(traceIdentifiers.synthetic),
+    toolBase,
+    outcomeKind: outcome.kind,
+    success: outcome.success,
+    rewardProxy: outcome.rewardProxy,
+    returnedCount: outcome.returnedCount,
+    browse: outcome.browse,
+    hasMore: outcome.hasMore,
+    durationMs,
+    smalltalkKind: detectedIntent?.smalltalkKind || '',
+    promptFingerprint: buildPromptFingerprint(promptText),
+    prompt: {
+      length: promptSummary.length,
+      wordCount: promptSummary.wordCount,
+      hasQuestion: promptSummary.hasQuestion,
+      startsWithSlash: promptSummary.startsWithSlash,
+    },
+    ...(locationTelemetry ? { locationTelemetry } : {}),
+  };
+}
+
+function capturePostHogRagSpan(
+  req,
+  userId,
+  conversationId,
+  toolBase,
+  toolPayload,
+  searchResult,
+  durationMs,
+) {
+  const traceIdentifiers = getStreetBotTraceIdentifiers(req);
+  return captureStreetBotPostHogSpan({
+    distinctId: userId,
+    traceId: traceIdentifiers.traceId,
+    sessionId: conversationId,
+    spanId: crypto.randomUUID(),
+    parentId: traceIdentifiers.spanId,
+    spanName: `streetbot_${toolBase}`,
+    inputState: {
+      toolBase,
+      query: toolPayload?.query || '',
+      city: toolPayload?.city || '',
+      province: toolPayload?.province || '',
+      limit: toolPayload?.limit ?? null,
+      categories: toolPayload?.categories || [],
+      tags: toolPayload?.tags || [],
+    },
+    outputState: {
+      ok: searchResult?.ok !== false,
+      browse: Boolean(searchResult?.browse),
+      returnedCount:
+        Number(
+          searchResult?.returned_count ?? searchResult?.items?.length ?? searchResult?.count ?? 0,
+        ) || 0,
+      hasMore: Boolean(searchResult?.has_more),
+    },
+    latencySeconds: Number(durationMs || 0) / 1000,
+    properties: {
+      streetbot_tool_base: toolBase,
+      streetbot_route_kind: 'fastpath',
+    },
+  });
+}
+
+function capturePostHogGeneration(
+  req,
+  userId,
+  conversationId,
+  toolBase,
+  userText,
+  responseText,
+  durationMs,
+  outcome,
+  searchResult,
+) {
+  const traceIdentifiers = getStreetBotTraceIdentifiers(req);
+  return captureStreetBotPostHogGeneration({
+    distinctId: userId,
+    traceId: traceIdentifiers.traceId,
+    sessionId: conversationId,
+    spanId: crypto.randomUUID(),
+    parentId: traceIdentifiers.spanId,
+    spanName: 'streetbot_fastpath_response',
+    model:
+      toolBase === 'conversation'
+        ? 'streetbot-deepagents'
+        : toolBase === 'smalltalk'
+          ? 'streetbot-fastpath'
+          : 'streetbot-rag',
+    provider: toolBase === 'conversation' ? 'deepagents' : 'streetbot',
+    input: [buildPostHogTextMessage('user', userText)],
+    outputChoices: [buildPostHogTextMessage('assistant', responseText)],
+    latencySeconds: Number(durationMs || 0) / 1000,
+    httpStatus: 200,
+    properties: {
+      streetbot_tool_base: toolBase,
+      streetbot_route_kind: 'fastpath',
+      streetbot_outcome_kind: outcome?.kind || '',
+      streetbot_reward_proxy: outcome?.rewardProxy ?? null,
+      streetbot_browse: Boolean(searchResult?.browse),
+      streetbot_returned_count: Number(searchResult?.returned_count ?? 0) || 0,
+      streetbot_has_more: Boolean(searchResult?.has_more),
+    },
+  });
+}
+
+function capturePostHogGenerationError(
+  req,
+  userId,
+  conversationId,
+  toolBase,
+  userText,
+  error,
+  durationMs,
+) {
+  const traceIdentifiers = getStreetBotTraceIdentifiers(req);
+  return captureStreetBotPostHogGeneration({
+    distinctId: userId,
+    traceId: traceIdentifiers.traceId,
+    sessionId: conversationId,
+    spanId: crypto.randomUUID(),
+    parentId: traceIdentifiers.spanId,
+    spanName: 'streetbot_fastpath_error',
+    model:
+      toolBase === 'conversation'
+        ? 'streetbot-deepagents'
+        : toolBase === 'smalltalk'
+          ? 'streetbot-fastpath'
+          : 'streetbot-rag',
+    provider: toolBase === 'conversation' ? 'deepagents' : 'streetbot',
+    input: [buildPostHogTextMessage('user', userText)],
+    outputChoices: [],
+    latencySeconds: Number(durationMs || 0) / 1000,
+    httpStatus: 500,
+    isError: true,
+    error: error?.message || String(error || 'streetbot-fastpath unexpected error'),
+    properties: {
+      streetbot_tool_base: toolBase,
+      streetbot_route_kind: 'fastpath',
+    },
+  });
+}
+
+async function streetbotFastPath(req, res, _next) {
+  const startedAt = Date.now();
+  const { endpointOption, conversationId: reqConversationId, parentMessageId } = req.body;
+  const userText = req._streetbotFastPath?.userText || String(req.body?.text || '').trim();
+  const userId = req.user.id;
+
+  const { allowed, pendingRequests, limit } = await checkAndIncrementPendingRequest(userId);
+  if (!allowed) {
+    const violationInfo = getViolationInfo(pendingRequests, limit);
+    return res.status(429).json(violationInfo);
+  }
+
+  const conversationId =
+    !reqConversationId || reqConversationId === 'new' ? crypto.randomUUID() : reqConversationId;
+  const streamId = conversationId;
+
+  try {
+    const job = await GenerationJobManager.createJob(streamId, userId, conversationId);
+    res.json({ streamId, conversationId, status: 'started' });
+
+    const userMessageId = crypto.randomUUID();
+    const responseMessageId = crypto.randomUUID();
+    const isNewConvo = !reqConversationId || reqConversationId === 'new';
+    let progressStepIndex = 0;
+    const nextProgressStepIndex = () => progressStepIndex++;
+    const runProgressPhase = (phaseKey, work, metadata = {}) =>
+      withStreetBotProgressStep(
+        streamId,
+        responseMessageId,
+        phaseKey,
+        nextProgressStepIndex(),
+        work,
+        metadata,
+      );
+
+    const userMessage = {
+      messageId: userMessageId,
+      conversationId,
+      parentMessageId: parentMessageId || Constants.NO_PARENT,
+      sender: 'User',
+      text: userText,
+      isCreatedByUser: true,
+      user: userId,
+      endpoint: endpointOption.endpoint,
+    };
+
+    GenerationJobManager.emitChunk(streamId, {
+      created: true,
+      message: userMessage,
+      streamId,
+    });
+
+    const detectedIntent =
+      req._streetbotFastPath ||
+      (await detectStreetBotIntent(
+        userText,
+        req._streetbotServiceContext,
+        req.body?._streetbotUserContext,
+      ));
+    const toolBase = detectedIntent?.toolBase || 'services_search';
+    let responseText = String(detectedIntent?.responseText || '').trim();
+    let searchResult = null;
+    let toolCallContent = null;
+    let responseAlreadyStreamed = false;
+
+    annotateStreetBotRequestTrace(req, {
+      observation: {
+        metadata: {
+          routeKind: 'fastpath',
+          toolBase,
+          hasServiceContext: Boolean(req._streetbotServiceContext?.session_id),
+        },
+      },
+      attributes: {
+        'streetbot.route.fast_path': true,
+        'streetbot.fastpath.tool_base': toolBase,
+        'streetbot.fastpath.smalltalk': toolBase === 'smalltalk',
+      },
+    });
+
+    if (toolBase === 'conversation') {
+      try {
+        responseText = await runStreetBotConversationModel(
+          req,
+          endpointOption,
+          conversationId,
+          userText,
+          runProgressPhase,
+          streamId,
+          responseMessageId,
+          nextProgressStepIndex,
+        );
+        responseAlreadyStreamed = STREETBOT_FASTPATH_STREAMING_ENABLED;
+      } catch (error) {
+        logger.warn('[streetbot-fastpath] conversation model unavailable, using fallback', {
+          error: error?.message || String(error || ''),
+        });
+        responseText = buildStreetBotGeneralFallback(userText, error);
+        responseAlreadyStreamed = false;
+      }
+      searchResult = { ok: true, returned_count: 0, items: [], has_more: false };
+    } else if (toolBase !== 'smalltalk') {
+      const { searchServicesInternal, buildMoreResults, categoriesInternal } = await getRagModule();
+      const requestUserContext = getStreetBotUserContext(req.body?._streetbotUserContext);
+      let searchArgs = req._streetbotSearchArgs ||
+        detectedIntent?.searchArgs || {
+          query: userText,
+          limit: 5,
+        };
+      let moreArgs = req._streetbotMoreArgs || detectedIntent?.moreArgs || null;
+      let categoryArgs = req._streetbotCategoryArgs || detectedIntent?.categoryArgs || { limit: 8 };
+
+      searchArgs = applyStreetBotUserContextToSearchArgs(searchArgs, requestUserContext);
+      if (moreArgs?.fallback_search_args) {
+        moreArgs = {
+          ...moreArgs,
+          fallback_search_args: applyStreetBotUserContextToSearchArgs(
+            moreArgs.fallback_search_args,
+            requestUserContext,
+          ),
+        };
+      }
+      categoryArgs = applyStreetBotUserContextToSearchArgs(categoryArgs, requestUserContext);
+
+      const toolCallId = `call_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
+      const stepId = `step_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
+      const toolName = `${toolBase}${Constants.mcp_delimiter}streetbot-rag`;
+      const toolPayload = toolBase === 'services_more' && moreArgs ? moreArgs : searchArgs;
+      const toolArgs = JSON.stringify(toolPayload);
+
+      if (STREETBOT_FASTPATH_STREAMING_ENABLED) {
+        GenerationJobManager.emitChunk(streamId, {
+          event: 'on_run_step',
+          data: {
+            id: stepId,
+            runId: responseMessageId,
+            index: 0,
+            stepDetails: {
+              type: 'tool_calls',
+              tool_calls: [
+                {
+                  id: toolCallId,
+                  name: toolName,
+                  args: toolArgs,
+                },
+              ],
+            },
+          },
+        });
+      }
+
+      const ragStartedAt = Date.now();
+      try {
+        const searchPhase =
+          toolBase === 'services_more'
+            ? 'loading_more_results'
+            : toolBase === 'services_categories'
+              ? 'browsing_service_categories'
+              : 'checking_directory';
+        searchResult = await runProgressPhase(
+          searchPhase,
+          () =>
+            withStreetBotSpan(
+              toolBase === 'services_more'
+                ? 'streetbot.rag.more'
+                : toolBase === 'services_categories'
+                  ? 'streetbot.rag.categories'
+                  : 'streetbot.rag.search',
+              {
+                observationType: 'retriever',
+                observation: {
+                  input: summarizeStreetBotText(
+                    searchArgs?.query || moreArgs?.fallback_search_args?.query || userText,
+                  ),
+                  metadata: {
+                    toolBase,
+                    requestedLimit:
+                      searchArgs?.limit ??
+                      moreArgs?.limit ??
+                      moreArgs?.fallback_search_args?.limit ??
+                      categoryArgs?.limit ??
+                      null,
+                    hasSessionId: Boolean(
+                      moreArgs?.session_id || req._streetbotServiceContext?.session_id,
+                    ),
+                    city:
+                      searchArgs?.city ||
+                      moreArgs?.fallback_search_args?.city ||
+                      req._streetbotServiceContext?.city ||
+                      null,
+                    province:
+                      searchArgs?.province ||
+                      moreArgs?.fallback_search_args?.province ||
+                      req._streetbotServiceContext?.province ||
+                      null,
+                  },
+                },
+                attributes: {
+                  'streetbot.rag.tool_base': toolBase,
+                  'streetbot.rag.requested_limit':
+                    searchArgs?.limit ??
+                    moreArgs?.limit ??
+                    moreArgs?.fallback_search_args?.limit ??
+                    categoryArgs?.limit ??
+                    0,
+                },
+              },
+              async (span) => {
+                let result;
+                if (toolBase === 'services_more') {
+                  let pagedResult = null;
+                  if (moreArgs?.session_id) {
+                    pagedResult = await buildMoreResults(
+                      moreArgs.session_id,
+                      moreArgs.limit,
+                      moreArgs.fallback_search_args,
+                    );
+                  }
+                  if (pagedResult?.ok) {
+                    result = pagedResult;
+                  } else if (moreArgs?.fallback_search_args?.query) {
+                    result = await searchServicesInternal(moreArgs.fallback_search_args);
+                  } else {
+                    result = pagedResult || {
+                      ok: false,
+                      message:
+                        'No previous Street Bot service search is available for more results yet.',
+                      items: [],
+                      count: 0,
+                      returned_count: 0,
+                      has_more: false,
+                    };
+                  }
+                } else if (toolBase === 'services_categories') {
+                  result = await categoriesInternal(categoryArgs);
+                } else {
+                  result = await searchServicesInternal(searchArgs);
+                }
+
+                applyStreetBotSpanAttributes(span, {
+                  observationType: 'retriever',
+                  observation: {
+                    output: {
+                      ok: result?.ok !== false,
+                      browse: Boolean(result?.browse),
+                      returnedCount:
+                        Number(
+                          result?.returned_count ?? result?.items?.length ?? result?.count ?? 0,
+                        ) || 0,
+                      hasMore: Boolean(result?.has_more),
+                    },
+                  },
+                  attributes: {
+                    'streetbot.rag.ok': result?.ok !== false,
+                    'streetbot.rag.browse': Boolean(result?.browse),
+                    'streetbot.rag.returned_count':
+                      Number(
+                        result?.returned_count ?? result?.items?.length ?? result?.count ?? 0,
+                      ) || 0,
+                    'streetbot.rag.has_more': Boolean(result?.has_more),
+                  },
+                });
+
+                void capturePostHogRagSpan(
+                  req,
+                  userId,
+                  conversationId,
+                  toolBase,
+                  toolPayload,
+                  result,
+                  Date.now() - ragStartedAt,
+                );
+
+                return result;
+              },
+            ),
+          { toolBase },
+        );
+        searchResult = normalizeStreetBotDistanceFields(searchResult);
+      } catch (error) {
+        logger.error('[streetbot-fastpath] Weaviate search failed', error);
+        searchResult = {
+          ok: false,
+          query: searchArgs.query || req._streetbotServiceContext?.query || userText,
+          count: 0,
+          returned_count: 0,
+          has_more: false,
+          items: [],
+          error: error.message,
+        };
+      }
+
+      const toolOutput = JSON.stringify(searchResult);
+      if (STREETBOT_FASTPATH_STREAMING_ENABLED) {
+        GenerationJobManager.emitChunk(streamId, {
+          event: 'on_run_step_completed',
+          data: {
+            result: {
+              id: stepId,
+              tool_call: {
+                name: toolName,
+                args: toolArgs,
+                output: toolOutput,
+                id: toolCallId,
+              },
+            },
+          },
+        });
+      }
+
+      responseText =
+        toolBase === 'services_categories'
+          ? buildRenderedCategoryResponse(searchResult, userText, req.body?._streetbotUserContext)
+          : buildRenderedServiceResponse(searchResult, userText);
+      toolCallContent = {
+        type: 'tool_call',
+        tool_call: {
+          name: toolName,
+          args: toolArgs,
+          output: toolOutput,
+          id: toolCallId,
+          progress: 1,
+        },
+      };
+    }
+
+    if (STREETBOT_FASTPATH_STREAMING_ENABLED && !responseAlreadyStreamed && responseText) {
+      const responseStep = emitStreetBotResponseStepStart(
+        streamId,
+        responseMessageId,
+        nextProgressStepIndex(),
+      );
+      const visibleResponseText =
+        stripStreetBotServicePayloadForDisplay(responseText) || responseText;
+      await emitStreetBotMessageText(
+        streamId,
+        responseStep?.stepId || responseMessageId,
+        visibleResponseText,
+        {
+          delayMs: toolBase === 'smalltalk' ? STREETBOT_TEXT_STREAM_DELAY_MS : 0,
+        },
+      );
+      responseAlreadyStreamed = true;
+    }
+
+    const responseMessage = {
+      messageId: responseMessageId,
+      conversationId,
+      parentMessageId: userMessageId,
+      sender: getStreetBotDisplayLabel(
+        endpointOption.endpoint,
+        endpointOption.model_parameters?.modelLabel || req.body?.modelDisplayLabel,
+      ),
+      text: responseText,
+      content: [{ type: 'text', text: responseText }],
+      isCreatedByUser: false,
+      user: userId,
+      endpoint: endpointOption.endpoint,
+      unfinished: false,
+      error: false,
+    };
+
+    if (req.body?.agent_id) {
+      responseMessage.agent_id = req.body.agent_id;
+    }
+
+    const title = isNewConvo ? generateTitle(userText) : undefined;
+    const convoData = {
+      conversationId,
+      endpoint: endpointOption.endpoint,
+      model: endpointOption.modelOptions?.model || endpointOption.model_parameters?.model,
+      modelLabel: getStreetBotDisplayLabel(
+        endpointOption.endpoint,
+        endpointOption.model_parameters?.modelLabel || req.body?.modelDisplayLabel,
+      ),
+      ...(title ? { title } : {}),
+    };
+
+    if (req.body?.agent_id) {
+      convoData.agent_id = req.body.agent_id;
+    }
+    if (endpointOption.spec) {
+      convoData.spec = endpointOption.spec;
+    }
+    if (endpointOption.iconURL) {
+      convoData.iconURL = endpointOption.iconURL;
+    }
+
+    const finalEvent = {
+      final: true,
+      conversation: convoData,
+      title: title || 'New Chat',
+      requestMessage: sanitizeMessageForTransmit(userMessage),
+      responseMessage: { ...responseMessage },
+    };
+
+    await saveMessage(req, userMessage, {
+      context: 'streetbot-fastpath user message',
+    });
+    await saveMessage(req, responseMessage, {
+      context: 'streetbot-fastpath response',
+    });
+    await saveConvo(req, convoData, {
+      context: 'streetbot-fastpath conversation',
+    });
+
+    const pollStart = Date.now();
+    const pollIntervalMs = 25;
+    const subscriberTimeoutMs = 5000;
+    const waitForSubscriber = () => {
+      if (job.emitter.listenerCount() > 0) {
+        GenerationJobManager.emitDone(streamId, finalEvent);
+        GenerationJobManager.completeJob(streamId);
+        return;
+      }
+      if (Date.now() - pollStart > subscriberTimeoutMs) {
+        logger.warn('[streetbot-fastpath] subscriber timeout', { streamId });
+        GenerationJobManager.emitDone(streamId, finalEvent);
+        GenerationJobManager.completeJob(streamId);
+        return;
+      }
+      setTimeout(waitForSubscriber, pollIntervalMs);
+    };
+    waitForSubscriber();
+
+    const outcome = buildStreetBotOutcome(
+      toolBase,
+      detectedIntent,
+      searchResult,
+      Date.now() - startedAt,
+    );
+    const rewardLogEvent = buildRewardLogEvent(
+      req,
+      conversationId,
+      toolBase,
+      detectedIntent,
+      searchResult,
+      Date.now() - startedAt,
+      outcome,
+    );
+
+    annotateStreetBotRequestTrace(req, {
+      observation: {
+        output: {
+          routeKind: 'fastpath',
+          toolBase,
+          outcomeKind: outcome.kind,
+          rewardProxyV1: outcome.rewardProxy,
+          success: outcome.success,
+          returnedCount: Number(searchResult?.returned_count ?? 0) || 0,
+          hasMore: Boolean(searchResult?.has_more),
+          browse: Boolean(searchResult?.browse),
+          durationMs: Date.now() - startedAt,
+        },
+      },
+      attributes: {
+        'streetbot.fastpath.duration_ms': Date.now() - startedAt,
+        'streetbot.outcome.kind': outcome.kind,
+        'streetbot.outcome.success': outcome.success,
+        'streetbot.reward.proxy_v1': outcome.rewardProxy,
+        'streetbot.fastpath.returned_count': Number(searchResult?.returned_count ?? 0) || 0,
+        'streetbot.fastpath.has_more': Boolean(searchResult?.has_more),
+        'streetbot.fastpath.browse': Boolean(searchResult?.browse),
+      },
+    });
+
+    void capturePostHogGeneration(
+      req,
+      userId,
+      conversationId,
+      toolBase,
+      userText,
+      responseText,
+      Date.now() - startedAt,
+      outcome,
+      searchResult,
+    );
+
+    await decrementPendingRequest(userId);
+
+    logger.info('[streetbot-fastpath] completed', {
+      conversationId,
+      toolBase,
+      returnedCount: searchResult?.returned_count ?? 0,
+      durationMs: Date.now() - startedAt,
+    });
+    logger.info(`[streetbot-reward] ${JSON.stringify(rewardLogEvent)}`);
+  } catch (error) {
+    annotateStreetBotRequestTrace(req, {
+      observation: {
+        level: 'ERROR',
+        statusMessage: error?.message || 'streetbot-fastpath unexpected error',
+      },
+      attributes: {
+        'streetbot.fastpath.error': true,
+      },
+    });
+    logger.error('[streetbot-fastpath] unexpected error', error);
+    void capturePostHogGenerationError(
+      req,
+      userId,
+      String(req?.body?.conversationId || '').trim(),
+      req?._streetbotFastPath?.toolBase || 'smalltalk',
+      userText,
+      error,
+      Date.now() - startedAt,
+    );
+    try {
+      GenerationJobManager.completeJob(streamId, error.message);
+    } catch (_) {
+      // ignore cleanup errors
+    }
+    await decrementPendingRequest(userId);
+  }
+}
+
+module.exports = {
+  buildRenderedServiceResponse,
+  detectStreetBotIntent,
+  isStreetBotEndpoint,
+  looksLikeStreetBotServiceRequest,
+  normalizeStreetBotMessagePayload,
+  normalizeStreetBotResponse,
+  streetbotFastPath,
+};

@@ -1,7 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
 const baseURL = process.env.LIBRECHAT_BASE_URL || 'http://localhost:3180';
-const storageState = process.env.MESSAGES_STORAGE_STATE || undefined;
+const defaultMessagesStorageState = path.resolve(
+  process.cwd(),
+  'e2e/.auth/messages-storage-state.json',
+);
+const storageState =
+  process.env.MESSAGES_STORAGE_STATE ||
+  (fs.existsSync(defaultMessagesStorageState) ? defaultMessagesStorageState : undefined);
 
 export default defineConfig({
   testDir: 'specs',

@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { ArrowLeft, ArrowRight, Clock, Heart, Search } from "lucide-react";
-import { useLocation } from "react-router-dom";
-import { sbFetch } from "../shared/sbFetch";
-import { filterVisibleAcademyCourses, filterVisibleAcademyPrograms, getLearningPathCourseMap } from "./academyLearningPaths";
-import { getCourseCardArt } from "./academyCardArt";
-import { useAcademyLearningPaths } from "./useAcademyLearningPaths";
-import { useAcademyUserId } from "./useAcademyUserId";
-import { useAcademySavedItems } from "./useAcademySavedItems";
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { ArrowLeft, ArrowRight, Clock, Heart, Search } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { sbFetch } from '../shared/sbFetch';
+import {
+  filterVisibleAcademyCourses,
+  filterVisibleAcademyPrograms,
+  getLearningPathCourseMap,
+} from './academyLearningPaths';
+import { getCourseCardArt } from './academyCardArt';
+import { useAcademyLearningPaths } from './useAcademyLearningPaths';
+import { useAcademyUserId } from './useAcademyUserId';
+import { useAcademySavedItems } from './useAcademySavedItems';
 
 type Course = {
   id: string;
@@ -17,7 +21,7 @@ type Course = {
   category?: string | null;
   instructor_name?: string | null;
   instructor?: string | null;
-  state?: "draft" | "published" | "archived";
+  state?: 'draft' | 'published' | 'archived';
   module_count?: number;
   lesson_count?: number;
   image_url?: string | null;
@@ -26,35 +30,38 @@ type Course = {
 
 type Enrollment = {
   course_id: string;
-  status: "active" | "completed" | "dropped";
+  status: 'active' | 'completed' | 'dropped';
   progress_percent: number;
 };
 
 export default function AcademyCoursesPage() {
   const currentUserId = useAcademyUserId();
   const location = useLocation();
-  const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
+  const basePath = location.pathname.startsWith('/learning') ? '/learning' : '/academy';
   const { paths: learningPaths } = useAcademyLearningPaths();
-  const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLevel, setSelectedLevel] = useState("All");
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLevel, setSelectedLevel] = useState('All');
   const { isCourseSaved, toggleCourseSaved } = useAcademySavedItems();
-  const visibleLearningPaths = useMemo(() => filterVisibleAcademyPrograms(learningPaths), [learningPaths]);
+  const visibleLearningPaths = useMemo(
+    () => filterVisibleAcademyPrograms(learningPaths),
+    [learningPaths],
+  );
 
   const colors = useMemo(
     () => ({
-      bg: "var(--sb-color-background)",
-      cardBg: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.35)",
-      cardBgStrong: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.58)",
-      border: isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(255, 255, 255, 0.6)",
-      text: isDark ? "#fff" : "#111",
-      textSecondary: isDark ? "rgba(255, 255, 255, 0.72)" : "#4b5563",
-      textMuted: isDark ? "rgba(255, 255, 255, 0.5)" : "#6b7280",
-      accent: "#FFD600",
-      shadow: isDark ? "0 10px 30px rgba(0, 0, 0, 0.35)" : "0 10px 30px rgba(31, 38, 135, 0.16)",
+      bg: 'var(--sb-color-background)',
+      cardBg: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.35)',
+      cardBgStrong: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.58)',
+      border: isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.6)',
+      text: isDark ? '#fff' : '#111',
+      textSecondary: isDark ? 'rgba(255, 255, 255, 0.72)' : '#4b5563',
+      textMuted: isDark ? 'rgba(255, 255, 255, 0.5)' : '#6b7280',
+      accent: '#FFD600',
+      shadow: isDark ? '0 10px 30px rgba(0, 0, 0, 0.35)' : '0 10px 30px rgba(31, 38, 135, 0.16)',
     }),
     [isDark],
   );
@@ -63,7 +70,7 @@ export default function AcademyCoursesPage() {
     async function load() {
       try {
         const [coursesResp, enrollmentsResp] = await Promise.all([
-          sbFetch("/api/academy/courses"),
+          sbFetch('/api/academy/courses'),
           sbFetch(`/api/academy/enrollments?user_id=${encodeURIComponent(currentUserId)}`),
         ]);
 
@@ -85,7 +92,7 @@ export default function AcademyCoursesPage() {
   }, [currentUserId]);
 
   const activeEnrollments = useMemo(
-    () => enrollments.filter((enrollment) => enrollment.status !== "dropped"),
+    () => enrollments.filter((enrollment) => enrollment.status !== 'dropped'),
     [enrollments],
   );
   const visibleCourses = useMemo(
@@ -103,13 +110,13 @@ export default function AcademyCoursesPage() {
 
   const filteredCourses = useMemo(() => {
     return visibleCourses.filter((course) => {
-      if (course.state && course.state !== "published") {
+      if (course.state && course.state !== 'published') {
         return false;
       }
 
       if (
-        selectedLevel !== "All" &&
-        (course.level ? course.level.toLowerCase() : "beginner") !== selectedLevel.toLowerCase()
+        selectedLevel !== 'All' &&
+        (course.level ? course.level.toLowerCase() : 'beginner') !== selectedLevel.toLowerCase()
       ) {
         return false;
       }
@@ -118,49 +125,58 @@ export default function AcademyCoursesPage() {
         return true;
       }
 
-      const haystack = `${course.title} ${course.description ?? ""}`.toLowerCase();
+      const haystack = `${course.title} ${course.description ?? ''}`.toLowerCase();
       return haystack.includes(searchQuery.toLowerCase());
     });
   }, [searchQuery, selectedLevel, visibleCourses]);
 
   const tabStyle = (active: boolean) => ({
-    padding: "10px 18px",
+    padding: '10px 18px',
     borderRadius: 9999,
     fontSize: 14,
     fontWeight: 600 as const,
-    background: active ? colors.accent : "transparent",
-    color: active ? "#000" : colors.textSecondary,
-    border: active ? "none" : `1px solid ${colors.border}`,
+    background: active ? colors.accent : 'transparent',
+    color: active ? '#000' : colors.textSecondary,
+    border: active ? 'none' : `1px solid ${colors.border}`,
   });
 
   const inputStyle: CSSProperties = {
-    width: "100%",
-    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)",
+    width: '100%',
+    background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
     border: `1px solid ${colors.border}`,
     borderRadius: 9999,
     color: colors.text,
-    padding: "12px 16px",
+    padding: '12px 16px',
     fontSize: 14,
-    outline: "none",
+    outline: 'none',
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 48px" }}>
-      <div style={{ maxWidth: 1160, margin: "0 auto" }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 48px' }}>
+      <div style={{ maxWidth: 1160, margin: '0 auto' }}>
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
               Pick a single course.
             </h1>
-            <p className="mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
+            <p
+              className="mt-3 max-w-2xl text-sm md:text-base"
+              style={{ color: colors.textSecondary }}
+            >
               Choose one course now, or go back to programs for a full plan.
             </p>
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full p-1" style={{ background: colors.cardBgStrong }}>
+            <div
+              className="mt-5 inline-flex items-center gap-2 rounded-full p-1"
+              style={{ background: colors.cardBgStrong }}
+            >
               <a href={`${basePath}/paths`} style={tabStyle(false)}>
                 Programs
               </a>
               <a href={`${basePath}/courses`} style={tabStyle(true)}>
                 Courses
+              </a>
+              <a href={`${basePath}/my-courses`} style={tabStyle(false)}>
+                My Courses
               </a>
               <a href={`${basePath}/saved`} style={tabStyle(false)}>
                 Saved
@@ -172,7 +188,7 @@ export default function AcademyCoursesPage() {
             <a
               href={`${basePath}/dashboard`}
               className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-              style={{ background: colors.accent, color: "#000" }}
+              style={{ background: colors.accent, color: '#000' }}
             >
               Open Dashboard
               <ArrowRight className="h-4 w-4" />
@@ -180,7 +196,11 @@ export default function AcademyCoursesPage() {
             <a
               href={basePath}
               className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-              style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
+              style={{
+                background: colors.cardBgStrong,
+                color: colors.text,
+                border: `1px solid ${colors.border}`,
+              }}
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Homepage
@@ -188,9 +208,19 @@ export default function AcademyCoursesPage() {
           </div>
         </div>
 
-        <section className="grid gap-4 rounded-[28px] border p-5 md:grid-cols-[1.4fr,0.8fr]" style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}>
+        <section
+          className="grid gap-4 rounded-[28px] border p-5 md:grid-cols-[1.4fr,0.8fr]"
+          style={{
+            borderColor: colors.border,
+            background: colors.cardBg,
+            boxShadow: colors.shadow,
+          }}
+        >
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: colors.textMuted }} />
+            <Search
+              className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2"
+              style={{ color: colors.textMuted }}
+            />
             <input
               type="text"
               value={searchQuery}
@@ -199,7 +229,11 @@ export default function AcademyCoursesPage() {
               style={{ ...inputStyle, paddingLeft: 40 }}
             />
           </div>
-          <select value={selectedLevel} onChange={(event) => setSelectedLevel(event.target.value)} style={inputStyle}>
+          <select
+            value={selectedLevel}
+            onChange={(event) => setSelectedLevel(event.target.value)}
+            style={inputStyle}
+          >
             <option value="All">All levels</option>
             <option value="Beginner">Beginner</option>
             <option value="Intermediate">Intermediate</option>
@@ -210,7 +244,11 @@ export default function AcademyCoursesPage() {
         <section className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {isLoading &&
             [1, 2, 3].map((item) => (
-              <div key={item} className="h-[280px] rounded-[26px] border" style={{ borderColor: colors.border, background: colors.cardBg }} />
+              <div
+                key={item}
+                className="h-[280px] rounded-[26px] border"
+                style={{ borderColor: colors.border, background: colors.cardBg }}
+              />
             ))}
 
           {!isLoading &&
@@ -223,23 +261,33 @@ export default function AcademyCoursesPage() {
                 <article
                   key={course.id}
                   className="group rounded-[26px] border p-6 transition-transform duration-300 hover:-translate-y-2"
-                  style={{ borderColor: colors.border, background: colors.cardBg, boxShadow: colors.shadow }}
+                  style={{
+                    borderColor: colors.border,
+                    background: colors.cardBg,
+                    boxShadow: colors.shadow,
+                  }}
                 >
-                  <div className="relative mb-5 overflow-hidden rounded-[24px] border" style={{ borderColor: colors.border }}>
+                  <div
+                    className="relative mb-5 overflow-hidden rounded-[24px] border"
+                    style={{ borderColor: colors.border }}
+                  >
                     <img
                       src={visual.src}
                       alt={course.title}
                       className="h-[220px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       onError={(event) => {
-                        if (event.currentTarget.dataset.fallbackApplied === "true") {
+                        if (event.currentTarget.dataset.fallbackApplied === 'true') {
                           return;
                         }
-                        event.currentTarget.dataset.fallbackApplied = "true";
+                        event.currentTarget.dataset.fallbackApplied = 'true';
                         event.currentTarget.src = visual.fallbackSrc;
                       }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-                    <div className="absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: "rgba(15,23,42,0.65)", color: visual.accent }}>
+                    <div
+                      className="absolute left-4 top-4 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                      style={{ background: 'rgba(15,23,42,0.65)', color: visual.accent }}
+                    >
                       {visual.eyebrow}
                     </div>
                   </div>
@@ -264,25 +312,39 @@ export default function AcademyCoursesPage() {
                     <button
                       onClick={() => toggleCourseSaved(course.id)}
                       className="rounded-full p-2"
-                      style={{ background: "rgba(255,214,0,0.12)", border: `1px solid ${colors.border}` }}
+                      style={{
+                        background: 'rgba(255,214,0,0.12)',
+                        border: `1px solid ${colors.border}`,
+                      }}
                       aria-label="Save course"
                     >
                       <Heart
                         className="h-4 w-4"
-                        style={{ color: colors.accent, fill: isCourseSaved(course.id) ? colors.accent : "transparent" }}
+                        style={{
+                          color: colors.accent,
+                          fill: isCourseSaved(course.id) ? colors.accent : 'transparent',
+                        }}
                       />
                     </button>
                   </div>
 
                   <p className="mt-3 text-sm" style={{ color: colors.textSecondary }}>
-                    {course.description || "Open this course to view the overview, requirements, and what you will learn."}
+                    {course.description ||
+                      'Open this course to view the overview, requirements, and what you will learn.'}
                   </p>
 
-                  <div className="mt-4 flex flex-wrap gap-3 text-xs" style={{ color: colors.textMuted }}>
-                    <span>{course.level ? course.level.charAt(0).toUpperCase() + course.level.slice(1) : "Beginner"}</span>
+                  <div
+                    className="mt-4 flex flex-wrap gap-3 text-xs"
+                    style={{ color: colors.textMuted }}
+                  >
+                    <span>
+                      {course.level
+                        ? course.level.charAt(0).toUpperCase() + course.level.slice(1)
+                        : 'Beginner'}
+                    </span>
                     <span className="inline-flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5" />
-                      {course.duration || "Self-paced"}
+                      {course.duration || 'Self-paced'}
                     </span>
                     <span>{course.module_count || 0} modules</span>
                   </div>
@@ -293,8 +355,17 @@ export default function AcademyCoursesPage() {
                         <span style={{ color: colors.textSecondary }}>Progress</span>
                         <span style={{ color: colors.accent }}>{enrollment.progress_percent}%</span>
                       </div>
-                      <div className="h-2 w-full rounded-full" style={{ background: "rgba(255,255,255,0.14)" }}>
-                        <div className="h-full rounded-full" style={{ width: `${enrollment.progress_percent}%`, background: colors.accent }} />
+                      <div
+                        className="h-2 w-full rounded-full"
+                        style={{ background: 'rgba(255,255,255,0.14)' }}
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${enrollment.progress_percent}%`,
+                            background: colors.accent,
+                          }}
+                        />
                       </div>
                     </div>
                   )}
@@ -303,14 +374,22 @@ export default function AcademyCoursesPage() {
                     <a
                       href={`${basePath}/courses/${course.id}`}
                       className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
-                      style={{ background: colors.cardBgStrong, color: colors.text, border: `1px solid ${colors.border}` }}
+                      style={{
+                        background: colors.cardBgStrong,
+                        color: colors.text,
+                        border: `1px solid ${colors.border}`,
+                      }}
                     >
                       Learn More
                     </a>
                     <a
-                      href={enrolledCourseIds.has(course.id) ? `${basePath}/courses/${course.id}` : `${basePath}/courses/${course.id}/enroll`}
+                      href={
+                        enrolledCourseIds.has(course.id)
+                          ? `${basePath}/courses/${course.id}`
+                          : `${basePath}/courses/${course.id}/enroll`
+                      }
                       className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
-                      style={{ background: colors.accent, color: "#000" }}
+                      style={{ background: colors.accent, color: '#000' }}
                     >
                       Sign up Now
                       <ArrowRight className="h-4 w-4" />
@@ -322,8 +401,16 @@ export default function AcademyCoursesPage() {
         </section>
 
         {!isLoading && filteredCourses.length === 0 && (
-          <div className="mt-10 rounded-[26px] border p-8 text-center" style={{ borderColor: colors.border, background: colors.cardBg, color: colors.textSecondary }}>
-            No courses match this filter yet. Try a different level, search, or switch back to Programs.
+          <div
+            className="mt-10 rounded-[26px] border p-8 text-center"
+            style={{
+              borderColor: colors.border,
+              background: colors.cardBg,
+              color: colors.textSecondary,
+            }}
+          >
+            No courses match this filter yet. Try a different level, search, or switch back to
+            Programs.
           </div>
         )}
       </div>

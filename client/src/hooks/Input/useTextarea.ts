@@ -18,6 +18,7 @@ import { useInteractionHealthCheck } from '~/data-provider';
 import { useChatContext } from '~/Providers/ChatContext';
 import { globalAudioId } from '~/common';
 import { useLocalize } from '~/hooks';
+import { isStreetBot } from '~/config/appVariant';
 import store from '~/store';
 
 type KeyEvent = KeyboardEvent<HTMLTextAreaElement>;
@@ -55,6 +56,11 @@ export default function useTextarea({
     assistant_id: conversation?.assistant_id,
   });
   const entityName = entity?.name ?? '';
+  const isStreetBotConversation =
+    isStreetBot ||
+    conversation?.spec === 'streetbot-0.1' ||
+    conversation?.model === 'streetbot-0.1' ||
+    conversation?.iconURL?.includes('street-voices-bot');
 
   const isNotAppendable = latestMessage?.error === true && !isAssistant;
   // && (conversationId?.length ?? 0) > 6; // also ensures that we don't show the wrong placeholder
@@ -92,6 +98,10 @@ export default function useTextarea({
 
       if (isNotAppendable) {
         return localize('com_endpoint_message_not_appendable');
+      }
+
+      if (isStreetBotConversation) {
+        return `${localize('com_endpoint_message_new', { 0: 'Street Bot' })}`;
       }
 
       const sender =
@@ -136,6 +146,7 @@ export default function useTextarea({
     conversation,
     latestMessage,
     isNotAppendable,
+    isStreetBotConversation,
   ]);
 
   const handleKeyDown = useCallback(

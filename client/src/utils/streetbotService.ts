@@ -39,6 +39,16 @@ export type ServiceResultPayload = {
   data?: unknown[];
 };
 
+const SERVICE_RESULTS_FENCE = /```streetbot-service-results\s*[\s\S]*?```/gi;
+
+export const stripServiceResultPayloads = (text: string): string => {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+
+  return text.replace(SERVICE_RESULTS_FENCE, '').trim();
+};
+
 type ServiceLookupContext = {
   messageById: Map<string, TMessage>;
   indexById: Map<string, number>;

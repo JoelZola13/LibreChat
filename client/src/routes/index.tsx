@@ -23,6 +23,7 @@ import dashboardRoutes from './Dashboard';
 
 // Lazy-loaded core routes (moves highlight.js, katex, ChatView out of initial bundle)
 const ChatRoute = lazy(() => import('./ChatRoute'));
+const HomepageRoute = lazy(() => import('./HomepageRoute'));
 const Search = lazy(() => import('./Search'));
 const ShareRoute = lazy(() => import('./ShareRoute'));
 const Root = lazy(() => import('./Root'));
@@ -291,16 +292,17 @@ export const router = createBrowserRouter(
             </Suspense>
           ),
           children: [
-            // Default landing → chat interface (same as /c/new)
+            // StreetBot opens to its branded home page; the directory build keeps
+            // the existing chat redirect so the variants do not collide.
             {
               index: true,
-              element: <Navigate to="/c/new" replace />,
+              element: <Navigate to={isStreetBot ? '/home' : '/c/new'} replace />,
             },
             {
               path: 'home',
               element: (
                 <Suspense fallback={<SBPageFallback />}>
-                  <ChatRoute />
+                  <HomepageRoute />
                 </Suspense>
               ),
             },

@@ -62,6 +62,21 @@ export default function ConvoIcon({
           agentName={name}
           context={context}
         />
+      ) : iconURL ? (
+        <div className={containerClassName}>
+          <img
+            src={iconURL}
+            alt={conversation?.chatGptLabel ?? conversation?.modelLabel ?? 'Conversation icon'}
+            className={className}
+            width={size}
+            height={size}
+            style={{
+              width: size,
+              height: size,
+              objectFit: 'contain',
+            }}
+          />
+        </div>
       ) : (
         <div className={containerClassName}>
           {endpoint && Icon != null && (

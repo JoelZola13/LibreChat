@@ -23,6 +23,7 @@ import {
 import { TAuthConfig, TUserContext, TAuthContext, TResError } from '~/common';
 import useTimeout from './useTimeout';
 import store from '~/store';
+import { isStreetBot } from '~/config/appVariant';
 
 const AuthContext = createContext<TAuthContext | undefined>(undefined);
 
@@ -136,6 +137,22 @@ const AuthContextProvider = ({
   const pathAllowsAnonymous = () => {
     if (typeof window === 'undefined') return false;
     const p = window.location.pathname || '';
+    if (isStreetBot) {
+      return (
+        p === '/' ||
+        p === '/home' ||
+        p === '/about' ||
+        p === '/how-it-works' ||
+        p === '/terms' ||
+        p === '/privacy' ||
+        p === '/products' ||
+        p === '/pricing' ||
+        p.startsWith('/news') ||
+        p.startsWith('/directory') ||
+        p.startsWith('/gallery') ||
+        p.startsWith('/creatives')
+      );
+    }
     return p.startsWith('/gallery') || p.startsWith('/creatives');
   };
 

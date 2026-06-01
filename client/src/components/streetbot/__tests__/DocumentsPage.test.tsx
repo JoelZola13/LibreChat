@@ -89,7 +89,7 @@ jest.mock('lucide-react', () => {
     'Clock', 'Star', 'Trash2', 'Share2', 'Download', 'Edit3', 'X', 'Loader2',
     'Upload', 'MoreHorizontal', 'Grid3X3', 'List', 'Eye', 'Users', 'Lock',
     'History', 'Tag', 'RefreshCw', 'Presentation', 'ArrowLeft', 'ExternalLink',
-    'Globe',
+    'Globe', 'RotateCcw', 'BarChart3', 'AlertTriangle', 'Bell', 'CalendarClock',
   ];
   iconNames.forEach((name) => {
     icons[name] = ({ size }: { size?: number }) =>

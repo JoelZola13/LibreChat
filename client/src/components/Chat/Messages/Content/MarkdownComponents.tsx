@@ -5,9 +5,12 @@ import { PermissionTypes, Permissions, apiBaseUrl } from 'librechat-data-provide
 import MermaidErrorBoundary from '~/components/Messages/Content/MermaidErrorBoundary';
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
 import Mermaid from '~/components/Messages/Content/Mermaid';
+import StreetBotServiceResults from '~/components/Chat/Messages/Content/StreetBotServiceResults';
 import useHasAccess from '~/hooks/Roles/useHasAccess';
 import { useFileDownload } from '~/data-provider';
 import { useCodeBlockContext } from '~/Providers';
+import { isStreetBot } from '~/config/appVariant';
+import { hasServiceResults } from '~/utils/streetbotService';
 import { handleDoubleClick } from '~/utils';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
@@ -18,16 +21,44 @@ type TCodeProps = {
   children: React.ReactNode;
 };
 
+const getCodeContent = (children: React.ReactNode): string => {
+  if (typeof children === 'string') {
+    return children;
+  }
+  if (Array.isArray(children)) {
+    return children
+      .map((child) => (typeof child === 'string' ? child : String(child ?? '')))
+      .join('');
+  }
+  return String(children ?? '');
+};
+
+const getLanguageName = (className?: string): string | undefined => {
+  return /language-([^\s]+)/.exec(className ?? '')?.[1];
+};
+
+const isStreetBotServiceResultBlock = (className: string | undefined, content: string): boolean => {
+  if (!isStreetBot) {
+    return false;
+  }
+  const languageName = getLanguageName(className);
+  return (
+    languageName === 'streetbot-service-results' ||
+    (languageName === 'streetbot' && hasServiceResults(content))
+  );
+};
+
 export const code: React.ElementType = memo(({ className, children }: TCodeProps) => {
   const canRunCode = useHasAccess({
     permissionType: PermissionTypes.RUN_CODE,
     permission: Permissions.USE,
   });
-  const match = /language-(\w+)/.exec(className ?? '');
-  const lang = match && match[1];
+  const languageName = getLanguageName(className);
+  const lang = languageName?.split('-')[0];
   const isMath = lang === 'math';
   const isMermaid = lang === 'mermaid';
-  const isSingleLine = typeof children === 'string' && children.split('\n').length === 1;
+  const content = getCodeContent(children);
+  const isSingleLine = content.split('\n').length === 1;
 
   const { getNextIndex, resetCounter } = useCodeBlockContext();
   const blockIndex = useRef(getNextIndex(isMath || isMermaid || isSingleLine)).current;
@@ -39,12 +70,13 @@ export const code: React.ElementType = memo(({ className, children }: TCodeProps
   if (isMath) {
     return <>{children}</>;
   } else if (isMermaid) {
-    const content = typeof children === 'string' ? children : String(children);
     return (
       <MermaidErrorBoundary code={content}>
         <Mermaid id={`mermaid-${blockIndex}`}>{content}</Mermaid>
       </MermaidErrorBoundary>
     );
+  } else if (!isSingleLine && isStreetBotServiceResultBlock(className, content)) {
+    return <StreetBotServiceResults raw={content} />;
   } else if (isSingleLine) {
     return (
       <code onDoubleClick={handleDoubleClick} className={className}>
@@ -64,15 +96,17 @@ export const code: React.ElementType = memo(({ className, children }: TCodeProps
 });
 
 export const codeNoExecution: React.ElementType = memo(({ className, children }: TCodeProps) => {
-  const match = /language-(\w+)/.exec(className ?? '');
-  const lang = match && match[1];
+  const languageName = getLanguageName(className);
+  const lang = languageName?.split('-')[0];
+  const content = getCodeContent(children);
 
   if (lang === 'math') {
     return children;
   } else if (lang === 'mermaid') {
-    const content = typeof children === 'string' ? children : String(children);
     return <Mermaid>{content}</Mermaid>;
-  } else if (typeof children === 'string' && children.split('\n').length === 1) {
+  } else if (content.split('\n').length > 1 && isStreetBotServiceResultBlock(className, content)) {
+    return <StreetBotServiceResults raw={content} />;
+  } else if (content.split('\n').length === 1) {
     return (
       <code onDoubleClick={handleDoubleClick} className={className}>
         {children}

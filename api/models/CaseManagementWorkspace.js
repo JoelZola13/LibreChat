@@ -66,6 +66,24 @@ const saveCaseManagementWorkspace = async (user, workspace) => {
   }
 };
 
+const getCaseManagementWorkspacesWithActiveLocalArchiveAutomation = async ({ limit = 25 } = {}) => {
+  try {
+    const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
+    return await CaseManagementWorkspace.find({
+      'workspace.localArchiveCampaignAutomation.status': 'active',
+    })
+      .sort({ savedAt: 1 })
+      .limit(safeLimit)
+      .lean();
+  } catch (error) {
+    logger.error(
+      '[getCaseManagementWorkspacesWithActiveLocalArchiveAutomation] Error loading active workspaces',
+      error,
+    );
+    throw new Error('Error loading active case management automation workspaces');
+  }
+};
+
 const deleteCaseManagementWorkspace = async (user) => {
   try {
     return await CaseManagementWorkspace.findOneAndDelete({ user }).lean();
@@ -78,6 +96,7 @@ const deleteCaseManagementWorkspace = async (user) => {
 module.exports = {
   CaseManagementWorkspace,
   getCaseManagementWorkspace,
+  getCaseManagementWorkspacesWithActiveLocalArchiveAutomation,
   saveCaseManagementWorkspace,
   deleteCaseManagementWorkspace,
 };

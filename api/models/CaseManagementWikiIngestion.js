@@ -46,7 +46,27 @@ const caseManagementWikiIngestionSchema = new mongoose.Schema(
     linkedClientId: String,
     linkedCaseId: String,
     linkedServiceName: String,
+    sourceScope: {
+      type: String,
+      default: 'standalone',
+    },
     sourcePageId: String,
+    archive: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    embeddingReview: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    weaviateDryRun: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    relationshipReviewRecords: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
     privacy: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
@@ -122,8 +142,50 @@ const saveCaseManagementWikiIngestion = async (user, ingestion) => {
   }
 };
 
+const updateCaseManagementWikiIngestionArchive = async (user, fileId, archive) => {
+  try {
+    return await CaseManagementWikiIngestion.findOneAndUpdate(
+      { user, fileId },
+      {
+        $set: {
+          archive,
+          'wikiPage.archive': archive,
+          'generatedRecords.frontendRecord.archive': archive,
+        },
+      },
+      {
+        new: true,
+        lean: true,
+      },
+    );
+  } catch (error) {
+    logger.error('[updateCaseManagementWikiIngestionArchive] Error updating wiki ingestion archive review', error);
+    throw new Error('Error updating case management wiki archive review');
+  }
+};
+
+const updateCaseManagementWikiIngestionReview = async (user, fileId, updates = {}) => {
+  try {
+    return await CaseManagementWikiIngestion.findOneAndUpdate(
+      { user, fileId },
+      {
+        $set: updates,
+      },
+      {
+        new: true,
+        lean: true,
+      },
+    );
+  } catch (error) {
+    logger.error('[updateCaseManagementWikiIngestionReview] Error updating wiki ingestion review', error);
+    throw new Error('Error updating case management wiki review');
+  }
+};
+
 module.exports = {
   CaseManagementWikiIngestion,
   getCaseManagementWikiIngestions,
   saveCaseManagementWikiIngestion,
+  updateCaseManagementWikiIngestionArchive,
+  updateCaseManagementWikiIngestionReview,
 };

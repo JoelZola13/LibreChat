@@ -28,6 +28,11 @@ const { checkMigrations } = require('./services/start/migration');
 const initializeMCPs = require('./services/initializeMCPs');
 const configureSocialLogins = require('./socialLogins');
 const { getAppConfig } = require('./services/Config');
+const { attachDocumentsCollaborationServer } = require('./services/DocumentsCollaborationServer');
+const {
+  startDocumentsRetentionExportWorker,
+  startDocumentsRetentionReminderNotificationWorker,
+} = require('./services/DocumentsRetentionExportWorker');
 const staticCache = require('./utils/staticCache');
 const noIndex = require('./middleware/noIndex');
 const { seedDatabase } = require('~/models');
@@ -145,6 +150,11 @@ const startServer = async () => {
   app.use('/api/presets', routes.presets);
   app.use('/api/prompts', routes.prompts);
   app.use('/api/case-management', routes.caseManagement);
+  app.use('/api/documents/organizer', routes.documentsOrganizer);
+  app.use('/api/documents/history', routes.documentsHistory);
+  app.use('/api/documents/collaboration', routes.documentsCollaboration);
+  app.use('/api/email', routes.email);
+  app.use('/api/voice', routes.voice);
   app.use('/api/categories', routes.categories);
   app.use('/api/endpoints', routes.endpoints);
   app.use('/api/balance', routes.balance);
@@ -180,7 +190,7 @@ const startServer = async () => {
     res.send(updatedIndexHtml);
   });
 
-  app.listen(port, host, async (err) => {
+  const server = app.listen(port, host, async (err) => {
     if (err) {
       logger.error('Failed to start server:', err);
       process.exit(1);
@@ -202,7 +212,10 @@ const startServer = async () => {
     const streamServices = createStreamServices();
     GenerationJobManager.configure(streamServices);
     GenerationJobManager.initialize();
+    startDocumentsRetentionExportWorker();
+    startDocumentsRetentionReminderNotificationWorker();
   });
+  attachDocumentsCollaborationServer(server);
 };
 
 startServer();

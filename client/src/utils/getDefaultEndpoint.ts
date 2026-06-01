@@ -19,6 +19,11 @@ const getEndpointFromSetup = (
   targetEndpoint = targetEndpoint ?? '';
   if (targetEndpoint && endpointsConfig?.[targetEndpoint]) {
     return targetEndpoint as EModelEndpoint;
+  } else if (
+    targetEndpoint &&
+    (convoSetup?.endpointType === 'custom' || targetEndpoint === 'Street Bot')
+  ) {
+    return targetEndpoint as EModelEndpoint;
   } else if (targetEndpoint) {
     console.warn(`Illegal target endpoint ${targetEndpoint}`, endpointsConfig);
   }

@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { Spinner } from '@librechat/client';
+import { useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
 import { Constants, EModelEndpoint } from 'librechat-data-provider';
@@ -33,6 +32,14 @@ export default function ChatRoute() {
   useIdChangeEffect(conversationId);
   const { hasSetConversation, conversation } = store.useCreateConversationAtom(index);
   const { newConversation } = useNewConvo();
+  const lastConversationIdRef = useRef(conversationId);
+
+  useEffect(() => {
+    if (lastConversationIdRef.current !== conversationId) {
+      hasSetConversation.current = false;
+      lastConversationIdRef.current = conversationId;
+    }
+  }, [conversationId, hasSetConversation]);
 
   const modelsQuery = useGetModelsQuery({
     enabled: isAuthenticated,
@@ -77,7 +84,6 @@ export default function ChatRoute() {
       logger.log('conversation', 'ChatRoute, new convo effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        template: conversation ? conversation : undefined,
         ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
       });
 
@@ -102,7 +108,6 @@ export default function ChatRoute() {
       logger.log('conversation', 'ChatRoute new convo, assistants effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        template: conversation ? conversation : undefined,
         ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
       });
       hasSetConversation.current = true;
@@ -130,14 +135,6 @@ export default function ChatRoute() {
     assistantListMap,
   ]);
 
-  if (endpointsQuery.isLoading || modelsQuery.isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center" aria-live="polite" role="status">
-        <Spinner className="text-text-primary" />
-      </div>
-    );
-  }
-
   if (!isAuthenticated) {
     return null;
   }
@@ -146,17 +143,13 @@ export default function ChatRoute() {
   if (conversation?.conversationId === Constants.SEARCH) {
     return null;
   }
-  // if conversationId not match
-  if (conversation?.conversationId !== conversationId && !conversation) {
-    return null;
-  }
   // if conversationId is null
   if (!conversationId) {
     return null;
   }
 
   return (
-    <ToolCallsMapProvider conversationId={conversation.conversationId ?? ''}>
+    <ToolCallsMapProvider conversationId={conversation?.conversationId ?? conversationId ?? ''}>
       <ChatView index={index} />
     </ToolCallsMapProvider>
   );

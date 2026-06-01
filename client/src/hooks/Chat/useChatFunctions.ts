@@ -137,7 +137,14 @@ export default function useChatFunctions({
     // construct the query message
     // this is not a real messageId, it is used as placeholder before real messageId returned
     const intermediateId = overrideUserMessageId ?? v4();
-    parentMessageId = parentMessageId ?? latestMessage?.messageId ?? Constants.NO_PARENT;
+    const currentTailMessage = currentMessages.length
+      ? currentMessages[currentMessages.length - 1]
+      : null;
+    parentMessageId =
+      parentMessageId ??
+      latestMessage?.messageId ??
+      currentTailMessage?.messageId ??
+      Constants.NO_PARENT;
 
     logChatRequest({
       index,
@@ -173,9 +180,16 @@ export default function useChatFunctions({
 
     const endpointsConfig = queryClient.getQueryData<TEndpointsConfig>([QueryKeys.endpoints]);
     const startupConfig = queryClient.getQueryData<TStartupConfig>([QueryKeys.startupConfig]);
-    const endpointType = getEndpointField(endpointsConfig, endpoint, 'type');
+    const isCustomConversationEndpoint =
+      !!endpoint && !Object.values(EModelEndpoint).includes(endpoint as EModelEndpoint);
+    const endpointType =
+      getEndpointField(endpointsConfig, endpoint, 'type') ??
+      conversation?.endpointType ??
+      (isCustomConversationEndpoint ? EModelEndpoint.custom : undefined);
     const iconURL = conversation?.iconURL;
-    const defaultParamsEndpoint = getDefaultParamsEndpoint(endpointsConfig, endpoint);
+    const defaultParamsEndpoint =
+      getDefaultParamsEndpoint(endpointsConfig, endpoint) ??
+      (endpointType === EModelEndpoint.custom ? EModelEndpoint.openAI : undefined);
 
     /** This becomes part of the `endpointOption` */
     const convo = parseCompactConvo({
@@ -185,7 +199,10 @@ export default function useChatFunctions({
       defaultParamsEndpoint,
     });
 
-    const { modelDisplayLabel } = endpointsConfig?.[endpoint ?? ''] ?? {};
+    const { modelDisplayLabel: configuredModelDisplayLabel } =
+      endpointsConfig?.[endpoint ?? ''] ?? {};
+    const modelDisplayLabel =
+      configuredModelDisplayLabel ?? (endpoint === 'Street Bot' ? 'Street Bot' : undefined);
     const endpointOption = Object.assign(
       {
         endpoint,

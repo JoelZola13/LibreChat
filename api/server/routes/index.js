@@ -2,6 +2,10 @@ const accessPermissions = require('./accessPermissions');
 const assistants = require('./assistants');
 const categories = require('./categories');
 const caseManagement = require('./caseManagement');
+const documentsCollaboration = require('./documentsCollaboration');
+const documentsHistory = require('./documentsHistory');
+const documentsOrganizer = require('./documentsOrganizer');
+const email = require('./email');
 const adminAuth = require('./admin/auth');
 const endpoints = require('./endpoints');
 const staticRoute = require('./static');
@@ -27,8 +31,10 @@ const auth = require('./auth');
 const keys = require('./keys');
 const user = require('./user');
 const mcp = require('./mcp');
+const voice = require('./voice');
 
 module.exports = {
+  voice,
   mcp,
   auth,
   adminAuth,
@@ -56,6 +62,10 @@ module.exports = {
   assistants,
   categories,
   caseManagement,
+  documentsCollaboration,
+  documentsHistory,
+  documentsOrganizer,
+  email,
   staticRoute,
   accessPermissions,
 };

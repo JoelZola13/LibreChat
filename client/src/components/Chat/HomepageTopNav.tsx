@@ -2,11 +2,41 @@ import { lazy, memo, Suspense, useCallback, useContext, useEffect, useMemo, useS
 import { Link } from 'react-router-dom';
 import { ThemeContext, isDark } from '@librechat/client';
 import { useUserRole } from '~/components/streetbot/lib/auth/useUserRole';
-import MobileMenuDrawer, { HamburgerButton, getMobileNavLinkStyle, getMobileDividerStyle } from '~/components/streetbot/shared/MobileMenuDrawer';
-import { variantConfig, isDirectory } from '~/config/appVariant';
+import MobileMenuDrawer, { getMobileNavLinkStyle, getMobileDividerStyle } from '~/components/streetbot/shared/MobileMenuDrawer';
+import { variantConfig, isDirectory, isStreetBot } from '~/config/appVariant';
 import { useActiveUser } from '~/components/streetbot/shared/useActiveUser';
 
 const AuthPopupModal = lazy(() => import('~/components/streetbot/shared/AuthPopupModal'));
+
+function MobileSideMenuIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 9h12M5 15h8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MobileMenuIcon() {
+  return (
+    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MobileBellIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M15 17H9m9-2V10a6 6 0 1 0-12 0v5l-2 2h16l-2-2ZM10 20h4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function HomepageTopNav() {
   const { canAccess } = useUserRole();
@@ -32,21 +62,32 @@ function HomepageTopNav() {
   return (
     <>
     <style>{`.sv-login-btn { background: transparent; border: 2px solid #FFD600; color: #000; transition: 0.3s ease-in-out; } html.dark .sv-login-btn { color: #fff; } .sv-login-btn:hover { background: rgb(255, 198, 0) !important; color: #000 !important; } .sv-home-nav-link { transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; } html.dark .sv-home-nav-link, html.light .sv-home-nav-link, [data-theme="dark"] .sv-home-nav-link, [data-theme="light"] .sv-home-nav-link { border-radius: 999px !important; } html.dark .sv-home-nav-link:hover, html.dark .sv-home-nav-link:focus-visible, [data-theme="dark"] .sv-home-nav-link:hover, [data-theme="dark"] .sv-home-nav-link:focus-visible { background: #28292C !important; color: #E6E7F2 !important; box-shadow: none; } html.light .sv-home-nav-link:hover, html.light .sv-home-nav-link:focus-visible, [data-theme="light"] .sv-home-nav-link:hover, [data-theme="light"] .sv-home-nav-link:focus-visible { background: var(--surface-hover) !important; color: var(--text-primary) !important; box-shadow: 0 0 0 1px rgba(227, 227, 227, 0.18); } .sv-home-donate-btn { border-radius: 999px; transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; } html.light .sv-home-donate-btn, [data-theme="light"] .sv-home-donate-btn { background: transparent !important; color: var(--text-primary) !important; border: 2px solid var(--text-primary) !important; padding: 6px 28px !important; box-shadow: 0 0 0 1px rgba(33, 33, 33, 0.08); } html.dark .sv-home-donate-btn, [data-theme="dark"] .sv-home-donate-btn { background: transparent !important; color: #E1E3EB !important; border: 2px solid #E1E3EB !important; padding: 6px 28px !important; } html.light .sv-home-donate-btn:hover, html.light .sv-home-donate-btn:focus-visible, [data-theme="light"] .sv-home-donate-btn:hover, [data-theme="light"] .sv-home-donate-btn:focus-visible, html.dark .sv-home-donate-btn:hover, html.dark .sv-home-donate-btn:focus-visible, [data-theme="dark"] .sv-home-donate-btn:hover, [data-theme="dark"] .sv-home-donate-btn:focus-visible { background: #FFD600 !important; border-color: #FFD600 !important; color: #000 !important; box-shadow: 0 0 0 1px rgba(255, 214, 0, 0.14); }`}</style>
-    <div className="absolute top-0 z-10 w-full px-4 sm:px-6">
-      <div className="relative flex h-[60px] w-full items-center justify-between">
-        {/* Left: phone (mobile) */}
+    <div className="absolute top-0 z-10 w-full border-b border-white/5 bg-[#11121b]/96 px-4 text-white sm:px-6 lg:border-none lg:bg-transparent">
+      <div className="relative flex h-[56px] w-full items-center justify-between lg:h-[60px]">
+        {/* Left: mobile menu for StreetBot, phone for directory */}
         <div className="flex items-center gap-2">
-          <a
-            href="tel:+14166976626"
-            className="flex items-center gap-2 rounded-lg text-text-primary transition-colors hover:bg-surface-hover lg:hidden"
-            aria-label="Call Street Voices"
-            style={{ padding: '6px 10px', fontSize: 14, fontFamily: 'Rubik, sans-serif', whiteSpace: 'nowrap' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-            </svg>
-            +1 416-697-6626
-          </a>
+          {isStreetBot ? (
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-white/90 lg:hidden"
+              aria-label="Open menu"
+            >
+              <MobileSideMenuIcon />
+            </button>
+          ) : (
+            <a
+              href="tel:+14166976626"
+              className="flex items-center gap-2 rounded-lg text-text-primary transition-colors hover:bg-surface-hover lg:hidden"
+              aria-label="Call Street Voices"
+              style={{ padding: '6px 10px', fontSize: 14, fontFamily: 'Rubik, sans-serif', whiteSpace: 'nowrap' }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+              </svg>
+              +1 416-697-6626
+            </a>
+          )}
           {isDirectory && (
             <a
               href="tel:+14166976626"
@@ -89,7 +130,7 @@ function HomepageTopNav() {
         </nav>
 
         {/* Right actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 lg:gap-2">
           <Link
             to="/donate"
             className="sv-home-donate-btn hidden font-bold text-black transition-opacity hover:opacity-90 lg:inline-flex"
@@ -106,9 +147,19 @@ function HomepageTopNav() {
               Login
             </button>
           )}
+          <Link
+            to="/notifications"
+            aria-label="Notifications"
+            className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white lg:hidden"
+          >
+            <MobileBellIcon />
+            <span className="absolute -right-1 -top-1 rounded-full bg-[#ff2f5f] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+              16
+            </span>
+          </Link>
           <button
             onClick={toggleTheme}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-text-primary transition-colors hover:bg-surface-hover"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/8 lg:h-9 lg:w-9 lg:rounded-lg lg:text-text-primary lg:hover:bg-surface-hover"
             aria-label="Toggle theme"
           >
             {isDark(theme) ? (
@@ -132,29 +183,34 @@ function HomepageTopNav() {
           {activeUser && (
             <a
               href="/settings"
-              className="flex items-center"
+              className="flex h-10 w-10 items-center justify-center rounded-full lg:h-auto lg:w-auto"
               aria-label="Settings"
             >
               {activeUser.avatar && !avatarLoadError ? (
                 <img
                   src={activeUser.avatar}
                   alt={activeUser.name || 'Profile'}
-                  className="h-7 w-7 rounded-full object-cover"
+                  className="h-9 w-9 rounded-full object-cover lg:h-7 lg:w-7"
                   width={28}
                   height={28}
                   loading="lazy"
                   onError={() => setAvatarLoadError(true)}
                 />
               ) : (
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-600 text-xs font-medium text-white">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-600 text-xs font-medium text-white lg:h-7 lg:w-7">
                   {userInitial}
                 </div>
               )}
             </a>
           )}
-          <div className="lg:hidden">
-            <HamburgerButton onClick={() => setMobileMenuOpen(true)} dark={dark} />
-          </div>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-white/90 lg:hidden"
+            aria-label="Open menu"
+          >
+            <MobileMenuIcon />
+          </button>
         </div>
       </div>
 

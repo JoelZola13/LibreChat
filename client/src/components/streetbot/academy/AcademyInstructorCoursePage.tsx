@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   BookOpen,
   CalendarDays,
@@ -15,40 +15,47 @@ import {
   Trash2,
   Users,
   Video,
-} from "lucide-react";
-import { useLocation, useParams } from "react-router-dom";
-import { CourseMaterialsBrowser } from "./CourseMaterialsBrowser";
-import { CourseDiscussionsPanel } from "./CourseDiscussionsPanel";
-import { CourseWorkBuilder } from "./CourseWorkBuilder";
-import { GradingDashboard } from "./GradingDashboard";
-import { SubmissionGradingInterface } from "./SubmissionGradingInterface";
+} from 'lucide-react';
+import { useLocation, useParams } from 'react-router-dom';
+import { CourseMaterialsBrowser } from './CourseMaterialsBrowser';
+import { CourseDiscussionsPanel } from './CourseDiscussionsPanel';
+import { CourseWorkBuilder } from './CourseWorkBuilder';
+import { GradingDashboard } from './GradingDashboard';
+import { SubmissionGradingInterface } from './SubmissionGradingInterface';
 import {
   getCourseAssignments,
   getSubmissionForGrading,
   type Assignment,
   type GradingQueueItem,
   type Submission,
-} from "./api/assignments";
-import { listEnrollmentApplications, type EnrollmentApplication } from "./api/enrollment-applications";
-import { getCourseMaterials, removeMaterialLink, type CourseMaterial } from "./api/course-materials";
+} from './api/assignments';
+import {
+  listEnrollmentApplications,
+  type EnrollmentApplication,
+} from './api/enrollment-applications';
+import {
+  getCourseMaterials,
+  removeMaterialLink,
+  type CourseMaterial,
+} from './api/course-materials';
 import {
   createCourseScheduleItem,
   deleteCourseScheduleItem,
   listCourseScheduleItems,
   type CourseScheduleCategory,
   type CourseScheduleItem,
-} from "./api/course-schedule";
+} from './api/course-schedule';
 import {
   getCourseAttendance,
   markCourseAttendance,
   type AttendanceStatus,
   type CourseAttendanceStudent,
-} from "./api/course-attendance";
-import { createSession, cancelSession, listSessions, type LiveSession } from "./api/live-sessions";
-import { useAcademyUserId } from "./useAcademyUserId";
-import { sbFetch } from "../shared/sbFetch";
-import type { Cohort } from "../lib/api/cohorts";
-import { fileToAcademyAsset, openAcademyAsset, type AcademyFileAsset } from "./academyFileAssets";
+} from './api/course-attendance';
+import { createSession, cancelSession, listSessions, type LiveSession } from './api/live-sessions';
+import { useAcademyUserId } from './useAcademyUserId';
+import { sbFetch } from '../shared/sbFetch';
+import type { Cohort } from '../lib/api/cohorts';
+import { fileToAcademyAsset, openAcademyAsset, type AcademyFileAsset } from './academyFileAssets';
 
 type Course = {
   id: string;
@@ -62,15 +69,15 @@ type Course = {
 };
 
 type InstructorCourseTab =
-  | "schedule"
-  | "discussions"
-  | "sessions"
-  | "attendance"
-  | "grading"
-  | "form-submissions"
-  | "feedback"
-  | "builder"
-  | "materials";
+  | 'schedule'
+  | 'discussions'
+  | 'sessions'
+  | 'attendance'
+  | 'grading'
+  | 'form-submissions'
+  | 'feedback'
+  | 'builder'
+  | 'materials';
 
 type ScheduleFormState = {
   title: string;
@@ -125,18 +132,18 @@ type CourseReviewStats = {
 
 function combineLocalDateTime(date: string, time: string): string {
   const safeDate = date || new Date().toISOString().slice(0, 10);
-  const safeTime = time || "18:00";
-  return new Date(safeDate + "T" + safeTime + ":00").toISOString();
+  const safeTime = time || '18:00';
+  return new Date(safeDate + 'T' + safeTime + ':00').toISOString();
 }
 
 function scheduleCategoryLabel(category: CourseScheduleCategory): string {
-  if (category === "assignment") {
-    return "Assignments";
+  if (category === 'assignment') {
+    return 'Assignments';
   }
-  if (category === "reading") {
-    return "Readings";
+  if (category === 'reading') {
+    return 'Readings';
   }
-  return "Materials";
+  return 'Materials';
 }
 
 function startOfCalendarMonth(value: Date): Date {
@@ -155,39 +162,39 @@ function buildCalendarDays(baseDate: Date): Date[] {
 }
 
 function dateKey(isoOrDate: string | Date): string {
-  const value = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
+  const value = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
   return value.toISOString().slice(0, 10);
 }
 
 function formatDateTime(value?: string | null) {
   if (!value) {
-    return "Recently updated";
+    return 'Recently updated';
   }
 
   return new Date(value).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
 export default function AcademyInstructorCoursePage() {
   const params = useParams();
-  const courseId = params.courseId || "";
+  const courseId = params.courseId || '';
   const location = useLocation();
   const instructorId = useAcademyUserId();
-  const isDark = document.documentElement.getAttribute("data-theme") !== "light";
-  const usesDashboardRoute = location.pathname.includes("/dashboard/instructor");
-  const basePath = location.pathname.startsWith("/learning")
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const usesDashboardRoute = location.pathname.includes('/dashboard/instructor');
+  const basePath = location.pathname.startsWith('/learning')
     ? usesDashboardRoute
-      ? "/learning/dashboard/instructor"
-      : "/learning/instructor"
+      ? '/learning/dashboard/instructor'
+      : '/learning/instructor'
     : usesDashboardRoute
-      ? "/academy/dashboard/instructor"
-      : "/academy/instructor";
-  const academyRootPath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
+      ? '/academy/dashboard/instructor'
+      : '/academy/instructor';
+  const academyRootPath = location.pathname.startsWith('/learning') ? '/learning' : '/academy';
 
   const [course, setCourse] = useState<Course | null>(null);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
@@ -217,99 +224,102 @@ export default function AcademyInstructorCoursePage() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState<ScheduleFormState>({
-    title: "",
+    title: '',
     date: new Date().toISOString().slice(0, 10),
-    time: "18:00",
-    notes: "",
-    category: "assignment",
+    time: '18:00',
+    notes: '',
+    category: 'assignment',
   });
 
   const [liveFormOpen, setLiveFormOpen] = useState(false);
   const [liveSaving, setLiveSaving] = useState(false);
   const [liveMessage, setLiveMessage] = useState<string | null>(null);
   const [liveForm, setLiveForm] = useState<LiveFormState>({
-    title: "",
+    title: '',
     date: new Date().toISOString().slice(0, 10),
-    time: "18:00",
-    notes: "",
+    time: '18:00',
+    notes: '',
   });
 
   const [materialFormOpen, setMaterialFormOpen] = useState(false);
   const [materialSaving, setMaterialSaving] = useState(false);
   const [materialMessage, setMaterialMessage] = useState<string | null>(null);
-  const [materialForm, setMaterialForm] = useState<MaterialFormState>({ title: "", notes: "" });
+  const [materialForm, setMaterialForm] = useState<MaterialFormState>({ title: '', notes: '' });
   const [materialFile, setMaterialFile] = useState<File | null>(null);
 
   const colors = useMemo(
     function () {
       return {
-        bg: "var(--sb-color-background)",
-        cardBg: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.56)",
-        cardBgStrong: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.72)",
-        border: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)",
-        text: isDark ? "#fff" : "#111",
-        textSecondary: isDark ? "rgba(255,255,255,0.72)" : "#4b5563",
-        textMuted: isDark ? "rgba(255,255,255,0.45)" : "#6b7280",
-        accent: "#F97316",
+        bg: 'var(--sb-color-background)',
+        cardBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.56)',
+        cardBgStrong: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)',
+        border: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.1)',
+        text: isDark ? '#fff' : '#111',
+        textSecondary: isDark ? 'rgba(255,255,255,0.72)' : '#4b5563',
+        textMuted: isDark ? 'rgba(255,255,255,0.45)' : '#6b7280',
+        accent: '#F97316',
       };
     },
     [isDark],
   );
 
-  const loadCourseWorkspace = useCallback(async function () {
-    setLoading(true);
-    try {
-      const responses = await Promise.all([
-        sbFetch("/api/academy/courses/" + courseId),
-        sbFetch(
-          "/api/academy/cohorts?course_id=" +
-            encodeURIComponent(courseId) +
-            "&instructor_id=" +
-            encodeURIComponent(instructorId),
-        ),
-        listSessions({ instructorId, courseId }),
-        listCourseScheduleItems(courseId).catch(function () {
-          return [];
-        }),
-        getCourseMaterials(courseId).catch(function () {
-          return [];
-        }),
-        getCourseAssignments(courseId, true).catch(function () {
-          return [];
-        }),
-      ]);
+  const loadCourseWorkspace = useCallback(
+    async function () {
+      setLoading(true);
+      try {
+        const responses = await Promise.all([
+          sbFetch('/api/academy/courses/' + courseId),
+          sbFetch(
+            '/api/academy/cohorts?course_id=' +
+              encodeURIComponent(courseId) +
+              '&instructor_id=' +
+              encodeURIComponent(instructorId),
+          ),
+          listSessions({ instructorId, courseId }),
+          listCourseScheduleItems(courseId).catch(function () {
+            return [];
+          }),
+          getCourseMaterials(courseId).catch(function () {
+            return [];
+          }),
+          getCourseAssignments(courseId, true).catch(function () {
+            return [];
+          }),
+        ]);
 
-      const courseResponse = responses[0];
-      const cohortsResponse = responses[1];
-      const liveSessionData = responses[2];
-      const scheduleData = responses[3];
-      const materialData = responses[4];
-      const assignmentData = responses[5];
+        const courseResponse = responses[0];
+        const cohortsResponse = responses[1];
+        const liveSessionData = responses[2];
+        const scheduleData = responses[3];
+        const materialData = responses[4];
+        const assignmentData = responses[5];
 
-      const directCourse = courseResponse.ok ? await courseResponse.json() : null;
-      const cohortData = cohortsResponse.ok ? await cohortsResponse.json() : [];
+        const directCourse = courseResponse.ok ? await courseResponse.json() : null;
+        const cohortData = cohortsResponse.ok ? await cohortsResponse.json() : [];
 
-      setCourse(directCourse ?? null);
-      setCohorts(Array.isArray(cohortData) ? cohortData : []);
-      setSessions(
-        (liveSessionData.sessions || []).filter(function (session) {
-          return session.status !== "cancelled";
-        }),
-      );
-      setScheduleItems(scheduleData);
-      setMaterials(materialData);
-      setCourseAssignments(assignmentData);
-    } catch {
-      setCourse(null);
-      setCohorts([]);
-      setSessions([]);
-      setScheduleItems([]);
-      setMaterials([]);
-      setCourseAssignments([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [courseId, instructorId]);
+        setCourse(directCourse ?? null);
+        setCohorts(Array.isArray(cohortData) ? cohortData : []);
+        setSessions(
+          (liveSessionData.sessions || []).filter(function (session) {
+            return session.status !== 'cancelled';
+          }),
+        );
+        setScheduleItems(scheduleData);
+        setMaterials(materialData);
+        setCourseAssignments(assignmentData);
+      } catch {
+        setCourse(null);
+        setCohorts([]);
+        setSessions([]);
+        setScheduleItems([]);
+        setMaterials([]);
+        setCourseAssignments([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [courseId, instructorId],
+  );
 
   useEffect(
     function () {
@@ -318,104 +328,117 @@ export default function AcademyInstructorCoursePage() {
     [loadCourseWorkspace],
   );
 
-  const loadAttendance = useCallback(async function () {
-    if (courseId === "") {
-      setAttendanceRows([]);
-      return;
-    }
+  const loadAttendance = useCallback(
+    async function () {
+      if (courseId === '') {
+        setAttendanceRows([]);
+        return;
+      }
 
-    setLoadingAttendance(true);
-    try {
-      const roster = await getCourseAttendance(courseId, attendanceDate);
-      setAttendanceRows(roster.students);
-    } catch (error) {
-      console.error("Failed to load attendance roster:", error);
-      setAttendanceRows([]);
-    } finally {
-      setLoadingAttendance(false);
-    }
-  }, [attendanceDate, courseId]);
+      setLoadingAttendance(true);
+      try {
+        const roster = await getCourseAttendance(courseId, attendanceDate);
+        setAttendanceRows(roster.students);
+      } catch (error) {
+        console.error('Failed to load attendance roster:', error);
+        setAttendanceRows([]);
+      } finally {
+        setLoadingAttendance(false);
+      }
+    },
+    [attendanceDate, courseId],
+  );
 
   useEffect(
     function () {
-      if (openTab === "attendance") {
+      if (openTab === 'attendance') {
         void loadAttendance();
       }
     },
     [loadAttendance, openTab],
   );
 
-  const loadEnrollmentFormSubmissions = useCallback(async function () {
-    if (courseId === "") {
-      setEnrollmentApplications([]);
-      return;
-    }
+  const loadEnrollmentFormSubmissions = useCallback(
+    async function () {
+      if (courseId === '') {
+        setEnrollmentApplications([]);
+        return;
+      }
 
-    setLoadingApplications(true);
-    setApplicationsError(null);
-    try {
-      const applications = await listEnrollmentApplications({ courseId });
-      setEnrollmentApplications(applications);
-    } catch (error) {
-      setEnrollmentApplications([]);
-      setApplicationsError(error instanceof Error ? error.message : "Failed to load form submissions.");
-    } finally {
-      setLoadingApplications(false);
-    }
-  }, [courseId]);
+      setLoadingApplications(true);
+      setApplicationsError(null);
+      try {
+        const applications = await listEnrollmentApplications({ courseId });
+        setEnrollmentApplications(applications);
+      } catch (error) {
+        setEnrollmentApplications([]);
+        setApplicationsError(
+          error instanceof Error ? error.message : 'Failed to load form submissions.',
+        );
+      } finally {
+        setLoadingApplications(false);
+      }
+    },
+    [courseId],
+  );
 
   useEffect(
     function () {
-      if (openTab === "form-submissions") {
+      if (openTab === 'form-submissions') {
         void loadEnrollmentFormSubmissions();
       }
     },
     [loadEnrollmentFormSubmissions, openTab],
   );
 
-  const loadCourseFeedback = useCallback(async function () {
-    if (courseId === "") {
-      setCourseReviews([]);
-      setReviewStats(null);
-      return;
-    }
+  const loadCourseFeedback = useCallback(
+    async function () {
+      if (courseId === '') {
+        setCourseReviews([]);
+        setReviewStats(null);
+        return;
+      }
 
-    setLoadingFeedback(true);
-    setFeedbackError(null);
-    try {
-      const [reviewsResponse, statsResponse] = await Promise.all([
-        sbFetch(`/api/academy/reviews/course/${encodeURIComponent(courseId)}`),
-        sbFetch(`/api/academy/reviews/course/${encodeURIComponent(courseId)}/stats`),
-      ]);
+      setLoadingFeedback(true);
+      setFeedbackError(null);
+      try {
+        const [reviewsResponse, statsResponse] = await Promise.all([
+          sbFetch(`/api/academy/reviews/course/${encodeURIComponent(courseId)}`),
+          sbFetch(`/api/academy/reviews/course/${encodeURIComponent(courseId)}/stats`),
+        ]);
 
-      const reviewsData = reviewsResponse.ok ? await reviewsResponse.json() : [];
-      const statsData = statsResponse.ok ? await statsResponse.json() : null;
+        const reviewsData = reviewsResponse.ok ? await reviewsResponse.json() : [];
+        const statsData = statsResponse.ok ? await statsResponse.json() : null;
 
-      setCourseReviews(Array.isArray(reviewsData) ? reviewsData : []);
-      setReviewStats(
-        statsData && typeof statsData === "object"
-          ? {
-              average: Number(statsData.average || 0),
-              count: Number(statsData.count || 0),
-              distribution:
-                statsData.distribution && typeof statsData.distribution === "object"
-                  ? statsData.distribution
-                  : { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-            }
-          : null,
-      );
-    } catch (error) {
-      setCourseReviews([]);
-      setReviewStats(null);
-      setFeedbackError(error instanceof Error ? error.message : "Failed to load course feedback.");
-    } finally {
-      setLoadingFeedback(false);
-    }
-  }, [courseId]);
+        setCourseReviews(Array.isArray(reviewsData) ? reviewsData : []);
+        setReviewStats(
+          statsData && typeof statsData === 'object'
+            ? {
+                average: Number(statsData.average || 0),
+                count: Number(statsData.count || 0),
+                distribution:
+                  statsData.distribution && typeof statsData.distribution === 'object'
+                    ? statsData.distribution
+                    : { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+              }
+            : null,
+        );
+      } catch (error) {
+        setCourseReviews([]);
+        setReviewStats(null);
+        setFeedbackError(
+          error instanceof Error ? error.message : 'Failed to load course feedback.',
+        );
+      } finally {
+        setLoadingFeedback(false);
+      }
+    },
+    [courseId],
+  );
 
   useEffect(
     function () {
-      if (openTab === "feedback") {
+      if (openTab === 'feedback') {
         void loadCourseFeedback();
       }
     },
@@ -431,7 +454,7 @@ export default function AcademyInstructorCoursePage() {
         setSelectedSubmission(submission);
       }
     } catch (error) {
-      console.error("Failed to load submission for grading:", error);
+      console.error('Failed to load submission for grading:', error);
     } finally {
       setLoadingSubmission(false);
     }
@@ -445,7 +468,7 @@ export default function AcademyInstructorCoursePage() {
   function toggleTab(tab: InstructorCourseTab) {
     setOpenTab(function (prev) {
       const nextValue = prev === tab ? null : tab;
-      if (nextValue !== "grading") {
+      if (nextValue !== 'grading') {
         setSelectedQueueItem(null);
         setSelectedSubmission(null);
       }
@@ -455,30 +478,30 @@ export default function AcademyInstructorCoursePage() {
 
   function resetScheduleForm() {
     setScheduleForm({
-      title: "",
+      title: '',
       date: new Date().toISOString().slice(0, 10),
-      time: "18:00",
-      notes: "",
-      category: "assignment",
+      time: '18:00',
+      notes: '',
+      category: 'assignment',
     });
   }
 
   function resetLiveForm() {
     setLiveForm({
-      title: "",
+      title: '',
       date: new Date().toISOString().slice(0, 10),
-      time: "18:00",
-      notes: "",
+      time: '18:00',
+      notes: '',
     });
   }
 
   function resetMaterialForm() {
-    setMaterialForm({ title: "", notes: "" });
+    setMaterialForm({ title: '', notes: '' });
     setMaterialFile(null);
   }
 
   async function handleCreateScheduleItem() {
-    if (course == null || scheduleForm.title.trim() === "") {
+    if (course == null || scheduleForm.title.trim() === '') {
       return;
     }
 
@@ -495,12 +518,14 @@ export default function AcademyInstructorCoursePage() {
         },
         instructorId,
       );
-      setScheduleMessage(scheduleCategoryLabel(scheduleForm.category) + " added to the course calendar.");
+      setScheduleMessage(
+        scheduleCategoryLabel(scheduleForm.category) + ' added to the course calendar.',
+      );
       setScheduleFormOpen(false);
       resetScheduleForm();
       await loadCourseWorkspace();
     } catch (error) {
-      setScheduleMessage(error instanceof Error ? error.message : "Failed to add schedule item.");
+      setScheduleMessage(error instanceof Error ? error.message : 'Failed to add schedule item.');
     } finally {
       setScheduleSaving(false);
     }
@@ -511,12 +536,14 @@ export default function AcademyInstructorCoursePage() {
       await deleteCourseScheduleItem(item.id);
       await loadCourseWorkspace();
     } catch (error) {
-      setScheduleMessage(error instanceof Error ? error.message : "Failed to delete this schedule item.");
+      setScheduleMessage(
+        error instanceof Error ? error.message : 'Failed to delete this schedule item.',
+      );
     }
   }
 
   async function handleCreateLiveSession() {
-    if (course == null || liveForm.title.trim() === "") {
+    if (course == null || liveForm.title.trim() === '') {
       return;
     }
 
@@ -524,25 +551,27 @@ export default function AcademyInstructorCoursePage() {
     setLiveMessage(null);
     try {
       const scheduledStart = combineLocalDateTime(liveForm.date, liveForm.time);
-      const scheduledEnd = new Date(new Date(scheduledStart).getTime() + 60 * 60 * 1000).toISOString();
+      const scheduledEnd = new Date(
+        new Date(scheduledStart).getTime() + 60 * 60 * 1000,
+      ).toISOString();
       await createSession(
         {
           course_id: course.id,
           title: liveForm.title.trim(),
           description: liveForm.notes.trim(),
-          session_type: "class",
+          session_type: 'class',
           scheduled_start: scheduledStart,
           scheduled_end: scheduledEnd,
-          platform: "internal",
+          platform: 'internal',
         },
         instructorId,
       );
-      setLiveMessage("Live session added to the course and student dashboards.");
+      setLiveMessage('Live session added to the course and student dashboards.');
       setLiveFormOpen(false);
       resetLiveForm();
       await loadCourseWorkspace();
     } catch (error) {
-      setLiveMessage(error instanceof Error ? error.message : "Failed to create live session.");
+      setLiveMessage(error instanceof Error ? error.message : 'Failed to create live session.');
     } finally {
       setLiveSaving(false);
     }
@@ -550,10 +579,12 @@ export default function AcademyInstructorCoursePage() {
 
   async function handleDeleteLiveSession(session: LiveSession) {
     try {
-      await cancelSession(session.id, "Removed from the instructor workspace");
+      await cancelSession(session.id, 'Removed from the instructor workspace');
       await loadCourseWorkspace();
     } catch (error) {
-      setLiveMessage(error instanceof Error ? error.message : "Failed to remove this live session.");
+      setLiveMessage(
+        error instanceof Error ? error.message : 'Failed to remove this live session.',
+      );
     }
   }
 
@@ -566,8 +597,8 @@ export default function AcademyInstructorCoursePage() {
       return;
     }
 
-    const title = materialForm.title.trim() || (materialFile ? materialFile.name : "");
-    if (title === "") {
+    const title = materialForm.title.trim() || (materialFile ? materialFile.name : '');
+    if (title === '') {
       return;
     }
 
@@ -581,7 +612,7 @@ export default function AcademyInstructorCoursePage() {
           title,
           notes: materialForm.notes.trim(),
           scheduledAt: new Date().toISOString(),
-          category: "material",
+          category: 'material',
           fileName: materialFile ? materialFile.name : undefined,
           documentType: materialFile ? materialFile.type : undefined,
           fileUrl: attachment?.url,
@@ -591,12 +622,12 @@ export default function AcademyInstructorCoursePage() {
         },
         instructorId,
       );
-      setMaterialMessage("Learning material added for your students.");
+      setMaterialMessage('Learning material added for your students.');
       setMaterialFormOpen(false);
       resetMaterialForm();
       await loadCourseWorkspace();
     } catch (error) {
-      setMaterialMessage(error instanceof Error ? error.message : "Failed to add material.");
+      setMaterialMessage(error instanceof Error ? error.message : 'Failed to add material.');
     } finally {
       setMaterialSaving(false);
     }
@@ -611,7 +642,9 @@ export default function AcademyInstructorCoursePage() {
       }
       await loadCourseWorkspace();
     } catch (error) {
-      setMaterialMessage(error instanceof Error ? error.message : "Failed to delete this material.");
+      setMaterialMessage(
+        error instanceof Error ? error.message : 'Failed to delete this material.',
+      );
     }
   }
 
@@ -642,10 +675,10 @@ export default function AcademyInstructorCoursePage() {
         });
       });
       setAttendanceMessage(
-        `${savedRecord.userName} marked ${attendanceStatus} for ${new Date(attendanceDate + "T12:00:00").toLocaleDateString()}.`,
+        `${savedRecord.userName} marked ${attendanceStatus} for ${new Date(attendanceDate + 'T12:00:00').toLocaleDateString()}.`,
       );
     } catch (error) {
-      setAttendanceMessage(error instanceof Error ? error.message : "Failed to save attendance.");
+      setAttendanceMessage(error instanceof Error ? error.message : 'Failed to save attendance.');
     } finally {
       setAttendanceSavingUserId(null);
     }
@@ -664,21 +697,21 @@ export default function AcademyInstructorCoursePage() {
     function () {
       const cohortEntries = cohorts.map(function (cohort) {
         return {
-          id: "cohort-" + cohort.id,
+          id: 'cohort-' + cohort.id,
           date: cohort.start_date,
-          label: "Cohort",
+          label: 'Cohort',
           title: cohort.name,
-          subtitle: "Guided learning group for this course.",
+          subtitle: 'Guided learning group for this course.',
         };
       });
 
       const sessionEntries = sessions.map(function (session) {
         return {
-          id: "session-" + session.id,
+          id: 'session-' + session.id,
           date: session.scheduled_start,
-          label: session.status === "live" ? "Live Now" : "Live Session",
+          label: session.status === 'live' ? 'Live Now' : 'Live Session',
           title: session.title,
-          subtitle: session.description || "Live session for enrolled learners.",
+          subtitle: session.description || 'Live session for enrolled learners.',
         };
       });
 
@@ -688,7 +721,8 @@ export default function AcademyInstructorCoursePage() {
           date: item.scheduledAt,
           label: scheduleCategoryLabel(item.category),
           title: item.title,
-          subtitle: item.notes || scheduleCategoryLabel(item.category) + " shared with enrolled students.",
+          subtitle:
+            item.notes || scheduleCategoryLabel(item.category) + ' shared with enrolled students.',
         };
       });
 
@@ -736,7 +770,7 @@ export default function AcademyInstructorCoursePage() {
   const quizAssignments = useMemo(
     function () {
       return courseAssignments.filter(function (assignment) {
-        return assignment.assignmentType === "quiz";
+        return assignment.assignmentType === 'quiz';
       });
     },
     [courseAssignments],
@@ -745,7 +779,7 @@ export default function AcademyInstructorCoursePage() {
   const homeworkAssignments = useMemo(
     function () {
       return courseAssignments.filter(function (assignment) {
-        return assignment.assignmentType !== "quiz";
+        return assignment.assignmentType !== 'quiz';
       });
     },
     [courseAssignments],
@@ -781,10 +815,10 @@ export default function AcademyInstructorCoursePage() {
   const attendanceSummary = useMemo(
     function () {
       const presentCount = attendanceRows.filter(function (student) {
-        return student.attendanceStatus === "present";
+        return student.attendanceStatus === 'present';
       }).length;
       const absentCount = attendanceRows.filter(function (student) {
-        return student.attendanceStatus === "absent";
+        return student.attendanceStatus === 'absent';
       }).length;
       return {
         total: attendanceRows.length,
@@ -820,10 +854,10 @@ export default function AcademyInstructorCoursePage() {
       }).length;
       const writtenCount = courseReviews.filter(function (review) {
         return (
-          String(review.workshop_feedback || "").trim() !== "" ||
-          String(review.rating_reason || "").trim() !== "" ||
-          String(review.other_feedback || "").trim() !== "" ||
-          String(review.review_text || "").trim() !== ""
+          String(review.workshop_feedback || '').trim() !== '' ||
+          String(review.rating_reason || '').trim() !== '' ||
+          String(review.other_feedback || '').trim() !== '' ||
+          String(review.review_text || '').trim() !== ''
         );
       }).length;
       return {
@@ -834,59 +868,65 @@ export default function AcademyInstructorCoursePage() {
     [courseReviews],
   );
 
-  const sectionTabs: Array<{ tab: InstructorCourseTab; label: string; description: string; icon: typeof CalendarDays }> = [
+  const sectionTabs: Array<{
+    tab: InstructorCourseTab;
+    label: string;
+    description: string;
+    icon: typeof CalendarDays;
+  }> = [
     {
-      tab: "schedule",
-      label: "Schedule",
+      tab: 'schedule',
+      label: 'Schedule',
       description: "Plan and stay organized with the course you're teaching.",
       icon: CalendarDays,
     },
     {
-      tab: "discussions",
-      label: "Discussions",
-      description: "Post course updates that enrolled students can see in their dashboard.",
+      tab: 'discussions',
+      label: 'Discussions',
+      description: 'Post course updates that enrolled students can see in their dashboard.',
       icon: MessageSquare,
     },
     {
-      tab: "sessions",
-      label: "Live Sessions",
-      description: "Run live sessions connected to your courses and students.",
+      tab: 'sessions',
+      label: 'Live Sessions',
+      description: 'Run live sessions connected to your courses and students.',
       icon: Video,
     },
     {
-      tab: "attendance",
-      label: "Attendance",
-      description: "Mark students present or absent for each class date in this course.",
+      tab: 'attendance',
+      label: 'Attendance',
+      description: 'Mark students present or absent for each class date in this course.',
       icon: Users,
     },
     {
-      tab: "grading",
-      label: "Grading & Feedback",
-      description: "Review and grade submissions, give feedback, and track student progress.",
+      tab: 'grading',
+      label: 'Grading & Feedback',
+      description: 'Review and grade submissions, give feedback, and track student progress.',
       icon: ClipboardCheck,
     },
     {
-      tab: "form-submissions",
-      label: "Form Submissions",
-      description: "Read the enrollment forms submitted by students joining this course.",
+      tab: 'form-submissions',
+      label: 'Form Submissions',
+      description: 'Read the enrollment forms submitted by students joining this course.',
       icon: FileText,
     },
     {
-      tab: "feedback",
-      label: "Course Feedback",
-      description: "See ratings, comments, and review trends from enrolled learners.",
+      tab: 'feedback',
+      label: 'Course Feedback',
+      description: 'See ratings, comments, and review trends from enrolled learners.',
       icon: Star,
     },
     {
-      tab: "builder",
-      label: "Quiz & Assignment Maker",
-      description: "Create quizzes and homework that appear in the student dashboard for this course.",
+      tab: 'builder',
+      label: 'Quiz & Assignment Maker',
+      description:
+        'Create quizzes and homework that appear in the student dashboard for this course.',
       icon: Plus,
     },
     {
-      tab: "materials",
-      label: "Learning Materials",
-      description: "Upload and organize resources your students need throughout the course.",
+      tab: 'materials',
+      label: 'Learning Materials',
+      description: 'Upload and organize resources your students need throughout the course.',
       icon: BookOpen,
     },
   ];
@@ -896,16 +936,20 @@ export default function AcademyInstructorCoursePage() {
       return null;
     }
 
-    if (openTab === "schedule") {
+    if (openTab === 'schedule') {
       return (
-        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="rounded-[24px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
                 Course schedule
               </h2>
               <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                Add assignments, readings, and materials for this course. Students in this class will see the same updates in their dashboard.
+                Add assignments, readings, and materials for this course. Students in this class
+                will see the same updates in their dashboard.
               </p>
             </div>
             <button
@@ -917,7 +961,11 @@ export default function AcademyInstructorCoursePage() {
                 });
               }}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-              style={{ background: "rgba(249,115,22,0.12)", color: colors.accent, border: "1px solid " + colors.border }}
+              style={{
+                background: 'rgba(249,115,22,0.12)',
+                color: colors.accent,
+                border: '1px solid ' + colors.border,
+              }}
             >
               <Plus className="h-4 w-4" />
               Add to calendar
@@ -925,16 +973,29 @@ export default function AcademyInstructorCoursePage() {
           </div>
 
           {scheduleMessage && (
-            <div className="mt-4 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
+            <div
+              className="mt-4 rounded-[18px] border px-4 py-3 text-sm"
+              style={{
+                borderColor: colors.border,
+                background: colors.cardBgStrong,
+                color: colors.textSecondary,
+              }}
+            >
               {scheduleMessage}
             </div>
           )}
 
           {scheduleFormOpen && (
-            <div className="mt-5 rounded-[22px] border p-5" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+            <div
+              className="mt-5 rounded-[22px] border p-5"
+              style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                  <label
+                    className="mb-1 block text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
                     Title
                   </label>
                   <input
@@ -945,11 +1006,18 @@ export default function AcademyInstructorCoursePage() {
                       });
                     }}
                     className="w-full rounded-xl border px-3 py-2"
-                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBg,
+                      color: colors.text,
+                    }}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                  <label
+                    className="mb-1 block text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
                     Category
                   </label>
                   <select
@@ -960,7 +1028,11 @@ export default function AcademyInstructorCoursePage() {
                       });
                     }}
                     className="w-full rounded-xl border px-3 py-2"
-                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBg,
+                      color: colors.text,
+                    }}
                   >
                     <option value="assignment">Assignments</option>
                     <option value="reading">Readings</option>
@@ -968,7 +1040,10 @@ export default function AcademyInstructorCoursePage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                  <label
+                    className="mb-1 block text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
                     Date
                   </label>
                   <input
@@ -980,11 +1055,18 @@ export default function AcademyInstructorCoursePage() {
                       });
                     }}
                     className="w-full rounded-xl border px-3 py-2"
-                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBg,
+                      color: colors.text,
+                    }}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                  <label
+                    className="mb-1 block text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
                     Time
                   </label>
                   <input
@@ -996,13 +1078,20 @@ export default function AcademyInstructorCoursePage() {
                       });
                     }}
                     className="w-full rounded-xl border px-3 py-2"
-                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBg,
+                      color: colors.text,
+                    }}
                   />
                 </div>
               </div>
 
               <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                <label
+                  className="mb-1 block text-sm font-medium"
+                  style={{ color: colors.textSecondary }}
+                >
                   Additional Notes
                 </label>
                 <textarea
@@ -1014,7 +1103,11 @@ export default function AcademyInstructorCoursePage() {
                   }}
                   rows={4}
                   className="w-full rounded-xl border px-3 py-2"
-                  style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                  style={{
+                    borderColor: colors.border,
+                    background: colors.cardBg,
+                    color: colors.text,
+                  }}
                 />
               </div>
 
@@ -1024,11 +1117,11 @@ export default function AcademyInstructorCoursePage() {
                   onClick={function () {
                     void handleCreateScheduleItem();
                   }}
-                  disabled={scheduleSaving || scheduleForm.title.trim() === ""}
+                  disabled={scheduleSaving || scheduleForm.title.trim() === ''}
                   className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                  style={{ background: colors.accent, color: "#fff" }}
+                  style={{ background: colors.accent, color: '#fff' }}
                 >
-                  {scheduleSaving ? "Saving..." : "Done"}
+                  {scheduleSaving ? 'Saving...' : 'Done'}
                 </button>
                 <button
                   type="button"
@@ -1037,7 +1130,11 @@ export default function AcademyInstructorCoursePage() {
                     resetScheduleForm();
                   }}
                   className="rounded-full px-4 py-2 text-sm font-semibold"
-                  style={{ background: colors.cardBg, color: colors.text, border: "1px solid " + colors.border }}
+                  style={{
+                    background: colors.cardBg,
+                    color: colors.text,
+                    border: '1px solid ' + colors.border,
+                  }}
                 >
                   Cancel
                 </button>
@@ -1045,19 +1142,31 @@ export default function AcademyInstructorCoursePage() {
             </div>
           )}
 
-          <div className="mt-6 rounded-[24px] border p-4" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+          <div
+            className="mt-6 rounded-[24px] border p-4"
+            style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+          >
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                <p
+                  className="text-xs uppercase tracking-[0.22em]"
+                  style={{ color: colors.textMuted }}
+                >
                   Calendar
                 </p>
                 <h3 className="mt-1 text-lg font-semibold" style={{ color: colors.text }}>
-                  {calendarBaseDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                  {calendarBaseDate.toLocaleDateString(undefined, {
+                    month: 'long',
+                    year: 'numeric',
+                  })}
                 </h3>
               </div>
             </div>
-            <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(function (day) {
+            <div
+              className="grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-[0.2em]"
+              style={{ color: colors.textMuted }}
+            >
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(function (day) {
                 return <div key={day}>{day}</div>;
               })}
             </div>
@@ -1071,7 +1180,7 @@ export default function AcademyInstructorCoursePage() {
                     className="min-h-[96px] rounded-[18px] border p-2"
                     style={{
                       borderColor: colors.border,
-                      background: inMonth ? colors.cardBg : "transparent",
+                      background: inMonth ? colors.cardBg : 'transparent',
                       opacity: inMonth ? 1 : 0.5,
                     }}
                   >
@@ -1084,7 +1193,7 @@ export default function AcademyInstructorCoursePage() {
                           <div
                             key={item.id}
                             className="rounded-full px-2 py-1 text-[11px] font-medium"
-                            style={{ background: "rgba(249,115,22,0.14)", color: colors.accent }}
+                            style={{ background: 'rgba(249,115,22,0.14)', color: colors.accent }}
                           >
                             {item.label}: {item.title}
                           </div>
@@ -1113,14 +1222,18 @@ export default function AcademyInstructorCoursePage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+                      <p
+                        className="text-xs uppercase tracking-[0.22em]"
+                        style={{ color: colors.textMuted }}
+                      >
                         {scheduleCategoryLabel(item.category)}
                       </p>
                       <h3 className="mt-2 text-lg font-semibold" style={{ color: colors.text }}>
                         {item.title}
                       </h3>
                       <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                        {item.notes || scheduleCategoryLabel(item.category) + " shared with enrolled students."}
+                        {item.notes ||
+                          scheduleCategoryLabel(item.category) + ' shared with enrolled students.'}
                       </p>
                       <p className="mt-3 text-sm font-medium" style={{ color: colors.text }}>
                         {eventDate.toLocaleString()}
@@ -1132,7 +1245,11 @@ export default function AcademyInstructorCoursePage() {
                         void handleDeleteScheduleItem(item);
                       }}
                       className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold"
-                      style={{ background: colors.cardBg, color: colors.text, border: "1px solid " + colors.border }}
+                      style={{
+                        background: colors.cardBg,
+                        color: colors.text,
+                        border: '1px solid ' + colors.border,
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                       Delete
@@ -1143,7 +1260,10 @@ export default function AcademyInstructorCoursePage() {
             })}
 
             {customScheduleItems.length === 0 && (
-              <div className="rounded-[22px] border p-4 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+              <div
+                className="rounded-[22px] border p-4 text-sm"
+                style={{ borderColor: colors.border, color: colors.textSecondary }}
+              >
                 No assignments, readings, or materials have been scheduled for this course yet.
               </div>
             )}
@@ -1152,14 +1272,18 @@ export default function AcademyInstructorCoursePage() {
       );
     }
 
-    if (openTab === "discussions") {
+    if (openTab === 'discussions') {
       return (
-        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="rounded-[24px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
             Course Discussions
           </h2>
           <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-            Post reminders, guidance, and course updates for students enrolled in this class. These posts appear in the student dashboard discussion section for this course only.
+            Post reminders, guidance, and course updates for students enrolled in this class. These
+            posts appear in the student dashboard discussion section for this course only.
           </p>
 
           <div className="mt-5">
@@ -1167,7 +1291,7 @@ export default function AcademyInstructorCoursePage() {
               courseId={course.id}
               colors={colors}
               mode="instructor"
-              authorName={course.instructor_name || course.instructor || "Course Instructor"}
+              authorName={course.instructor_name || course.instructor || 'Course Instructor'}
               authorId={instructorId}
             />
           </div>
@@ -1175,9 +1299,12 @@ export default function AcademyInstructorCoursePage() {
       );
     }
 
-    if (openTab === "sessions") {
+    if (openTab === 'sessions') {
       return (
-        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="rounded-[24px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
@@ -1196,7 +1323,11 @@ export default function AcademyInstructorCoursePage() {
                 });
               }}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-              style={{ background: "rgba(249,115,22,0.12)", color: colors.accent, border: "1px solid " + colors.border }}
+              style={{
+                background: 'rgba(249,115,22,0.12)',
+                color: colors.accent,
+                border: '1px solid ' + colors.border,
+              }}
             >
               <Plus className="h-4 w-4" />
               Add live session
@@ -1204,16 +1335,29 @@ export default function AcademyInstructorCoursePage() {
           </div>
 
           {liveMessage && (
-            <div className="mt-4 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
+            <div
+              className="mt-4 rounded-[18px] border px-4 py-3 text-sm"
+              style={{
+                borderColor: colors.border,
+                background: colors.cardBgStrong,
+                color: colors.textSecondary,
+              }}
+            >
               {liveMessage}
             </div>
           )}
 
           {liveFormOpen && (
-            <div className="mt-5 rounded-[22px] border p-5" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+            <div
+              className="mt-5 rounded-[22px] border p-5"
+              style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                  <label
+                    className="mb-1 block text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
                     Title
                   </label>
                   <input
@@ -1224,11 +1368,18 @@ export default function AcademyInstructorCoursePage() {
                       });
                     }}
                     className="w-full rounded-xl border px-3 py-2"
-                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBg,
+                      color: colors.text,
+                    }}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                  <label
+                    className="mb-1 block text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
                     Date
                   </label>
                   <input
@@ -1240,11 +1391,18 @@ export default function AcademyInstructorCoursePage() {
                       });
                     }}
                     className="w-full rounded-xl border px-3 py-2"
-                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBg,
+                      color: colors.text,
+                    }}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                  <label
+                    className="mb-1 block text-sm font-medium"
+                    style={{ color: colors.textSecondary }}
+                  >
                     Time
                   </label>
                   <input
@@ -1256,13 +1414,20 @@ export default function AcademyInstructorCoursePage() {
                       });
                     }}
                     className="w-full rounded-xl border px-3 py-2"
-                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                    style={{
+                      borderColor: colors.border,
+                      background: colors.cardBg,
+                      color: colors.text,
+                    }}
                   />
                 </div>
               </div>
 
               <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                <label
+                  className="mb-1 block text-sm font-medium"
+                  style={{ color: colors.textSecondary }}
+                >
                   Additional Notes
                 </label>
                 <textarea
@@ -1274,7 +1439,11 @@ export default function AcademyInstructorCoursePage() {
                   }}
                   rows={4}
                   className="w-full rounded-xl border px-3 py-2"
-                  style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                  style={{
+                    borderColor: colors.border,
+                    background: colors.cardBg,
+                    color: colors.text,
+                  }}
                 />
               </div>
 
@@ -1284,11 +1453,11 @@ export default function AcademyInstructorCoursePage() {
                   onClick={function () {
                     void handleCreateLiveSession();
                   }}
-                  disabled={liveSaving || liveForm.title.trim() === ""}
+                  disabled={liveSaving || liveForm.title.trim() === ''}
                   className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                  style={{ background: colors.accent, color: "#fff" }}
+                  style={{ background: colors.accent, color: '#fff' }}
                 >
-                  {liveSaving ? "Adding..." : "Add"}
+                  {liveSaving ? 'Adding...' : 'Add'}
                 </button>
                 <button
                   type="button"
@@ -1297,7 +1466,11 @@ export default function AcademyInstructorCoursePage() {
                     resetLiveForm();
                   }}
                   className="rounded-full px-4 py-2 text-sm font-semibold"
-                  style={{ background: colors.cardBg, color: colors.text, border: "1px solid " + colors.border }}
+                  style={{
+                    background: colors.cardBg,
+                    color: colors.text,
+                    border: '1px solid ' + colors.border,
+                  }}
                 >
                   Cancel
                 </button>
@@ -1314,17 +1487,23 @@ export default function AcademyInstructorCoursePage() {
                   style={{ borderColor: colors.border, background: colors.cardBgStrong }}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <a href={academyRootPath + "/live-sessions/" + session.id} className="min-w-0 flex-1">
+                    <a
+                      href={academyRootPath + '/live-sessions/' + session.id}
+                      className="min-w-0 flex-1"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <h3 className="text-lg font-semibold" style={{ color: colors.text }}>
                             {session.title}
                           </h3>
                           <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                            {session.description || "Live course session ready for your learners."}
+                            {session.description || 'Live course session ready for your learners.'}
                           </p>
                         </div>
-                        <span className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" style={{ background: "rgba(249,115,22,0.14)", color: colors.accent }}>
+                        <span
+                          className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
+                          style={{ background: 'rgba(249,115,22,0.14)', color: colors.accent }}
+                        >
                           {session.status}
                         </span>
                       </div>
@@ -1338,7 +1517,11 @@ export default function AcademyInstructorCoursePage() {
                         void handleDeleteLiveSession(session);
                       }}
                       className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold"
-                      style={{ background: colors.cardBg, color: colors.text, border: "1px solid " + colors.border }}
+                      style={{
+                        background: colors.cardBg,
+                        color: colors.text,
+                        border: '1px solid ' + colors.border,
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                       Delete
@@ -1349,7 +1532,10 @@ export default function AcademyInstructorCoursePage() {
             })}
 
             {visibleSessions.length === 0 && (
-              <div className="rounded-[22px] border p-4 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+              <div
+                className="rounded-[22px] border p-4 text-sm"
+                style={{ borderColor: colors.border, color: colors.textSecondary }}
+              >
                 No live sessions are connected to this course yet.
               </div>
             )}
@@ -1358,20 +1544,27 @@ export default function AcademyInstructorCoursePage() {
       );
     }
 
-    if (openTab === "attendance") {
+    if (openTab === 'attendance') {
       return (
-        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="rounded-[24px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
                 Attendance
               </h2>
               <p className="mt-2 max-w-3xl text-sm" style={{ color: colors.textSecondary }}>
-                Mark each enrolled learner as present or absent for a specific class date. When you switch the class date, the list starts fresh for that class.
+                Mark each enrolled learner as present or absent for a specific class date. When you
+                switch the class date, the list starts fresh for that class.
               </p>
             </div>
             <div className="min-w-[220px]">
-              <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+              <label
+                className="mb-1 block text-sm font-medium"
+                style={{ color: colors.textSecondary }}
+              >
                 Class date
               </label>
               <input
@@ -1382,23 +1575,34 @@ export default function AcademyInstructorCoursePage() {
                   setAttendanceMessage(null);
                 }}
                 className="w-full rounded-xl border px-3 py-2"
-                style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                style={{
+                  borderColor: colors.border,
+                  background: colors.cardBg,
+                  color: colors.text,
+                }}
               />
             </div>
           </div>
 
           {attendanceMessage && (
-            <div className="mt-4 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
+            <div
+              className="mt-4 rounded-[18px] border px-4 py-3 text-sm"
+              style={{
+                borderColor: colors.border,
+                background: colors.cardBgStrong,
+                color: colors.textSecondary,
+              }}
+            >
               {attendanceMessage}
             </div>
           )}
 
           <div className="mt-5 grid gap-4 md:grid-cols-4">
             {[
-              { label: "Enrolled", value: attendanceSummary.total },
-              { label: "Present", value: attendanceSummary.presentCount },
-              { label: "Absent", value: attendanceSummary.absentCount },
-              { label: "Unmarked", value: attendanceSummary.unmarkedCount },
+              { label: 'Enrolled', value: attendanceSummary.total },
+              { label: 'Present', value: attendanceSummary.presentCount },
+              { label: 'Absent', value: attendanceSummary.absentCount },
+              { label: 'Unmarked', value: attendanceSummary.unmarkedCount },
             ].map(function (item) {
               return (
                 <div
@@ -1406,7 +1610,10 @@ export default function AcademyInstructorCoursePage() {
                   className="rounded-[20px] border p-4"
                   style={{ borderColor: colors.border, background: colors.cardBgStrong }}
                 >
-                  <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                  <p
+                    className="text-xs uppercase tracking-[0.2em]"
+                    style={{ color: colors.textMuted }}
+                  >
                     {item.label}
                   </p>
                   <p className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
@@ -1417,15 +1624,22 @@ export default function AcademyInstructorCoursePage() {
             })}
           </div>
 
-          <div className="mt-6 rounded-[24px] border" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+          <div
+            className="mt-6 rounded-[24px] border"
+            style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+          >
             <div className="border-b px-5 py-4" style={{ borderColor: colors.border }}>
               <p className="text-sm" style={{ color: colors.textSecondary }}>
-                This attendance sheet is saved only for {new Date(attendanceDate + "T12:00:00").toLocaleDateString()}.
+                This attendance sheet is saved only for{' '}
+                {new Date(attendanceDate + 'T12:00:00').toLocaleDateString()}.
               </p>
             </div>
 
             {loadingAttendance ? (
-              <div className="flex items-center gap-2 px-5 py-8 text-sm" style={{ color: colors.textSecondary }}>
+              <div
+                className="flex items-center gap-2 px-5 py-8 text-sm"
+                style={{ color: colors.textSecondary }}
+              >
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading attendance roster...
               </div>
@@ -1433,8 +1647,8 @@ export default function AcademyInstructorCoursePage() {
               <div className="divide-y" style={{ borderColor: colors.border }}>
                 {attendanceRows.map(function (student) {
                   const isSaving = attendanceSavingUserId === student.userId;
-                  const isPresent = student.attendanceStatus === "present";
-                  const isAbsent = student.attendanceStatus === "absent";
+                  const isPresent = student.attendanceStatus === 'present';
+                  const isAbsent = student.attendanceStatus === 'absent';
                   return (
                     <div
                       key={student.userId}
@@ -1444,7 +1658,10 @@ export default function AcademyInstructorCoursePage() {
                         <h3 className="text-base font-semibold" style={{ color: colors.text }}>
                           {student.userName}
                         </h3>
-                        <div className="mt-1 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
+                        <div
+                          className="mt-1 flex flex-wrap gap-3 text-sm"
+                          style={{ color: colors.textSecondary }}
+                        >
                           <span>Student ID: {student.studentId}</span>
                           <span>Progress: {student.progressPercent || 0}%</span>
                         </div>
@@ -1454,14 +1671,15 @@ export default function AcademyInstructorCoursePage() {
                         <button
                           type="button"
                           onClick={function () {
-                            void handleAttendanceMark(student.userId, "present");
+                            void handleAttendanceMark(student.userId, 'present');
                           }}
                           disabled={isSaving}
                           className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
                           style={{
-                            background: isPresent ? "rgba(34,197,94,0.16)" : colors.cardBg,
-                            color: isPresent ? "#22C55E" : colors.text,
-                            border: "1px solid " + (isPresent ? "rgba(34,197,94,0.35)" : colors.border),
+                            background: isPresent ? 'rgba(34,197,94,0.16)' : colors.cardBg,
+                            color: isPresent ? '#22C55E' : colors.text,
+                            border:
+                              '1px solid ' + (isPresent ? 'rgba(34,197,94,0.35)' : colors.border),
                           }}
                         >
                           Present
@@ -1469,19 +1687,25 @@ export default function AcademyInstructorCoursePage() {
                         <button
                           type="button"
                           onClick={function () {
-                            void handleAttendanceMark(student.userId, "absent");
+                            void handleAttendanceMark(student.userId, 'absent');
                           }}
                           disabled={isSaving}
                           className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
                           style={{
-                            background: isAbsent ? "rgba(239,68,68,0.16)" : colors.cardBg,
-                            color: isAbsent ? "#EF4444" : colors.text,
-                            border: "1px solid " + (isAbsent ? "rgba(239,68,68,0.35)" : colors.border),
+                            background: isAbsent ? 'rgba(239,68,68,0.16)' : colors.cardBg,
+                            color: isAbsent ? '#EF4444' : colors.text,
+                            border:
+                              '1px solid ' + (isAbsent ? 'rgba(239,68,68,0.35)' : colors.border),
                           }}
                         >
                           Absent
                         </button>
-                        {isSaving && <Loader2 className="h-4 w-4 animate-spin" style={{ color: colors.textSecondary }} />}
+                        {isSaving && (
+                          <Loader2
+                            className="h-4 w-4 animate-spin"
+                            style={{ color: colors.textSecondary }}
+                          />
+                        )}
                       </div>
                     </div>
                   );
@@ -1497,52 +1721,67 @@ export default function AcademyInstructorCoursePage() {
       );
     }
 
-    if (openTab === "grading") {
+    if (openTab === 'grading') {
       return (
-        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="rounded-[24px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
             Grading and Feedback
           </h2>
           <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-            Review and grade submissions for this course while staying aligned with the learner dashboard.
+            Review and grade submissions for this course while staying aligned with the learner
+            dashboard.
           </p>
 
           <div className="mt-5">
             <div className="mb-6 grid gap-4 md:grid-cols-2">
               <a
-                href={basePath + "/courses/" + course.id + "/submissions/quizzes"}
+                href={basePath + '/courses/' + course.id + '/submissions/quizzes'}
                 className="rounded-[20px] border p-4 transition hover:opacity-90"
                 style={{ borderColor: colors.border, background: colors.cardBgStrong }}
               >
-                <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                <p
+                  className="text-xs uppercase tracking-[0.2em]"
+                  style={{ color: colors.textMuted }}
+                >
                   Quiz submissions
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
                   {submissionCollectionSummary.quizSubmitted}
                 </h3>
                 <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                  {submissionCollectionSummary.quizCount} quizzes posted · {submissionCollectionSummary.quizPending} waiting for review
+                  {submissionCollectionSummary.quizCount} quizzes posted ·{' '}
+                  {submissionCollectionSummary.quizPending} waiting for review
                 </p>
               </a>
               <a
-                href={basePath + "/courses/" + course.id + "/submissions/assignments"}
+                href={basePath + '/courses/' + course.id + '/submissions/assignments'}
                 className="rounded-[20px] border p-4 transition hover:opacity-90"
                 style={{ borderColor: colors.border, background: colors.cardBgStrong }}
               >
-                <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                <p
+                  className="text-xs uppercase tracking-[0.2em]"
+                  style={{ color: colors.textMuted }}
+                >
                   Assignment submissions
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
                   {submissionCollectionSummary.homeworkSubmitted}
                 </h3>
                 <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                  {submissionCollectionSummary.homeworkCount} assignments posted · {submissionCollectionSummary.homeworkPending} waiting for review
+                  {submissionCollectionSummary.homeworkCount} assignments posted ·{' '}
+                  {submissionCollectionSummary.homeworkPending} waiting for review
                 </p>
               </a>
             </div>
 
             {loadingSubmission && (
-              <div className="mb-6 inline-flex items-center gap-2 rounded-lg px-3 py-2" style={{ color: colors.textSecondary }}>
+              <div
+                className="mb-6 inline-flex items-center gap-2 rounded-lg px-3 py-2"
+                style={{ color: colors.textSecondary }}
+              >
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading submission...
               </div>
@@ -1557,23 +1796,31 @@ export default function AcademyInstructorCoursePage() {
                 onGradeSubmitted={handleBackToQueue}
               />
             ) : (
-              <GradingDashboard instructorId={instructorId} courseId={course.id} onSelectSubmission={handleSelectSubmission} />
+              <GradingDashboard
+                instructorId={instructorId}
+                courseId={course.id}
+                onSelectSubmission={handleSelectSubmission}
+              />
             )}
           </div>
         </section>
       );
     }
 
-    if (openTab === "form-submissions") {
+    if (openTab === 'form-submissions') {
       return (
-        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="rounded-[24px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
                 Form Submissions
               </h2>
               <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                Review the enrollment forms submitted for this course. Each student submission stays connected to the class they enrolled in.
+                Review the enrollment forms submitted for this course. Each student submission stays
+                connected to the class they enrolled in.
               </p>
             </div>
             <button
@@ -1582,18 +1829,22 @@ export default function AcademyInstructorCoursePage() {
                 void loadEnrollmentFormSubmissions();
               }}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-              style={{ background: colors.cardBgStrong, color: colors.text, border: "1px solid " + colors.border }}
+              style={{
+                background: colors.cardBgStrong,
+                color: colors.text,
+                border: '1px solid ' + colors.border,
+              }}
             >
-              <Loader2 className={loadingApplications ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              <Loader2 className={loadingApplications ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
               Refresh
             </button>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             {[
-              { label: "Submitted Forms", value: applicationSummary.total },
-              { label: "With Attachments", value: applicationSummary.withAttachments },
-              { label: "Files Shared", value: applicationSummary.attachmentCount },
+              { label: 'Submitted Forms', value: applicationSummary.total },
+              { label: 'With Attachments', value: applicationSummary.withAttachments },
+              { label: 'Files Shared', value: applicationSummary.attachmentCount },
             ].map(function (item) {
               return (
                 <div
@@ -1601,7 +1852,10 @@ export default function AcademyInstructorCoursePage() {
                   className="rounded-[20px] border p-4"
                   style={{ borderColor: colors.border, background: colors.cardBgStrong }}
                 >
-                  <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                  <p
+                    className="text-xs uppercase tracking-[0.2em]"
+                    style={{ color: colors.textMuted }}
+                  >
                     {item.label}
                   </p>
                   <p className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
@@ -1613,13 +1867,23 @@ export default function AcademyInstructorCoursePage() {
           </div>
 
           {applicationsError && (
-            <div className="mt-5 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>
+            <div
+              className="mt-5 rounded-[18px] border px-4 py-3 text-sm"
+              style={{
+                borderColor: 'rgba(239,68,68,0.35)',
+                background: 'rgba(239,68,68,0.08)',
+                color: '#ef4444',
+              }}
+            >
               {applicationsError}
             </div>
           )}
 
           {loadingApplications ? (
-            <div className="mt-6 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: colors.textSecondary }}>
+            <div
+              className="mt-6 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+              style={{ color: colors.textSecondary }}
+            >
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading submitted enrollment forms...
             </div>
@@ -1629,7 +1893,7 @@ export default function AcademyInstructorCoursePage() {
                 const displayName =
                   application.preferred_name ||
                   application.full_name ||
-                  [application.first_name, application.last_name].filter(Boolean).join(" ") ||
+                  [application.first_name, application.last_name].filter(Boolean).join(' ') ||
                   application.email ||
                   application.user_id;
 
@@ -1641,13 +1905,21 @@ export default function AcademyInstructorCoursePage() {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
-                          {application.target_type === "learning_path" ? "Program enrollment" : "Course enrollment"}
+                        <p
+                          className="text-xs uppercase tracking-[0.2em]"
+                          style={{ color: colors.textMuted }}
+                        >
+                          {application.target_type === 'learning_path'
+                            ? 'Program enrollment'
+                            : 'Course enrollment'}
                         </p>
                         <h3 className="mt-2 text-xl font-semibold" style={{ color: colors.text }}>
                           {displayName}
                         </h3>
-                        <div className="mt-2 flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
+                        <div
+                          className="mt-2 flex flex-wrap gap-3 text-sm"
+                          style={{ color: colors.textSecondary }}
+                        >
                           <span>Student ID: {application.user_id}</span>
                           {application.email ? (
                             <span className="inline-flex items-center gap-1">
@@ -1662,8 +1934,11 @@ export default function AcademyInstructorCoursePage() {
                         <p className="mt-1" style={{ color: colors.textMuted }}>
                           {formatDateTime(application.submitted_at || application.created_at)}
                         </p>
-                        <p className="mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]" style={{ background: "rgba(249,115,22,0.14)", color: colors.accent }}>
-                          {application.status || "submitted"}
+                        <p
+                          className="mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]"
+                          style={{ background: 'rgba(249,115,22,0.14)', color: colors.accent }}
+                        >
+                          {application.status || 'submitted'}
                         </p>
                       </div>
                     </div>
@@ -1671,23 +1946,38 @@ export default function AcademyInstructorCoursePage() {
                     <div className="mt-5 grid gap-4 lg:grid-cols-2">
                       <div className="space-y-4">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                          <p
+                            className="text-xs uppercase tracking-[0.18em]"
+                            style={{ color: colors.textMuted }}
+                          >
                             How they heard about the program
                           </p>
-                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
-                            {application.heard_about || "No answer provided."}
+                          <p
+                            className="mt-2 text-sm leading-6"
+                            style={{ color: colors.textSecondary }}
+                          >
+                            {application.heard_about || 'No answer provided.'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                          <p
+                            className="text-xs uppercase tracking-[0.18em]"
+                            style={{ color: colors.textMuted }}
+                          >
                             Prior experience or interest
                           </p>
-                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
-                            {application.prior_experience || "No answer provided."}
+                          <p
+                            className="mt-2 text-sm leading-6"
+                            style={{ color: colors.textSecondary }}
+                          >
+                            {application.prior_experience || 'No answer provided.'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                          <p
+                            className="text-xs uppercase tracking-[0.18em]"
+                            style={{ color: colors.textMuted }}
+                          >
                             Interest areas
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -1697,7 +1987,11 @@ export default function AcademyInstructorCoursePage() {
                                   <span
                                     key={interest}
                                     className="rounded-full px-3 py-1 text-xs font-medium"
-                                    style={{ background: colors.cardBg, color: colors.textSecondary, border: "1px solid " + colors.border }}
+                                    style={{
+                                      background: colors.cardBg,
+                                      color: colors.textSecondary,
+                                      border: '1px solid ' + colors.border,
+                                    }}
                                   >
                                     {interest}
                                   </span>
@@ -1714,51 +2008,83 @@ export default function AcademyInstructorCoursePage() {
 
                       <div className="space-y-4">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                          <p
+                            className="text-xs uppercase tracking-[0.18em]"
+                            style={{ color: colors.textMuted }}
+                          >
                             Future project
                           </p>
-                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
-                            {application.future_project || "No answer provided."}
+                          <p
+                            className="mt-2 text-sm leading-6"
+                            style={{ color: colors.textSecondary }}
+                          >
+                            {application.future_project || 'No answer provided.'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                          <p
+                            className="text-xs uppercase tracking-[0.18em]"
+                            style={{ color: colors.textMuted }}
+                          >
                             What they hope to gain
                           </p>
-                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
-                            {application.program_goals || "No answer provided."}
+                          <p
+                            className="mt-2 text-sm leading-6"
+                            style={{ color: colors.textSecondary }}
+                          >
+                            {application.program_goals || 'No answer provided.'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                          <p
+                            className="text-xs uppercase tracking-[0.18em]"
+                            style={{ color: colors.textMuted }}
+                          >
                             Challenges they shared
                           </p>
-                          <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
-                            {application.challenges || "No answer provided."}
+                          <p
+                            className="mt-2 text-sm leading-6"
+                            style={{ color: colors.textSecondary }}
+                          >
+                            {application.challenges || 'No answer provided.'}
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    {(application.past_project || application.general_comments || application.sample_work_attachments.length > 0) && (
+                    {(application.past_project ||
+                      application.general_comments ||
+                      application.sample_work_attachments.length > 0) && (
                       <div className="mt-5 grid gap-4 lg:grid-cols-[1fr,0.9fr]">
                         <div className="space-y-4">
                           {application.past_project ? (
                             <div>
-                              <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                              <p
+                                className="text-xs uppercase tracking-[0.18em]"
+                                style={{ color: colors.textMuted }}
+                              >
                                 Past creative project
                               </p>
-                              <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                              <p
+                                className="mt-2 text-sm leading-6"
+                                style={{ color: colors.textSecondary }}
+                              >
                                 {application.past_project}
                               </p>
                             </div>
                           ) : null}
                           {application.general_comments ? (
                             <div>
-                              <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                              <p
+                                className="text-xs uppercase tracking-[0.18em]"
+                                style={{ color: colors.textMuted }}
+                              >
                                 General comments
                               </p>
-                              <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                              <p
+                                className="mt-2 text-sm leading-6"
+                                style={{ color: colors.textSecondary }}
+                              >
                                 {application.general_comments}
                               </p>
                             </div>
@@ -1766,12 +2092,17 @@ export default function AcademyInstructorCoursePage() {
                         </div>
 
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em]" style={{ color: colors.textMuted }}>
+                          <p
+                            className="text-xs uppercase tracking-[0.18em]"
+                            style={{ color: colors.textMuted }}
+                          >
                             Attachments
                           </p>
                           <div className="mt-2 space-y-2">
                             {application.sample_work_attachments.length > 0 ? (
-                              application.sample_work_attachments.map(function (asset: AcademyFileAsset) {
+                              application.sample_work_attachments.map(function (
+                                asset: AcademyFileAsset,
+                              ) {
                                 return (
                                   <button
                                     key={`${application.id}-${asset.filename}-${asset.uploadedAt}`}
@@ -1780,7 +2111,11 @@ export default function AcademyInstructorCoursePage() {
                                       openAcademyAsset(asset);
                                     }}
                                     className="flex w-full items-center justify-between gap-3 rounded-[18px] border px-4 py-3 text-left text-sm"
-                                    style={{ borderColor: colors.border, background: colors.cardBg, color: colors.textSecondary }}
+                                    style={{
+                                      borderColor: colors.border,
+                                      background: colors.cardBg,
+                                      color: colors.textSecondary,
+                                    }}
                                   >
                                     <span className="inline-flex min-w-0 items-center gap-2">
                                       <Paperclip className="h-4 w-4 shrink-0" />
@@ -1791,7 +2126,14 @@ export default function AcademyInstructorCoursePage() {
                                 );
                               })
                             ) : (
-                              <div className="rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: colors.border, background: colors.cardBg, color: colors.textSecondary }}>
+                              <div
+                                className="rounded-[18px] border px-4 py-3 text-sm"
+                                style={{
+                                  borderColor: colors.border,
+                                  background: colors.cardBg,
+                                  color: colors.textSecondary,
+                                }}
+                              >
                                 No attachments were uploaded with this form.
                               </div>
                             )}
@@ -1804,7 +2146,10 @@ export default function AcademyInstructorCoursePage() {
               })}
             </div>
           ) : (
-            <div className="mt-6 rounded-[22px] border p-4 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+            <div
+              className="mt-6 rounded-[22px] border p-4 text-sm"
+              style={{ borderColor: colors.border, color: colors.textSecondary }}
+            >
               No students have submitted an enrollment form for this course yet.
             </div>
           )}
@@ -1812,16 +2157,20 @@ export default function AcademyInstructorCoursePage() {
       );
     }
 
-    if (openTab === "feedback") {
+    if (openTab === 'feedback') {
       return (
-        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="rounded-[24px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
                 Course Feedback
               </h2>
               <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-                Track the overall course rating and read every review submitted by enrolled students for this class.
+                Track the overall course rating and read every review submitted by enrolled students
+                for this class.
               </p>
             </div>
             <button
@@ -1830,19 +2179,26 @@ export default function AcademyInstructorCoursePage() {
                 void loadCourseFeedback();
               }}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-              style={{ background: colors.cardBgStrong, color: colors.text, border: "1px solid " + colors.border }}
+              style={{
+                background: colors.cardBgStrong,
+                color: colors.text,
+                border: '1px solid ' + colors.border,
+              }}
             >
-              <Loader2 className={loadingFeedback ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              <Loader2 className={loadingFeedback ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
               Refresh
             </button>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-4">
             {[
-              { label: "Average Rating", value: reviewStats ? reviewStats.average.toFixed(1) : "0.0" },
-              { label: "Total Reviews", value: reviewStats?.count || 0 },
-              { label: "Five Star Reviews", value: feedbackSummary.fiveStarCount },
-              { label: "Written Comments", value: feedbackSummary.writtenCount },
+              {
+                label: 'Average Rating',
+                value: reviewStats ? reviewStats.average.toFixed(1) : '0.0',
+              },
+              { label: 'Total Reviews', value: reviewStats?.count || 0 },
+              { label: 'Five Star Reviews', value: feedbackSummary.fiveStarCount },
+              { label: 'Written Comments', value: feedbackSummary.writtenCount },
             ].map(function (item) {
               return (
                 <div
@@ -1850,7 +2206,10 @@ export default function AcademyInstructorCoursePage() {
                   className="rounded-[20px] border p-4"
                   style={{ borderColor: colors.border, background: colors.cardBgStrong }}
                 >
-                  <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                  <p
+                    className="text-xs uppercase tracking-[0.2em]"
+                    style={{ color: colors.textMuted }}
+                  >
                     {item.label}
                   </p>
                   <p className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
@@ -1862,20 +2221,36 @@ export default function AcademyInstructorCoursePage() {
           </div>
 
           {feedbackError && (
-            <div className="mt-5 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>
+            <div
+              className="mt-5 rounded-[18px] border px-4 py-3 text-sm"
+              style={{
+                borderColor: 'rgba(239,68,68,0.35)',
+                background: 'rgba(239,68,68,0.08)',
+                color: '#ef4444',
+              }}
+            >
               {feedbackError}
             </div>
           )}
 
           {loadingFeedback ? (
-            <div className="mt-6 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: colors.textSecondary }}>
+            <div
+              className="mt-6 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+              style={{ color: colors.textSecondary }}
+            >
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading course feedback...
             </div>
           ) : (
             <>
-              <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
-                <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+              <div
+                className="mt-6 rounded-[24px] border p-5"
+                style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+              >
+                <p
+                  className="text-xs uppercase tracking-[0.22em]"
+                  style={{ color: colors.textMuted }}
+                >
                   Rating Distribution
                 </p>
                 <div className="mt-4 space-y-3">
@@ -1884,17 +2259,26 @@ export default function AcademyInstructorCoursePage() {
                     const percentage = reviewStats?.count ? (count / reviewStats.count) * 100 : 0;
                     return (
                       <div key={rating} className="flex items-center gap-3">
-                        <div className="flex w-14 items-center gap-1 text-sm font-medium" style={{ color: colors.text }}>
+                        <div
+                          className="flex w-14 items-center gap-1 text-sm font-medium"
+                          style={{ color: colors.text }}
+                        >
                           <span>{rating}</span>
                           <Star className="h-4 w-4 fill-current" style={{ color: colors.accent }} />
                         </div>
-                        <div className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: colors.cardBg }}>
+                        <div
+                          className="h-2 flex-1 overflow-hidden rounded-full"
+                          style={{ background: colors.cardBg }}
+                        >
                           <div
                             className="h-full rounded-full"
                             style={{ width: `${percentage}%`, background: colors.accent }}
                           />
                         </div>
-                        <span className="w-10 text-right text-sm" style={{ color: colors.textSecondary }}>
+                        <span
+                          className="w-10 text-right text-sm"
+                          style={{ color: colors.textSecondary }}
+                        >
                           {count}
                         </span>
                       </div>
@@ -1907,8 +2291,8 @@ export default function AcademyInstructorCoursePage() {
                 {courseReviews.length > 0 ? (
                   courseReviews.map(function (review) {
                     const reviewDisplayName =
-                      String(review.user_name || "").trim() ||
-                      [review.first_name, review.last_name].filter(Boolean).join(" ").trim() ||
+                      String(review.user_name || '').trim() ||
+                      [review.first_name, review.last_name].filter(Boolean).join(' ').trim() ||
                       review.user_id;
 
                     return (
@@ -1930,60 +2314,104 @@ export default function AcademyInstructorCoursePage() {
                                     key={starValue}
                                     className="h-4 w-4"
                                     style={{
-                                      color: starValue <= review.rating ? colors.accent : colors.textMuted,
-                                      fill: starValue <= review.rating ? colors.accent : "transparent",
+                                      color:
+                                        starValue <= review.rating
+                                          ? colors.accent
+                                          : colors.textMuted,
+                                      fill:
+                                        starValue <= review.rating ? colors.accent : 'transparent',
                                     }}
                                   />
                                 );
                               })}
-                              <span className="ml-2 text-sm font-medium" style={{ color: colors.textSecondary }}>
+                              <span
+                                className="ml-2 text-sm font-medium"
+                                style={{ color: colors.textSecondary }}
+                              >
                                 {review.rating}/5
                               </span>
                             </div>
                           </div>
-                        <p className="text-sm" style={{ color: colors.textMuted }}>
-                          {formatDateTime(review.created_at)}
-                        </p>
-                      </div>
+                          <p className="text-sm" style={{ color: colors.textMuted }}>
+                            {formatDateTime(review.created_at)}
+                          </p>
+                        </div>
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          <div className="rounded-[18px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
-                            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                          <div
+                            className="rounded-[18px] border p-4"
+                            style={{ borderColor: colors.border, background: colors.cardBg }}
+                          >
+                            <p
+                              className="text-xs uppercase tracking-[0.2em]"
+                              style={{ color: colors.textMuted }}
+                            >
                               Contact
                             </p>
                             <p className="mt-2 text-sm font-medium" style={{ color: colors.text }}>
                               {reviewDisplayName}
                             </p>
                             <p className="mt-1 text-sm" style={{ color: colors.textSecondary }}>
-                              {String(review.email || "").trim() || "No email shared"}
+                              {String(review.email || '').trim() || 'No email shared'}
                             </p>
                           </div>
 
-                          <div className="rounded-[18px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
-                            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                          <div
+                            className="rounded-[18px] border p-4"
+                            style={{ borderColor: colors.border, background: colors.cardBg }}
+                          >
+                            <p
+                              className="text-xs uppercase tracking-[0.2em]"
+                              style={{ color: colors.textMuted }}
+                            >
                               Why this rating
                             </p>
-                            <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
-                              {String(review.rating_reason || "").trim() || "No rating reason was added."}
+                            <p
+                              className="mt-2 text-sm leading-6"
+                              style={{ color: colors.textSecondary }}
+                            >
+                              {String(review.rating_reason || '').trim() ||
+                                'No rating reason was added.'}
                             </p>
                           </div>
                         </div>
 
                         <div className="mt-4 grid gap-4">
-                          <div className="rounded-[18px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
-                            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                          <div
+                            className="rounded-[18px] border p-4"
+                            style={{ borderColor: colors.border, background: colors.cardBg }}
+                          >
+                            <p
+                              className="text-xs uppercase tracking-[0.2em]"
+                              style={{ color: colors.textMuted }}
+                            >
                               What they liked or disliked
                             </p>
-                            <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
-                              {String(review.workshop_feedback || review.review_text || "").trim() || "No workshop feedback was added."}
+                            <p
+                              className="mt-2 text-sm leading-6"
+                              style={{ color: colors.textSecondary }}
+                            >
+                              {String(
+                                review.workshop_feedback || review.review_text || '',
+                              ).trim() || 'No workshop feedback was added.'}
                             </p>
                           </div>
 
-                          <div className="rounded-[18px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
-                            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: colors.textMuted }}>
+                          <div
+                            className="rounded-[18px] border p-4"
+                            style={{ borderColor: colors.border, background: colors.cardBg }}
+                          >
+                            <p
+                              className="text-xs uppercase tracking-[0.2em]"
+                              style={{ color: colors.textMuted }}
+                            >
                               Any other feedback
                             </p>
-                            <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
-                              {String(review.other_feedback || "").trim() || "No additional feedback was added."}
+                            <p
+                              className="mt-2 text-sm leading-6"
+                              style={{ color: colors.textSecondary }}
+                            >
+                              {String(review.other_feedback || '').trim() ||
+                                'No additional feedback was added.'}
                             </p>
                           </div>
                         </div>
@@ -1991,7 +2419,10 @@ export default function AcademyInstructorCoursePage() {
                     );
                   })
                 ) : (
-                  <div className="rounded-[22px] border p-4 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+                  <div
+                    className="rounded-[22px] border p-4 text-sm"
+                    style={{ borderColor: colors.border, color: colors.textSecondary }}
+                  >
                     No course feedback has been submitted yet.
                   </div>
                 )}
@@ -2002,14 +2433,18 @@ export default function AcademyInstructorCoursePage() {
       );
     }
 
-    if (openTab === "builder") {
+    if (openTab === 'builder') {
       return (
-        <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="rounded-[24px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
             Quiz & Assignment Maker
           </h2>
           <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
-            Post quizzes and homework that only students enrolled in this course can see inside their dashboard.
+            Post quizzes and homework that only students enrolled in this course can see inside
+            their dashboard.
           </p>
 
           <div className="mt-5">
@@ -2025,7 +2460,10 @@ export default function AcademyInstructorCoursePage() {
     }
 
     return (
-      <section className="rounded-[24px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+      <section
+        className="rounded-[24px] border p-6"
+        style={{ borderColor: colors.border, background: colors.cardBg }}
+      >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold" style={{ color: colors.text }}>
@@ -2044,7 +2482,11 @@ export default function AcademyInstructorCoursePage() {
               });
             }}
             className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-            style={{ background: "rgba(249,115,22,0.12)", color: colors.accent, border: "1px solid " + colors.border }}
+            style={{
+              background: 'rgba(249,115,22,0.12)',
+              color: colors.accent,
+              border: '1px solid ' + colors.border,
+            }}
           >
             <Plus className="h-4 w-4" />
             Add material
@@ -2052,16 +2494,29 @@ export default function AcademyInstructorCoursePage() {
         </div>
 
         {materialMessage && (
-          <div className="mt-4 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: colors.border, background: colors.cardBgStrong, color: colors.textSecondary }}>
+          <div
+            className="mt-4 rounded-[18px] border px-4 py-3 text-sm"
+            style={{
+              borderColor: colors.border,
+              background: colors.cardBgStrong,
+              color: colors.textSecondary,
+            }}
+          >
             {materialMessage}
           </div>
         )}
 
         {materialFormOpen && (
-          <div className="mt-5 rounded-[22px] border p-5" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+          <div
+            className="mt-5 rounded-[22px] border p-5"
+            style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+          >
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                <label
+                  className="mb-1 block text-sm font-medium"
+                  style={{ color: colors.textSecondary }}
+                >
                   Title
                 </label>
                 <input
@@ -2072,24 +2527,38 @@ export default function AcademyInstructorCoursePage() {
                     });
                   }}
                   className="w-full rounded-xl border px-3 py-2"
-                  style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                  style={{
+                    borderColor: colors.border,
+                    background: colors.cardBg,
+                    color: colors.text,
+                  }}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+                <label
+                  className="mb-1 block text-sm font-medium"
+                  style={{ color: colors.textSecondary }}
+                >
                   Upload file
                 </label>
                 <input
                   type="file"
                   onChange={handleMaterialFileChange}
                   className="w-full rounded-xl border px-3 py-2"
-                  style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                  style={{
+                    borderColor: colors.border,
+                    background: colors.cardBg,
+                    color: colors.text,
+                  }}
                 />
               </div>
             </div>
 
             <div className="mt-4">
-              <label className="mb-1 block text-sm font-medium" style={{ color: colors.textSecondary }}>
+              <label
+                className="mb-1 block text-sm font-medium"
+                style={{ color: colors.textSecondary }}
+              >
                 Additional Notes
               </label>
               <textarea
@@ -2101,7 +2570,11 @@ export default function AcademyInstructorCoursePage() {
                 }}
                 rows={4}
                 className="w-full rounded-xl border px-3 py-2"
-                style={{ borderColor: colors.border, background: colors.cardBg, color: colors.text }}
+                style={{
+                  borderColor: colors.border,
+                  background: colors.cardBg,
+                  color: colors.text,
+                }}
               />
             </div>
 
@@ -2111,11 +2584,13 @@ export default function AcademyInstructorCoursePage() {
                 onClick={function () {
                   void handleCreateMaterial();
                 }}
-                disabled={materialSaving || (materialForm.title.trim() === "" && materialFile == null)}
+                disabled={
+                  materialSaving || (materialForm.title.trim() === '' && materialFile == null)
+                }
                 className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                style={{ background: colors.accent, color: "#fff" }}
+                style={{ background: colors.accent, color: '#fff' }}
               >
-                {materialSaving ? "Adding..." : "Add"}
+                {materialSaving ? 'Adding...' : 'Add'}
               </button>
               <button
                 type="button"
@@ -2124,7 +2599,11 @@ export default function AcademyInstructorCoursePage() {
                   resetMaterialForm();
                 }}
                 className="rounded-full px-4 py-2 text-sm font-semibold"
-                style={{ background: colors.cardBg, color: colors.text, border: "1px solid " + colors.border }}
+                style={{
+                  background: colors.cardBg,
+                  color: colors.text,
+                  border: '1px solid ' + colors.border,
+                }}
               >
                 Cancel
               </button>
@@ -2143,7 +2622,10 @@ export default function AcademyInstructorCoursePage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: "rgba(249,115,22,0.12)" }}>
+                      <div
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                        style={{ background: 'rgba(249,115,22,0.12)' }}
+                      >
                         <FileText className="h-5 w-5" style={{ color: colors.accent }} />
                       </div>
                       <div>
@@ -2151,7 +2633,7 @@ export default function AcademyInstructorCoursePage() {
                           {material.title}
                         </h3>
                         <p className="text-sm" style={{ color: colors.textMuted }}>
-                          {material.fileName || "Shared with enrolled students"}
+                          {material.fileName || 'Shared with enrolled students'}
                         </p>
                       </div>
                     </div>
@@ -2167,7 +2649,11 @@ export default function AcademyInstructorCoursePage() {
                       void handleDeleteMaterial(material);
                     }}
                     className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold"
-                    style={{ background: colors.cardBg, color: colors.text, border: "1px solid " + colors.border }}
+                    style={{
+                      background: colors.cardBg,
+                      color: colors.text,
+                      border: '1px solid ' + colors.border,
+                    }}
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete
@@ -2178,20 +2664,28 @@ export default function AcademyInstructorCoursePage() {
           })}
 
           {materials.length === 0 && (
-            <div className="rounded-[22px] border p-4 text-sm" style={{ borderColor: colors.border, color: colors.textSecondary }}>
+            <div
+              className="rounded-[22px] border p-4 text-sm"
+              style={{ borderColor: colors.border, color: colors.textSecondary }}
+            >
               No materials are connected to this course yet.
             </div>
           )}
         </div>
 
         <div className="mt-6">
-          <p className="mb-3 text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
+          <p
+            className="mb-3 text-xs uppercase tracking-[0.22em]"
+            style={{ color: colors.textMuted }}
+          >
             Student view
           </p>
           <CourseMaterialsBrowser
-            key={materials.map(function (item) {
-              return item.linkId;
-            }).join(":")}
+            key={materials
+              .map(function (item) {
+                return item.linkId;
+              })
+              .join(':')}
             entityType="course"
             entityId={course.id}
           />
@@ -2201,132 +2695,193 @@ export default function AcademyInstructorCoursePage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 40px" }}>
-      <div style={{ maxWidth: 1240, margin: "0 auto" }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 40px' }}>
+      <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <a href={academyRootPath} className="text-sm font-medium hover:opacity-80" style={{ color: colors.textSecondary }}>
+          <a
+            href={academyRootPath}
+            className="text-sm font-medium hover:opacity-80"
+            style={{ color: colors.textSecondary }}
+          >
             Academy
           </a>
           <span style={{ color: colors.textMuted }}>/</span>
-          <a href={basePath + "/courses"} className="text-sm font-medium hover:opacity-80" style={{ color: colors.textSecondary }}>
+          <a
+            href={basePath + '/courses'}
+            className="text-sm font-medium hover:opacity-80"
+            style={{ color: colors.textSecondary }}
+          >
             Instructor Courses
           </a>
           <span style={{ color: colors.textMuted }}>/</span>
           <span className="text-sm font-medium" style={{ color: colors.accent }}>
-            {course ? course.title : "Course Workspace"}
+            {course ? course.title : 'Course Workspace'}
           </span>
         </div>
 
         {loading ? (
-          <div className="rounded-[28px] border p-8" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
-            <div className="inline-flex items-center gap-2 text-sm" style={{ color: colors.textSecondary }}>
+          <div
+            className="rounded-[28px] border p-8"
+            style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+          >
+            <div
+              className="inline-flex items-center gap-2 text-sm"
+              style={{ color: colors.textSecondary }}
+            >
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading course workspace...
             </div>
           </div>
         ) : course ? (
           course.instructor_id !== instructorId ? (
-            <section className="rounded-[28px] border p-8" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
-              <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                Instructor Dashboard
+            <section
+              className="rounded-[28px] border p-8"
+              style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+            >
+              <p
+                className="text-xs uppercase tracking-[0.22em]"
+                style={{ color: colors.textMuted }}
+              >
+                Dashboard
               </p>
-              <h1 className="mt-3 text-2xl font-semibold md:text-3xl" style={{ color: colors.text }}>
+              <h1
+                className="mt-3 text-2xl font-semibold md:text-3xl"
+                style={{ color: colors.text }}
+              >
                 This course is no longer in your workspace
               </h1>
-              <p className="mt-3 max-w-2xl text-sm md:text-base" style={{ color: colors.textSecondary }}>
-                If you used Undo on this course, it has been removed from your teaching list and you no longer have instructor access to its course workspace.
+              <p
+                className="mt-3 max-w-2xl text-sm md:text-base"
+                style={{ color: colors.textSecondary }}
+              >
+                If you used Undo on this course, it has been removed from your teaching list and you
+                no longer have instructor access to its course workspace.
               </p>
               <a
                 href={`${basePath}/add-course`}
                 className="mt-6 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-                style={{ background: colors.accent, color: "#fff" }}
+                style={{ background: colors.accent, color: '#fff' }}
               >
                 Back to Add Course
               </a>
             </section>
           ) : (
-          <>
-            <section className="mb-6 rounded-[28px] border p-6 md:p-8" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
-              <div className="flex flex-col gap-4">
-                <a href={basePath + "/courses"} className="text-sm font-semibold" style={{ color: colors.accent }}>
-                  Back to Courses
-                </a>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>
-                    Instructor Course Dashboard
-                  </p>
-                  <h1 className="mt-2 text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
-                    {course.title}
-                  </h1>
-                  <p className="mt-3 max-w-3xl text-base" style={{ color: colors.textSecondary }}>
-                    {course.description || "Use this course workspace to manage the teaching experience for your learners."}
-                  </p>
+            <>
+              <section
+                className="mb-6 rounded-[28px] border p-6 md:p-8"
+                style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+              >
+                <div className="flex flex-col gap-4">
+                  <a
+                    href={basePath + '/courses'}
+                    className="text-sm font-semibold"
+                    style={{ color: colors.accent }}
+                  >
+                    Back to Courses
+                  </a>
+                  <div>
+                    <p
+                      className="text-xs uppercase tracking-[0.22em]"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Instructor Course Dashboard
+                    </p>
+                    <h1
+                      className="mt-2 text-3xl font-bold md:text-4xl"
+                      style={{ color: colors.text }}
+                    >
+                      {course.title}
+                    </h1>
+                    <p className="mt-3 max-w-3xl text-base" style={{ color: colors.textSecondary }}>
+                      {course.description ||
+                        'Use this course workspace to manage the teaching experience for your learners.'}
+                    </p>
+                  </div>
+
+                  <div
+                    className="flex flex-wrap gap-3 text-sm"
+                    style={{ color: colors.textSecondary }}
+                  >
+                    <span>{course.category || 'Academy course'}</span>
+                    <span>{course.duration || 'Flexible duration'}</span>
+                    <span>{visibleSessions.length} live sessions</span>
+                    <span>{cohorts.length} cohorts</span>
+                    <span>{scheduleItems.length} course updates</span>
+                  </div>
                 </div>
+              </section>
 
-                <div className="flex flex-wrap gap-3 text-sm" style={{ color: colors.textSecondary }}>
-                  <span>{course.category || "Academy course"}</span>
-                  <span>{course.duration || "Flexible duration"}</span>
-                  <span>{visibleSessions.length} live sessions</span>
-                  <span>{cohorts.length} cohorts</span>
-                  <span>{scheduleItems.length} course updates</span>
+              <div className="mb-6 grid gap-2 md:grid-cols-2 xl:grid-cols-9">
+                {sectionTabs.map(function (item) {
+                  const isOpen = openTab === item.tab;
+                  return (
+                    <button
+                      key={item.tab}
+                      type="button"
+                      onClick={function () {
+                        toggleTab(item.tab);
+                      }}
+                      className="rounded-[20px] border p-2.5 text-left transition-colors"
+                      style={{
+                        borderColor: isOpen ? colors.accent : colors.border,
+                        background: isOpen ? colors.cardBgStrong : colors.cardBg,
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div
+                          className="flex h-8 w-8 items-center justify-center rounded-xl"
+                          style={{
+                            background: isOpen ? 'rgba(249,115,22,0.18)' : 'rgba(249,115,22,0.12)',
+                          }}
+                        >
+                          <item.icon className="h-4 w-4" style={{ color: colors.accent }} />
+                        </div>
+                        <ChevronDown
+                          className="h-4 w-4 transition-transform"
+                          style={{
+                            color: isOpen ? colors.accent : colors.textMuted,
+                            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          }}
+                        />
+                      </div>
+                      <h2
+                        className="mt-2.5 text-[13px] font-semibold leading-4"
+                        style={{ color: colors.text }}
+                      >
+                        {item.label}
+                      </h2>
+                      <p
+                        className="mt-1 text-[10px] leading-4"
+                        style={{ color: colors.textSecondary }}
+                      >
+                        {item.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {openTab == null && (
+                <div
+                  className="mb-6 rounded-[24px] border p-5 text-sm"
+                  style={{
+                    borderColor: colors.border,
+                    background: colors.cardBg,
+                    color: colors.textSecondary,
+                  }}
+                >
+                  Click a tab above to open that teaching section. Click it again to hide it.
                 </div>
-              </div>
-            </section>
+              )}
 
-
-<div className="mb-6 grid gap-2 md:grid-cols-2 xl:grid-cols-9">
-  {sectionTabs.map(function (item) {
-    const isOpen = openTab === item.tab;
-    return (
-      <button
-        key={item.tab}
-        type="button"
-        onClick={function () {
-          toggleTab(item.tab);
-        }}
-        className="rounded-[20px] border p-2.5 text-left transition-colors"
-        style={{
-          borderColor: isOpen ? colors.accent : colors.border,
-          background: isOpen ? colors.cardBgStrong : colors.cardBg,
-        }}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-xl"
-            style={{ background: isOpen ? "rgba(249,115,22,0.18)" : "rgba(249,115,22,0.12)" }}
-          >
-            <item.icon className="h-4 w-4" style={{ color: colors.accent }} />
-          </div>
-          <ChevronDown
-            className="h-4 w-4 transition-transform"
-            style={{
-              color: isOpen ? colors.accent : colors.textMuted,
-              transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-            }}
-          />
-        </div>
-        <h2 className="mt-2.5 text-[13px] font-semibold leading-4" style={{ color: colors.text }}>
-          {item.label}
-        </h2>
-        <p className="mt-1 text-[10px] leading-4" style={{ color: colors.textSecondary }}>
-          {item.description}
-        </p>
-      </button>
-    );
-  })}
-</div>
-
-            {openTab == null && (
-              <div className="mb-6 rounded-[24px] border p-5 text-sm" style={{ borderColor: colors.border, background: colors.cardBg, color: colors.textSecondary }}>
-                Click a tab above to open that teaching section. Click it again to hide it.
-              </div>
-            )}
-
-            {renderOpenSection()}
-          </>
+              {renderOpenSection()}
+            </>
           )
         ) : (
-          <div className="rounded-[28px] border p-8" style={{ borderColor: colors.border, background: colors.cardBgStrong }}>
+          <div
+            className="rounded-[28px] border p-8"
+            style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+          >
             <h1 className="text-2xl font-semibold" style={{ color: colors.text }}>
               Course not found
             </h1>

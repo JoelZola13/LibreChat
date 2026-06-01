@@ -10,8 +10,19 @@
 
 export type AppVariant = 'streetbot' | 'directory';
 
-export const APP_VARIANT: AppVariant =
-  (import.meta.env.VITE_APP_VARIANT as AppVariant) || 'streetbot';
+const envVariant = import.meta.env.VITE_APP_VARIANT as AppVariant | undefined;
+const runtimeHost = typeof window === 'undefined' ? '' : window.location.hostname;
+const runtimePort = typeof window === 'undefined' ? '' : window.location.port;
+const runtimeForcesStreetBot =
+  runtimePort === '3180' ||
+  runtimeHost === 'streetbot-directory.pages.dev' ||
+  runtimeHost.endsWith('.streetbot-directory.pages.dev');
+
+export const APP_VARIANT: AppVariant = runtimeForcesStreetBot
+  ? 'streetbot'
+  : envVariant === 'directory'
+    ? 'directory'
+    : 'streetbot';
 
 export const isDirectory = APP_VARIANT === 'directory';
 export const isStreetBot = APP_VARIANT === 'streetbot';
@@ -46,13 +57,13 @@ interface VariantConfig {
 const streetbotConfig: VariantConfig = {
   appName: 'Street Voices',
   landingLogo: {
-    darkIcon: '/assets/streetbot-icon.svg',
-    lightIcon: '/assets/streetbot-icon-light.svg',
-    darkText: '/assets/streetbot-text.svg',
+    darkIcon: '/assets/streetbot-icon-home-dark-animated.svg',
+    lightIcon: '/assets/streetbot-icon-home-light-animated.svg',
+    darkText: '/assets/streetbot-text-home-dark-soft.svg',
     lightText: '/assets/streetbot-text-light.svg',
     alt: 'Street Voices',
-    iconWidth: 90,
-    textWidth: 140,
+    iconWidth: 104,
+    textWidth: 132,
   },
   showSidebarBranding: true,
   showChatInput: true,

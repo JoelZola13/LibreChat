@@ -44,6 +44,14 @@ type ChatHelpers = Pick<
 
 const MAX_RETRIES = 5;
 
+const parseStreamPayload = (value: unknown) => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw || raw.startsWith('<')) {
+    throw new Error('Stream returned a non-JSON response.');
+  }
+  return JSON.parse(raw);
+};
+
 /**
  * Hook for resumable SSE streams.
  * Separates generation start (POST) from stream subscription (GET EventSource).
@@ -168,7 +176,7 @@ export default function useResumableSSE(
 
       sse.addEventListener('message', (e: MessageEvent) => {
         try {
-          const data = JSON.parse(e.data);
+          const data = parseStreamPayload(e.data);
 
           if (data.final != null) {
             console.log('[ResumableSSE] Received FINAL event', {
@@ -332,6 +340,18 @@ export default function useResumableSSE(
           }
         } catch (error) {
           console.error('[ResumableSSE] Error processing message:', error);
+          sse.close();
+          removeActiveJob(currentStreamId);
+          errorHandler({
+            data: {
+              text: 'Street Bot had trouble reading the server response. Please try again.',
+            } as unknown as Parameters<typeof errorHandler>[0]['data'],
+            submission: currentSubmission as EventSubmission,
+          });
+          setIsSubmitting(false);
+          setShowStopButton(false);
+          setStreamId(null);
+          reconnectAttemptRef.current = 0;
         }
       });
 
@@ -390,7 +410,7 @@ export default function useResumableSSE(
           removeActiveJob(currentStreamId);
 
           try {
-            const errorData = JSON.parse(e.data);
+            const errorData = parseStreamPayload(e.data);
             const errorString = errorData.error ?? errorData.message ?? JSON.stringify(errorData);
 
             // Check if it's a known error type (ViolationTypes or ErrorTypes)

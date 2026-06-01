@@ -14,6 +14,28 @@ const {
 const { getConvoTitle, getConvo, saveConvo, deleteConvos } = require('./Conversation');
 const { getPreset, getPresets, savePreset, deletePresets } = require('./Preset');
 const { File } = require('~/db/models');
+const {
+  DocumentsCollaborationSnapshot,
+  getDocumentsCollaborationSnapshot,
+  saveDocumentsCollaborationSnapshot,
+  deleteDocumentsCollaborationSnapshot,
+} = require('./DocumentsCollaborationSnapshot');
+const {
+  DocumentsCollaborationLock,
+  getDocumentsCollaborationLock,
+  saveDocumentsCollaborationLock,
+  deleteDocumentsCollaborationLock,
+  deleteExpiredDocumentsCollaborationLocks,
+} = require('./DocumentsCollaborationLock');
+const {
+  DocumentsVersionRetentionExportJob,
+  DocumentsVersionSnapshot,
+  createDocumentsVersionSnapshotHash,
+  getDocumentsVersionSnapshots,
+  saveDocumentsVersionSnapshot,
+  serializeDocumentsVersionSnapshot,
+} = require('./DocumentsVersionSnapshot');
+const { DocumentsOrganizerSavedView } = require('./DocumentsOrganizerSavedView');
 
 const seedDatabase = async () => {
   await methods.initializeRoles();
@@ -45,4 +67,23 @@ module.exports = {
   deletePresets,
 
   Files: File,
+
+  DocumentsCollaborationSnapshot,
+  getDocumentsCollaborationSnapshot,
+  saveDocumentsCollaborationSnapshot,
+  deleteDocumentsCollaborationSnapshot,
+
+  DocumentsCollaborationLock,
+  getDocumentsCollaborationLock,
+  saveDocumentsCollaborationLock,
+  deleteDocumentsCollaborationLock,
+  deleteExpiredDocumentsCollaborationLocks,
+
+  DocumentsVersionSnapshot,
+  DocumentsVersionRetentionExportJob,
+  DocumentsOrganizerSavedView,
+  createDocumentsVersionSnapshotHash,
+  getDocumentsVersionSnapshots,
+  saveDocumentsVersionSnapshot,
+  serializeDocumentsVersionSnapshot,
 };

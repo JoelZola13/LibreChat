@@ -23,7 +23,11 @@ const buildDefaultConvo = ({
   defaultParamsEndpoint?: string | null;
 }): TConversation => {
   const { lastSelectedModel, lastSelectedTools } = getLocalStorageItems();
-  const endpointType = lastConversationSetup?.endpointType ?? conversation.endpointType;
+  const setupForParsing = lastConversationSetup ?? conversation ?? {};
+  const endpointType =
+    lastConversationSetup?.endpointType ??
+    conversation?.endpointType ??
+    (endpoint === 'Street Bot' ? EModelEndpoint.custom : undefined);
 
   if (!endpoint) {
     return {
@@ -34,7 +38,7 @@ const buildDefaultConvo = ({
   }
 
   const availableModels = models;
-  const model = lastConversationSetup?.model ?? lastSelectedModel?.[endpoint] ?? '';
+  const model = setupForParsing?.model ?? lastSelectedModel?.[endpoint] ?? '';
 
   let possibleModels: string[];
 
@@ -47,7 +51,7 @@ const buildDefaultConvo = ({
   const convo = parseConvo({
     endpoint: endpoint as EndpointSchemaKey,
     endpointType: endpointType as EndpointSchemaKey,
-    conversation: lastConversationSetup,
+    conversation: setupForParsing,
     possibleValues: {
       models: possibleModels,
     },
@@ -63,14 +67,14 @@ const buildDefaultConvo = ({
 
   // Ensures assistant_id is always defined
   const assistantId = convo?.assistant_id ?? conversation?.assistant_id ?? '';
-  const defaultAssistantId = lastConversationSetup?.assistant_id ?? '';
+  const defaultAssistantId = setupForParsing?.assistant_id ?? '';
   if (isAssistantsEndpoint(endpoint) && !defaultAssistantId && assistantId) {
     defaultConvo.assistant_id = assistantId;
   }
 
   // Ensures agent_id is always defined
   const agentId = convo?.agent_id ?? '';
-  const defaultAgentId = lastConversationSetup?.agent_id ?? '';
+  const defaultAgentId = setupForParsing?.agent_id ?? '';
   if (
     isAgentsEndpoint(endpoint) &&
     agentId &&
@@ -82,7 +86,7 @@ const buildDefaultConvo = ({
   // Clear model for non-ephemeral agents - agents use their configured model internally
   clearModelForNonEphemeralAgent(defaultConvo);
 
-  defaultConvo.tools = lastConversationSetup?.tools ?? lastSelectedTools ?? defaultConvo.tools;
+  defaultConvo.tools = setupForParsing?.tools ?? lastSelectedTools ?? defaultConvo.tools;
 
   return defaultConvo;
 };

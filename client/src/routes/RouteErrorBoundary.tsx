@@ -1,4 +1,5 @@
 import { Button } from '@librechat/client';
+import { useEffect } from 'react';
 import { useRouteError } from 'react-router-dom';
 import { useLocalize } from '~/hooks';
 import logger from '~/utils/logger';
@@ -70,6 +71,37 @@ const getBrowserInfo = async () => {
   };
 };
 
+const isRecoverableChunkError = (message?: string) => {
+  if (!message) {
+    return false;
+  }
+
+  return [
+    'Failed to fetch dynamically imported module',
+    'Importing a module script failed',
+    'error loading dynamically imported module',
+    'ChunkLoadError',
+    'Loading chunk',
+    'CSS_CHUNK_LOAD_FAILED',
+    "Unexpected token '<'",
+  ].some((pattern) => message.includes(pattern));
+};
+
+const clearStaleRuntimeAssets = async () => {
+  await Promise.allSettled([
+    'serviceWorker' in navigator
+      ? navigator.serviceWorker
+          .getRegistrations()
+          .then((registrations) =>
+            Promise.allSettled(registrations.map((registration) => registration.unregister())),
+          )
+      : Promise.resolve(),
+    'caches' in window
+      ? caches.keys().then((keys) => Promise.allSettled(keys.map((key) => caches.delete(key))))
+      : Promise.resolve(),
+  ]);
+};
+
 export default function RouteErrorBoundary() {
   const localize = useLocalize();
   const typedError = useRouteError() as {
@@ -87,6 +119,27 @@ export default function RouteErrorBoundary() {
     statusText: typedError.statusText,
     data: typedError.data,
   };
+
+  useEffect(() => {
+    if (!isRecoverableChunkError(errorDetails.message)) {
+      return;
+    }
+
+    const recoveryKey = `streetbot:chunk-recovery:${window.location.pathname}`;
+    if (sessionStorage.getItem(recoveryKey) === '1') {
+      return;
+    }
+
+    sessionStorage.setItem(recoveryKey, '1');
+    clearStaleRuntimeAssets()
+      .catch((error) => {
+        logger.warn('Failed to clear stale runtime assets before reload');
+        logger.error(error);
+      })
+      .finally(() => {
+        window.location.reload();
+      });
+  }, [errorDetails.message]);
 
   const handleDownloadLogs = async () => {
     try {

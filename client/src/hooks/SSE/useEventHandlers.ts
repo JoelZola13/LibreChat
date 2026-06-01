@@ -33,6 +33,8 @@ import {
   removeConvoFromAllQueries,
   findConversationInInfinite,
 } from '~/utils';
+import { isStreetBot } from '~/config/appVariant';
+import { stripServiceResultPayloads } from '~/utils/streetbotService';
 import { queueTitleGeneration } from '~/data-provider/SSE/queries';
 import useAttachmentHandler from '~/hooks/SSE/useAttachmentHandler';
 import useContentHandler from '~/hooks/SSE/useContentHandler';
@@ -479,7 +481,12 @@ export default function useEventHandlers({
 
         /* a11y announcements */
         announcePolite({ message: 'end', isStatus: true });
-        announcePolite({ message: getAllContentText(responseMessage) });
+        const responseAnnouncement = isStreetBot
+          ? stripServiceResultPayloads(getAllContentText(responseMessage))
+          : getAllContentText(responseMessage);
+        if (responseAnnouncement) {
+          announcePolite({ message: responseAnnouncement });
+        }
 
         const isNewConvo = conversation.conversationId !== submissionConvo.conversationId;
 
@@ -543,6 +550,11 @@ export default function useEventHandlers({
           removeConvoFromAllQueries(queryClient, submissionConvo.conversationId);
         }
 
+        const shouldReplaceNewConversationRoute =
+          Boolean(conversation.conversationId) &&
+          location.pathname === `/c/${Constants.NEW_CONVO}` &&
+          isAddedRequest !== true;
+
         if (setConversation && isAddedRequest !== true) {
           setConversation((prevState) => {
             const update = {
@@ -574,10 +586,10 @@ export default function useEventHandlers({
               startupConfig: queryClient.getQueryData<TStartupConfig>([QueryKeys.startupConfig]),
             });
           }
+        }
 
-          if (location.pathname === `/c/${Constants.NEW_CONVO}`) {
-            navigate(`/c/${conversation.conversationId}`, { replace: true });
-          }
+        if (shouldReplaceNewConversationRoute) {
+          navigate(`/c/${conversation.conversationId}`, { replace: true });
         }
       } finally {
         setShowStopButton(false);

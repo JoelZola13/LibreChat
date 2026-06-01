@@ -86,6 +86,7 @@ const useNewConvo = (index = 0) => {
         keepAddedConvos?: boolean,
         disableFocus?: boolean,
         _disableParams?: boolean,
+        skipNavigation?: boolean,
       ) => {
         const modelsConfig = modelsData ?? modelsQuery.data;
         const { endpoint = null } = conversation;
@@ -149,7 +150,10 @@ const useNewConvo = (index = 0) => {
             }) as EModelEndpoint;
           }
 
-          const endpointType = getEndpointField(endpointsConfig, defaultEndpoint, 'type');
+          const endpointType =
+            getEndpointField(endpointsConfig, defaultEndpoint, 'type') ??
+            (activePreset?.endpointType as EModelEndpoint | undefined) ??
+            (defaultEndpoint === 'Street Bot' ? EModelEndpoint.custom : undefined);
           if (!conversation.endpointType && endpointType) {
             conversation.endpointType = endpointType;
           } else if (conversation.endpointType && !endpointType) {
@@ -191,8 +195,12 @@ const useNewConvo = (index = 0) => {
             conversation.assistant_id = undefined;
           }
 
-          const models = modelsConfig?.[defaultEndpoint] ?? [];
-          const defaultParamsEndpoint = getDefaultParamsEndpoint(endpointsConfig, defaultEndpoint);
+          const models =
+            modelsConfig?.[defaultEndpoint] ??
+            (activePreset?.model ? [String(activePreset.model)] : []);
+          const defaultParamsEndpoint =
+            getDefaultParamsEndpoint(endpointsConfig, defaultEndpoint) ??
+            (endpointType === EModelEndpoint.custom ? EModelEndpoint.openAI : undefined);
           conversation = buildDefaultConvo({
             conversation,
             lastConversationSetup: activePreset as TConversation,
@@ -233,6 +241,10 @@ const useNewConvo = (index = 0) => {
           return;
         }
 
+        if (skipNavigation === true) {
+          return;
+        }
+
         const searchParamsString = searchParams?.toString();
         const getParams = () => (searchParamsString ? `?${searchParamsString}` : '');
 
@@ -265,6 +277,7 @@ const useNewConvo = (index = 0) => {
       keepLatestMessage = false,
       keepAddedConvos = false,
       disableParams,
+      skipNavigation = false,
     }: {
       template?: Partial<TConversation>;
       preset?: Partial<TPreset>;
@@ -274,6 +287,7 @@ const useNewConvo = (index = 0) => {
       keepLatestMessage?: boolean;
       keepAddedConvos?: boolean;
       disableParams?: boolean;
+      skipNavigation?: boolean;
     } = {}) {
       pauseGlobalAudio();
       if (!saveBadgesState) {
@@ -352,6 +366,7 @@ const useNewConvo = (index = 0) => {
         keepAddedConvos,
         disableFocus,
         disableParams,
+        skipNavigation,
       );
     },
     [

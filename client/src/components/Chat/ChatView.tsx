@@ -18,6 +18,7 @@ import Header from './Header';
 import Footer from './Footer';
 import { cn } from '~/utils';
 import store from '~/store';
+import { isStreetBot } from '~/config/appVariant';
 import { GlassBackground } from '~/components/streetbot/shared/GlassBackground';
 
 function LoadingSpinner() {
@@ -102,10 +103,10 @@ function ChatView({ index = 0 }: { index?: number }) {
                     )}
                   >
                     <ChatForm index={index} />
-                    {isLandingPage ? <ConversationStarters /> : <Footer />}
+                    {isLandingPage ? <ConversationStarters /> : !isStreetBot ? <Footer /> : null}
                   </div>
                 </div>
-                {isLandingPage && <Footer />}
+                {isLandingPage && !isStreetBot && <Footer />}
               </>
             </div>
           </Presentation>

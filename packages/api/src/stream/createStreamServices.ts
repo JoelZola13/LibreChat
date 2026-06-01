@@ -44,6 +44,7 @@ export interface StreamServices {
   jobStore: IJobStore;
   eventTransport: IEventTransport;
   isRedis: boolean;
+  cleanupOnComplete: boolean;
 }
 
 /**
@@ -99,6 +100,7 @@ export function createStreamServices(config: StreamServicesConfig = {}): StreamS
         jobStore,
         eventTransport,
         isRedis: true,
+        cleanupOnComplete: false,
       };
     } catch (err) {
       logger.error(
@@ -129,5 +131,6 @@ function createInMemoryServices(options?: StreamServicesConfig['inMemoryOptions'
     jobStore,
     eventTransport,
     isRedis: false,
+    cleanupOnComplete: false,
   };
 }

@@ -8,8 +8,10 @@ import { useNewConvo, useAppStartup, useAssistantListMap, useAuthContext } from 
 import { getDefaultModelSpec, getModelSpecPreset, logger } from '~/utils';
 import { ToolCallsMapProvider } from '~/Providers';
 import HomepageChatView from '~/components/Chat/HomepageChatView';
+import PublicLanding from '~/components/Chat/PublicLanding';
 import temporaryStore from '~/store/temporary';
 import store from '~/store';
+import { isStreetBot } from '~/config/appVariant';
 
 export default function HomepageRoute() {
   const { data: startupConfig } = useGetStartupConfig();
@@ -56,7 +58,6 @@ export default function HomepageRoute() {
       logger.log('conversation', 'HomepageRoute, new convo effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        template: conversation ? conversation : undefined,
         ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
         skipNavigation: true,
       });
@@ -70,20 +71,17 @@ export default function HomepageRoute() {
       logger.log('conversation', 'HomepageRoute new convo, assistants effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        template: conversation ? conversation : undefined,
         ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
         skipNavigation: true,
       });
       hasSetConversation.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    roles,
-    startupConfig,
-    endpointsQuery.data,
-    modelsQuery.data,
-    assistantListMap,
-  ]);
+  }, [roles, startupConfig, endpointsQuery.data, modelsQuery.data, assistantListMap]);
+
+  if (!isAuthenticated) {
+    return isStreetBot ? <PublicLanding /> : null;
+  }
 
   if (endpointsQuery.isLoading || modelsQuery.isLoading) {
     return (
@@ -91,10 +89,6 @@ export default function HomepageRoute() {
         <Spinner className="text-text-primary" />
       </div>
     );
-  }
-
-  if (!isAuthenticated) {
-    return null;
   }
 
   if (!conversation) {

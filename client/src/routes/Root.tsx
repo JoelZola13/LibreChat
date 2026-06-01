@@ -20,7 +20,7 @@ import { useUserTermsQuery, useGetStartupConfig } from '~/data-provider';
 import { Nav, MobileNav, NAV_WIDTH } from '~/components/Nav';
 import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
-import { isDirectory } from '~/config/appVariant';
+import { isDirectory, isStreetBot } from '~/config/appVariant';
 import { Banner } from '~/components/Banners';
 import { ThemeProvider } from '~/components/streetbot/shared/theme-provider';
 import SbpBackgroundOrbs from '~/components/streetbot/shared/SbpBackgroundOrbs';
@@ -126,16 +126,17 @@ export default function Root() {
   const academyUserId = useAcademyUserId();
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
 
-  // StreetBot only: keep desktop sidebar visible for signed-in sessions.
   useEffect(() => {
-    if (isDirectory || !isAuthenticated || isSmallScreen) {
+    if (!isStreetBot || !isAuthenticated || isSmallScreen) {
       return;
     }
-    if (!navVisible) {
+
+    const savedNavVisible = localStorage.getItem('navVisible');
+    if (savedNavVisible === null) {
       setNavVisible(true);
       localStorage.setItem('navVisible', JSON.stringify(true));
     }
-  }, [isAuthenticated, isSmallScreen, navVisible, isDirectory]);
+  }, [isAuthenticated, isSmallScreen]);
 
   // Global health check - runs once per authenticated session
   useHealthCheck(isAuthenticated);

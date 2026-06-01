@@ -6,6 +6,33 @@
   var isHome = window.location.pathname === '/home' || window.__SV_HOME;
   var path = window.location.pathname;
 
+  var globalStyle = document.createElement('style');
+  globalStyle.textContent = [
+    'nav#chat-history-nav [role="grid"][aria-label="Conversations"] [role="button"][aria-label$=" conversation"] .flex.grow.items-center.gap-2 > div:has(img[src*="street-voices-bot"]) { display:none !important; }',
+    'nav#chat-history-nav [role="grid"][aria-label="Conversations"] [role="button"][aria-label$=" conversation"] img[src*="street-voices-bot"] { display:none !important; }',
+  ].join('\n');
+  document.head.appendChild(globalStyle);
+
+  function hideChatHistoryBotIcons() {
+    var icons = document.querySelectorAll(
+      'nav#chat-history-nav [role="grid"][aria-label="Conversations"] [role="button"][aria-label$=" conversation"] img[src*="street-voices-bot"]'
+    );
+    icons.forEach(function (icon) {
+      var iconWrap = icon.parentElement;
+      while (iconWrap && iconWrap.parentElement && !iconWrap.parentElement.classList.contains('gap-2')) {
+        iconWrap = iconWrap.parentElement;
+      }
+      if (iconWrap) {
+        iconWrap.style.setProperty('display', 'none', 'important');
+      }
+      icon.style.setProperty('display', 'none', 'important');
+    });
+  }
+
+  hideChatHistoryBotIcons();
+  var chatHistoryIconObserver = new MutationObserver(hideChatHistoryBotIcons);
+  chatHistoryIconObserver.observe(document.documentElement, { childList: true, subtree: true });
+
   // If we were /home but got redirected to /c/new, push URL back
   if (window.__SV_HOME && path !== '/home') {
     history.replaceState(null, '', '/home');

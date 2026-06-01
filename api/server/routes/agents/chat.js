@@ -3,13 +3,19 @@ const { generateCheckAccess, skipAgentCheck } = require('@librechat/api');
 const { PermissionTypes, Permissions, PermissionBits } = require('librechat-data-provider');
 const {
   moderateText,
-  // validateModel,
   validateConvoAccess,
   buildEndpointOption,
   canAccessAgentFromBody,
 } = require('~/server/middleware');
 const { initializeClient } = require('~/server/services/Endpoints/agents');
 const AgentController = require('~/server/controllers/agents/request');
+const { streetBotProOwnerOnly } = require('~/server/middleware/streetBotProOwnerOnly');
+const { streetbotFastPath } = require('/app/tools/streetbot-fastpath.cjs');
+const {
+  failStreetBotRequestTrace,
+  finalizeStreetBotRequestTrace,
+  runInStreetBotTrace,
+} = require('/app/tools/streetbot-telemetry.cjs');
 const addTitle = require('~/server/services/Endpoints/agents/title');
 const { getRoleByName } = require('~/models/Role');
 
@@ -25,34 +31,56 @@ const checkAgentResourceAccess = canAccessAgentFromBody({
   requiredPermission: PermissionBits.VIEW,
 });
 
-router.use(moderateText);
+router.use(buildEndpointOption);
 router.use(checkAgentAccess);
 router.use(checkAgentResourceAccess);
 router.use(validateConvoAccess);
-router.use(buildEndpointOption);
+router.use((req, res, next) => {
+  if (req._streetbotFastPath && req._streetbotFastPath.toolBase !== 'conversation') {
+    return next();
+  }
+  return moderateText(req, res, next);
+});
 
 const controller = async (req, res, next) => {
-  await AgentController(req, res, next, initializeClient, addTitle);
+  const routeKind = req._streetbotFastPath ? 'fastpath' : 'agent';
+
+  try {
+    const result = await runInStreetBotTrace(req, async () => {
+      if (req._streetbotFastPath) {
+        return streetbotFastPath(req, res, next);
+      }
+      return AgentController(req, res, next, initializeClient, addTitle);
+    });
+
+    finalizeStreetBotRequestTrace(req, {
+      output: {
+        routeKind,
+        fastPath: Boolean(req._streetbotFastPath),
+        conversationId: req.body?.conversationId || 'new',
+      },
+      metadata: {
+        routeKind,
+      },
+      attributes: {
+        'streetbot.route.fast_path': Boolean(req._streetbotFastPath),
+      },
+    });
+    return result;
+  } catch (error) {
+    failStreetBotRequestTrace(req, error, {
+      metadata: {
+        routeKind,
+      },
+      attributes: {
+        'streetbot.route.fast_path': Boolean(req._streetbotFastPath),
+      },
+    });
+    throw error;
+  }
 };
 
-/**
- * @route POST / (regular endpoint)
- * @desc Chat with an assistant
- * @access Public
- * @param {express.Request} req - The request object, containing the request data.
- * @param {express.Response} res - The response object, used to send back a response.
- * @returns {void}
- */
-router.post('/', controller);
-
-/**
- * @route POST /:endpoint (ephemeral agents)
- * @desc Chat with an assistant
- * @access Public
- * @param {express.Request} req - The request object, containing the request data.
- * @param {express.Response} res - The response object, used to send back a response.
- * @returns {void}
- */
-router.post('/:endpoint', controller);
+router.post('/', streetBotProOwnerOnly, controller);
+router.post('/:endpoint', streetBotProOwnerOnly, controller);
 
 module.exports = router;

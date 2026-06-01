@@ -10,12 +10,16 @@ import store from '~/store';
 export default function useIdChangeEffect(conversationId: string) {
   const lastConvoId = useRef<string | null>(null);
   const resetVisibleArtifacts = useResetRecoilState(store.visibleArtifacts);
+  const resetLatestMessage = useResetRecoilState(store.latestMessageFamily(0));
+  const resetSubmission = useResetRecoilState(store.submissionByIndex(0));
 
   useEffect(() => {
     if (conversationId !== lastConvoId.current) {
       logger.log('conversation', 'Conversation ID change');
       resetVisibleArtifacts();
+      resetLatestMessage();
+      resetSubmission();
     }
     lastConvoId.current = conversationId;
-  }, [conversationId, resetVisibleArtifacts]);
+  }, [conversationId, resetLatestMessage, resetSubmission, resetVisibleArtifacts]);
 }

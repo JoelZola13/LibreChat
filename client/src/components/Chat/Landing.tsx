@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { easings } from '@react-spring/web';
 import { EModelEndpoint } from 'librechat-data-provider';
 import { BirthdayIcon, TooltipAnchor, SplitText } from '@librechat/client';
@@ -6,6 +7,7 @@ import { useChatContext, useAgentsMapContext, useAssistantsMapContext } from '~/
 import { useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
 import ConvoIcon from '~/components/Endpoints/ConvoIcon';
 import { useLocalize, useAuthContext } from '~/hooks';
+import { isStreetBot } from '~/config/appVariant';
 import { getIconEndpoint, getEntity } from '~/utils';
 
 const containerClassName =
@@ -29,6 +31,7 @@ function getTextSizeClass(text: string | undefined | null) {
 
 export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: boolean }) {
   const { conversation } = useChatContext();
+  const { pathname } = useLocation();
   const agentsMap = useAgentsMapContext();
   const assistantMap = useAssistantsMapContext();
   const { data: startupConfig } = useGetStartupConfig();
@@ -136,42 +139,99 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
     typeof startupConfig?.interface?.customWelcome === 'string'
       ? getGreeting()
       : getGreeting() + (user?.name ? ', ' + user.name : '');
+  const showStreetBotHomeLogo = isStreetBot && (pathname === '/' || pathname === '/home');
+  const showStreetBotGreetingIcon = isStreetBot && !showStreetBotHomeLogo;
+  const landingMarginClass = showStreetBotHomeLogo ? 'mb-[50px]' : getDynamicMargin;
 
   return (
     <div
-      className={`flex h-full transform-gpu flex-col items-center justify-center pb-16 transition-all duration-200 ${centerFormOnLanding ? 'max-h-full sm:max-h-0' : 'max-h-full'} ${getDynamicMargin}`}
+      className={`flex h-full transform-gpu flex-col items-center justify-center pb-16 transition-all duration-200 ${centerFormOnLanding ? 'max-h-full sm:max-h-0' : 'max-h-full'} ${landingMarginClass}`}
     >
       <div ref={contentRef} className="flex flex-col items-center gap-0 p-2">
-        <div
-          className={`flex ${textHasMultipleLines ? 'flex-col' : 'flex-col md:flex-row'} items-center justify-center gap-2`}
-        >
-          <div className={`relative size-10 justify-center ${textHasMultipleLines ? 'mb-2' : ''}`}>
-            <ConvoIcon
-              agentsMap={agentsMap}
-              assistantMap={assistantMap}
-              conversation={conversation}
-              endpointsConfig={endpointsConfig}
-              containerClassName={containerClassName}
-              context="landing"
-              className="h-2/3 w-2/3 text-black dark:text-white"
-              size={41}
+        {showStreetBotHomeLogo ? (
+          <div className="flex flex-col items-center justify-center gap-2">
+            <img
+              src="/assets/streetbot-icon-home-light-animated.svg"
+              alt="Street Bot"
+              className="block h-auto w-[92px] dark:hidden sm:w-[104px]"
             />
-            {startupConfig?.showBirthdayIcon && (
-              <TooltipAnchor
-                className="absolute bottom-[27px] right-2"
-                description={localize('com_ui_happy_birthday')}
-                aria-label={localize('com_ui_happy_birthday')}
-              >
-                <BirthdayIcon />
-              </TooltipAnchor>
-            )}
+            <img
+              src="/assets/streetbot-icon-home-dark-animated.svg"
+              alt="Street Bot"
+              className="hidden h-auto w-[92px] dark:block sm:w-[104px]"
+            />
+            <img
+              src="/assets/streetbot-text-light.svg"
+              alt="Street Bot"
+              className="block h-auto w-[118px] dark:hidden sm:w-[132px]"
+            />
+            <img
+              src="/assets/streetbot-text-home-dark-soft.svg"
+              alt="Street Bot"
+              className="hidden h-auto w-[118px] dark:block sm:w-[132px]"
+            />
           </div>
-          {((isAgent || isAssistant) && name) || name ? (
-            <div className="flex flex-col items-center gap-0 p-2">
+        ) : (
+          <div
+            className={`flex ${textHasMultipleLines ? 'flex-col' : 'flex-col md:flex-row'} items-center justify-center gap-2`}
+          >
+            <div className={`relative size-10 justify-center ${textHasMultipleLines ? 'mb-2' : ''}`}>
+              {showStreetBotGreetingIcon ? (
+                <>
+                  <img
+                    src="/assets/streetbot-icon-home-light-animated.svg"
+                    alt="Street Bot"
+                    className="block h-full w-full object-contain dark:hidden"
+                  />
+                  <img
+                    src="/assets/streetbot-icon-home-dark-animated.svg"
+                    alt="Street Bot"
+                    className="hidden h-full w-full object-contain dark:block"
+                  />
+                </>
+              ) : (
+                <ConvoIcon
+                  agentsMap={agentsMap}
+                  assistantMap={assistantMap}
+                  conversation={conversation}
+                  endpointsConfig={endpointsConfig}
+                  containerClassName={containerClassName}
+                  context="landing"
+                  className="h-2/3 w-2/3 text-black dark:text-white"
+                  size={41}
+                />
+              )}
+              {startupConfig?.showBirthdayIcon && (
+                <TooltipAnchor
+                  className="absolute bottom-[27px] right-2"
+                  description={localize('com_ui_happy_birthday')}
+                  aria-label={localize('com_ui_happy_birthday')}
+                >
+                  <BirthdayIcon />
+                </TooltipAnchor>
+              )}
+            </div>
+            {((isAgent || isAssistant) && name) || name ? (
+              <div className="flex flex-col items-center gap-0 p-2">
+                <SplitText
+                  key={`split-text-${name}`}
+                  text={name}
+                  className={`${getTextSizeClass(name)} font-medium text-text-primary`}
+                  delay={50}
+                  textAlign="center"
+                  animationFrom={{ opacity: 0, transform: 'translate3d(0,50px,0)' }}
+                  animationTo={{ opacity: 1, transform: 'translate3d(0,0,0)' }}
+                  easing={easings.easeOutCubic}
+                  threshold={0}
+                  rootMargin="0px"
+                  onLineCountChange={handleLineCountChange}
+                />
+              </div>
+            ) : (
               <SplitText
-                key={`split-text-${name}`}
-                text={name}
-                className={`${getTextSizeClass(name)} font-medium text-text-primary`}
+                key={`split-text-${greetingText}${user?.name ? '-user' : ''}`}
+                text={greetingText}
+                className={`${getTextSizeClass(greetingText)} font-medium text-text-primary`}
                 delay={50}
                 textAlign="center"
                 animationFrom={{ opacity: 0, transform: 'translate3d(0,50px,0)' }}
@@ -181,23 +241,9 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
                 rootMargin="0px"
                 onLineCountChange={handleLineCountChange}
               />
-            </div>
-          ) : (
-            <SplitText
-              key={`split-text-${greetingText}${user?.name ? '-user' : ''}`}
-              text={greetingText}
-              className={`${getTextSizeClass(greetingText)} font-medium text-text-primary`}
-              delay={50}
-              textAlign="center"
-              animationFrom={{ opacity: 0, transform: 'translate3d(0,50px,0)' }}
-              animationTo={{ opacity: 1, transform: 'translate3d(0,0,0)' }}
-              easing={easings.easeOutCubic}
-              threshold={0}
-              rootMargin="0px"
-              onLineCountChange={handleLineCountChange}
-            />
-          )}
-        </div>
+            )}
+          </div>
+        )}
         {description && (
           <div className="animate-fadeIn mt-4 max-w-md text-center text-sm font-normal text-text-primary">
             {description}

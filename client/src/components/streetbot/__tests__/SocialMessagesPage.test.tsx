@@ -1,4 +1,8 @@
-import { buildIframeSrc } from '~/components/streetbot/messages/SocialMessagesPage';
+import {
+  buildIframeSrc,
+  getMessagesDiagnosticsSeverity,
+  MESSAGES_DIAGNOSTICS_ENDPOINT,
+} from '~/components/streetbot/messages/SocialMessagesPage';
 
 describe('SocialMessagesPage iframe routing', () => {
   it('defaults to the embedded DM directory', () => {
@@ -21,5 +25,32 @@ describe('SocialMessagesPage iframe routing', () => {
     expect(buildIframeSrc('?channel=channel-general&msg=legacy-message-link')).toBe(
       '/social/channels/general?embed=true&message=legacy-message-link',
     );
+  });
+
+  it('uses the Social diagnostics endpoint for teammate setup checks', () => {
+    expect(MESSAGES_DIAGNOSTICS_ENDPOINT).toBe('/social/api/setup/diagnostics');
+  });
+
+  it('surfaces unreachable Social diagnostics as an error', () => {
+    expect(
+      getMessagesDiagnosticsSeverity({
+        phase: 'unreachable',
+        error: 'LibreChat could not reach diagnostics',
+      }),
+    ).toBe('error');
+  });
+
+  it('passes through warning diagnostics from Social', () => {
+    expect(
+      getMessagesDiagnosticsSeverity({
+        phase: 'ready',
+        diagnostics: {
+          service: 'street-voices-social',
+          generatedAt: '2026-05-04T12:00:00.000Z',
+          status: 'warning',
+          checks: [],
+        },
+      }),
+    ).toBe('warning');
   });
 });

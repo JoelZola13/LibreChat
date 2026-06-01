@@ -23364,27 +23364,31 @@ export default function CaseManagementPage() {
       }
       setDraftNotice(serverPersistenceReady ? 'Saved graph workspace removed and will sync to Street Voices.' : 'Saved graph workspace removed locally.');
     };
-    useEffect(() => {
-      if (typeof window === 'undefined') return;
-      if (new URLSearchParams(window.location.search).get('graphExpand') !== '1') return;
-      if (!selectedLifeDomainGraphNode || !selectedLifeDomainGraphNodeSourceIds.length) return;
-
+    if (
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('graphExpand') === '1' &&
+      selectedLifeDomainGraphNode &&
+      selectedLifeDomainGraphNodeSourceIds.length
+    ) {
       const sourceIdsToLoad = selectedLifeDomainGraphNodeSourceIds.slice(0, 4);
       const requestKey = `${selectedLifeDomainGraphNode.id}:${sourceIdsToLoad.join('|')}`;
-      if (lastGraphExpansionRequestRef.current === requestKey) return;
-      lastGraphExpansionRequestRef.current = requestKey;
-      setWikiIngestStatus(
-        `Expanding ${selectedLifeDomainGraphNode.label}: loading ${sourceIdsToLoad.length} connected source graph${sourceIdsToLoad.length === 1 ? '' : 's'} from Neo4j or saved graph fallback.`,
-      );
-      void (async () => {
-        for (const sourceId of sourceIdsToLoad) {
-          await loadWikiGraphBrowser(sourceId, Boolean(wikiGraphBrowsers[sourceId]));
-        }
-        setWikiIngestStatus(
-          `Graph expansion loaded for ${selectedLifeDomainGraphNode.label}. Review the connected source graph cards before approving relationships.`,
-        );
-      })();
-    }, [selectedLifeDomainGraphNodeId, selectedLifeDomainGraphNodeSourceIds.join('|')]);
+      if (lastGraphExpansionRequestRef.current !== requestKey) {
+        lastGraphExpansionRequestRef.current = requestKey;
+        window.setTimeout(() => {
+          setWikiIngestStatus(
+            `Expanding ${selectedLifeDomainGraphNode.label}: loading ${sourceIdsToLoad.length} connected source graph${sourceIdsToLoad.length === 1 ? '' : 's'} from Neo4j or saved graph fallback.`,
+          );
+          void (async () => {
+            for (const sourceId of sourceIdsToLoad) {
+              await loadWikiGraphBrowser(sourceId, Boolean(wikiGraphBrowsers[sourceId]));
+            }
+            setWikiIngestStatus(
+              `Graph expansion loaded for ${selectedLifeDomainGraphNode.label}. Review the connected source graph cards before approving relationships.`,
+            );
+          })();
+        }, 0);
+      }
+    }
     const selectedPageLifeDomainRelationshipDecisionCounts =
       selectedPageLifeDomainRelationshipItems.reduce<Record<WikiRelationshipReviewStatus, number>>(
         (counts, relationship) => {
@@ -26704,19 +26708,19 @@ export default function CaseManagementPage() {
       .map((hook) => `${hook.id}:${hook.nextSnapshotAt}`)
       .sort()
       .join('|');
-    useEffect(() => {
-      if (typeof window === 'undefined') return;
-      if (!dueWikiReviewDigestAutomationSignature) return;
-      if (wikiReviewDigestAutomationAutoRunRef.current === dueWikiReviewDigestAutomationSignature) return;
+    if (
+      typeof window !== 'undefined' &&
+      dueWikiReviewDigestAutomationSignature &&
+      wikiReviewDigestAutomationAutoRunRef.current !== dueWikiReviewDigestAutomationSignature
+    ) {
       wikiReviewDigestAutomationAutoRunRef.current = dueWikiReviewDigestAutomationSignature;
-      const timer = window.setTimeout(() => {
+      window.setTimeout(() => {
         dueWikiReviewDigestAutomationHooks.forEach((hook) => runWikiReviewDigestAutomationHook(hook, 'auto-runner'));
         setWikiIngestStatus(
           `${dueWikiReviewDigestAutomationHooks.length} due digest automation hook${dueWikiReviewDigestAutomationHooks.length === 1 ? '' : 's'} auto-captured while Case Wiki was open.`,
         );
       }, 400);
-      return () => window.clearTimeout(timer);
-    }, [dueWikiReviewDigestAutomationSignature]);
+    }
     const latestWikiReviewBoardDigestSnapshot = wikiReviewBoardDigestSnapshots[0] ?? null;
     const previousWikiReviewBoardDigestSnapshot = wikiReviewBoardDigestSnapshots[1] ?? null;
     const wikiReviewBoardDigestComparisonRows =

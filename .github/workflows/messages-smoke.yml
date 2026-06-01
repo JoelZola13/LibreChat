@@ -1,0 +1,73 @@
+name: Messages Smoke Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+      - dev-staging
+      - release/*
+    paths:
+      - '.github/workflows/messages-smoke.yml'
+      - 'client/src/components/streetbot/messages/**'
+      - 'client/src/components/streetbot/__tests__/SocialMessagesPage.test.tsx'
+      - 'e2e/playwright.messages.config.ts'
+      - 'e2e/setup/bootstrap-messages-storage-state.mjs'
+      - 'e2e/setup/capture-messages-storage-state.mjs'
+      - 'e2e/setup/seed-messages-storage-state.mjs'
+      - 'e2e/setup/verify-messages-storage-state.mjs'
+      - 'e2e/specs/social-messages-smoke.spec.ts'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'LibreChat base URL for a running Nanobot stack'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  messages-smoke:
+    name: Run Messages smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LIBRECHAT_BASE_URL: ${{ github.event.inputs.base_url || vars.MESSAGES_SMOKE_BASE_URL }}
+      MESSAGES_STORAGE_STATE_JSON: ${{ secrets.MESSAGES_STORAGE_STATE_JSON }}
+      MESSAGES_STORAGE_STATE_BASE64: ${{ secrets.MESSAGES_STORAGE_STATE_BASE64 }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Check Messages smoke target
+        id: smoke-target
+        shell: bash
+        run: |
+          if [ -z "$LIBRECHAT_BASE_URL" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Set the MESSAGES_SMOKE_BASE_URL repository variable, or pass base_url manually, to run the Messages smoke workflow."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Messages smoke target: $LIBRECHAT_BASE_URL"
+          fi
+
+      - name: Use Node.js 20.x
+        if: steps.smoke-target.outputs.configured == 'true'
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.smoke-target.outputs.configured == 'true'
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        if: steps.smoke-target.outputs.configured == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authenticated Messages smoke tests
+        if: steps.smoke-target.outputs.configured == 'true'
+        run: npm run e2e:messages-ci:required

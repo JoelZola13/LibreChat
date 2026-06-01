@@ -34,6 +34,7 @@ import EditBadges from './EditBadges';
 import BadgeRow from './BadgeRow';
 import Mention from './Mention';
 import store from '~/store';
+import { isStreetBot } from '~/config/appVariant';
 
 const ChatForm = memo(({ index = 0 }: { index?: number }) => {
   const submitButtonRef = useRef<HTMLButtonElement>(null);
@@ -321,7 +322,10 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
               </div>
               <BadgeRow
                 showEphemeralBadges={
-                  !!endpoint && !isAgentsEndpoint(endpoint) && !isAssistantsEndpoint(endpoint)
+                  !isStreetBot &&
+                  !!endpoint &&
+                  !isAgentsEndpoint(endpoint) &&
+                  !isAssistantsEndpoint(endpoint)
                 }
                 isSubmitting={isSubmitting}
                 conversationId={conversationId}

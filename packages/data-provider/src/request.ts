@@ -72,6 +72,26 @@ const dispatchTokenUpdatedEvent = (token: string) => {
   window.dispatchEvent(new CustomEvent('tokenUpdated', { detail: token }));
 };
 
+const isStreetBotPublicPath = () => {
+  if (typeof window === 'undefined') return false;
+
+  const path = window.location.pathname || '/';
+  return (
+    path === '/' ||
+    path === '/home' ||
+    path === '/about' ||
+    path === '/how-it-works' ||
+    path === '/terms' ||
+    path === '/privacy' ||
+    path === '/products' ||
+    path === '/pricing' ||
+    path.startsWith('/news') ||
+    path.startsWith('/directory') ||
+    path.startsWith('/gallery') ||
+    path.startsWith('/creatives')
+  );
+};
+
 const processQueue = (error: AxiosError | null, token: string | null = null) => {
   failedQueue.forEach((prom) => {
     if (error) {
@@ -133,6 +153,10 @@ if (typeof window !== 'undefined') {
           } else if (window.location.href.includes('share/')) {
             console.log(
               `Refresh token failed from shared link, attempting request to ${originalRequest.url}`,
+            );
+          } else if (isStreetBotPublicPath()) {
+            console.log(
+              `Refresh token failed on public StreetBot route, attempting request to ${originalRequest.url}`,
             );
           } else {
             window.location.href = endpoints.loginPage();

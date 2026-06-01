@@ -304,8 +304,16 @@ export function getModelSpecPreset(modelSpec?: t.TModelSpec) {
   if (!modelSpec) {
     return;
   }
+  const endpoint = modelSpec.preset.endpoint ?? '';
+  const endpointType =
+    modelSpec.preset.endpointType ??
+    (endpoint && !Object.values(EModelEndpoint).includes(endpoint as EModelEndpoint)
+      ? EModelEndpoint.custom
+      : undefined);
+
   return {
     ...modelSpec.preset,
+    ...(endpointType ? { endpointType } : {}),
     spec: modelSpec.name,
     iconURL: getModelSpecIconURL(modelSpec),
   };

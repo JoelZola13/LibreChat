@@ -10,10 +10,13 @@ export const GlassBackground = memo(function GlassBackground() {
   const { pathname } = useLocation();
   const { gradientOrbs, isDark } = useGlassStyles();
   const isHomeStyledRoute =
+    pathname === "/" ||
     pathname === "/home" ||
     pathname === "/c/new" ||
     (typeof window !== "undefined" &&
-      (window.location.pathname === "/home" || window.location.pathname === "/c/new"));
+      (window.location.pathname === "/" ||
+        window.location.pathname === "/home" ||
+        window.location.pathname === "/c/new"));
   const isHomeDarkRoute =
     isHomeStyledRoute &&
     (isDark ||
