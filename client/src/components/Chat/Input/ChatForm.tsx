@@ -240,6 +240,7 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
           <PromptsCommand index={index} textAreaRef={textAreaRef} submitPrompt={submitPrompt} />
           <div
             onClick={handleContainerClick}
+            data-testid="streetbot-chat-composer"
             className={cn(
               'relative flex w-full flex-grow flex-col overflow-hidden rounded-t-3xl border pb-4 text-text-primary transition-all duration-200 sm:rounded-3xl sm:pb-0',
               isTextAreaFocused ? 'shadow-lg' : 'shadow-md',

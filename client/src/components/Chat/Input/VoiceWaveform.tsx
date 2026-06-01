@@ -4,7 +4,7 @@ export default function VoiceWaveform({ status = 'Listening' }: { status?: strin
   return (
     <div
       data-testid="streetbot-recording-waveform"
-      className="pointer-events-none absolute bottom-2 left-14 right-24 z-10 flex h-9 items-center justify-center gap-1 rounded-full border border-white/10 bg-black/10 px-4 backdrop-blur-sm dark:bg-white/5"
+      className="pointer-events-none absolute bottom-2 left-14 right-24 z-30 flex h-9 items-center justify-center gap-1 rounded-full border border-white/10 bg-black/10 px-4 backdrop-blur-sm dark:bg-white/5"
       aria-hidden="true"
     >
       <style>

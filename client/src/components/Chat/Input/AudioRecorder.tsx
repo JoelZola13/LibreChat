@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { MicOff } from 'lucide-react';
 import { useToastContext, TooltipAnchor, ListeningIcon, Spinner } from '@librechat/client';
 import { useLocalize, useSpeechToText, useGetAudioSettings } from '~/hooks';
@@ -129,14 +130,19 @@ export default function AudioRecorder({
 
   const isVoiceActive = isListening === true || realtimeVoice.isActive;
   const isVoiceLoading = isLoading === true || realtimeVoice.isConnecting;
+  const waveform = isVoiceActive ? (
+    <VoiceWaveform status={realtimeVoice.isSpeaking ? 'StreetBot is speaking' : 'Listening'} />
+  ) : null;
+  const waveformPortalTarget =
+    typeof document !== 'undefined'
+      ? textAreaRef.current.closest('[data-testid="streetbot-chat-composer"]')
+      : null;
 
   return (
     <>
       {isVoiceActive && (
         <>
-          <VoiceWaveform
-            status={realtimeVoice.isSpeaking ? 'StreetBot is speaking' : 'Listening'}
-          />
+          {waveformPortalTarget ? createPortal(waveform, waveformPortalTarget) : waveform}
           <span className="sr-only" aria-live="polite">
             {localize('com_ui_use_micrphone')}
           </span>
