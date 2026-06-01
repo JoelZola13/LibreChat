@@ -96,7 +96,7 @@ export default function Presentation({ children }: { children: React.ReactNode }
 
   if (isStreetBot) {
     return (
-      <DragDropWrapper className="relative flex w-full grow overflow-hidden bg-transparent">
+      <DragDropWrapper className="relative flex min-w-0 flex-1 overflow-hidden bg-transparent">
         {content}
       </DragDropWrapper>
     );
