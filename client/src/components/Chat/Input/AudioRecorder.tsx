@@ -135,7 +135,9 @@ export default function AudioRecorder({
   ) : null;
   const waveformPortalTarget =
     typeof document !== 'undefined'
-      ? textAreaRef.current.closest('[data-testid="streetbot-chat-composer"]')
+      ? textAreaRef.current.closest(
+          '[data-streetbot-composer="true"], [data-testid="streetbot-chat-composer"]',
+        )
       : null;
 
   return (
