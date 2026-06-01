@@ -10,6 +10,7 @@ import { SidePanelGroup } from '~/components/SidePanel';
 import { useSetFilesToDelete } from '~/hooks';
 import { logger } from '~/utils';
 import store from '~/store';
+import { isStreetBot } from '~/config/appVariant';
 
 const parseStoredJSON = <T,>(key: string, fallback: T): T => {
   const value = localStorage.getItem(key);
@@ -87,6 +88,20 @@ export default function Presentation({ children }: { children: React.ReactNode }
     return null;
   }, [artifactsVisibility, artifacts]);
 
+  const content = (
+    <main className="flex h-full flex-col overflow-y-auto" role="main">
+      {children}
+    </main>
+  );
+
+  if (isStreetBot) {
+    return (
+      <DragDropWrapper className="relative flex w-full grow overflow-hidden bg-transparent">
+        {content}
+      </DragDropWrapper>
+    );
+  }
+
   return (
     <DragDropWrapper className="relative flex w-full grow overflow-hidden bg-presentation">
       <SidePanelProvider>
@@ -96,9 +111,7 @@ export default function Presentation({ children }: { children: React.ReactNode }
           defaultCollapsed={defaultCollapsed}
           artifacts={artifactsElement}
         >
-          <main className="flex h-full flex-col overflow-y-auto" role="main">
-            {children}
-          </main>
+          {content}
         </SidePanelGroup>
       </SidePanelProvider>
     </DragDropWrapper>
