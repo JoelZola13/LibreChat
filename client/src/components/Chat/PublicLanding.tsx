@@ -24,6 +24,10 @@ function PublicLanding() {
   const { isAuthenticated } = useAuthContext();
   const { pathname } = useLocation();
 
+  if (!isAuthenticated && isStreetBot && pathname.startsWith('/c/')) {
+    return <Navigate to="/login" replace />;
+  }
+
   // Authenticated StreetBot users at / → redirect to /home (renders inside Root with sidebar)
   if (isAuthenticated && isStreetBot && pathname !== '/home') {
     return <Navigate to="/home" replace />;
@@ -141,10 +145,11 @@ function PublicLanding() {
  */
 function PublicChatInput() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewStreamRef = useRef<MediaStream | null>(null);
   const [isVoicePreviewActive, setIsVoicePreviewActive] = useState(false);
-  const go = () => navigate('/c/new');
+  const go = () => navigate(pathname.startsWith('/c/') ? '/login' : '/c/new');
 
   const stopVoicePreview = useCallback(() => {
     if (previewTimeoutRef.current) {
