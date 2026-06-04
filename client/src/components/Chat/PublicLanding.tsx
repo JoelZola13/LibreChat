@@ -193,9 +193,7 @@ function PublicChatInput() {
   useEffect(() => stopVoicePreview, [stopVoicePreview]);
 
   return (
-    <div
-      className={cn('w-full px-6 sm:px-0', 'max-w-3xl transition-all duration-200 xl:max-w-4xl')}
-    >
+    <div className="w-full max-w-[920px] px-5 transition-all duration-200 sm:px-6">
       <div
         onClick={go}
         onKeyDown={(e) => {
@@ -203,10 +201,10 @@ function PublicChatInput() {
         }}
         role="button"
         tabIndex={0}
-        className="mx-auto flex w-full cursor-pointer flex-row sm:hidden"
+        className="mx-auto flex w-full cursor-pointer flex-row"
       >
         <div
-          className="relative flex min-h-[120px] w-full flex-col justify-between overflow-hidden rounded-[28px] border px-4 py-4 text-text-primary shadow-md transition-all duration-200"
+          className="relative flex min-h-[104px] w-full flex-col justify-between overflow-hidden rounded-[24px] border px-5 py-4 text-text-primary shadow-md transition-all duration-200"
           style={{
             background: 'var(--sb-color-input-bg)',
             borderColor: 'var(--sb-color-input-border)',
@@ -215,14 +213,14 @@ function PublicChatInput() {
           }}
         >
           {isVoicePreviewActive && <VoiceWaveform />}
-          <div className="px-1 text-[18px] leading-6 text-text-secondary">
+          <div className="text-[16px] font-medium leading-6 text-text-secondary">
             Message Street Voices 0.5
           </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex size-8 items-center justify-center rounded-full text-text-primary">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-8 items-center justify-center rounded-full text-text-primary transition-colors hover:bg-surface-hover">
                 <svg
-                  className="size-6"
+                  className="size-5"
                   xmlns="http://www.w3.org/2000/svg"
                   width="24"
                   height="24"
@@ -237,9 +235,9 @@ function PublicChatInput() {
                   <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                 </svg>
               </div>
-              <div className="flex size-10 items-center justify-center rounded-full bg-blue-500/20 text-blue-400">
+              <div className="flex size-8 items-center justify-center rounded-full bg-blue-500/20 text-blue-400">
                 <svg
-                  className="size-5"
+                  className="size-4"
                   xmlns="http://www.w3.org/2000/svg"
                   width="24"
                   height="24"
@@ -251,7 +249,7 @@ function PublicChatInput() {
                 </svg>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 className="relative z-20 flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover"
@@ -260,7 +258,7 @@ function PublicChatInput() {
                 onClick={handleVoicePreviewClick}
               >
                 <svg
-                  className="size-6"
+                  className="size-5"
                   xmlns="http://www.w3.org/2000/svg"
                   width="24"
                   height="24"
@@ -301,120 +299,6 @@ function PublicChatInput() {
                   />
                 </svg>
               </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="hidden sm:block" style={{ transform: 'translateY(-5px)' }}>
-        <div
-          onClick={go}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') go();
-          }}
-          role="button"
-          tabIndex={0}
-          className={cn(
-            'mx-auto flex w-full cursor-pointer flex-row gap-3 sm:mb-28 sm:px-2',
-            'md:max-w-2xl xl:max-w-3xl',
-          )}
-        >
-          <div className="relative flex h-full flex-1 items-stretch md:flex-col">
-            <div className="flex w-full items-center">
-              <div
-                className={cn(
-                  'relative flex w-full flex-grow flex-col overflow-hidden rounded-3xl border text-text-primary shadow-md transition-all duration-200',
-                  'border-border-light bg-surface-chat',
-                )}
-                style={{
-                  background: 'var(--sb-color-input-bg)',
-                  borderColor: 'var(--sb-color-input-border)',
-                  backdropFilter: 'blur(18px) saturate(140%)',
-                  WebkitBackdropFilter: 'blur(18px) saturate(140%)',
-                }}
-              >
-                {isVoicePreviewActive && <VoiceWaveform />}
-                <div className="flex items-center gap-2 px-2 py-1.5">
-                  {/* Plus button — matches PlusButton: size-9 rounded-full */}
-                  <div className="flex size-9 items-center justify-center rounded-full p-1 hover:bg-surface-hover">
-                    <svg
-                      className="size-5"
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                  </div>
-                  {/* Textarea placeholder — matches TextareaAutosize area */}
-                  <div className="relative flex-1">
-                    <div
-                      className="m-0 w-full resize-none px-5 py-1 text-text-secondary md:py-1"
-                      style={{ height: 24, lineHeight: '24px' }}
-                    >
-                      Message Street Voices...
-                    </div>
-                  </div>
-                  {/* Mic icon — matches AudioRecorder button */}
-                  <button
-                    type="button"
-                    className="relative z-20 flex size-9 items-center justify-center rounded-full p-1 text-text-secondary hover:bg-surface-hover"
-                    aria-label="Start StreetBot voice"
-                    aria-pressed={isVoicePreviewActive}
-                    onClick={handleVoicePreviewClick}
-                  >
-                    <svg
-                      className="size-5"
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                      <line x1="12" y1="19" x2="12" y2="23" />
-                      <line x1="8" y1="23" x2="16" y2="23" />
-                    </svg>
-                  </button>
-                  {/* Send button — matches SendButton: rounded-full bg-text-primary p-1.5, disabled style */}
-                  <button
-                    className="rounded-full bg-text-primary p-1.5 text-text-primary opacity-10 disabled:cursor-not-allowed"
-                    aria-label="Send message"
-                    tabIndex={-1}
-                    disabled
-                  >
-                    <svg
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-white dark:text-black"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M7 11L12 6L17 11M12 18V7"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         </div>

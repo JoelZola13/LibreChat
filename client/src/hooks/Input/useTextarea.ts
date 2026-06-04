@@ -101,7 +101,7 @@ export default function useTextarea({
       }
 
       if (isStreetBotConversation) {
-        return `${localize('com_endpoint_message_new', { 0: 'Street Bot' })}`;
+        return 'Message Street Voices 0.5';
       }
 
       const sender =

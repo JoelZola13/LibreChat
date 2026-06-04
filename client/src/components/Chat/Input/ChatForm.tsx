@@ -243,7 +243,10 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
             data-testid="streetbot-chat-composer"
             data-streetbot-composer="true"
             className={cn(
-              'relative flex w-full flex-grow flex-col overflow-hidden rounded-t-3xl border pb-4 text-text-primary transition-all duration-200 sm:rounded-3xl sm:pb-0',
+              'relative flex w-full flex-grow flex-col overflow-hidden border text-text-primary transition-all duration-200',
+              isStreetBot
+                ? 'min-h-[104px] rounded-[24px] pb-0'
+                : 'rounded-t-3xl pb-4 sm:rounded-3xl sm:pb-0',
               isTextAreaFocused ? 'shadow-lg' : 'shadow-md',
               isStreetBot
                 ? 'border-white/15 bg-transparent'
@@ -272,7 +275,13 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
             />
             <FileFormChat conversation={conversation} />
             {endpoint && (
-              <div className={cn('flex', isRTL ? 'flex-row-reverse' : 'flex-row')}>
+              <div
+                className={cn(
+                  'flex',
+                  isStreetBot && 'px-5 pt-4',
+                  isRTL ? 'flex-row-reverse' : 'flex-row',
+                )}
+              >
                 <div
                   className="relative flex-1"
                   style={
@@ -308,47 +317,79 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
                     onBlur={setIsTextAreaFocused.bind(null, false)}
                     aria-label={localize('com_ui_message_input')}
                     onClick={handleFocusOrClick}
-                    style={{ height: 44, overflowY: 'auto' }}
+                    style={{
+                      height: isStreetBot ? 28 : 44,
+                      overflowY: 'auto',
+                    }}
                     className={cn(
-                      baseClasses,
+                      isStreetBot
+                        ? 'm-0 max-h-[32vh] w-full resize-none bg-transparent p-0 text-[16px] font-medium leading-6 placeholder-black/50 dark:placeholder-white/50'
+                        : baseClasses,
                       removeFocusRings,
                       'scrollbar-hover transition-[max-height] duration-200 disabled:cursor-not-allowed',
                     )}
                   />
                 </div>
-                <div className="flex flex-col items-start justify-start pr-2.5 pt-1.5">
-                  <CollapseChat
-                    isCollapsed={isCollapsed}
-                    isScrollable={isMoreThanThreeRows}
-                    setIsCollapsed={setIsCollapsed}
-                  />
-                </div>
+                {!isStreetBot && (
+                  <div className="flex flex-col items-start justify-start pr-2.5 pt-1.5">
+                    <CollapseChat
+                      isCollapsed={isCollapsed}
+                      isScrollable={isMoreThanThreeRows}
+                      setIsCollapsed={setIsCollapsed}
+                    />
+                  </div>
+                )}
               </div>
             )}
             <div
               className={cn(
-                '@container items-between flex gap-2 pb-2',
+                '@container items-between flex gap-2',
+                isStreetBot ? 'px-4 pb-3 pt-2' : 'pb-2',
                 isRTL ? 'flex-row-reverse' : 'flex-row',
               )}
             >
-              <div className={`${isRTL ? 'mr-2' : 'ml-2'}`}>
+              <div
+                className={cn(
+                  'flex items-center gap-2',
+                  !isStreetBot && (isRTL ? 'mr-2' : 'ml-2'),
+                )}
+              >
                 <AttachFileChat conversation={conversation} disableInputs={disableInputs} />
+                {isStreetBot && (
+                  <button
+                    type="button"
+                    className="flex size-8 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 transition-colors hover:bg-blue-500/25"
+                    aria-label="Use location"
+                    disabled={disableInputs}
+                  >
+                    <svg
+                      className="size-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z" />
+                    </svg>
+                  </button>
+                )}
               </div>
-              <BadgeRow
-                showEphemeralBadges={
-                  !isStreetBot &&
-                  !!endpoint &&
-                  !isAgentsEndpoint(endpoint) &&
-                  !isAssistantsEndpoint(endpoint)
-                }
-                isSubmitting={isSubmitting}
-                conversationId={conversationId}
-                specName={conversation?.spec}
-                onChange={setBadges}
-                isInChat={
-                  Array.isArray(conversation?.messages) && conversation.messages.length >= 1
-                }
-              />
+              {!isStreetBot && (
+                <BadgeRow
+                  showEphemeralBadges={
+                    !!endpoint && !isAgentsEndpoint(endpoint) && !isAssistantsEndpoint(endpoint)
+                  }
+                  isSubmitting={isSubmitting}
+                  conversationId={conversationId}
+                  specName={conversation?.spec}
+                  onChange={setBadges}
+                  isInChat={
+                    Array.isArray(conversation?.messages) && conversation.messages.length >= 1
+                  }
+                />
+              )}
               <div className="mx-auto flex" />
               {SpeechToText && (
                 <AudioRecorder
