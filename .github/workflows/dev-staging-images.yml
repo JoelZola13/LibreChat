@@ -71,7 +71,7 @@ jobs:
       # Build and push Docker images for each target
       - name: Build and push Docker images
         if: ${{ env.HAS_DOCKERHUB_SECRETS == 'true' }}
-        uses: docker/build-push-action@v7.1.0
+        uses: docker/build-push-action@v7.2.0
         with:
           context: .
           file: ${{ matrix.file }}
@@ -86,7 +86,7 @@ jobs:
 
       - name: Build and push Docker images to GHCR
         if: ${{ env.HAS_DOCKERHUB_SECRETS != 'true' }}
-        uses: docker/build-push-action@v7.1.0
+        uses: docker/build-push-action@v7.2.0
         with:
           context: .
           file: ${{ matrix.file }}
