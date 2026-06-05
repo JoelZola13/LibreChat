@@ -417,6 +417,9 @@
     s.textContent = [
       'button[aria-label="Toggle theme"] { display:none !important; }',
       'a[aria-label="Settings"] { display:none !important; }',
+      'html[data-sv-agent-selected="true"] [aria-label="Select a model"]::before { content:none !important; display:none !important; background-image:none !important; }',
+      'html[data-sv-agent-selected="true"] .relative.size-10.justify-center::before { content:none !important; display:none !important; background-image:none !important; }',
+      'html[data-sv-agent-selected="true"] .relative.size-10.justify-center:not(:has(.sv-new-chat-landing-logo)) > * { opacity:1 !important; }',
       'html[data-theme="dark"] .sv-new-chat-landing-logo { width:100%; height:100%; display:flex; align-items:center; justify-content:center; line-height:0; }',
       'html[data-theme="dark"] .sv-new-chat-landing-logo svg { display:block; width:100%; height:100%; overflow:visible; }',
       'html[data-theme="light"] #sv-home-composer, html[data-theme="light"] form div.relative.flex.w-full.flex-grow.flex-col.overflow-hidden.rounded-t-3xl.border { border:0.5px solid rgba(0,0,0,0.12) !important; }',
@@ -550,6 +553,31 @@
       svg.setAttribute('data-sv-eye-bound', 'true');
     }
 
+    function isNonStreetBotAgentSelection() {
+      var requested = '';
+      try {
+        var params = new URL(window.location.href).searchParams;
+        requested = String(params.get('agentModel') || params.get('spec') || '').replace(/^spec-agent\//, 'agent/').toLowerCase();
+      } catch (e) {}
+
+      var selectedButton = document.querySelector('button[aria-label="Select a model"]');
+      var selectedLabel = String((selectedButton && selectedButton.textContent) || '').toLowerCase();
+      return (
+        (requested.indexOf('agent/') === 0 || selectedLabel.indexOf(' agent') !== -1) &&
+        requested.indexOf('streetbot') === -1 &&
+        selectedLabel.indexOf('streetbot') === -1 &&
+        selectedLabel.indexOf('street bot') === -1
+      );
+    }
+
+    function syncNewChatAgentFlag() {
+      if (isNonStreetBotAgentSelection()) {
+        document.documentElement.setAttribute('data-sv-agent-selected', 'true');
+      } else {
+        document.documentElement.removeAttribute('data-sv-agent-selected');
+      }
+    }
+
     function hydrateNewChatLogo(wrapper) {
       if (!wrapper || wrapper.getAttribute('data-sv-logo-src') === newChatDarkLogoIconSrc || wrapper.getAttribute('data-sv-logo-loading') === 'true') {
         return;
@@ -587,9 +615,19 @@
     }
 
     function syncNewChatLandingLogo() {
+      syncNewChatAgentFlag();
       var iconHost = document.querySelector('.flex.flex-col.items-center.gap-0.p-2 .relative.size-10.justify-center');
       if (!iconHost) {
         return false;
+      }
+
+      if (isNonStreetBotAgentSelection()) {
+        if (iconHost.getAttribute('data-sv-new-chat-logo') === 'true') {
+          iconHost.innerHTML = iconHost.getAttribute('data-sv-original-html') || '';
+          iconHost.removeAttribute('data-sv-new-chat-logo');
+          iconHost.removeAttribute('data-sv-original-html');
+        }
+        return true;
       }
 
       if (getNewChatTheme() !== 'dark') {
@@ -613,6 +651,7 @@
 
     var newChatLogoAttempts = 0;
     var newChatLogoPoll = window.setInterval(function () {
+      syncNewChatAgentFlag();
       var found = syncNewChatLandingLogo();
       newChatLogoAttempts++;
       if ((found && document.querySelector('.sv-new-chat-landing-logo svg[data-sv-inline-logo="true"]')) || newChatLogoAttempts > 50) {
@@ -627,5 +666,7 @@
     });
     window.addEventListener('focus', syncNewChatLandingLogo, { passive: true });
     document.addEventListener('visibilitychange', syncNewChatLandingLogo, { passive: true });
+    var newChatAgentObserver = new MutationObserver(syncNewChatAgentFlag);
+    newChatAgentObserver.observe(document.documentElement, { childList: true, subtree: true });
   }
 })();
