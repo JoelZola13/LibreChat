@@ -7,12 +7,21 @@ import './mobile.css';
 import { ApiErrorBoundaryProvider } from './hooks/ApiErrorBoundaryContext';
 import 'katex/dist/katex.min.css';
 import 'katex/dist/contrib/copy-tex.js';
+import { installLocalStreetBotReadProxy } from './components/streetbot/shared/apiConfig';
 
-const isStreetBotVariant = (import.meta.env.VITE_APP_VARIANT || 'streetbot') === 'streetbot';
+const runtimeHost = window.location.hostname;
+const runtimePort = window.location.port;
+const runtimeForcesStreetBot =
+  runtimePort === '3180' ||
+  runtimeHost === 'streetbot-directory.pages.dev' ||
+  runtimeHost.endsWith('.streetbot-directory.pages.dev');
+const isStreetBotVariant =
+  runtimeForcesStreetBot || (import.meta.env.VITE_APP_VARIANT || 'streetbot') === 'streetbot';
 
 if (isStreetBotVariant) {
+  installLocalStreetBotReadProxy();
   try {
-    if (!localStorage.getItem('color-theme')) {
+    if (runtimeForcesStreetBot || !localStorage.getItem('color-theme')) {
       localStorage.setItem('color-theme', 'dark');
       localStorage.setItem('theme', 'dark');
       document.documentElement.classList.remove('light');

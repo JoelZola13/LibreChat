@@ -1,10 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, CheckCircle2, ChevronRight, Clock3, Layers3, Mail, MapPin, Phone, Users, Video } from "lucide-react";
-import { useLocation, useParams } from "react-router-dom";
-import { findAcademyStreetProfileByInstructorName } from "../profile/academyStreetProfiles";
-import { sbFetch } from "../shared/sbFetch";
-import { useAcademyUserId } from "./useAcademyUserId";
-import { CourseReviews } from "./CourseReviews";
+import { useEffect, useMemo, useState } from 'react';
+import {
+  BookOpen,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  Layers3,
+  Mail,
+  MapPin,
+  Phone,
+  Users,
+  Video,
+} from 'lucide-react';
+import { useLocation, useParams } from 'react-router-dom';
+import { findAcademyStreetProfileByInstructorName } from '../profile/academyStreetProfiles';
+import { sbFetch } from '../shared/sbFetch';
+import { useAcademyUserId } from './useAcademyUserId';
+import { CourseReviews } from './CourseReviews';
+import { getAcademyProgramCourseDisplayTitle } from './academyLearningPaths';
 import {
   formatCourseLevel,
   getCourseCohortMeta,
@@ -16,7 +29,9 @@ import {
   getCourseScheduleNotesFromTags,
   getCourseStartDateFromTags,
   getCourseStartMonthFromTags,
-} from "./academyCourseMeta";
+  getCourseWorkshopSessions,
+} from './academyCourseMeta';
+import AcademyNavigationChrome, { ACADEMY_DESKTOP_CONTENT_LEFT } from './AcademyNavigationChrome';
 
 type Course = {
   id: string;
@@ -63,19 +78,19 @@ type Enrollment = {
 export default function AcademyCourseDetailPage() {
   const sampleCourseFlyers = [
     {
-      src: "/assets/academy-flyers/course-flyer-front-apr2026.png",
-      alt: "Street Voices Academy sample course flyer front",
+      src: '/assets/academy-flyers/course-flyer-front-apr2026.png',
+      alt: 'Street Voices Academy sample course flyer front',
     },
     {
-      src: "/assets/academy-flyers/course-flyer-back-apr2026.png",
-      alt: "Street Voices Academy sample course flyer back",
+      src: '/assets/academy-flyers/course-flyer-back-apr2026.png',
+      alt: 'Street Voices Academy sample course flyer back',
     },
   ];
   const { courseId } = useParams();
   const location = useLocation();
-  const basePath = location.pathname.startsWith("/learning") ? "/learning" : "/academy";
+  const basePath = location.pathname.startsWith('/learning') ? '/learning' : '/academy';
   const userId = useAcademyUserId();
-  const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
   const [course, setCourse] = useState<Course | null>(null);
   const [modules, setModules] = useState<Array<Module & { lessons: Lesson[] }>>([]);
@@ -88,13 +103,13 @@ export default function AcademyCourseDetailPage() {
 
   const colors = useMemo(
     () => ({
-      bg: "var(--sb-color-background)",
-      cardBg: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.42)",
-      border: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)",
-      text: isDark ? "#fff" : "#111",
-      textSecondary: isDark ? "rgba(255,255,255,0.72)" : "#4b5563",
-      textMuted: isDark ? "rgba(255,255,255,0.5)" : "#6b7280",
-      accent: "#FFD600",
+      bg: 'var(--sb-color-background)',
+      cardBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.42)',
+      border: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.1)',
+      text: isDark ? '#fff' : '#111',
+      textSecondary: isDark ? 'rgba(255,255,255,0.72)' : '#4b5563',
+      textMuted: isDark ? 'rgba(255,255,255,0.5)' : '#6b7280',
+      accent: '#FFD600',
     }),
     [isDark],
   );
@@ -116,7 +131,9 @@ export default function AcademyCourseDetailPage() {
         const [courseResp, modulesResp, enrollmentsResp] = await Promise.all([
           sbFetch(`/api/academy/courses/${courseId}`),
           sbFetch(`/api/academy/courses/${courseId}/modules`),
-          sbFetch(`/api/academy/enrollments?user_id=${encodeURIComponent(userId)}&course_id=${encodeURIComponent(courseId)}`),
+          sbFetch(
+            `/api/academy/enrollments?user_id=${encodeURIComponent(userId)}&course_id=${encodeURIComponent(courseId)}`,
+          ),
         ]);
 
         if (!courseResp.ok) {
@@ -148,7 +165,7 @@ export default function AcademyCourseDetailPage() {
 
         const enrollmentData = enrollmentsResp.ok ? await enrollmentsResp.json() : [];
         const matchingEnrollment = (Array.isArray(enrollmentData) ? enrollmentData : []).find(
-          (entry: Enrollment) => entry.course_id === courseId && entry.status !== "dropped",
+          (entry: Enrollment) => entry.course_id === courseId && entry.status !== 'dropped',
         );
         setEnrollment(matchingEnrollment ?? null);
       } finally {
@@ -167,26 +184,59 @@ export default function AcademyCourseDetailPage() {
     return course ? getCourseLearningPoints(course, modules) : [];
   }, [course, modules]);
 
-  const cohortMeta = useMemo(() => getCourseCohortMeta(course?.id), [course?.id]);
+  const displayCourseTitle = useMemo(
+    () => getAcademyProgramCourseDisplayTitle(course?.title),
+    [course?.title],
+  );
+  const workshopSessions = useMemo(() => getCourseWorkshopSessions(course?.title), [course?.title]);
+  const moduleCount = modules.length || course?.module_count || 0;
+  const lessonCount =
+    modules.reduce((sum, module) => sum + module.lessons.length, 0) || course?.lesson_count || 0;
+  const cohortMeta = useMemo(
+    () => getCourseCohortMeta(course?.id, course?.title),
+    [course?.id, course?.title],
+  );
   const courseDuration = cohortMeta.durationLabel;
   const deliveryMode = useMemo(
-    () => getCourseDeliveryModeFromTags(course?.tags) || "In person and live stream",
+    () => getCourseDeliveryModeFromTags(course?.tags) || 'In person and live stream',
     [course?.tags],
   );
   const courseOverviewParagraphs = useMemo(() => {
+    if (course && workshopSessions.length > 0) {
+      return [
+        course.description?.trim() ||
+          `${displayCourseTitle} is a focused workshop series built around practical skills, guided practice, and clear next steps.`,
+        `Learners move through ${workshopSessions.length} Wednesday workshop sessions over ${courseDuration}. Each session has its own focus, activities, prep, and takeaways so students know exactly what they are building week by week.`,
+      ];
+    }
+
     return course
       ? getCourseDetailedOverview(course, {
-          moduleCount: modules.length || course.module_count,
-          lessonCount: modules.reduce((sum, module) => sum + module.lessons.length, 0) || course.lesson_count,
+          moduleCount,
+          lessonCount,
           deliveryMode,
           duration: courseDuration,
         })
       : [];
-  }, [course, courseDuration, deliveryMode, modules]);
+  }, [
+    course,
+    courseDuration,
+    deliveryMode,
+    displayCourseTitle,
+    lessonCount,
+    moduleCount,
+    workshopSessions.length,
+  ]);
   const courseStartDate = useMemo(() => getCourseStartDateFromTags(course?.tags), [course?.tags]);
   const courseStartMonth = useMemo(() => getCourseStartMonthFromTags(course?.tags), [course?.tags]);
-  const courseMeetingDays = useMemo(() => getCourseMeetingDaysFromTags(course?.tags), [course?.tags]);
-  const courseScheduleNotes = useMemo(() => getCourseScheduleNotesFromTags(course?.tags), [course?.tags]);
+  const courseMeetingDays = useMemo(
+    () => getCourseMeetingDaysFromTags(course?.tags),
+    [course?.tags],
+  );
+  const courseScheduleNotes = useMemo(
+    () => getCourseScheduleNotesFromTags(course?.tags),
+    [course?.tags],
+  );
   const formattedCourseStartDate = useMemo(() => {
     if (!courseStartDate) {
       return null;
@@ -198,18 +248,25 @@ export default function AcademyCourseDetailPage() {
     }
 
     return parsed.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
   }, [courseStartDate]);
-  const hasScheduleMeta = Boolean(courseStartMonth || formattedCourseStartDate || courseMeetingDays.length > 0 || courseScheduleNotes);
+  const hasScheduleMeta = Boolean(
+    courseStartMonth ||
+      formattedCourseStartDate ||
+      courseMeetingDays.length > 0 ||
+      courseScheduleNotes,
+  );
   const instructorName = course?.instructor_name || course?.instructor || null;
   const instructorProfile = useMemo(
     () => findAcademyStreetProfileByInstructorName(instructorName),
     [instructorName],
   );
-  const instructorProfileHref = instructorProfile ? `/creatives/${instructorProfile.username}` : null;
+  const instructorProfileHref = instructorProfile
+    ? `/profiles/${instructorProfile.username}`
+    : null;
 
   async function handleUnenroll() {
     if (!enrollment?.id) {
@@ -220,7 +277,7 @@ export default function AcademyCourseDetailPage() {
     setUnenrollMessage(null);
     try {
       const response = await sbFetch(`/api/academy/enrollments/${enrollment.id}`, {
-        method: "DELETE",
+        method: 'DELETE',
       });
 
       if (!response.ok && response.status !== 204) {
@@ -229,9 +286,11 @@ export default function AcademyCourseDetailPage() {
 
       setEnrollment(null);
       setShowUnenrollConfirm(false);
-      setUnenrollMessage("You have been unenrolled from this course. You can enroll again anytime.");
+      setUnenrollMessage(
+        'You have been unenrolled from this course. You can enroll again anytime.',
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to unenroll right now.";
+      const message = error instanceof Error ? error.message : 'Unable to unenroll right now.';
       setUnenrollMessage(message);
     } finally {
       setUnenrolling(false);
@@ -240,9 +299,12 @@ export default function AcademyCourseDetailPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 40px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div className="h-64 rounded-[32px]" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }} />
+      <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 40px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div
+            className="h-64 rounded-[32px]"
+            style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
+          />
         </div>
       </div>
     );
@@ -250,15 +312,25 @@ export default function AcademyCourseDetailPage() {
 
   if (notFound || !course) {
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 40px" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          <div className="rounded-[32px] border p-10 text-center" style={{ borderColor: colors.border, background: colors.cardBg }}>
+      <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 40px' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto' }}>
+          <div
+            className="rounded-[32px] border p-10 text-center"
+            style={{ borderColor: colors.border, background: colors.cardBg }}
+          >
             <BookOpen className="mx-auto mb-4 h-12 w-12" style={{ color: colors.accent }} />
-            <h1 className="text-3xl font-bold" style={{ color: colors.text }}>Course not found</h1>
+            <h1 className="text-3xl font-bold" style={{ color: colors.text }}>
+              Course not found
+            </h1>
             <p className="mt-3 text-sm" style={{ color: colors.textSecondary }}>
-              This Academy course could not be found. The route is live, but the course ID is invalid in this environment.
+              This Academy course could not be found. The route is live, but the course ID is
+              invalid in this environment.
             </p>
-            <a href={`${basePath}/courses`} className="mt-6 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold" style={{ background: colors.accent, color: "#000" }}>
+            <a
+              href={`${basePath}/courses`}
+              className="mt-6 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
+              style={{ background: colors.accent, color: '#000' }}
+            >
               Back to courses
               <ChevronRight className="h-4 w-4" />
             </a>
@@ -269,32 +341,88 @@ export default function AcademyCourseDetailPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: colors.bg, padding: "88px 24px 40px" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: colors.bg,
+        padding: `88px 24px 40px ${ACADEMY_DESKTOP_CONTENT_LEFT}px`,
+      }}
+    >
+      <AcademyNavigationChrome />
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <a href={basePath} className="text-sm font-medium hover:opacity-80" style={{ color: colors.textSecondary }}>Academy</a>
+          <a
+            href={basePath}
+            className="text-sm font-medium hover:opacity-80"
+            style={{ color: colors.textSecondary }}
+          >
+            Academy
+          </a>
           <span style={{ color: colors.textMuted }}>/</span>
-          <a href={`${basePath}/courses`} className="text-sm font-medium hover:opacity-80" style={{ color: colors.textSecondary }}>Courses</a>
+          <a
+            href={`${basePath}/courses`}
+            className="text-sm font-medium hover:opacity-80"
+            style={{ color: colors.textSecondary }}
+          >
+            Courses
+          </a>
           <span style={{ color: colors.textMuted }}>/</span>
-          <span className="text-sm font-medium" style={{ color: colors.accent }}>{course.title}</span>
+          <span className="text-sm font-medium" style={{ color: colors.accent }}>
+            {displayCourseTitle}
+          </span>
         </div>
 
-        <section className="rounded-[32px] border p-8" style={{ borderColor: colors.border, background: colors.cardBg, backdropFilter: "blur(20px)" }}>
+        <section
+          className="rounded-[32px] border p-8"
+          style={{
+            borderColor: colors.border,
+            background: colors.cardBg,
+            backdropFilter: 'blur(20px)',
+          }}
+        >
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div style={{ maxWidth: 720 }}>
-              <div className="mb-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: "rgba(255,214,0,0.18)", color: colors.accent }}>
+              <div
+                className="mb-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold"
+                style={{ background: 'rgba(255,214,0,0.18)', color: colors.accent }}
+              >
                 Street Voices Academy Course
               </div>
-              <h1 className="text-4xl font-bold" style={{ color: colors.text }}>{course.title}</h1>
+              <h1 className="text-4xl font-bold" style={{ color: colors.text }}>
+                {displayCourseTitle}
+              </h1>
               <p className="mt-4 text-base" style={{ color: colors.textSecondary }}>
-                {course.description || "This Academy course page gives you a clear overview before you enroll."}
+                {course.description ||
+                  'This Academy course page gives you a clear overview before you enroll.'}
               </p>
-              <div className="mt-6 flex flex-wrap items-center gap-4 text-sm" style={{ color: colors.textSecondary }}>
-                <span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />{formatCourseLevel(course.level)}</span>
-                <span className="inline-flex items-center gap-2"><Layers3 className="h-4 w-4" />{modules.length || course.module_count || 0} modules</span>
-                <span className="inline-flex items-center gap-2"><BookOpen className="h-4 w-4" />{modules.reduce((sum, module) => sum + module.lessons.length, 0) || course.lesson_count || 0} lessons</span>
-                <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4" />{courseDuration}</span>
-                <span className="inline-flex items-center gap-2"><Video className="h-4 w-4" />{deliveryMode}</span>
+              <div
+                className="mt-6 flex flex-wrap items-center gap-4 text-sm"
+                style={{ color: colors.textSecondary }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {formatCourseLevel(course.level)}
+                </span>
+                {moduleCount > 0 && (
+                  <span className="inline-flex items-center gap-2">
+                    <Layers3 className="h-4 w-4" />
+                    {moduleCount} modules
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  {lessonCount > 0
+                    ? `${lessonCount} lessons`
+                    : `${workshopSessions.length || cohortMeta.weeks} workshop sessions`}
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <Clock3 className="h-4 w-4" />
+                  {courseDuration}
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <Video className="h-4 w-4" />
+                  {deliveryMode}
+                </span>
                 {instructorName &&
                   (instructorProfileHref ? (
                     <a
@@ -303,7 +431,7 @@ export default function AcademyCourseDetailPage() {
                       style={{
                         color: colors.textSecondary,
                         borderColor: colors.border,
-                        background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.55)",
+                        background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.55)',
                       }}
                     >
                       <Users className="h-4 w-4 transition-colors duration-200 group-hover:text-[#FFD600]" />
@@ -312,13 +440,27 @@ export default function AcademyCourseDetailPage() {
                       </span>
                     </a>
                   ) : (
-                    <span className="inline-flex items-center gap-2"><Users className="h-4 w-4" />{instructorName}</span>
+                    <span className="inline-flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      {instructorName}
+                    </span>
                   ))}
               </div>
             </div>
 
-            <div className="min-w-[260px] rounded-[28px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.65)" }}>
-              <p className="text-xs uppercase tracking-[0.22em]" style={{ color: colors.textMuted }}>Course details</p>
+            <div
+              className="min-w-[260px] rounded-[28px] border p-5"
+              style={{
+                borderColor: colors.border,
+                background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.65)',
+              }}
+            >
+              <p
+                className="text-xs uppercase tracking-[0.22em]"
+                style={{ color: colors.textMuted }}
+              >
+                Course details
+              </p>
               <div className="mt-4 space-y-3 text-sm" style={{ color: colors.textSecondary }}>
                 <div className="flex items-center justify-between gap-3">
                   <span>Level</span>
@@ -335,12 +477,16 @@ export default function AcademyCourseDetailPage() {
               </div>
               <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
                 {enrollment
-                  ? "You’re enrolled in this Academy course."
-                  : "Enroll to unlock the course dashboard, live support, assignments, materials, and discussion with instructors."}
+                  ? 'You’re enrolled in this Academy course.'
+                  : 'Enroll to unlock the course dashboard, live support, assignments, materials, and discussion with instructors.'}
               </p>
               <div className="mt-5 space-y-3">
                 {enrollment ? (
-                  <a href={`${basePath}/dashboard`} className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold" style={{ background: colors.accent, color: "#000" }}>
+                  <a
+                    href={`${basePath}/dashboard`}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
+                    style={{ background: colors.accent, color: '#000' }}
+                  >
                     Open Dashboard
                     <ChevronRight className="h-4 w-4" />
                   </a>
@@ -348,7 +494,7 @@ export default function AcademyCourseDetailPage() {
                   <a
                     href={`${basePath}/courses/${course.id}/enroll`}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
-                    style={{ background: colors.accent, color: "#000", border: "none" }}
+                    style={{ background: colors.accent, color: '#000', border: 'none' }}
                   >
                     Sign up Now
                     <ChevronRight className="h-4 w-4" />
@@ -359,11 +505,20 @@ export default function AcademyCourseDetailPage() {
           </div>
         </section>
 
-        <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
-          <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Course Overview</h2>
+        <section
+          className="mt-8 rounded-[28px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
+          <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+            Course Overview
+          </h2>
           <div className="mt-4 space-y-4">
             {courseOverviewParagraphs.map((paragraph) => (
-              <p key={paragraph} className="text-sm leading-7" style={{ color: colors.textSecondary }}>
+              <p
+                key={paragraph}
+                className="text-sm leading-7"
+                style={{ color: colors.textSecondary }}
+              >
                 {paragraph}
               </p>
             ))}
@@ -371,15 +526,29 @@ export default function AcademyCourseDetailPage() {
         </section>
 
         {hasScheduleMeta && (
-          <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+          <section
+            className="mt-8 rounded-[28px] border p-6"
+            style={{ borderColor: colors.border, background: colors.cardBg }}
+          >
             <div className="mb-4 flex items-center gap-3">
               <CalendarDays className="h-5 w-5" style={{ color: colors.accent }} />
-              <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Course Schedule</h2>
+              <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                Course Schedule
+              </h2>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               {courseStartMonth && (
-                <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
-                  <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                <div
+                  className="rounded-[24px] border p-5"
+                  style={{
+                    borderColor: colors.border,
+                    background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+                  }}
+                >
+                  <p
+                    className="text-sm font-semibold uppercase tracking-[0.14em]"
+                    style={{ color: colors.textMuted }}
+                  >
                     Start Month
                   </p>
                   <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
@@ -389,8 +558,17 @@ export default function AcademyCourseDetailPage() {
               )}
 
               {formattedCourseStartDate && (
-                <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
-                  <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                <div
+                  className="rounded-[24px] border p-5"
+                  style={{
+                    borderColor: colors.border,
+                    background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+                  }}
+                >
+                  <p
+                    className="text-sm font-semibold uppercase tracking-[0.14em]"
+                    style={{ color: colors.textMuted }}
+                  >
                     Start Date
                   </p>
                   <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
@@ -400,19 +578,37 @@ export default function AcademyCourseDetailPage() {
               )}
 
               {courseMeetingDays.length > 0 && (
-                <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
-                  <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                <div
+                  className="rounded-[24px] border p-5"
+                  style={{
+                    borderColor: colors.border,
+                    background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+                  }}
+                >
+                  <p
+                    className="text-sm font-semibold uppercase tracking-[0.14em]"
+                    style={{ color: colors.textMuted }}
+                  >
                     Class Days
                   </p>
                   <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
-                    {courseMeetingDays.join(", ")}
+                    {courseMeetingDays.join(', ')}
                   </p>
                 </div>
               )}
 
               {courseScheduleNotes && (
-                <div className="rounded-[24px] border p-5 md:col-span-3" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
-                  <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                <div
+                  className="rounded-[24px] border p-5 md:col-span-3"
+                  style={{
+                    borderColor: colors.border,
+                    background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+                  }}
+                >
+                  <p
+                    className="text-sm font-semibold uppercase tracking-[0.14em]"
+                    style={{ color: colors.textMuted }}
+                  >
                     Additional Schedule Details
                   </p>
                   <p className="mt-4 text-sm leading-7" style={{ color: colors.textSecondary }}>
@@ -424,36 +620,201 @@ export default function AcademyCourseDetailPage() {
           </section>
         )}
 
+        {workshopSessions.length > 0 && (
+          <section
+            className="mt-8 rounded-[28px] border p-6 md:p-8"
+            style={{ borderColor: colors.border, background: colors.cardBg }}
+          >
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p
+                  className="text-xs font-semibold uppercase tracking-[0.2em]"
+                  style={{ color: colors.accent }}
+                >
+                  Workshop Breakdown
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
+                  Every session in {displayCourseTitle}
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm" style={{ color: colors.textSecondary }}>
+                  Each workshop has its own focus, practice activities, takeaways, and prep so
+                  students can see exactly what happens each Wednesday.
+                </p>
+              </div>
+              <span
+                className="rounded-full px-3 py-1 text-xs font-semibold"
+                style={{
+                  background: 'rgba(255,214,0,0.14)',
+                  color: colors.accent,
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                {workshopSessions.length} sessions
+              </span>
+            </div>
+
+            <div className="grid gap-4">
+              {workshopSessions.map((session, index) => (
+                <article
+                  key={`${session.date}-${session.title}`}
+                  id={`session-${index + 1}`}
+                  className="rounded-[24px] border p-5"
+                  style={{
+                    borderColor: colors.border,
+                    background: isDark ? 'rgba(255,255,255,0.045)' : 'rgba(255,255,255,0.58)',
+                  }}
+                >
+                  <div className="grid gap-5 lg:grid-cols-[190px,1fr]">
+                    <div
+                      className="rounded-[20px] border p-4"
+                      style={{
+                        borderColor: colors.border,
+                        background: isDark ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.55)',
+                      }}
+                    >
+                      <p
+                        className="text-xs font-semibold uppercase tracking-[0.18em]"
+                        style={{ color: colors.textMuted }}
+                      >
+                        Session {index + 1}
+                      </p>
+                      <p className="mt-3 text-2xl font-bold" style={{ color: colors.text }}>
+                        {session.date}
+                      </p>
+                      <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
+                        {session.time}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-xl font-semibold" style={{ color: colors.text }}>
+                        {session.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6" style={{ color: colors.textSecondary }}>
+                        {session.focus}
+                      </p>
+
+                      <div className="mt-5 grid gap-4 md:grid-cols-2">
+                        <div>
+                          <p
+                            className="text-xs font-semibold uppercase tracking-[0.16em]"
+                            style={{ color: colors.textMuted }}
+                          >
+                            In the room
+                          </p>
+                          <ul className="mt-3 space-y-2">
+                            {session.activities.map((activity) => (
+                              <li
+                                key={activity}
+                                className="flex gap-2 text-sm"
+                                style={{ color: colors.textSecondary }}
+                              >
+                                <CheckCircle2
+                                  className="mt-0.5 h-4 w-4 shrink-0"
+                                  style={{ color: colors.accent }}
+                                />
+                                <span>{activity}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div>
+                          <p
+                            className="text-xs font-semibold uppercase tracking-[0.16em]"
+                            style={{ color: colors.textMuted }}
+                          >
+                            Students leave with
+                          </p>
+                          <ul className="mt-3 space-y-2">
+                            {session.takeaways.map((takeaway) => (
+                              <li
+                                key={takeaway}
+                                className="flex gap-2 text-sm"
+                                style={{ color: colors.textSecondary }}
+                              >
+                                <CheckCircle2
+                                  className="mt-0.5 h-4 w-4 shrink-0"
+                                  style={{ color: colors.accent }}
+                                />
+                                <span>{takeaway}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div
+                        className="mt-5 rounded-2xl border px-4 py-3 text-sm"
+                        style={{ borderColor: colors.border, color: colors.textSecondary }}
+                      >
+                        <strong style={{ color: colors.text }}>Prep:</strong> {session.prep}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="mt-8 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
-            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Requirements</h2>
+          <div
+            className="rounded-[28px] border p-6"
+            style={{ borderColor: colors.border, background: colors.cardBg }}
+          >
+            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+              Requirements
+            </h2>
             <ul className="mt-5 space-y-3">
               {courseRequirements.map((requirement) => (
-                <li key={requirement} className="flex items-start gap-3 rounded-2xl border p-4" style={{ borderColor: colors.border }}>
+                <li
+                  key={requirement}
+                  className="flex items-start gap-3 rounded-2xl border p-4"
+                  style={{ borderColor: colors.border }}
+                >
                   <CheckCircle2 className="mt-0.5 h-5 w-5" style={{ color: colors.accent }} />
-                  <span className="text-sm" style={{ color: colors.textSecondary }}>{requirement}</span>
+                  <span className="text-sm" style={{ color: colors.textSecondary }}>
+                    {requirement}
+                  </span>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
-            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>What you&apos;ll learn</h2>
+          <div
+            className="rounded-[28px] border p-6"
+            style={{ borderColor: colors.border, background: colors.cardBg }}
+          >
+            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+              What you&apos;ll learn
+            </h2>
             <ul className="mt-5 space-y-3">
               {courseLearningPoints.map((point) => (
-                <li key={point} className="flex items-start gap-3 rounded-2xl border p-4" style={{ borderColor: colors.border }}>
+                <li
+                  key={point}
+                  className="flex items-start gap-3 rounded-2xl border p-4"
+                  style={{ borderColor: colors.border }}
+                >
                   <CheckCircle2 className="mt-0.5 h-5 w-5" style={{ color: colors.accent }} />
-                  <span className="text-sm" style={{ color: colors.textSecondary }}>{point}</span>
+                  <span className="text-sm" style={{ color: colors.textSecondary }}>
+                    {point}
+                  </span>
                 </li>
               ))}
             </ul>
           </div>
         </section>
 
-        <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="mt-8 rounded-[28px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Course Review Form</h2>
+              <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                Course Review Form
+              </h2>
               <p className="mt-2 text-sm" style={{ color: colors.textSecondary }}>
                 Enrolled students can rate the course and share feedback here.
               </p>
@@ -467,7 +828,10 @@ export default function AcademyCourseDetailPage() {
           />
         </section>
 
-        <section className="mt-8 rounded-[28px] border p-6 md:p-8" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="mt-8 rounded-[28px] border p-6 md:p-8"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="max-w-3xl">
             <h2 className="text-2xl font-semibold md:text-3xl" style={{ color: colors.text }}>
               Flyers
@@ -487,7 +851,7 @@ export default function AcademyCourseDetailPage() {
                 className="group block overflow-hidden rounded-[28px] border transition-transform duration-300 hover:-translate-y-1"
                 style={{
                   borderColor: colors.border,
-                  background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)",
+                  background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
                 }}
               >
                 <div className="relative overflow-hidden">
@@ -499,7 +863,10 @@ export default function AcademyCourseDetailPage() {
                   />
                 </div>
                 <div className="flex justify-end p-5">
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: colors.accent }}>
+                  <span
+                    className="inline-flex items-center gap-2 text-sm font-semibold"
+                    style={{ color: colors.accent }}
+                  >
                     Open full image
                     <ChevronRight className="h-4 w-4" />
                   </span>
@@ -509,12 +876,23 @@ export default function AcademyCourseDetailPage() {
           </div>
         </section>
 
-        <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="mt-8 rounded-[28px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="mb-4 flex items-center gap-3">
-            <Users className="h-5 w-5" style={{ color: "#8B5CF6" }} />
-            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>{cohortMeta.name}</h2>
+            <Users className="h-5 w-5" style={{ color: '#8B5CF6' }} />
+            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+              {cohortMeta.name}
+            </h2>
           </div>
-          <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.6)" }}>
+          <div
+            className="rounded-[24px] border p-5"
+            style={{
+              borderColor: colors.border,
+              background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.6)',
+            }}
+          >
             <p className="text-lg font-semibold" style={{ color: colors.text }}>
               Starts {cohortMeta.startLabel} - {cohortMeta.durationLabel}
             </p>
@@ -525,25 +903,32 @@ export default function AcademyCourseDetailPage() {
               Last day to Enroll: {cohortMeta.enrollmentDeadlineLabel}
             </p>
             <a
-              href={enrollment ? `${basePath}/dashboard` : `${basePath}/courses/${course.id}/enroll`}
+              href={
+                enrollment ? `${basePath}/dashboard` : `${basePath}/courses/${course.id}/enroll`
+              }
               className="mt-5 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold"
-              style={{ background: "#8B5CF6", color: "#fff", border: "none" }}
+              style={{ background: '#8B5CF6', color: '#fff', border: 'none' }}
             >
-              {enrollment ? "Open Dashboard" : "Join 2026 Cohort"}
+              {enrollment ? 'Open Dashboard' : 'Join 2026 Cohort'}
               <ChevronRight className="h-4 w-4" />
             </a>
           </div>
         </section>
 
         {(enrollment || unenrollMessage) && (
-          <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+          <section
+            className="mt-8 rounded-[28px] border p-6"
+            style={{ borderColor: colors.border, background: colors.cardBg }}
+          >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl">
-                <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Course Access</h2>
+                <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+                  Course Access
+                </h2>
                 <p className="mt-2 text-sm leading-7" style={{ color: colors.textSecondary }}>
                   {enrollment
-                    ? "If you leave this course, it will be removed from your student dashboard and you will no longer see its live sessions, materials, assignments, or instructor discussion."
-                    : "You are not enrolled in this course right now. If you want access again, use the Sign up Now button above."}
+                    ? 'If you leave this course, it will be removed from your student dashboard and you will no longer see its live sessions, materials, assignments, or instructor discussion.'
+                    : 'You are not enrolled in this course right now. If you want access again, use the Sign up Now button above.'}
                 </p>
               </div>
 
@@ -555,7 +940,11 @@ export default function AcademyCourseDetailPage() {
                     setUnenrollMessage(null);
                   }}
                   className="rounded-full px-4 py-3 text-sm font-semibold"
-                  style={{ background: colors.cardBg, color: colors.text, border: `1px solid ${colors.border}` }}
+                  style={{
+                    background: colors.cardBg,
+                    color: colors.text,
+                    border: `1px solid ${colors.border}`,
+                  }}
                 >
                   Unenroll in this Course
                 </button>
@@ -567,7 +956,11 @@ export default function AcademyCourseDetailPage() {
                     type="button"
                     onClick={() => setShowUnenrollConfirm(false)}
                     className="rounded-full px-4 py-3 text-sm font-semibold"
-                    style={{ background: colors.cardBg, color: colors.text, border: `1px solid ${colors.border}` }}
+                    style={{
+                      background: colors.cardBg,
+                      color: colors.text,
+                      border: `1px solid ${colors.border}`,
+                    }}
                   >
                     Cancel
                   </button>
@@ -576,9 +969,9 @@ export default function AcademyCourseDetailPage() {
                     onClick={() => void handleUnenroll()}
                     disabled={unenrolling}
                     className="rounded-full px-4 py-3 text-sm font-semibold disabled:opacity-60"
-                    style={{ background: "#ef4444", color: "#fff" }}
+                    style={{ background: '#ef4444', color: '#fff' }}
                   >
-                    {unenrolling ? "Confirming..." : "Confirm"}
+                    {unenrolling ? 'Confirming...' : 'Confirm'}
                   </button>
                 </div>
               )}
@@ -588,9 +981,15 @@ export default function AcademyCourseDetailPage() {
               <div
                 className="mt-4 rounded-[18px] border px-4 py-3 text-sm"
                 style={{
-                  borderColor: unenrollMessage.toLowerCase().includes("unable") ? "rgba(239,68,68,0.3)" : colors.border,
-                  background: unenrollMessage.toLowerCase().includes("unable") ? "rgba(239,68,68,0.08)" : colors.cardBg,
-                  color: unenrollMessage.toLowerCase().includes("unable") ? "#ef4444" : colors.textSecondary,
+                  borderColor: unenrollMessage.toLowerCase().includes('unable')
+                    ? 'rgba(239,68,68,0.3)'
+                    : colors.border,
+                  background: unenrollMessage.toLowerCase().includes('unable')
+                    ? 'rgba(239,68,68,0.08)'
+                    : colors.cardBg,
+                  color: unenrollMessage.toLowerCase().includes('unable')
+                    ? '#ef4444'
+                    : colors.textSecondary,
                 }}
               >
                 {unenrollMessage}
@@ -599,16 +998,30 @@ export default function AcademyCourseDetailPage() {
           </section>
         )}
 
-        <section className="mt-8 rounded-[28px] border p-6" style={{ borderColor: colors.border, background: colors.cardBg }}>
+        <section
+          className="mt-8 rounded-[28px] border p-6"
+          style={{ borderColor: colors.border, background: colors.cardBg }}
+        >
           <div className="mb-4 flex items-center gap-3">
             <Phone className="h-5 w-5" style={{ color: colors.accent }} />
-            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>Contact Information</h2>
+            <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
+              Contact Information
+            </h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+            <div
+              className="rounded-[24px] border p-5"
+              style={{
+                borderColor: colors.border,
+                background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+              }}
+            >
               <div className="flex items-center gap-3">
                 <MapPin className="h-5 w-5" style={{ color: colors.accent }} />
-                <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                <p
+                  className="text-sm font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: colors.textMuted }}
+                >
                   Address
                 </p>
               </div>
@@ -617,10 +1030,19 @@ export default function AcademyCourseDetailPage() {
               </p>
             </div>
 
-            <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+            <div
+              className="rounded-[24px] border p-5"
+              style={{
+                borderColor: colors.border,
+                background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+              }}
+            >
               <div className="flex items-center gap-3">
                 <Phone className="h-5 w-5" style={{ color: colors.accent }} />
-                <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                <p
+                  className="text-sm font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: colors.textMuted }}
+                >
                   Phone
                 </p>
               </div>
@@ -633,10 +1055,19 @@ export default function AcademyCourseDetailPage() {
               </a>
             </div>
 
-            <div className="rounded-[24px] border p-5" style={{ borderColor: colors.border, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.58)" }}>
+            <div
+              className="rounded-[24px] border p-5"
+              style={{
+                borderColor: colors.border,
+                background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+              }}
+            >
               <div className="flex items-center gap-3">
                 <Mail className="h-5 w-5" style={{ color: colors.accent }} />
-                <p className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: colors.textMuted }}>
+                <p
+                  className="text-sm font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: colors.textMuted }}
+                >
                   Email
                 </p>
               </div>

@@ -10,12 +10,24 @@ const {
 const { initializeClient } = require('~/server/services/Endpoints/agents');
 const AgentController = require('~/server/controllers/agents/request');
 const { streetBotProOwnerOnly } = require('~/server/middleware/streetBotProOwnerOnly');
-const { streetbotFastPath } = require('/app/tools/streetbot-fastpath.cjs');
+let streetBotFastPathTools;
+try {
+  streetBotFastPathTools = require('/app/tools/streetbot-fastpath.cjs');
+} catch (_) {
+  streetBotFastPathTools = require('../../../../tools/streetbot-fastpath.cjs');
+}
+const { streetbotFastPath } = streetBotFastPathTools;
+let streetBotTelemetry;
+try {
+  streetBotTelemetry = require('/app/tools/streetbot-telemetry.cjs');
+} catch (_) {
+  streetBotTelemetry = require('../../../../tools/streetbot-telemetry.cjs');
+}
 const {
   failStreetBotRequestTrace,
   finalizeStreetBotRequestTrace,
   runInStreetBotTrace,
-} = require('/app/tools/streetbot-telemetry.cjs');
+} = streetBotTelemetry;
 const addTitle = require('~/server/services/Endpoints/agents/title');
 const { getRoleByName } = require('~/models/Role');
 

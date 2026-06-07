@@ -88,7 +88,7 @@ export const normalizeArticle = (article: Article, sourceType: "internal" | "agg
   source_type: sourceType,
 });
 
-export const normalizeAggregatedItem = (item: Record<string, unknown>): Article => ({
+export const normalizeAggregatedItem = (item: Record<string, unknown>, index = 0): Article => ({
   id: String(item.id || ""),
   title: String(item.title || ""),
   slug: undefined,
@@ -100,6 +100,7 @@ export const normalizeAggregatedItem = (item: Record<string, unknown>): Article 
   source_type: "aggregated",
   source_name: String(item.source_name || ""),
   source_url: String(item.source_url || item.canonical_url || ""),
+  feed_rank: Number.isFinite(Number(item.feed_rank)) ? Number(item.feed_rank) : index,
   is_featured: false,
   is_breaking: Boolean(item.is_breaking),
 });

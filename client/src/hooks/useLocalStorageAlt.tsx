@@ -7,6 +7,18 @@
 
 import { useEffect, useState, useCallback } from 'react';
 
+function parseStoredValue<T>(raw: string | null, fallback: T): T {
+  if (raw == null || raw === '' || raw === 'undefined' || raw === 'null') {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function useLocalStorage<T>(
   key: string,
   defaultValue: T,
@@ -17,14 +29,15 @@ export default function useLocalStorage<T>(
 
   useEffect(() => {
     const item = localStorage.getItem(key);
+    const shouldResetStoredValue = !item || item === 'undefined' || item === 'null';
 
-    if (!item && !storageCondition) {
+    if (shouldResetStoredValue && !storageCondition) {
       localStorage.setItem(key, JSON.stringify(defaultValue));
-    } else if (!item && storageCondition && storageCondition(defaultValue)) {
+    } else if (shouldResetStoredValue && storageCondition && storageCondition(defaultValue)) {
       localStorage.setItem(key, JSON.stringify(defaultValue));
     }
 
-    const initialValue = item && item !== 'undefined' ? JSON.parse(item) : defaultValue;
+    const initialValue = parseStoredValue(item, defaultValue);
     setValue(initialValue);
     if (globalSetState) {
       globalSetState(initialValue);
@@ -36,7 +49,7 @@ export default function useLocalStorage<T>(
       }
 
       const lsi = localStorage.getItem(key);
-      setValue(JSON.parse(lsi ?? ''));
+      setValue(parseStoredValue(lsi, defaultValue));
     }
 
     window.addEventListener('storage', handler);

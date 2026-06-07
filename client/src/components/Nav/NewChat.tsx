@@ -1,51 +1,55 @@
 import React, { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
-import { TooltipAnchor, NewChatIcon, MobileSidebar, Sidebar, Button } from '@librechat/client';
-import { CLOSE_SIDEBAR_ID, OPEN_SIDEBAR_ID } from '~/components/Chat/Menus/OpenSidebar';
 import { useLocalize, useNewConvo } from '~/hooks';
 import { clearMessagesCache } from '~/utils';
 import store from '~/store';
 
+const palette = {
+  textPrimary: '#E6E7F2',
+};
+
+const SIDEBAR_ASSET_VERSION = 'sidebar-icons-20260523';
+const sidebarAsset = (path: string) => `${path}?v=${SIDEBAR_ASSET_VERSION}`;
+
 export default function NewChat({
   index = 0,
   toggleNav,
-  subHeaders,
   isSmallScreen,
-  headerButtons,
+  isMinimized = false,
 }: {
   index?: number;
   toggleNav: () => void;
   isSmallScreen?: boolean;
   subHeaders?: React.ReactNode;
   headerButtons?: React.ReactNode;
+  isMinimized?: boolean;
 }) {
   const queryClient = useQueryClient();
-  /** Note: this component needs an explicit index passed if using more than one */
   const { newConversation: newConvo } = useNewConvo(index);
   const navigate = useNavigate();
+  const location = useLocation();
   const localize = useLocalize();
   const { conversation } = store.useCreateConversationAtom(index);
+  const isActive = location.pathname === '/c/new';
 
-  const handleToggleNav = useCallback(() => {
-    toggleNav();
-    // Delay focus until after the sidebar animation completes (200ms)
-    setTimeout(() => {
-      document.getElementById(OPEN_SIDEBAR_ID)?.focus();
-    }, 250);
-  }, [toggleNav]);
-
-  const clickHandler: React.MouseEventHandler<HTMLButtonElement> = useCallback(
+  const clickHandler: React.MouseEventHandler<HTMLAnchorElement> = useCallback(
     (e) => {
       if (e.button === 0 && (e.ctrlKey || e.metaKey)) {
-        window.open('/c/new', '_blank');
         return;
       }
+      e.preventDefault();
       clearMessagesCache(queryClient, conversation?.conversationId);
       queryClient.invalidateQueries([QueryKeys.messages]);
       newConvo();
-      navigate('/c/new', { state: { focusChat: true } });
+      navigate('/c/new', { replace: false, state: { focusChat: true } });
+      window.setTimeout(() => {
+        if (window.location.pathname !== '/c/new') {
+          window.history.pushState({}, '', '/c/new');
+          window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+        }
+      }, 0);
       if (isSmallScreen) {
         toggleNav();
       }
@@ -53,51 +57,81 @@ export default function NewChat({
     [queryClient, conversation, newConvo, navigate, toggleNav, isSmallScreen],
   );
 
-  return (
-    <>
-      <div className="flex items-center justify-between px-0.5 py-[2px] md:py-2">
-        <TooltipAnchor
-          description={localize('com_nav_close_sidebar')}
-          render={
-            <Button
-              id={CLOSE_SIDEBAR_ID}
-              size="icon"
-              variant="outline"
-              data-testid="close-sidebar-button"
-              aria-label={localize('com_nav_close_sidebar')}
-              aria-expanded={true}
-              className="rounded-full border-none bg-transparent duration-0 hover:bg-surface-active-alt focus-visible:ring-inset focus-visible:ring-black focus-visible:ring-offset-0 dark:focus-visible:ring-white md:rounded-xl"
-              onClick={handleToggleNav}
-            >
-              <Sidebar aria-hidden="true" className="max-md:hidden" />
-              <MobileSidebar
-                aria-hidden="true"
-                className="icon-lg m-1 inline-flex items-center justify-center md:hidden"
-              />
-            </Button>
-          }
+  if (isMinimized) {
+    return (
+      <a
+        href="/c/new"
+        onClick={clickHandler}
+        className={`sb-action-btn sv-sidebar-btn sb-action-minimized${isActive ? ' sb-nav-active' : ''}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+          padding: 12,
+          borderRadius: 8,
+          border: 'none',
+          backgroundColor: 'transparent',
+          color: palette.textPrimary,
+          cursor: 'pointer',
+          marginBottom: 12,
+          textDecoration: 'none',
+        }}
+        data-testid="nav-new-chat-button"
+        aria-label={localize('com_ui_new_chat')}
+        title="New Chat"
+      >
+        <img
+          src={sidebarAsset('/images/sidebar-icons/new-chat.svg')}
+          alt=""
+          width={18}
+          height={18}
+          className="sb-action-icon sv-sidebar-icon"
         />
-        <div className="flex gap-0.5">
-          {headerButtons}
+      </a>
+    );
+  }
 
-          <TooltipAnchor
-            description={localize('com_ui_new_chat')}
-            render={
-              <Button
-                size="icon"
-                variant="outline"
-                data-testid="nav-new-chat-button"
-                aria-label={localize('com_ui_new_chat')}
-                className="rounded-full border-none bg-transparent duration-0 hover:bg-surface-active-alt focus-visible:ring-inset focus-visible:ring-black focus-visible:ring-offset-0 dark:focus-visible:ring-white md:rounded-xl"
-                onClick={clickHandler}
-              >
-                <NewChatIcon className="icon-lg text-text-primary" />
-              </Button>
-            }
+  return (
+    <a
+      href="/c/new"
+      onClick={clickHandler}
+      className={`sb-action-btn sv-sidebar-btn${isActive ? ' sb-nav-active' : ''}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        gap: 12,
+        padding: '9px 12px',
+        borderRadius: 14,
+        border: 'none',
+        backgroundColor: 'transparent',
+        color: palette.textPrimary,
+        fontSize: 14,
+        lineHeight: '1.125rem',
+        fontFamily: 'Rubik, sans-serif',
+        fontWeight: 400,
+        cursor: 'pointer',
+        marginTop: 2,
+        marginBottom: 0,
+        minHeight: 40,
+        textDecoration: 'none',
+      }}
+      data-testid="nav-new-chat-button"
+      aria-label={localize('com_ui_new_chat')}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden' }}>
+        <span aria-hidden>
+          <img
+            src={sidebarAsset('/images/sidebar-icons/new-chat.svg')}
+            alt=""
+            width={18}
+            height={18}
+            className="sb-action-icon sv-sidebar-icon"
           />
-        </div>
+        </span>
+        <span className="sv-sidebar-btn-label">New Chat</span>
       </div>
-      {subHeaders != null ? subHeaders : null}
-    </>
+    </a>
   );
 }

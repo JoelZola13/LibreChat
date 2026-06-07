@@ -5,11 +5,11 @@
  *
  * Writes results into sessionStorage so JobsPage can read warm cache on mount.
  */
-import { SB_API_BASE } from '~/components/streetbot/shared/apiConfig';
+import { STREETBOT_READ_API_BASE } from '~/components/streetbot/shared/apiConfig';
 import { readSessionCache, writeSessionCache } from '../shared/perfCache';
 import { enrichJobsSchedule } from './jobSchedule';
 
-const JOBS_CACHE_KEY = 'streetbot:jobs:listings:v2';
+const JOBS_CACHE_KEY = 'streetbot:jobs:listings:v3';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export type JobListing = {
@@ -39,7 +39,7 @@ export function prefetchJobs(): Promise<JobListing[]> {
 
   prefetchTimestamp = Date.now();
 
-  prefetchPromise = fetch(`${SB_API_BASE}/jobs`)
+  prefetchPromise = fetch(`${STREETBOT_READ_API_BASE}/jobs`)
     .then((r) => {
       if (!r.ok) return [];
       return r.json();

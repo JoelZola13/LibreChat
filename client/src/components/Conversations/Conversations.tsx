@@ -5,7 +5,7 @@ import { useRecoilValue } from 'recoil';
 import { Spinner, useMediaQuery } from '@librechat/client';
 import { List, AutoSizer, CellMeasurer, CellMeasurerCache } from 'react-virtualized';
 import type { TConversation } from 'librechat-data-provider';
-import { useLocalize, TranslationKeys, useFavorites, useShowMarketplace } from '~/hooks';
+import { useLocalize, TranslationKeys, useFavorites } from '~/hooks';
 import FavoritesList from '~/components/Nav/Favorites/FavoritesList';
 import { useActiveJobs } from '~/data-provider';
 import { groupConversationsByDate, cn } from '~/utils';
@@ -32,6 +32,7 @@ interface ConversationsProps {
   isSearchLoading: boolean;
   isChatsExpanded: boolean;
   setIsChatsExpanded: (expanded: boolean) => void;
+  hideHeader?: boolean;
 }
 
 interface MeasuredRowProps {
@@ -157,13 +158,13 @@ const Conversations: FC<ConversationsProps> = ({
   isSearchLoading,
   isChatsExpanded,
   setIsChatsExpanded,
+  hideHeader = false,
 }) => {
   const localize = useLocalize();
   const search = useRecoilValue(store.search);
   const { favorites, isLoading: isFavoritesLoading } = useFavorites();
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
   const convoHeight = isSmallScreen ? 44 : 34;
-  const showAgentMarketplace = useShowMarketplace();
 
   // Fetch active job IDs for showing generation indicators
   const { data: activeJobsData } = useActiveJobs();
@@ -174,7 +175,7 @@ const Conversations: FC<ConversationsProps> = ({
 
   // Determine if FavoritesList will render content
   const shouldShowFavorites =
-    !search.query && (isFavoritesLoading || favorites.length > 0 || showAgentMarketplace);
+    !hideHeader && !search.query && (isFavoritesLoading || favorites.length > 0);
 
   const filteredConversations = useMemo(
     () => rawConversations.filter(Boolean) as TConversation[],
@@ -192,7 +193,9 @@ const Conversations: FC<ConversationsProps> = ({
     if (shouldShowFavorites) {
       items.push({ type: 'favorites' });
     }
-    items.push({ type: 'chats-header' });
+    if (!hideHeader) {
+      items.push({ type: 'chats-header' });
+    }
 
     if (isChatsExpanded) {
       groupedConversations.forEach(([groupName, convos]) => {
@@ -205,7 +208,7 @@ const Conversations: FC<ConversationsProps> = ({
       }
     }
     return items;
-  }, [groupedConversations, isLoading, isChatsExpanded, shouldShowFavorites]);
+  }, [groupedConversations, hideHeader, isLoading, isChatsExpanded, shouldShowFavorites]);
 
   // Store flattenedItems in a ref for keyMapper to access without recreating cache
   const flattenedItemsRef = useRef(flattenedItems);
@@ -301,7 +304,7 @@ const Conversations: FC<ConversationsProps> = ({
         // First date header index depends on whether favorites row is included
         // With favorites: [favorites, chats-header, first-header] → index 2
         // Without favorites: [chats-header, first-header] → index 1
-        const firstHeaderIndex = shouldShowFavorites ? 2 : 1;
+        const firstHeaderIndex = (shouldShowFavorites ? 1 : 0) + (hideHeader ? 0 : 1);
         return (
           <MeasuredRow key={key} {...rowProps}>
             <DateLabel groupName={item.groupName} isFirst={index === firstHeaderIndex} />
@@ -334,6 +337,7 @@ const Conversations: FC<ConversationsProps> = ({
       isSmallScreen,
       isChatsExpanded,
       setIsChatsExpanded,
+      hideHeader,
       shouldShowFavorites,
       activeJobIds,
     ],

@@ -3,6 +3,10 @@
  * Used by DirectoryPage, NewsListing, HomePage, and any other search bar.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  DIRECTORY_SEARCH_API_URL,
+  DIRECTORY_SERVICES_SEARCH_API_URL,
+} from "~/components/streetbot/shared/apiConfig";
 
 export interface ServiceSuggestion {
   id: number;
@@ -112,7 +116,7 @@ export function useServiceSuggestions({
         const shouldTryPrimaryApi = !isSuggestSearchApiCoolingDown();
         if (shouldTryPrimaryApi) {
           try {
-            const primaryRes = await fetch(`/api/directory/search?${qs}`, { signal: controller.signal });
+            const primaryRes = await fetch(`${DIRECTORY_SEARCH_API_URL}?${qs}`, { signal: controller.signal });
             if (primaryRes.ok && isJsonResponse(primaryRes)) {
               clearSuggestSearchApiFailure();
               res = primaryRes;
@@ -128,7 +132,7 @@ export function useServiceSuggestions({
         }
 
         if (!res) {
-          res = await fetch(`/sbapi/services/search?${qs}`, { signal: controller.signal });
+          res = await fetch(`${DIRECTORY_SERVICES_SEARCH_API_URL}?${qs}`, { signal: controller.signal });
         }
 
         if (!res.ok) return;

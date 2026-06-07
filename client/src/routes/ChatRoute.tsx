@@ -1,9 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
-import { Constants, EModelEndpoint } from 'librechat-data-provider';
+import {
+  Constants,
+  EModelEndpoint,
+  type TStartupConfig,
+  type TPreset,
+} from 'librechat-data-provider';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
-import type { TPreset } from 'librechat-data-provider';
 import { useGetConvoIdQuery, useGetStartupConfig, useGetEndpointsQuery } from '~/data-provider';
 import { useNewConvo, useAppStartup, useAssistantListMap, useIdChangeEffect } from '~/hooks';
 import { getDefaultModelSpec, getModelSpecPreset, logger } from '~/utils';
@@ -13,9 +17,39 @@ import useAuthRedirect from './useAuthRedirect';
 import temporaryStore from '~/store/temporary';
 import store from '~/store';
 
+function getRequestedAgentPreset(
+  startupConfig: TStartupConfig | undefined,
+  requestedAgentModel: string,
+): TPreset | undefined {
+  const model = requestedAgentModel.trim();
+  if (!model.startsWith('agent/')) {
+    return undefined;
+  }
+
+  const spec = startupConfig?.modelSpecs?.list?.find(
+    (modelSpec) => modelSpec.name === model || modelSpec.preset?.model === model,
+  );
+  if (spec) {
+    return getModelSpecPreset(spec);
+  }
+
+  return {
+    endpoint: 'Street Bot',
+    endpointType: EModelEndpoint.custom,
+    model,
+    spec: model,
+  };
+}
+
 export default function ChatRoute() {
   const { data: startupConfig } = useGetStartupConfig();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated, user, roles } = useAuthRedirect();
+  const requestedAgentModel = searchParams.get('agentModel') ?? searchParams.get('spec') ?? '';
+  const requestedAgentPreset = getRequestedAgentPreset(
+    startupConfig,
+    requestedAgentModel,
+  );
 
   const defaultTemporaryChat = useRecoilValue(temporaryStore.defaultTemporaryChat);
   const setIsTemporary = useRecoilCallback(
@@ -68,10 +102,17 @@ export default function ChatRoute() {
    *  Adjusting this may have unintended consequences on the conversation state.
    */
   useEffect(() => {
-    // Wait for roles to load so hasAgentAccess has a definitive value in useNewConvo
-    const rolesLoaded = roles?.USER != null;
+    // Wait for roles when available, but do not block authenticated local sessions forever.
+    const rolesLoaded = roles?.USER != null || isAuthenticated;
+    const requestedSpecMismatch =
+      conversationId === Constants.NEW_CONVO &&
+      requestedAgentModel.startsWith('agent/') &&
+      conversation?.spec !== requestedAgentModel;
     const shouldSetConvo =
-      (startupConfig && rolesLoaded && !hasSetConversation.current && !modelsQuery.data?.initial) ??
+      (startupConfig &&
+        rolesLoaded &&
+        (!hasSetConversation.current || requestedSpecMismatch) &&
+        !modelsQuery.data?.initial) ??
       false;
     /* Early exit if startupConfig is not loaded and conversation is already set and only initial models have loaded */
     if (!shouldSetConvo) {
@@ -81,10 +122,11 @@ export default function ChatRoute() {
     if (conversationId === Constants.NEW_CONVO && endpointsQuery.data && modelsQuery.data) {
       const result = getDefaultModelSpec(startupConfig);
       const spec = result?.default ?? result?.last;
+      const preset = requestedAgentPreset ?? (spec ? getModelSpecPreset(spec) : undefined);
       logger.log('conversation', 'ChatRoute, new convo effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
+        ...(preset ? { preset } : {}),
       });
 
       hasSetConversation.current = true;
@@ -105,10 +147,11 @@ export default function ChatRoute() {
     ) {
       const result = getDefaultModelSpec(startupConfig);
       const spec = result?.default ?? result?.last;
+      const preset = requestedAgentPreset ?? (spec ? getModelSpecPreset(spec) : undefined);
       logger.log('conversation', 'ChatRoute new convo, assistants effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
+        ...(preset ? { preset } : {}),
       });
       hasSetConversation.current = true;
     } else if (
@@ -127,8 +170,11 @@ export default function ChatRoute() {
     /* Creates infinite render if all dependencies included due to newConversation invocations exceeding call stack before hasSetConversation.current becomes truthy */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    isAuthenticated,
     roles,
     startupConfig,
+    requestedAgentModel,
+    conversation?.spec,
     initialConvoQuery.data,
     endpointsQuery.data,
     modelsQuery.data,

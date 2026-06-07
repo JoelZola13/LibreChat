@@ -3,9 +3,14 @@ import { getEndpointField } from 'librechat-data-provider';
 import type { Assistant, Agent } from 'librechat-data-provider';
 import type { TMessageIcon } from '~/common';
 import ConvoIconURL from '~/components/Endpoints/ConvoIconURL';
-import { useGetEndpointsQuery } from '~/data-provider';
-import { getIconEndpoint, logger } from '~/utils';
+import { useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
+import { getIconEndpoint, getModelSpecIconURL, logger } from '~/utils';
 import Icon from '~/components/Endpoints/Icon';
+import StreetAgentIcon, {
+  getMarketplaceAgentIconId,
+  isStreetBotModelId,
+} from '~/components/Agents/StreetAgentIcon';
+import StreetBotMarketplaceIcon from '~/components/Agents/StreetBotMarketplaceIcon';
 
 const MessageIcon = memo(
   ({
@@ -19,6 +24,7 @@ const MessageIcon = memo(
   }) => {
     logger.log('icon_data', iconData, assistant, agent);
     const { data: endpointsConfig } = useGetEndpointsQuery();
+    const { data: startupConfig } = useGetStartupConfig();
 
     const agentName = useMemo(() => agent?.name ?? '', [agent]);
     const agentAvatar = useMemo(() => agent?.avatar?.filepath ?? '', [agent]);
@@ -36,9 +42,34 @@ const MessageIcon = memo(
     }, [assistant, agent, assistantAvatar, agentAvatar]);
 
     const iconURL = iconData?.iconURL;
+    const specIconURL = useMemo(() => {
+      const modelSpecs = startupConfig?.modelSpecs?.list ?? [];
+      const model = iconData?.model ?? '';
+      const label = iconData?.modelLabel ?? '';
+      const spec = modelSpecs.find(
+        (modelSpec) =>
+          modelSpec.name === model ||
+          modelSpec.preset?.model === model ||
+          modelSpec.label === label ||
+          modelSpec.preset?.modelLabel === label,
+      );
+
+      return spec ? getModelSpecIconURL(spec) : '';
+    }, [startupConfig?.modelSpecs?.list, iconData?.model, iconData?.modelLabel]);
+    const displayIconURL = iconURL || specIconURL;
+    const selectedModel = String(iconData?.model ?? '');
+    const iconRecord = (iconData ?? {}) as Record<string, unknown>;
+    const selectedAgentIconId = getMarketplaceAgentIconId(
+      selectedModel,
+      String(iconRecord.sender ?? ''),
+      String(iconRecord.chatGptLabel ?? ''),
+      String(iconData?.modelLabel ?? ''),
+      iconURL,
+      specIconURL,
+    );
     const endpoint = useMemo(
-      () => getIconEndpoint({ endpointsConfig, iconURL, endpoint: iconData?.endpoint }),
-      [endpointsConfig, iconURL, iconData?.endpoint],
+      () => getIconEndpoint({ endpointsConfig, iconURL: displayIconURL, endpoint: iconData?.endpoint }),
+      [endpointsConfig, displayIconURL, iconData?.endpoint],
     );
 
     const endpointIconURL = useMemo(
@@ -46,10 +77,22 @@ const MessageIcon = memo(
       [endpointsConfig, endpoint],
     );
 
-    if (iconData?.isCreatedByUser !== true && iconURL != null && iconURL.includes('http')) {
+    if (iconData?.isCreatedByUser !== true && selectedAgentIconId) {
+      return (
+        <span className="flex h-[28.8px] w-[28.8px] items-center justify-center">
+          <StreetAgentIcon id={selectedAgentIconId} className="h-5 w-5" />
+        </span>
+      );
+    }
+
+    if (iconData?.isCreatedByUser !== true && isStreetBotModelId(selectedModel)) {
+      return <StreetBotMarketplaceIcon className="h-[28.8px] w-[28.8px]" />;
+    }
+
+    if (iconData?.isCreatedByUser !== true && displayIconURL != null && displayIconURL !== '') {
       return (
         <ConvoIconURL
-          iconURL={iconURL}
+          iconURL={displayIconURL}
           modelLabel={iconData?.modelLabel}
           context="message"
           assistantAvatar={assistantAvatar}
@@ -65,7 +108,7 @@ const MessageIcon = memo(
       <Icon
         isCreatedByUser={iconData?.isCreatedByUser ?? false}
         endpoint={endpoint}
-        iconURL={avatarURL || endpointIconURL}
+        iconURL={avatarURL || displayIconURL || endpointIconURL}
         model={iconData?.model}
         assistantName={assistantName}
         agentName={agentName}

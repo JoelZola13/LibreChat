@@ -1,12 +1,22 @@
-import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
-import { SB_API_BASE } from "~/components/streetbot/shared/apiConfig";
-import { useGlassStyles } from "../shared/useGlassStyles";
-import { useResponsive } from "../hooks/useResponsive";
-import { getAboutThisJob, getRequirementsList, getResponsibilitiesList } from "./jobContent";
-import { enrichJobSchedule, enrichJobsSchedule } from "./jobSchedule";
-import { addApplication, getApplicationByJob, getAnyApplicationByJob, getResume, getDefaultResume, getCoverLetters } from "./jobsStorage";
-import type { ApplicationDocument, Job, JobApplication, CoverLetter } from "./types";
+/* eslint-disable i18next/no-literal-string */
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { SB_API_BASE, STREETBOT_READ_API_BASE } from '~/components/streetbot/shared/apiConfig';
+import { useGlassStyles } from '../shared/useGlassStyles';
+import { useResponsive } from '../hooks/useResponsive';
+import { getAboutThisJob, getRequirementsList, getResponsibilitiesList } from './jobContent';
+import { enrichJobSchedule, enrichJobsSchedule } from './jobSchedule';
+import {
+  addApplication,
+  getApplicationByJob,
+  getCoverLetters,
+  getDefaultResume,
+  getEmployerListing,
+  getPostedJobs,
+  getResume,
+} from './jobsStorage';
+import JobBoardTopNav from './JobBoardTopNav';
+import type { ApplicationDocument, Job, JobApplication, CoverLetter } from './types';
 import {
   ArrowLeft,
   Briefcase,
@@ -31,34 +41,138 @@ import {
   UserCheck,
   FileText,
   Upload,
-  AlertCircle,
-} from "lucide-react";
+} from 'lucide-react';
 
 // ── Helpers ──
 
 function getOrCreateUserId(): string {
-  const key = "sb_user_id";
+  const key = 'sb_user_id';
   let userId = localStorage.getItem(key);
   if (!userId) {
-    userId =
-      "user_" +
-      Math.random().toString(36).substring(2, 15) +
-      Date.now().toString(36);
+    userId = 'user_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
     localStorage.setItem(key, userId);
   }
   return userId;
 }
 
 const JOBS_API_URL = `${SB_API_BASE}/jobs`;
+const JOBS_READ_API_URL = `${STREETBOT_READ_API_BASE}/jobs`;
+
+const EMPLOYEE_WORKSPACE_SAMPLE_JOBS: Record<string, Job> = {
+  'sample-26': {
+    id: 'sample-26',
+    title: 'Volunteer Writer',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Volunteer',
+    category: 'Creative',
+    experience_level: 'Beginner friendly',
+    location: 'Remote / Hybrid',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      'Write interviews, profiles, short blog posts, and field notes that help Street Voices document community stories.',
+    responsibilities:
+      'Draft weekly story posts, interview artists and organizers, edit contributor submissions, and coordinate with the editorial team.',
+    requirements:
+      'Clear writing samples, curiosity about community stories, comfort interviewing people, and reliable weekly availability.',
+    posting_date: '2026-05-12',
+    deadline: '2026-06-05',
+    tags: 'writing,content,community,storytelling',
+    is_creative_opportunity: true,
+    no_experience_required: true,
+    employer_verified: true,
+    employer_verification_type: 'business',
+    view_count: 284,
+    application_count: 18,
+  },
+  'sample-27': {
+    id: 'sample-27',
+    title: 'Volunteer Videographer',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Volunteer',
+    category: 'Media',
+    experience_level: 'Intermediate',
+    location: 'Toronto / Hybrid',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      'Capture events, creator interviews, and behind-the-scenes footage for Street Voices reels and campaign videos.',
+    responsibilities:
+      'Film short-form content, organize raw clips, coordinate shoot timing, and help deliver social-ready edits.',
+    requirements:
+      'Access to a camera or strong phone setup, basic editing comfort, and availability for occasional Toronto shoots.',
+    posting_date: '2026-05-13',
+    deadline: '2026-06-10',
+    tags: 'video,reels,events,media',
+    is_media_gig: true,
+    is_creative_opportunity: true,
+    employer_verified: true,
+    employer_verification_type: 'business',
+    view_count: 198,
+    application_count: 12,
+  },
+  'sample-28': {
+    id: 'sample-28',
+    title: 'Podcast Producer',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Part-time',
+    category: 'Audio',
+    experience_level: 'Intermediate',
+    location: 'Remote',
+    compensation: '$150 per episode',
+    description:
+      'Support The Echo podcast with guest outreach, episode planning, recording logistics, and release coordination.',
+    responsibilities:
+      'Build run-of-show docs, coordinate guests, track assets, prep interview notes, and support weekly publishing.',
+    requirements:
+      'Strong organization, interest in culture and community media, and experience with audio workflows or production planning.',
+    posting_date: '2026-05-15',
+    deadline: '2026-06-12',
+    tags: 'podcast,audio,production,remote',
+    is_media_gig: true,
+    employer_verified: true,
+    employer_verification_type: 'business',
+    view_count: 167,
+    application_count: 9,
+  },
+};
+
+function getLocalJobFallback(jobId: string): Job | null {
+  const postedJob = getPostedJobs().find((item) => item.id === jobId);
+  if (postedJob) return postedJob;
+
+  const sampleJob = EMPLOYEE_WORKSPACE_SAMPLE_JOBS[jobId];
+  if (sampleJob) return sampleJob;
+
+  const employerListing = getEmployerListing(getOrCreateUserId(), jobId);
+  if (!employerListing) return null;
+
+  return {
+    id: employerListing.jobId,
+    title: employerListing.jobSnapshot.title,
+    organization: employerListing.jobSnapshot.organization,
+    logo_url: employerListing.jobSnapshot.logo_url,
+    opportunity_type: employerListing.jobSnapshot.opportunity_type,
+    location: employerListing.jobSnapshot.location,
+    compensation: employerListing.jobSnapshot.compensation,
+    description: employerListing.jobSnapshot.description,
+    view_count: employerListing.stats.viewCount,
+    application_count: employerListing.stats.applicationCount,
+    posting_date: employerListing.createdAt,
+    employer_verified: true,
+    employer_verification_type: 'business',
+  };
+}
 
 function formatDateTime(value: string): string {
   try {
-    return new Date(value).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
+    return new Date(value).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
     });
   } catch {
     return value;
@@ -67,98 +181,106 @@ function formatDateTime(value: string): string {
 
 // Organization name → logo mapping (mirrors JobsPage)
 const ORGANIZATION_LOGOS: Record<string, string> = {
-  "Access Alliance Multicultural Health": "/job-logos/access-alliance.svg",
-  "Beats & Rhymes Youth Program": "/job-logos/beats-rhymes.svg",
-  "Big Brothers Big Sisters Toronto": "/job-logos/big-brothers.svg",
-  "Black Voices Media Collective": "/job-logos/black-voices-media.svg",
-  "CAMH Community Programs": "/job-logos/camh.svg",
-  "Community Care Network": "/job-logos/community-care.svg",
-  "Community Connect Network": "/job-logos/community-connect.svg",
-  "Housing First Program": "/job-logos/housing-first.svg",
-  "Housing Justice Coalition": "/job-logos/housing-justice.svg",
-  "North York Community Pantry": "/job-logos/north-york-pantry.svg",
-  "Parks & Recreation Community Programs": "/job-logos/parks-rec.svg",
-  "Regent Park Arts Collective": "/job-logos/regent-park-arts.svg",
-  "Safe Haven Community Center": "/job-logos/safe-haven.svg",
-  "Social Planning Council": "/job-logos/social-planning.svg",
-  "Street Voices": "/job-logos/street-voices.svg?v=4",
-  "Street Voices Community Services": "/job-logos/street-voices.svg?v=4",
-  "TechForGood Initiative": "/job-logos/techforgood.svg",
-  "The Stop Community Food Centre": "/job-logos/the-stop.svg",
-  "Youth Achievement Center": "/job-logos/youth-achievement.svg",
-  "Youth Services Bureau": "/job-logos/youth-services-bureau.svg",
-  "Youth Wellness Hub": "/job-logos/youth-wellness-hub.svg",
+  'Access Alliance Multicultural Health': '/job-logos/access-alliance.svg',
+  'Beats & Rhymes Youth Program': '/job-logos/beats-rhymes.svg',
+  'Big Brothers Big Sisters Toronto': '/job-logos/big-brothers.svg',
+  'Black Voices Media Collective': '/job-logos/black-voices-media.svg',
+  'CAMH Community Programs': '/job-logos/camh.svg',
+  'Community Care Network': '/job-logos/community-care.svg',
+  'Community Connect Network': '/job-logos/community-connect.svg',
+  'Housing First Program': '/job-logos/housing-first.svg',
+  'Housing Justice Coalition': '/job-logos/housing-justice.svg',
+  'North York Community Pantry': '/job-logos/north-york-pantry.svg',
+  'Parks & Recreation Community Programs': '/job-logos/parks-rec.svg',
+  'Regent Park Arts Collective': '/job-logos/regent-park-arts.svg',
+  'Safe Haven Community Center': '/job-logos/safe-haven.svg',
+  'Social Planning Council': '/job-logos/social-planning.svg',
+  'Street Voices': '/job-logos/street-voices.svg?v=2',
+  'Street Voices Community Services': '/job-logos/street-voices.svg?v=2',
+  'TechForGood Initiative': '/job-logos/techforgood.svg',
+  'The Stop Community Food Centre': '/job-logos/the-stop.svg',
+  'Youth Achievement Center': '/job-logos/youth-achievement.svg',
+  'Youth Services Bureau': '/job-logos/youth-services-bureau.svg',
+  'Youth Wellness Hub': '/job-logos/youth-wellness-hub.svg',
 };
 
 const SAMPLE_LOGOS: Record<string, string> = {
-  "TechStart Toronto": "/job-logos/techstart.svg",
-  "Maple Leaf Marketing": "/job-logos/mapleleaf.svg",
-  "Grounded Coffee Co.": "/job-logos/grounded.svg",
-  "Creative Collective Studio": "/job-logos/creative-collective.svg",
-  "QuickShip Logistics": "/job-logos/quickship.svg",
-  "Digital Ink Media": "/job-logos/digitalink.svg",
-  "Northern Tech Solutions": "/job-logos/northern-tech.svg",
-  "Celebrate Events Inc.": "/job-logos/celebrate.svg",
-  "Urban Harvest": "/job-logos/urban-harvest.svg",
-  "Bright Futures Education": "/job-logos/bright-futures.svg",
-  "BuildRight Construction": "/job-logos/buildright.svg",
-  "Metro Health Community Clinic": "/job-logos/metro-health.svg",
-  "Community Care Network": "/job-logos/community-care.svg",
-  "Peak Fitness Studios": "/job-logos/peak-fitness.svg",
-  "Good Eats Catering": "/job-logos/good-eats.svg",
-  "EcoClean Services": "/job-logos/eco-clean.svg",
-  "TransitTo Solutions": "/job-logos/transit-to.svg",
-  "First Nations Credit Union": "/job-logos/first-nations-cu.svg",
-  "Spectrum Media Group": "/job-logos/spectrum-media.svg",
-  "SecureGuard Services": "/job-logos/secure-guard.svg",
-  "Apex Distribution": "/job-logos/apex-distribution.svg",
-  "Spark Digital Agency": "/job-logos/spark-digital.svg",
-  "Street Hope Foundation": "/job-logos/street-hope.svg",
-  "Bean & Brew Coffee House": "/job-logos/bean-brew.svg",
+  'TechStart Toronto': '/job-logos/techstart.svg',
+  'Maple Leaf Marketing': '/job-logos/mapleleaf.svg',
+  'Grounded Coffee Co.': '/job-logos/grounded.svg',
+  'Creative Collective Studio': '/job-logos/creative-collective.svg',
+  'QuickShip Logistics': '/job-logos/quickship.svg',
+  'Digital Ink Media': '/job-logos/digitalink.svg',
+  'Northern Tech Solutions': '/job-logos/northern-tech.svg',
+  'Celebrate Events Inc.': '/job-logos/celebrate.svg',
+  'Urban Harvest': '/job-logos/urban-harvest.svg',
+  'Bright Futures Education': '/job-logos/bright-futures.svg',
+  'BuildRight Construction': '/job-logos/buildright.svg',
+  'Metro Health Community Clinic': '/job-logos/metro-health.svg',
+  'Community Care Network': '/job-logos/community-care.svg',
+  'Peak Fitness Studios': '/job-logos/peak-fitness.svg',
+  'Good Eats Catering': '/job-logos/good-eats.svg',
+  'EcoClean Services': '/job-logos/eco-clean.svg',
+  'TransitTo Solutions': '/job-logos/transit-to.svg',
+  'First Nations Credit Union': '/job-logos/first-nations-cu.svg',
+  'Spectrum Media Group': '/job-logos/spectrum-media.svg',
+  'SecureGuard Services': '/job-logos/secure-guard.svg',
+  'Apex Distribution': '/job-logos/apex-distribution.svg',
+  'Spark Digital Agency': '/job-logos/spark-digital.svg',
+  'Street Hope Foundation': '/job-logos/street-hope.svg',
+  'Bean & Brew Coffee House': '/job-logos/bean-brew.svg',
 };
 
 function getLogoForJob(job: Job): string {
   if (job.logo_url) return job.logo_url;
   if (job.organization && ORGANIZATION_LOGOS[job.organization])
     return ORGANIZATION_LOGOS[job.organization];
-  if (job.organization && SAMPLE_LOGOS[job.organization])
-    return SAMPLE_LOGOS[job.organization];
-  return "/job-logos/default-job.svg";
+  if (job.organization && SAMPLE_LOGOS[job.organization]) return SAMPLE_LOGOS[job.organization];
+  return '/job-logos/default-job.svg';
+}
+
+function getApplyButtonBackground(isApplied: boolean, isDark: boolean, accent: string) {
+  if (!isApplied) return accent;
+  return isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.1)';
 }
 
 // ── Verification Badge (matches JobsPage) ──
 
 function VerificationBadge({
   verificationType,
-  size = "md",
+  size = 'md',
 }: {
   verificationType?: string;
-  size?: "sm" | "md" | "lg";
+  size?: 'sm' | 'md' | 'lg';
 }) {
   if (!verificationType) return null;
 
   const sizeStyles = {
-    sm: { padding: "2px 8px", fontSize: "10px", iconSize: 10 },
-    md: { padding: "4px 10px", fontSize: "11px", iconSize: 12 },
-    lg: { padding: "6px 14px", fontSize: "13px", iconSize: 14 },
+    sm: { padding: '2px 8px', fontSize: '10px', iconSize: 10 },
+    md: { padding: '4px 10px', fontSize: '11px', iconSize: 12 },
+    lg: { padding: '6px 14px', fontSize: '13px', iconSize: 14 },
   };
 
-  const typeConfig: Record<string, { label: string; bg: string }> = {
+  const typeConfig: Record<string, { label: string; bg: string; color: string }> = {
     basic: {
-      label: "Verified",
-      bg: "linear-gradient(135deg, #16a34a 0%, #059669 100%)",
+      label: 'Verified',
+      bg: 'linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.15) 100%)',
+      color: '#22c55e',
     },
     business: {
-      label: "Verified Business",
-      bg: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+      label: 'Verified Business',
+      bg: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)',
+      color: '#3b82f6',
     },
     nonprofit: {
-      label: "Verified Nonprofit",
-      bg: "linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)",
+      label: 'Verified Nonprofit',
+      bg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%)',
+      color: '#a855f7',
     },
     government: {
-      label: "Government",
-      bg: "linear-gradient(135deg, #ca8a04 0%, #a16207 100%)",
+      label: 'Government',
+      bg: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2) 0%, rgba(202, 138, 4, 0.15) 100%)',
+      color: '#eab308',
     },
   };
 
@@ -168,24 +290,20 @@ function VerificationBadge({
   return (
     <span
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "4px",
-        borderRadius: "9999px",
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        borderRadius: '9999px',
         background: config.bg,
+        border: `1px solid ${config.color}33`,
         padding: styles.padding,
         fontSize: styles.fontSize,
-        fontWeight: 700,
-        color: "#ffffff",
-        whiteSpace: "nowrap",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+        fontWeight: 600,
+        color: config.color,
+        whiteSpace: 'nowrap',
       }}
-      title={`${config.label} employer`}
     >
-      <Shield
-        style={{ width: styles.iconSize, height: styles.iconSize }}
-        aria-hidden="true"
-      />
+      <Shield style={{ width: styles.iconSize, height: styles.iconSize }} aria-hidden="true" />
       {config.label}
     </span>
   );
@@ -193,13 +311,7 @@ function VerificationBadge({
 
 // ── Toast (matches JobsPage) ──
 
-function Toast({
-  message,
-  onClose,
-}: {
-  message: string;
-  onClose: () => void;
-}) {
+function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
     return () => clearTimeout(timer);
@@ -210,37 +322,36 @@ function Toast({
       role="status"
       aria-live="polite"
       style={{
-        position: "fixed",
-        bottom: "24px",
-        right: "24px",
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
         zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        borderRadius: "8px",
-        background: "#1f2937",
-        padding: "12px 16px",
-        color: "#fff",
-        boxShadow:
-          "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        borderRadius: '8px',
+        background: '#1f2937',
+        padding: '12px 16px',
+        color: '#fff',
+        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
       }}
     >
       <span>{message}</span>
       <button
         onClick={onClose}
         style={{
-          background: "transparent",
-          border: "none",
-          color: "#9ca3af",
-          cursor: "pointer",
+          background: 'transparent',
+          border: 'none',
+          color: '#9ca3af',
+          cursor: 'pointer',
           padding: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
         aria-label="Dismiss"
       >
-        <X style={{ width: "16px", height: "16px" }} />
+        <X style={{ width: '16px', height: '16px' }} />
       </button>
     </div>
   );
@@ -261,88 +372,71 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [isFromSnapshot, setIsFromSnapshot] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isApplied, setIsApplied] = useState(false);
-  const [showApplicationSection, setShowApplicationSection] = useState(searchParams.get("apply") === "1");
+  const [showApplicationSection, setShowApplicationSection] = useState(
+    searchParams.get('apply') === '1',
+  );
   const [toast, setToast] = useState<string | null>(null);
   const [currentApplication, setCurrentApplication] = useState<JobApplication | null>(null);
-  const [applicationName, setApplicationName] = useState("");
-  const [applicationEmail, setApplicationEmail] = useState("");
-  const [coverNote, setCoverNote] = useState("");
+  const [applicationName, setApplicationName] = useState('');
+  const [applicationEmail, setApplicationEmail] = useState('');
+  const [coverNote, setCoverNote] = useState('');
   const [uploadedDocuments, setUploadedDocuments] = useState<ApplicationDocument[]>([]);
   const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([]);
   const [hasResume, setHasResume] = useState(false);
-  const [formErrors, setFormErrors] = useState<{ name?: string; email?: string; resume?: string }>({});
+  const [navSearch, setNavSearch] = useState('');
+  const [formErrors, setFormErrors] = useState<{ name?: string; email?: string; resume?: string }>(
+    {},
+  );
   const responsibilitiesList = useMemo(() => (job ? getResponsibilitiesList(job) : []), [job]);
   const requirementsList = useMemo(() => (job ? getRequirementsList(job) : []), [job]);
-  const aboutThisJob = useMemo(() => (job ? getAboutThisJob(job) : ""), [job]);
+  const aboutThisJob = useMemo(() => (job ? getAboutThisJob(job) : ''), [job]);
 
   // ── Load job ──
   useEffect(() => {
     if (!jobId) return;
     let cancelled = false;
 
-    const synthesizeFromApplication = (): Job | null => {
-      // The job might have been removed from the backend but the user has
-      // an application referencing it. Render the application's stored
-      // jobSnapshot so withdrawn applications can still be opened.
-      const userId = getOrCreateUserId();
-      const app = getAnyApplicationByJob(userId, jobId);
-      if (!app) return null;
-      const snapshot = app.jobSnapshot;
-      const synthetic: Job = {
-        id: jobId,
-        title: snapshot.title,
-        organization: snapshot.organization,
-        logo_url: snapshot.logo_url,
-        opportunity_type: snapshot.opportunity_type,
-        location: snapshot.location,
-        compensation: snapshot.compensation,
-      };
-      return synthetic;
-    };
-
     (async () => {
       setIsLoading(true);
       try {
+        const localJob = getLocalJobFallback(jobId);
+        if (localJob) {
+          if (!cancelled) setJob(enrichJobSchedule(localJob));
+          return;
+        }
+
         // Try API first
-        const resp = await fetch(`${JOBS_API_URL}/${jobId}`);
+        const resp = await fetch(`${JOBS_READ_API_URL}/${jobId}`);
         if (resp.ok) {
           const data = await resp.json();
           if (!cancelled) setJob(enrichJobSchedule(data));
         } else {
-          // Fallback 1: fetch all jobs and find by id
-          const allResp = await fetch(JOBS_API_URL);
-          let found: Job | undefined;
+          // Fallback: fetch all jobs and find by id
+          const allResp = await fetch(JOBS_READ_API_URL);
           if (allResp.ok) {
             const allJobs = enrichJobsSchedule(await allResp.json());
-            found = allJobs.find((j) => j.id === jobId);
-          }
-          if (cancelled) return;
-          if (found) {
-            setJob(found);
-          } else {
-            // Fallback 2: render from application's stored jobSnapshot if
-            // the user has applied (or withdrawn) for this job before.
-            const synthetic = synthesizeFromApplication();
-            if (synthetic) {
-              setJob(synthetic);
-              setIsFromSnapshot(true);
-            } else {
-              setNotFound(true);
+            const found = allJobs.find((j) => j.id === jobId);
+            if (!cancelled) {
+              if (found) setJob(found);
+              else {
+                const localJob = getLocalJobFallback(jobId);
+                if (localJob) setJob(enrichJobSchedule(localJob));
+                else setNotFound(true);
+              }
             }
+          } else if (!cancelled) {
+            const localJob = getLocalJobFallback(jobId);
+            if (localJob) setJob(enrichJobSchedule(localJob));
+            else setNotFound(true);
           }
         }
       } catch {
-        if (cancelled) return;
-        // Network error — try the application snapshot as a last resort
-        const synthetic = synthesizeFromApplication();
-        if (synthetic) {
-          setJob(synthetic);
-          setIsFromSnapshot(true);
-        } else {
-          setNotFound(true);
+        if (!cancelled) {
+          const localJob = getLocalJobFallback(jobId);
+          if (localJob) setJob(enrichJobSchedule(localJob));
+          else setNotFound(true);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -358,17 +452,13 @@ export default function JobDetailPage() {
   useEffect(() => {
     if (!job) return;
     const userId = getOrCreateUserId();
-    // For orphaned listings (rendered from a stored application snapshot),
-    // also surface withdrawn applications so the user can review them.
-    const existingApplication = isFromSnapshot
-      ? getAnyApplicationByJob(userId, job.id)
-      : getApplicationByJob(userId, job.id);
+    const existingApplication = getApplicationByJob(userId, job.id);
     const resume = getResume(userId);
     setCurrentApplication(existingApplication);
-    setIsApplied(Boolean(existingApplication) && !existingApplication?.withdrawn);
-    setApplicationName(existingApplication?.applicantName || resume?.fullName || "");
-    setApplicationEmail(existingApplication?.applicantEmail || resume?.email || "");
-    setCoverNote(existingApplication?.coverNote || "");
+    setIsApplied(Boolean(existingApplication));
+    setApplicationName(existingApplication?.applicantName || resume?.fullName || '');
+    setApplicationEmail(existingApplication?.applicantEmail || resume?.email || '');
+    setCoverNote(existingApplication?.coverNote || '');
     setUploadedDocuments(existingApplication?.documents || []);
     setHasResume(!!resume?.fullName && !!resume?.email);
     setCoverLetters(getCoverLetters(userId));
@@ -376,9 +466,7 @@ export default function JobDetailPage() {
     // Check favorites
     (async () => {
       try {
-        const resp = await fetch(
-          `${JOBS_API_URL}/favorites?user_id=${encodeURIComponent(userId)}`
-        );
+        const resp = await fetch(`${JOBS_READ_API_URL}/favorites?user_id=${encodeURIComponent(userId)}`);
         if (resp.ok) {
           const data: Job[] = await resp.json();
           if (Array.isArray(data)) {
@@ -389,14 +477,14 @@ export default function JobDetailPage() {
         /* ignore */
       }
     })();
-  }, [job, isFromSnapshot]);
+  }, [job]);
 
   useEffect(() => {
-    const shouldShowApply = searchParams.get("apply") === "1";
+    const shouldShowApply = searchParams.get('apply') === '1';
     setShowApplicationSection(shouldShowApply);
     if (!job || !shouldShowApply) return;
     const timer = window.setTimeout(() => {
-      applicationSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      applicationSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
     return () => window.clearTimeout(timer);
   }, [job, searchParams]);
@@ -408,13 +496,13 @@ export default function JobDetailPage() {
     try {
       const resp = await fetch(
         `${JOBS_API_URL}/${job.id}/favorite?user_id=${encodeURIComponent(userId)}`,
-        { method: isSaved ? "DELETE" : "POST" }
+        { method: isSaved ? 'DELETE' : 'POST' },
       );
       if (!resp.ok) throw new Error();
       setIsSaved((prev) => !prev);
-      setToast(isSaved ? "Removed from saved jobs" : "Job saved!");
+      setToast(isSaved ? 'Removed from saved jobs' : 'Job saved!');
     } catch {
-      setToast("Failed to update saved jobs");
+      setToast('Failed to update saved jobs');
     }
   }, [job, isSaved]);
 
@@ -423,26 +511,25 @@ export default function JobDetailPage() {
     const errors: { name?: string; email?: string; resume?: string } = {};
     const nameParts = applicationName.trim().split(/\s+/).filter(Boolean);
     if (nameParts.length === 0) {
-      errors.name = "Full name is required.";
+      errors.name = 'Full name is required.';
     } else if (nameParts.length < 2) {
-      errors.name = "Please enter your first and last name.";
+      errors.name = 'Please enter your first and last name.';
     }
     const trimmedEmail = applicationEmail.trim();
     if (!trimmedEmail) {
-      errors.email = "Email address is required.";
+      errors.email = 'Email address is required.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      errors.email = "Enter a valid email address.";
+      errors.email = 'Enter a valid email address.';
     }
     if (uploadedDocuments.length === 0) {
-      errors.resume = "Please upload your resume to continue.";
+      errors.resume = 'Please upload your resume to continue.';
     }
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) {
-      setToast("Please complete the required fields.");
+      setToast('Please complete the required fields.');
       return;
     }
     const userId = getOrCreateUserId();
-    const wasAlreadyApplied = isApplied;
     const nextApplication = addApplication(userId, job, {
       applicantName: applicationName.trim(),
       applicantEmail: applicationEmail.trim(),
@@ -451,65 +538,58 @@ export default function JobDetailPage() {
     });
     setCurrentApplication(nextApplication);
     setIsApplied(true);
-    setToast(
-      wasAlreadyApplied
-        ? "Application updated!"
-        : "Application submitted and employer notified!",
-    );
-  }, [applicationEmail, applicationName, coverNote, isApplied, job, uploadedDocuments]);
+    setToast('Application submitted and employer notified!');
+  }, [applicationEmail, applicationName, coverNote, job, uploadedDocuments]);
 
   const handleQuickApply = useCallback(() => {
     if (!job) return;
     const userId = getOrCreateUserId();
     const resume = getDefaultResume(userId);
     if (!resume?.fullName || !resume?.email) {
-      setToast("Complete your resume first for Quick Apply.");
+      setToast('Complete your resume first for Quick Apply.');
       return;
     }
     const nextApplication = addApplication(userId, job, {
       applicantName: resume.fullName,
       applicantEmail: resume.email,
-      coverNote: "",
+      coverNote: '',
       documents: [],
     });
     setCurrentApplication(nextApplication);
     setIsApplied(true);
-    setToast("Quick application submitted!");
+    setToast('Quick application submitted!');
   }, [job]);
 
   const focusApplicationSection = useCallback(() => {
     setShowApplicationSection(true);
-    applicationSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    applicationSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  const handleDocumentUpload = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files || []);
-      if (files.length === 0) return;
+  const handleDocumentUpload = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
 
-      const nextDocuments = files.map((file) => {
-        const lowerName = file.name.toLowerCase();
-        let kind: ApplicationDocument["kind"] = "other";
-        if (lowerName.includes("resume")) kind = "resume";
-        else if (lowerName.includes("cover")) kind = "cover_letter";
-        else if (lowerName.includes("portfolio")) kind = "portfolio";
+    const nextDocuments = files.map((file) => {
+      const lowerName = file.name.toLowerCase();
+      let kind: ApplicationDocument['kind'] = 'other';
+      if (lowerName.includes('resume')) kind = 'resume';
+      else if (lowerName.includes('cover')) kind = 'cover_letter';
+      else if (lowerName.includes('portfolio')) kind = 'portfolio';
 
-        return {
-          id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          kind,
-          name: file.name,
-          size: file.size,
-          mimeType: file.type || "application/octet-stream",
-          uploadedAt: new Date().toISOString(),
-        };
-      });
+      return {
+        id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        kind,
+        name: file.name,
+        size: file.size,
+        mimeType: file.type || 'application/octet-stream',
+        uploadedAt: new Date().toISOString(),
+      };
+    });
 
-      setUploadedDocuments((prev) => [...prev, ...nextDocuments]);
-      setFormErrors((prev) => (prev.resume ? { ...prev, resume: undefined } : prev));
-      event.target.value = "";
-    },
-    [],
-  );
+    setUploadedDocuments((prev) => [...prev, ...nextDocuments]);
+    setFormErrors((prev) => (prev.resume ? { ...prev, resume: undefined } : prev));
+    event.target.value = '';
+  }, []);
 
   const removeUploadedDocument = useCallback((documentId: string) => {
     setUploadedDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
@@ -519,7 +599,7 @@ export default function JobDetailPage() {
     if (!job) return;
     const url = `${window.location.origin}/jobs/${job.id}`;
     navigator.clipboard.writeText(url).then(
-      () => setToast("Link copied to clipboard!"),
+      () => setToast('Link copied to clipboard!'),
       () => setToast("Couldn't copy link. Long-press the share button to copy manually."),
     );
   }, [job]);
@@ -527,79 +607,78 @@ export default function JobDetailPage() {
   // ── Tag badges config ──
   const specialBadges = useMemo(() => {
     if (!job) return [];
-    const badges: { label: string; icon: typeof Sparkles; gradient: string }[] =
-      [];
+    const badges: { label: string; icon: typeof Sparkles; gradient: string }[] = [];
     if (job.black_led_organization)
       badges.push({
-        label: "Black-Led Organization",
+        label: 'Black-Led Organization',
         icon: Building2,
-        gradient: "linear-gradient(to right, #ec4899, #f43f5e)",
+        gradient: 'linear-gradient(to right, #ec4899, #f43f5e)',
       });
     if (job.no_experience_required)
       badges.push({
-        label: "No Experience Required",
+        label: 'No Experience Required',
         icon: Sparkles,
-        gradient: "linear-gradient(to right, #60a5fa, #22d3ee)",
+        gradient: 'linear-gradient(to right, #60a5fa, #22d3ee)',
       });
     if (job.training_provided)
       badges.push({
-        label: "Training Provided",
+        label: 'Training Provided',
         icon: GraduationCap,
-        gradient: "linear-gradient(to right, #4ade80, #34d399)",
+        gradient: 'linear-gradient(to right, #4ade80, #34d399)',
       });
     if (job.is_creative_opportunity)
       badges.push({
-        label: "Creative Opportunity",
+        label: 'Creative Opportunity',
         icon: Palette,
-        gradient: "linear-gradient(to right, #f472b6, #facc15)",
+        gradient: 'linear-gradient(to right, #f472b6, #facc15)',
       });
     if (job.is_media_gig)
       badges.push({
-        label: "Media Gig",
+        label: 'Media Gig',
         icon: Camera,
-        gradient: "linear-gradient(to right, #22d3ee, #6366f1)",
+        gradient: 'linear-gradient(to right, #22d3ee, #6366f1)',
       });
     if (job.hires_with_record)
       badges.push({
-        label: "Second Chance Employer",
+        label: 'Second Chance Employer',
         icon: UserCheck,
-        gradient: "linear-gradient(to right, #f97316, #eab308)",
+        gradient: 'linear-gradient(to right, #f97316, #eab308)',
       });
     if (job.hires_with_gaps)
       badges.push({
-        label: "Employment Gaps OK",
+        label: 'Employment Gaps OK',
         icon: UserCheck,
-        gradient: "linear-gradient(to right, #a78bfa, #818cf8)",
+        gradient: 'linear-gradient(to right, #a78bfa, #818cf8)',
       });
     if (job.hires_without_address)
       badges.push({
-        label: "No Fixed Address OK",
+        label: 'No Fixed Address OK',
         icon: UserCheck,
-        gradient: "linear-gradient(to right, #fb923c, #f472b6)",
+        gradient: 'linear-gradient(to right, #fb923c, #f472b6)',
       });
     if (job.provides_work_gear)
       badges.push({
-        label: "Work Gear Provided",
+        label: 'Work Gear Provided',
         icon: HardHat,
-        gradient: "linear-gradient(to right, #38bdf8, #818cf8)",
+        gradient: 'linear-gradient(to right, #38bdf8, #818cf8)',
       });
     if (job.same_day_pay)
       badges.push({
-        label: "Same Day Pay",
+        label: 'Same Day Pay',
         icon: Banknote,
-        gradient: "linear-gradient(to right, #34d399, #22d3ee)",
+        gradient: 'linear-gradient(to right, #34d399, #22d3ee)',
       });
     if (job.is_transit_accessible)
       badges.push({
-        label: "Transit Accessible",
+        label: 'Transit Accessible',
         icon: Bus,
-        gradient: "linear-gradient(to right, #60a5fa, #a78bfa)",
+        gradient: 'linear-gradient(to right, #60a5fa, #a78bfa)',
       });
     if (job.requires_background_check)
       badges.push({
-        label: "Background Check Required",
+        label: 'Background Check Required',
         icon: Shield,
-        gradient: "linear-gradient(to right, #f87171, #fb923c)",
+        gradient: 'linear-gradient(to right, #f87171, #fb923c)',
       });
     return badges;
   }, [job]);
@@ -612,27 +691,34 @@ export default function JobDetailPage() {
         <div style={gradientOrbs.pink} aria-hidden="true" />
         <div style={gradientOrbs.cyan} aria-hidden="true" />
         <div style={gradientOrbs.gold} aria-hidden="true" />
+        <JobBoardTopNav
+          searchValue={navSearch}
+          onSearchChange={setNavSearch}
+          onSearchSubmit={(value) =>
+            navigate(value.trim() ? `/jobs?search=${encodeURIComponent(value.trim())}` : '/jobs')
+          }
+        />
         <div
           style={{
-            position: "relative",
+            position: 'relative',
             zIndex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "60vh",
-            gap: "16px",
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '60vh',
+            gap: '16px',
             color: colors.textSecondary,
           }}
         >
           <div
             style={{
-              width: "40px",
-              height: "40px",
-              border: "3px solid",
+              width: '40px',
+              height: '40px',
+              border: '3px solid',
               borderColor: `${colors.accent} transparent transparent transparent`,
-              borderRadius: "50%",
-              animation: "spin 1s linear infinite",
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
             }}
           />
           <p>Loading job details...</p>
@@ -650,30 +736,37 @@ export default function JobDetailPage() {
         <div style={gradientOrbs.pink} aria-hidden="true" />
         <div style={gradientOrbs.cyan} aria-hidden="true" />
         <div style={gradientOrbs.gold} aria-hidden="true" />
+        <JobBoardTopNav
+          searchValue={navSearch}
+          onSearchChange={setNavSearch}
+          onSearchSubmit={(value) =>
+            navigate(value.trim() ? `/jobs?search=${encodeURIComponent(value.trim())}` : '/jobs')
+          }
+        />
         <div
           style={{
-            position: "relative",
+            position: 'relative',
             zIndex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "60vh",
-            gap: "16px",
-            textAlign: "center",
-            padding: "24px",
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '60vh',
+            gap: '16px',
+            textAlign: 'center',
+            padding: '24px',
           }}
         >
           <Briefcase
             style={{
-              width: "64px",
-              height: "64px",
+              width: '64px',
+              height: '64px',
               color: colors.textMuted,
             }}
           />
           <h2
             style={{
-              fontSize: "24px",
+              fontSize: '24px',
               fontWeight: 700,
               color: colors.text,
               margin: 0,
@@ -687,21 +780,21 @@ export default function JobDetailPage() {
           <Link
             to="/jobs"
             style={{
-              marginTop: "8px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              borderRadius: "14px",
+              marginTop: '8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              borderRadius: '14px',
               background: colors.accent,
-              padding: "12px 24px",
-              fontSize: "14px",
+              padding: '12px 24px',
+              fontSize: '14px',
               fontWeight: 600,
-              color: "#000",
-              textDecoration: "none",
-              boxShadow: "0 4px 14px rgba(255, 214, 0, 0.3)",
+              color: '#000',
+              textDecoration: 'none',
+              boxShadow: '0 4px 14px rgba(255, 214, 0, 0.3)',
             }}
           >
-            <ArrowLeft style={{ width: "16px", height: "16px" }} />
+            <ArrowLeft style={{ width: '16px', height: '16px' }} />
             Back to Job Board
           </Link>
         </div>
@@ -712,7 +805,7 @@ export default function JobDetailPage() {
   const logoUrl = getLogoForJob(job);
   const tags = job.tags
     ? job.tags
-        .split(",")
+        .split(',')
         .map((t) => t.trim())
         .filter(Boolean)
     : [];
@@ -727,33 +820,40 @@ export default function JobDetailPage() {
       <div style={gradientOrbs.pink} aria-hidden="true" />
       <div style={gradientOrbs.cyan} aria-hidden="true" />
       <div style={gradientOrbs.gold} aria-hidden="true" />
+      <JobBoardTopNav
+        searchValue={navSearch}
+        onSearchChange={setNavSearch}
+        onSearchSubmit={(value) =>
+          navigate(value.trim() ? `/jobs?search=${encodeURIComponent(value.trim())}` : '/jobs')
+        }
+      />
 
-      <div style={{ position: "relative", zIndex: 1 }}>
+      <div style={{ position: 'relative', zIndex: 1 }}>
         {/* ── Back Navigation ── */}
         <nav
           style={{
-            maxWidth: "960px",
-            margin: "0 auto",
-            padding: isMobile ? "16px 12px" : "24px 24px 0",
+            maxWidth: '960px',
+            margin: '0 auto',
+            padding: isMobile ? '16px 12px' : '24px 24px 0',
           }}
         >
           <button
-            onClick={() => navigate("/jobs")}
+            onClick={() => navigate('/jobs')}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              borderRadius: "14px",
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              borderRadius: '14px',
               border: `1px solid ${colors.border}`,
               background: colors.surface,
-              backdropFilter: "blur(24px) saturate(180%)",
-              WebkitBackdropFilter: "blur(24px) saturate(180%)",
-              padding: "10px 18px",
-              fontSize: "14px",
+              backdropFilter: 'blur(24px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+              padding: '10px 18px',
+              fontSize: '14px',
               fontWeight: 500,
               color: colors.textSecondary,
-              cursor: "pointer",
-              transition: "all 0.2s",
+              cursor: 'pointer',
+              transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = colors.borderHover;
@@ -764,7 +864,7 @@ export default function JobDetailPage() {
               e.currentTarget.style.color = colors.textSecondary;
             }}
           >
-            <ArrowLeft style={{ width: "16px", height: "16px" }} />
+            <ArrowLeft style={{ width: '16px', height: '16px' }} />
             Back to Jobs
           </button>
         </nav>
@@ -772,131 +872,122 @@ export default function JobDetailPage() {
         {/* ── Main Card ── */}
         <article
           style={{
-            maxWidth: "960px",
-            margin: isMobile ? "16px 12px 80px" : "24px auto 80px",
-            borderRadius: "24px",
+            maxWidth: '960px',
+            margin: isMobile ? '16px 12px 80px' : '24px auto 80px',
+            borderRadius: '24px',
             border: `1px solid ${colors.border}`,
             background: colors.cardBg,
-            backdropFilter: "blur(24px) saturate(180%)",
-            WebkitBackdropFilter: "blur(24px) saturate(180%)",
+            backdropFilter: 'blur(24px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
             boxShadow: colors.glassShadow,
-            overflow: "hidden",
+            overflow: 'hidden',
           }}
         >
           {/* ── Logo Banner ── */}
           <div
             style={{
-              position: "relative",
-              height: isMobile ? "160px" : "220px",
-              background: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              position: 'relative',
+              height: isMobile ? '160px' : '220px',
+              background: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               borderBottom: `1px solid ${colors.border}`,
-              overflow: "hidden",
             }}
           >
             <img
               src={logoUrl}
               alt={`${job.organization || job.title} logo`}
               style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
+                maxWidth: '85%',
+                maxHeight: isMobile ? '120px' : '160px',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
               }}
               onError={(e) => {
-                (e.target as HTMLImageElement).src = "/job-logos/default-job.svg";
+                (e.target as HTMLImageElement).src = '/job-logos/default-job.svg';
               }}
             />
 
             {/* Opportunity Type Badge */}
             <span
               style={{
-                position: "absolute",
-                top: "16px",
-                left: "16px",
-                display: "inline-block",
-                borderRadius: "9999px",
+                position: 'absolute',
+                top: '16px',
+                left: '16px',
+                display: 'inline-block',
+                borderRadius: '9999px',
                 background: colors.accent,
-                padding: "8px 16px",
-                fontSize: "13px",
+                padding: '8px 16px',
+                fontSize: '13px',
                 fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                color: "#000",
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: '#000',
               }}
             >
-              {job.opportunity_type || "Opportunity"}
+              {job.opportunity_type || 'Opportunity'}
             </span>
 
             {/* Featured badge */}
             {job.is_featured && (
               <span
                 style={{
-                  position: "absolute",
-                  top: "16px",
-                  right: "16px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  borderRadius: "9999px",
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  borderRadius: '9999px',
                   background: colors.accent,
-                  padding: "8px 16px",
-                  fontSize: "13px",
+                  padding: '8px 16px',
+                  fontSize: '13px',
                   fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  color: "#000",
-                  boxShadow: "0 2px 8px rgba(255, 214, 0, 0.4)",
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#000',
+                  boxShadow: '0 2px 8px rgba(255, 214, 0, 0.4)',
                 }}
               >
-                <Star style={{ width: "14px", height: "14px" }} fill="#000" />
+                <Star style={{ width: '14px', height: '14px' }} fill="#000" />
                 Featured
               </span>
             )}
 
+            {/* Verified badge - bottom center */}
+            {job.employer_verified && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '-14px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                }}
+              >
+                <VerificationBadge verificationType={job.employer_verification_type} size="lg" />
+              </div>
+            )}
           </div>
 
           {/* ── Content ── */}
           <div
             style={{
-              padding: isMobile ? "24px 16px" : "36px 48px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "28px",
+              padding: isMobile ? '24px 16px' : '36px 48px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '28px',
             }}
           >
             {/* Title & Org */}
-            <div style={{ textAlign: "center" }}>
-              {isFromSnapshot && (
-                <div
-                  role="status"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    margin: "0 auto 14px",
-                    padding: "8px 14px",
-                    borderRadius: "12px",
-                    border: "1px solid rgba(245, 158, 11, 0.4)",
-                    background: "rgba(245, 158, 11, 0.12)",
-                    color: "#f59e0b",
-                    fontSize: "12.5px",
-                    fontWeight: 600,
-                  }}
-                >
-                  <AlertCircle style={{ width: "14px", height: "14px" }} aria-hidden="true" />
-                  This listing has been removed. You can still review your application below.
-                </div>
-              )}
+            <div style={{ textAlign: 'center' }}>
               <h1
                 style={{
-                  fontSize: isMobile ? "24px" : "32px",
+                  fontSize: isMobile ? '24px' : '32px',
                   fontWeight: 800,
                   color: colors.text,
-                  margin: "0 0 8px 0",
+                  margin: '0 0 8px 0',
                   lineHeight: 1.2,
                 }}
               >
@@ -905,7 +996,7 @@ export default function JobDetailPage() {
               {job.organization && (
                 <p
                   style={{
-                    fontSize: isMobile ? "16px" : "18px",
+                    fontSize: isMobile ? '16px' : '18px',
                     color: colors.textSecondary,
                     margin: 0,
                   }}
@@ -913,53 +1004,41 @@ export default function JobDetailPage() {
                   {job.organization}
                 </p>
               )}
-              {job.employer_verified && (
-                <div style={{ display: "flex", justifyContent: "center", marginTop: "12px" }}>
-                  <VerificationBadge verificationType={job.employer_verification_type} size="lg" />
-                </div>
-              )}
             </div>
 
-            {/* Action Buttons Row — hidden when the underlying listing has been removed */}
-            {!isFromSnapshot && (
+            {/* Action Buttons Row */}
             <div
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "12px",
-                justifyContent: "center",
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '12px',
+                justifyContent: 'center',
               }}
             >
               {showApplicationSection ? (
                 <button
                   onClick={focusApplicationSection}
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    borderRadius: "14px",
-                    padding: "12px 28px",
-                    fontSize: "15px",
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    borderRadius: '14px',
+                    padding: '12px 28px',
+                    fontSize: '15px',
                     fontWeight: 600,
-                    cursor: "pointer",
-                    border: "none",
-                    background: isApplied
-                      ? isDark
-                        ? "rgba(16,185,129,0.15)"
-                        : "rgba(16,185,129,0.1)"
-                      : colors.accent,
-                    color: isApplied ? "#10B981" : "#000",
-                    transition: "all 0.2s",
-                    boxShadow: isApplied
-                      ? "none"
-                      : "0 4px 14px rgba(255, 214, 0, 0.3)",
+                    cursor: 'pointer',
+                    border: 'none',
+                    background: getApplyButtonBackground(isApplied, isDark, colors.accent),
+                    color: isApplied ? '#10B981' : '#000',
+                    transition: 'all 0.2s',
+                    boxShadow: isApplied ? 'none' : '0 4px 14px rgba(255, 214, 0, 0.3)',
                   }}
                 >
                   {isApplied ? (
                     <>View Application</>
                   ) : (
                     <>
-                      <Briefcase style={{ width: "16px", height: "16px" }} />
+                      <Briefcase style={{ width: '16px', height: '16px' }} />
                       Apply Now
                     </>
                   )}
@@ -968,47 +1047,47 @@ export default function JobDetailPage() {
                 <Link
                   to={`/jobs/${job.id}?apply=1`}
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    borderRadius: "14px",
-                    padding: "12px 28px",
-                    fontSize: "15px",
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    borderRadius: '14px',
+                    padding: '12px 28px',
+                    fontSize: '15px',
                     fontWeight: 600,
-                    cursor: "pointer",
-                    border: "none",
+                    cursor: 'pointer',
+                    border: 'none',
                     background: colors.accent,
-                    color: "#000",
-                    transition: "all 0.2s",
-                    boxShadow: "0 4px 14px rgba(255, 214, 0, 0.3)",
-                    textDecoration: "none",
+                    color: '#000',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 4px 14px rgba(255, 214, 0, 0.3)',
+                    textDecoration: 'none',
                   }}
                 >
-                  <Briefcase style={{ width: "16px", height: "16px" }} />
+                  <Briefcase style={{ width: '16px', height: '16px' }} />
                   Apply Now
                 </Link>
               )}
 
               {/* Quick Apply */}
-              {!isApplied && hasResume && job.apply_method !== "external" && (
+              {!isApplied && hasResume && job.apply_method !== 'external' && (
                 <button
                   onClick={handleQuickApply}
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    borderRadius: "14px",
-                    padding: "12px 20px",
-                    fontSize: "14px",
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    borderRadius: '14px',
+                    padding: '12px 20px',
+                    fontSize: '14px',
                     fontWeight: 600,
-                    cursor: "pointer",
+                    cursor: 'pointer',
                     border: `1px solid rgba(16,185,129,0.3)`,
-                    background: "rgba(16,185,129,0.1)",
-                    color: "#10B981",
-                    transition: "all 0.2s",
+                    background: 'rgba(16,185,129,0.1)',
+                    color: '#10B981',
+                    transition: 'all 0.2s',
                   }}
                 >
-                  <Sparkles style={{ width: "14px", height: "14px" }} />
+                  <Sparkles style={{ width: '14px', height: '14px' }} />
                   Quick Apply
                 </button>
               )}
@@ -1016,12 +1095,12 @@ export default function JobDetailPage() {
               {/* Resume prompt */}
               {!isApplied && !hasResume && (
                 <Link
-                  to="/jobs/resume"
+                  to="/jobs/employee-workspace?tab=resume"
                   style={{
-                    fontSize: "0.75rem",
+                    fontSize: '0.75rem',
                     color: colors.textMuted,
-                    textDecoration: "underline",
-                    alignSelf: "center",
+                    textDecoration: 'underline',
+                    alignSelf: 'center',
                   }}
                 >
                   Create your resume for Quick Apply
@@ -1031,62 +1110,60 @@ export default function JobDetailPage() {
               <button
                 onClick={toggleFavorite}
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  borderRadius: "14px",
-                  padding: "12px 20px",
-                  fontSize: "14px",
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  borderRadius: '14px',
+                  padding: '12px 20px',
+                  fontSize: '14px',
                   fontWeight: 500,
-                  cursor: "pointer",
+                  cursor: 'pointer',
                   border: `1px solid ${colors.border}`,
                   background: colors.surface,
-                  backdropFilter: "blur(24px)",
-                  color: isSaved ? "#ef4444" : colors.text,
-                  transition: "all 0.2s",
+                  backdropFilter: 'blur(24px)',
+                  color: isSaved ? '#ef4444' : colors.text,
+                  transition: 'all 0.2s',
                 }}
               >
                 <Heart
-                  style={{ width: "16px", height: "16px" }}
-                  fill={isSaved ? "#ef4444" : "none"}
-                  color={isSaved ? "#ef4444" : "currentColor"}
+                  style={{ width: '16px', height: '16px' }}
+                  fill={isSaved ? '#ef4444' : 'none'}
+                  color={isSaved ? '#ef4444' : 'currentColor'}
                 />
-                {isSaved ? "Saved" : "Save"}
+                {isSaved ? 'Saved' : 'Save'}
               </button>
 
               <button
                 onClick={shareJob}
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  borderRadius: "14px",
-                  padding: "12px 20px",
-                  fontSize: "14px",
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  borderRadius: '14px',
+                  padding: '12px 20px',
+                  fontSize: '14px',
                   fontWeight: 500,
-                  cursor: "pointer",
+                  cursor: 'pointer',
                   border: `1px solid ${colors.border}`,
                   background: colors.surface,
-                  backdropFilter: "blur(24px)",
+                  backdropFilter: 'blur(24px)',
                   color: colors.text,
-                  transition: "all 0.2s",
+                  transition: 'all 0.2s',
                 }}
               >
-                <Share2 style={{ width: "16px", height: "16px" }} />
+                <Share2 style={{ width: '16px', height: '16px' }} />
                 Share
               </button>
-
             </div>
-            )}
 
             {/* Special Badges */}
             {specialBadges.length > 0 && (
               <div
                 style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "8px",
-                  justifyContent: "center",
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  justifyContent: 'center',
                 }}
                 role="list"
                 aria-label="Job attributes"
@@ -1096,21 +1173,18 @@ export default function JobDetailPage() {
                     key={badge.label}
                     role="listitem"
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      borderRadius: "9999px",
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      borderRadius: '9999px',
                       background: badge.gradient,
-                      padding: "6px 14px",
-                      fontSize: "12px",
+                      padding: '6px 14px',
+                      fontSize: '12px',
                       fontWeight: 600,
-                      color: "#fff",
+                      color: '#fff',
                     }}
                   >
-                    <badge.icon
-                      style={{ width: "14px", height: "14px" }}
-                      aria-hidden="true"
-                    />
+                    <badge.icon style={{ width: '14px', height: '14px' }} aria-hidden="true" />
                     {badge.label}
                   </span>
                 ))}
@@ -1120,25 +1194,21 @@ export default function JobDetailPage() {
             {/* Key Info Grid */}
             <div
               style={{
-                display: "grid",
-                gap: "12px",
-                gridTemplateColumns: isMobile
-                  ? "1fr"
-                  : "repeat(auto-fit, minmax(200px, 1fr))",
-                padding: "20px",
-                background: isDark
-                  ? "rgba(255,255,255,0.03)"
-                  : "rgba(0,0,0,0.02)",
-                borderRadius: "16px",
+                display: 'grid',
+                gap: '12px',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))',
+                padding: '20px',
+                background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                borderRadius: '16px',
                 border: `1px solid ${colors.border}`,
               }}
             >
               {job.location && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <MapPin
                     style={{
-                      width: "18px",
-                      height: "18px",
+                      width: '18px',
+                      height: '18px',
                       color: colors.accent,
                       flexShrink: 0,
                     }}
@@ -1147,27 +1217,27 @@ export default function JobDetailPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: "11px",
+                        fontSize: '11px',
                         fontWeight: 500,
                         color: colors.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
                       }}
                     >
                       Location
                     </div>
-                    <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>
+                    <div style={{ fontSize: '14px', color: colors.text, fontWeight: 500 }}>
                       {job.location}
                     </div>
                   </div>
                 </div>
               )}
               {job.compensation && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <DollarSign
                     style={{
-                      width: "18px",
-                      height: "18px",
+                      width: '18px',
+                      height: '18px',
                       color: colors.accent,
                       flexShrink: 0,
                     }}
@@ -1176,27 +1246,27 @@ export default function JobDetailPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: "11px",
+                        fontSize: '11px',
                         fontWeight: 500,
                         color: colors.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
                       }}
                     >
                       Compensation
                     </div>
-                    <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>
+                    <div style={{ fontSize: '14px', color: colors.text, fontWeight: 500 }}>
                       {job.compensation}
                     </div>
                   </div>
                 </div>
               )}
               {job.opportunity_type && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Briefcase
                     style={{
-                      width: "18px",
-                      height: "18px",
+                      width: '18px',
+                      height: '18px',
                       color: colors.accent,
                       flexShrink: 0,
                     }}
@@ -1205,27 +1275,27 @@ export default function JobDetailPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: "11px",
+                        fontSize: '11px',
                         fontWeight: 500,
                         color: colors.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
                       }}
                     >
                       Type
                     </div>
-                    <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>
+                    <div style={{ fontSize: '14px', color: colors.text, fontWeight: 500 }}>
                       {job.opportunity_type}
                     </div>
                   </div>
                 </div>
               )}
               {job.work_mode && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Building2
                     style={{
-                      width: "18px",
-                      height: "18px",
+                      width: '18px',
+                      height: '18px',
                       color: colors.accent,
                       flexShrink: 0,
                     }}
@@ -1234,27 +1304,27 @@ export default function JobDetailPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: "11px",
+                        fontSize: '11px',
                         fontWeight: 500,
                         color: colors.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
                       }}
                     >
                       Work Mode
                     </div>
-                    <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>
+                    <div style={{ fontSize: '14px', color: colors.text, fontWeight: 500 }}>
                       {job.work_mode}
                     </div>
                   </div>
                 </div>
               )}
               {job.hours_per_week && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Clock
                     style={{
-                      width: "18px",
-                      height: "18px",
+                      width: '18px',
+                      height: '18px',
                       color: colors.accent,
                       flexShrink: 0,
                     }}
@@ -1263,27 +1333,27 @@ export default function JobDetailPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: "11px",
+                        fontSize: '11px',
                         fontWeight: 500,
                         color: colors.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
                       }}
                     >
                       Hours Per Week
                     </div>
-                    <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>
+                    <div style={{ fontSize: '14px', color: colors.text, fontWeight: 500 }}>
                       {job.hours_per_week}
                     </div>
                   </div>
                 </div>
               )}
               {job.category && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Star
                     style={{
-                      width: "18px",
-                      height: "18px",
+                      width: '18px',
+                      height: '18px',
                       color: colors.accent,
                       flexShrink: 0,
                     }}
@@ -1292,79 +1362,27 @@ export default function JobDetailPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: "11px",
+                        fontSize: '11px',
                         fontWeight: 500,
                         color: colors.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
                       }}
                     >
                       Category
                     </div>
-                    <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>
+                    <div style={{ fontSize: '14px', color: colors.text, fontWeight: 500 }}>
                       {job.category}
                     </div>
                   </div>
                 </div>
               )}
-              {(() => {
-                const postedRaw = job.posting_date || job.created_at;
-                if (!postedRaw) return null;
-                const posted = new Date(postedRaw);
-                if (isNaN(posted.getTime())) return null;
-                const now = new Date();
-                const diffDays = Math.floor((now.getTime() - posted.getTime()) / 86400000);
-                let label: string;
-                if (diffDays <= 0) label = "Today";
-                else if (diffDays === 1) label = "Yesterday";
-                else if (diffDays < 7) label = `${diffDays} days ago`;
-                else if (diffDays < 30) {
-                  const weeks = Math.floor(diffDays / 7);
-                  label = `${weeks} week${weeks === 1 ? "" : "s"} ago`;
-                } else {
-                  label = posted.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-                }
-                return (
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <Clock style={{ width: "18px", height: "18px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
-                    <div>
-                      <div style={{ fontSize: "11px", fontWeight: 500, color: colors.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Posted</div>
-                      <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>{label}</div>
-                    </div>
-                  </div>
-                );
-              })()}
-              {(() => {
-                if (!job.deadline) return null;
-                const due = new Date(job.deadline);
-                if (isNaN(due.getTime())) return null;
-                const now = new Date();
-                const diffDays = Math.floor((due.getTime() - now.getTime()) / 86400000);
-                let label: string;
-                let isUrgent = false;
-                let isClosed = false;
-                if (diffDays < 0) { label = "Closed"; isClosed = true; }
-                else if (diffDays === 0) { label = "Closes today"; isUrgent = true; }
-                else if (diffDays === 1) { label = "Closes tomorrow"; isUrgent = true; }
-                else if (diffDays < 7) { label = `Closes in ${diffDays} days`; isUrgent = true; }
-                else label = due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-                const valueColor = isUrgent ? "#EF4444" : (isClosed ? colors.textMuted : colors.text);
-                return (
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <Clock style={{ width: "18px", height: "18px", color: isUrgent ? "#EF4444" : colors.accent, flexShrink: 0 }} aria-hidden="true" />
-                    <div>
-                      <div style={{ fontSize: "11px", fontWeight: 500, color: colors.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Application Deadline</div>
-                      <div style={{ fontSize: "14px", color: valueColor, fontWeight: isUrgent ? 700 : 500 }}>{label}</div>
-                    </div>
-                  </div>
-                );
-              })()}
-              {job.experience_level && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <GraduationCap
+              {job.deadline && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Clock
                     style={{
-                      width: "18px",
-                      height: "18px",
+                      width: '18px',
+                      height: '18px',
                       color: colors.accent,
                       flexShrink: 0,
                     }}
@@ -1373,16 +1391,45 @@ export default function JobDetailPage() {
                   <div>
                     <div
                       style={{
-                        fontSize: "11px",
+                        fontSize: '11px',
                         fontWeight: 500,
                         color: colors.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      Application Deadline
+                    </div>
+                    <div style={{ fontSize: '14px', color: colors.text, fontWeight: 500 }}>
+                      {job.deadline}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {job.experience_level && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <GraduationCap
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      color: colors.accent,
+                      flexShrink: 0,
+                    }}
+                    aria-hidden="true"
+                  />
+                  <div>
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        color: colors.textMuted,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
                       }}
                     >
                       Experience Level
                     </div>
-                    <div style={{ fontSize: "14px", color: colors.text, fontWeight: 500 }}>
+                    <div style={{ fontSize: '14px', color: colors.text, fontWeight: 500 }}>
                       {job.experience_level}
                     </div>
                   </div>
@@ -1395,21 +1442,21 @@ export default function JobDetailPage() {
               <section>
                 <h2
                   style={{
-                    fontSize: "18px",
+                    fontSize: '18px',
                     fontWeight: 700,
                     color: colors.text,
-                    margin: "0 0 12px 0",
+                    margin: '0 0 12px 0',
                   }}
                 >
                   About This Role
                 </h2>
                 <p
                   style={{
-                    fontSize: "15px",
+                    fontSize: '15px',
                     lineHeight: 1.7,
                     color: colors.textSecondary,
                     margin: 0,
-                    whiteSpace: "pre-wrap",
+                    whiteSpace: 'pre-wrap',
                   }}
                 >
                   {aboutThisJob}
@@ -1422,10 +1469,10 @@ export default function JobDetailPage() {
               <section>
                 <h2
                   style={{
-                    fontSize: "18px",
+                    fontSize: '18px',
                     fontWeight: 700,
                     color: colors.text,
-                    margin: "0 0 12px 0",
+                    margin: '0 0 12px 0',
                   }}
                 >
                   Responsibilities
@@ -1433,15 +1480,15 @@ export default function JobDetailPage() {
                 <ul
                   style={{
                     margin: 0,
-                    paddingLeft: "20px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
+                    paddingLeft: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
                     color: colors.textSecondary,
                   }}
                 >
                   {responsibilitiesList.map((item) => (
-                    <li key={item} style={{ fontSize: "15px", lineHeight: 1.7 }}>
+                    <li key={item} style={{ fontSize: '15px', lineHeight: 1.7 }}>
                       {item}
                     </li>
                   ))}
@@ -1454,10 +1501,10 @@ export default function JobDetailPage() {
               <section>
                 <h2
                   style={{
-                    fontSize: "18px",
+                    fontSize: '18px',
                     fontWeight: 700,
                     color: colors.text,
-                    margin: "0 0 12px 0",
+                    margin: '0 0 12px 0',
                   }}
                 >
                   Requirements
@@ -1465,15 +1512,15 @@ export default function JobDetailPage() {
                 <ul
                   style={{
                     margin: 0,
-                    paddingLeft: "20px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
+                    paddingLeft: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
                     color: colors.textSecondary,
                   }}
                 >
                   {requirementsList.map((item) => (
-                    <li key={item} style={{ fontSize: "15px", lineHeight: 1.7 }}>
+                    <li key={item} style={{ fontSize: '15px', lineHeight: 1.7 }}>
                       {item}
                     </li>
                   ))}
@@ -1484,430 +1531,554 @@ export default function JobDetailPage() {
             {!showApplicationSection && (
               <section
                 style={{
-                  padding: isMobile ? "20px 16px" : "24px",
-                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                  borderRadius: "18px",
+                  padding: isMobile ? '20px 16px' : '24px',
+                  background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                  borderRadius: '18px',
                   border: `1px solid ${colors.border}`,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "14px",
-                  alignItems: "flex-start",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px',
+                  alignItems: 'flex-start',
                 }}
               >
                 <div>
-                  <h2 style={{ fontSize: "20px", fontWeight: 700, color: colors.text, margin: "0 0 8px 0" }}>
+                  <h2
+                    style={{
+                      fontSize: '20px',
+                      fontWeight: 700,
+                      color: colors.text,
+                      margin: '0 0 8px 0',
+                    }}
+                  >
                     Ready to Apply?
                   </h2>
-                  <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: colors.textSecondary }}>
-                    Continue to the application page to upload your documents and submit this job application.
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '14px',
+                      lineHeight: 1.6,
+                      color: colors.textSecondary,
+                    }}
+                  >
+                    Continue to the application page to upload your documents and submit this job
+                    application.
                   </p>
                 </div>
                 <Link
                   to={`/jobs/${job.id}?apply=1`}
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    borderRadius: "14px",
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    borderRadius: '14px',
                     background: colors.accent,
-                    padding: "12px 20px",
-                    fontSize: "14px",
+                    padding: '12px 20px',
+                    fontSize: '14px',
                     fontWeight: 600,
-                    color: "#000",
-                    textDecoration: "none",
-                    boxShadow: "0 4px 14px rgba(255, 214, 0, 0.3)",
+                    color: '#000',
+                    textDecoration: 'none',
+                    boxShadow: '0 4px 14px rgba(255, 214, 0, 0.3)',
                   }}
                 >
-                  <Briefcase style={{ width: "16px", height: "16px" }} />
+                  <Briefcase style={{ width: '16px', height: '16px' }} />
                   Apply Now
                 </Link>
               </section>
             )}
 
-            {(showApplicationSection || isFromSnapshot) && (
-            <section
-              ref={applicationSectionRef}
-              id="application-section"
-              style={{
-                padding: isMobile ? "20px 16px" : "24px",
-                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                borderRadius: "18px",
-                border: `1px solid ${colors.border}`,
-                display: "flex",
-                flexDirection: "column",
-                gap: "18px",
-              }}
-            >
-              <div>
-                <h2
+            {showApplicationSection && (
+              <section
+                ref={applicationSectionRef}
+                id="application-section"
+                style={{
+                  padding: isMobile ? '20px 16px' : '24px',
+                  background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                  borderRadius: '18px',
+                  border: `1px solid ${colors.border}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '18px',
+                }}
+              >
+                <div>
+                  <h2
+                    style={{
+                      fontSize: '20px',
+                      fontWeight: 700,
+                      color: colors.text,
+                      margin: '0 0 8px 0',
+                    }}
+                  >
+                    Apply for This Role
+                  </h2>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '14px',
+                      lineHeight: 1.6,
+                      color: colors.textSecondary,
+                    }}
+                  >
+                    Submit your documents here and we&apos;ll package them with this job listing so
+                    you can review the application and notification status in one place.
+                  </p>
+                </div>
+
+                <div
                   style={{
-                    fontSize: "20px",
-                    fontWeight: 700,
-                    color: colors.text,
-                    margin: "0 0 8px 0",
+                    display: 'grid',
+                    gap: '14px',
+                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
                   }}
                 >
-                  {isFromSnapshot
-                    ? "Your Application"
-                    : isApplied
-                      ? "Edit Your Application"
-                      : "Apply for This Role"}
-                </h2>
-                <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: colors.textSecondary }}>
-                  {isFromSnapshot
-                    ? "Reviewing the application you submitted before this listing was removed. Your details are below."
-                    : isApplied
-                      ? "Update your name, email, cover note, or attached documents below, then click Update Application to save your changes."
-                      : "Submit your documents here and we'll package them with this job listing so you can review the application and notification status in one place."}
-                </p>
-              </div>
-              {!isFromSnapshot && (<>
-              {/* APPLY FORM START */}
-
-              <div
-                style={{
-                  display: "grid",
-                  gap: "14px",
-                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-                }}
-              >
-                <label style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>
-                    Full Name <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
-                  </span>
-                  <input
-                    type="text"
-                    value={applicationName}
-                    onChange={(e) => {
-                      setApplicationName(e.target.value);
-                      if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: undefined }));
-                    }}
-                    placeholder="Your full name"
-                    aria-invalid={Boolean(formErrors.name)}
-                    aria-describedby={formErrors.name ? "apply-name-error" : undefined}
-                    style={{
-                      borderRadius: "12px",
-                      border: `1px solid ${formErrors.name ? "#ef4444" : colors.border}`,
-                      background: colors.surface,
-                      color: colors.text,
-                      padding: "12px 14px",
-                      fontSize: "14px",
-                      outline: "none",
-                    }}
-                  />
-                  {formErrors.name && (
-                    <span id="apply-name-error" style={{ fontSize: "12px", color: "#ef4444" }}>
-                      {formErrors.name}
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: colors.text }}>
+                      Full Name{' '}
+                      <span style={{ color: '#ef4444' }} aria-hidden="true">
+                        *
+                      </span>
                     </span>
-                  )}
-                </label>
-                <label style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>
-                    Email Address <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
-                  </span>
-                  <input
-                    type="email"
-                    value={applicationEmail}
-                    onChange={(e) => {
-                      setApplicationEmail(e.target.value);
-                      if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: undefined }));
-                    }}
-                    placeholder="you@example.com"
-                    aria-invalid={Boolean(formErrors.email)}
-                    aria-describedby={formErrors.email ? "apply-email-error" : undefined}
-                    style={{
-                      borderRadius: "12px",
-                      border: `1px solid ${formErrors.email ? "#ef4444" : colors.border}`,
-                      background: colors.surface,
-                      color: colors.text,
-                      padding: "12px 14px",
-                      fontSize: "14px",
-                      outline: "none",
-                    }}
-                  />
-                  {formErrors.email && (
-                    <span id="apply-email-error" style={{ fontSize: "12px", color: "#ef4444" }}>
-                      {formErrors.email}
-                    </span>
-                  )}
-                </label>
-              </div>
-
-              <label style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: colors.text }}>Cover Note</span>
-                {coverLetters.length > 0 && (
-                  <select
-                    onChange={(e) => {
-                      const letter = coverLetters.find((cl) => cl.id === e.target.value);
-                      if (letter) setCoverNote(letter.content);
-                    }}
-                    defaultValue=""
-                    style={{
-                      borderRadius: "12px",
-                      border: `1px solid ${colors.border}`,
-                      background: colors.surface,
-                      color: colors.text,
-                      padding: "8px 12px",
-                      fontSize: "13px",
-                      outline: "none",
-                      cursor: "pointer",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    <option value="">Use a saved cover letter...</option>
-                    {coverLetters.map((cl) => (
-                      <option key={cl.id} value={cl.id}>{cl.title}</option>
-                    ))}
-                  </select>
-                )}
-                <textarea
-                  value={coverNote}
-                  onChange={(e) => setCoverNote(e.target.value)}
-                  placeholder="Add a short note for the employer."
-                  rows={5}
-                  style={{
-                    borderRadius: "12px",
-                    border: `1px solid ${colors.border}`,
-                    background: colors.surface,
-                    color: colors.text,
-                    padding: "12px 14px",
-                    fontSize: "14px",
-                    lineHeight: 1.6,
-                    outline: "none",
-                    resize: "vertical",
-                  }}
-                />
-              </label>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                  padding: "16px",
-                  borderRadius: "14px",
-                  border: `1px dashed ${formErrors.resume ? "#ef4444" : colors.borderHover}`,
-                  background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.4)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-                  <div>
-                    <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 600, color: colors.text }}>
-                      Upload Documents <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
-                    </h3>
-                    <p style={{ margin: 0, fontSize: "13px", color: colors.textSecondary }}>
-                      Resume required. Add your resume, cover letter, portfolio, or supporting files.
-                    </p>
-                  </div>
-                  <label
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      borderRadius: "12px",
-                      background: colors.accent,
-                      color: "#000",
-                      padding: "10px 16px",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Upload style={{ width: "16px", height: "16px" }} />
-                    Add Files
                     <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.rtf,.jpg,.jpeg,.png"
-                      onChange={handleDocumentUpload}
-                      style={{ display: "none" }}
+                      type="text"
+                      value={applicationName}
+                      onChange={(e) => {
+                        setApplicationName(e.target.value);
+                        if (formErrors.name)
+                          setFormErrors((prev) => ({ ...prev, name: undefined }));
+                      }}
+                      placeholder="Your full name"
+                      aria-invalid={Boolean(formErrors.name)}
+                      aria-describedby={formErrors.name ? 'apply-name-error' : undefined}
+                      style={{
+                        borderRadius: '12px',
+                        border: `1px solid ${formErrors.name ? '#ef4444' : colors.border}`,
+                        background: colors.surface,
+                        color: colors.text,
+                        padding: '12px 14px',
+                        fontSize: '14px',
+                        outline: 'none',
+                      }}
                     />
+                    {formErrors.name && (
+                      <span id="apply-name-error" style={{ fontSize: '12px', color: '#ef4444' }}>
+                        {formErrors.name}
+                      </span>
+                    )}
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: colors.text }}>
+                      Email Address{' '}
+                      <span style={{ color: '#ef4444' }} aria-hidden="true">
+                        *
+                      </span>
+                    </span>
+                    <input
+                      type="email"
+                      value={applicationEmail}
+                      onChange={(e) => {
+                        setApplicationEmail(e.target.value);
+                        if (formErrors.email)
+                          setFormErrors((prev) => ({ ...prev, email: undefined }));
+                      }}
+                      placeholder="you@example.com"
+                      aria-invalid={Boolean(formErrors.email)}
+                      aria-describedby={formErrors.email ? 'apply-email-error' : undefined}
+                      style={{
+                        borderRadius: '12px',
+                        border: `1px solid ${formErrors.email ? '#ef4444' : colors.border}`,
+                        background: colors.surface,
+                        color: colors.text,
+                        padding: '12px 14px',
+                        fontSize: '14px',
+                        outline: 'none',
+                      }}
+                    />
+                    {formErrors.email && (
+                      <span id="apply-email-error" style={{ fontSize: '12px', color: '#ef4444' }}>
+                        {formErrors.email}
+                      </span>
+                    )}
                   </label>
                 </div>
 
-                {uploadedDocuments.length === 0 ? (
-                  <p style={{ margin: 0, fontSize: "13px", color: colors.textMuted }}>
-                    No documents uploaded yet.
-                  </p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    {uploadedDocuments.map((doc) => (
-                      <div
-                        key={doc.id}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: "12px",
-                          padding: "12px 14px",
-                          borderRadius: "12px",
-                          background: colors.surface,
-                          border: `1px solid ${colors.border}`,
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: "14px", fontWeight: 600, color: colors.text, overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {doc.name}
-                          </div>
-                          <div style={{ fontSize: "12px", color: colors.textMuted }}>
-                            {doc.kind.replace("_", " ")} · {Math.max(1, Math.round(doc.size / 1024))} KB
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeUploadedDocument(doc.id)}
-                          style={{
-                            borderRadius: "10px",
-                            border: `1px solid ${colors.border}`,
-                            background: "transparent",
-                            color: colors.textSecondary,
-                            padding: "8px 10px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {formErrors.resume && (
-                  <span style={{ fontSize: "12px", color: "#ef4444", fontWeight: 500 }}>
-                    {formErrors.resume}
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: colors.text }}>
+                    Cover Note
                   </span>
-                )}
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "12px",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ fontSize: "13px", color: colors.textSecondary }}>
-                  Employer notification will be sent to{" "}
-                  <span style={{ color: colors.text, fontWeight: 600 }}>
-                    {currentApplication?.employerNotification?.email || job.employer_email || "the employer inbox on file"}
-                  </span>
-                  {" "}when you submit.
-                </div>
-                <button
-                  type="button"
-                  onClick={handleApply}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    borderRadius: "14px",
-                    background: colors.accent,
-                    padding: "12px 24px",
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: "#000",
-                    border: "none",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 14px rgba(255, 214, 0, 0.3)",
-                  }}
-                >
-                  <Briefcase style={{ width: "16px", height: "16px" }} />
-                  {isApplied ? "Update Application" : "Submit Application"}
-                </button>
-              </div>
-              {/* APPLY FORM END */}
-              </>)}
-
-              {currentApplication && (
-                <div
-                  id="application-summary"
-                  style={{
-                    display: "grid",
-                    gap: "14px",
-                    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-                    paddingTop: "8px",
-                    borderTop: `1px solid ${colors.border}`,
-                  }}
-                >
-                  <section
-                    style={{
-                      padding: "16px",
-                      borderRadius: "14px",
-                      border: `1px solid ${colors.border}`,
-                      background: colors.surface,
-                    }}
-                  >
-                    <h3 style={{ margin: "0 0 10px 0", fontSize: "15px", fontWeight: 700, color: colors.text }}>
-                      View Application
-                    </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: colors.textSecondary }}>
-                      <div><strong style={{ color: colors.text }}>Applicant:</strong> {currentApplication.applicantName || "Not provided"}</div>
-                      <div><strong style={{ color: colors.text }}>Email:</strong> {currentApplication.applicantEmail || "Not provided"}</div>
-                      <div><strong style={{ color: colors.text }}>Submitted:</strong> {formatDateTime(currentApplication.appliedAt)}</div>
-                      {currentApplication.updatedAt && currentApplication.updatedAt !== currentApplication.appliedAt && (
-                        <div><strong style={{ color: colors.text }}>Last updated:</strong> {formatDateTime(currentApplication.updatedAt)}</div>
-                      )}
-                      <div><strong style={{ color: colors.text }}>Status:</strong> {currentApplication.status.replace("_", " ")}</div>
-                      {currentApplication.coverNote && (
-                        <div><strong style={{ color: colors.text }}>Cover Note:</strong> {currentApplication.coverNote}</div>
-                      )}
-                    </div>
-                    <Link
-                      to="/jobs/my-applications"
+                  {coverLetters.length > 0 && (
+                    <select
+                      onChange={(e) => {
+                        const letter = coverLetters.find((cl) => cl.id === e.target.value);
+                        if (letter) setCoverNote(letter.content);
+                      }}
+                      defaultValue=""
                       style={{
-                        marginTop: "14px",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        borderRadius: "12px",
+                        borderRadius: '12px',
                         border: `1px solid ${colors.border}`,
-                        background: "transparent",
+                        background: colors.surface,
                         color: colors.text,
-                        padding: "10px 14px",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        textDecoration: "none",
+                        padding: '8px 12px',
+                        fontSize: '13px',
+                        outline: 'none',
+                        cursor: 'pointer',
+                        marginBottom: '4px',
                       }}
                     >
-                      Open My Applications
-                    </Link>
-                  </section>
-
-                  <section
+                      <option value="">Use a saved cover letter...</option>
+                      {coverLetters.map((cl) => (
+                        <option key={cl.id} value={cl.id}>
+                          {cl.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <textarea
+                    value={coverNote}
+                    onChange={(e) => setCoverNote(e.target.value)}
+                    placeholder="Add a short note for the employer."
+                    rows={5}
                     style={{
-                      padding: "16px",
-                      borderRadius: "14px",
+                      borderRadius: '12px',
                       border: `1px solid ${colors.border}`,
                       background: colors.surface,
+                      color: colors.text,
+                      padding: '12px 14px',
+                      fontSize: '14px',
+                      lineHeight: 1.6,
+                      outline: 'none',
+                      resize: 'vertical',
+                    }}
+                  />
+                </label>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    padding: '16px',
+                    borderRadius: '14px',
+                    border: `1px dashed ${formErrors.resume ? '#ef4444' : colors.borderHover}`,
+                    background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.4)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
                     }}
                   >
-                    <h3 style={{ margin: "0 0 10px 0", fontSize: "15px", fontWeight: 700, color: colors.text }}>
-                      Employer Email Notification
-                    </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: colors.textSecondary }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", color: "#10B981", fontWeight: 700 }}>
-                        <Mail style={{ width: "15px", height: "15px" }} />
-                        Notification sent
-                      </div>
-                      <div><strong style={{ color: colors.text }}>Recipient:</strong> {currentApplication.employerNotification?.email}</div>
-                      <div><strong style={{ color: colors.text }}>Sent:</strong> {currentApplication.employerNotification ? formatDateTime(currentApplication.employerNotification.sentAt) : "Pending"}</div>
-                      <div><strong style={{ color: colors.text }}>Attachments:</strong> {currentApplication.documents?.length || 0} file(s)</div>
+                    <div>
+                      <h3
+                        style={{
+                          margin: '0 0 4px 0',
+                          fontSize: '15px',
+                          fontWeight: 600,
+                          color: colors.text,
+                        }}
+                      >
+                        Upload Documents{' '}
+                        <span style={{ color: '#ef4444' }} aria-hidden="true">
+                          *
+                        </span>
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '13px', color: colors.textSecondary }}>
+                        Resume required. Add your resume, cover letter, portfolio, or supporting
+                        files.
+                      </p>
                     </div>
-                    {(currentApplication.documents?.length || 0) > 0 && (
-                      <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                        {currentApplication.documents?.map((doc) => (
-                          <div key={doc.id} style={{ fontSize: "12px", color: colors.textSecondary }}>
-                            {doc.name}
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        borderRadius: '12px',
+                        background: colors.accent,
+                        color: '#000',
+                        padding: '10px 16px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Upload style={{ width: '16px', height: '16px' }} />
+                      Add Files
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.rtf,.jpg,.jpeg,.png"
+                        onChange={handleDocumentUpload}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                  </div>
+
+                  {uploadedDocuments.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: '13px', color: colors.textMuted }}>
+                      No documents uploaded yet.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {uploadedDocuments.map((doc) => (
+                        <div
+                          key={doc.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '12px 14px',
+                            borderRadius: '12px',
+                            background: colors.surface,
+                            border: `1px solid ${colors.border}`,
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: '14px',
+                                fontWeight: 600,
+                                color: colors.text,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {doc.name}
+                            </div>
+                            <div style={{ fontSize: '12px', color: colors.textMuted }}>
+                              {doc.kind.replace('_', ' ')} ·{' '}
+                              {Math.max(1, Math.round(doc.size / 1024))} KB
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
+                          <button
+                            type="button"
+                            onClick={() => removeUploadedDocument(doc.id)}
+                            style={{
+                              borderRadius: '10px',
+                              border: `1px solid ${colors.border}`,
+                              background: 'transparent',
+                              color: colors.textSecondary,
+                              padding: '8px 10px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {formErrors.resume && (
+                    <span style={{ fontSize: '12px', color: '#ef4444', fontWeight: 500 }}>
+                      {formErrors.resume}
+                    </span>
+                  )}
                 </div>
-              )}
-            </section>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '12px',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ fontSize: '13px', color: colors.textSecondary }}>
+                    Employer notification will be sent to{' '}
+                    <span style={{ color: colors.text, fontWeight: 600 }}>
+                      {currentApplication?.employerNotification?.email ||
+                        job.employer_email ||
+                        'the employer inbox on file'}
+                    </span>{' '}
+                    when you submit.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApply}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '14px',
+                      background: colors.accent,
+                      padding: '12px 24px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      color: '#000',
+                      border: 'none',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 14px rgba(255, 214, 0, 0.3)',
+                    }}
+                  >
+                    <Briefcase style={{ width: '16px', height: '16px' }} />
+                    {isApplied ? 'Update Application' : 'Submit Application'}
+                  </button>
+                </div>
+
+                {currentApplication && (
+                  <div
+                    id="application-summary"
+                    style={{
+                      display: 'grid',
+                      gap: '14px',
+                      gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+                      paddingTop: '8px',
+                      borderTop: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    <section
+                      style={{
+                        padding: '16px',
+                        borderRadius: '14px',
+                        border: `1px solid ${colors.border}`,
+                        background: colors.surface,
+                      }}
+                    >
+                      <h3
+                        style={{
+                          margin: '0 0 10px 0',
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          color: colors.text,
+                        }}
+                      >
+                        View Application
+                      </h3>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          fontSize: '13px',
+                          color: colors.textSecondary,
+                        }}
+                      >
+                        <div>
+                          <strong style={{ color: colors.text }}>Applicant:</strong>{' '}
+                          {currentApplication.applicantName || 'Not provided'}
+                        </div>
+                        <div>
+                          <strong style={{ color: colors.text }}>Email:</strong>{' '}
+                          {currentApplication.applicantEmail || 'Not provided'}
+                        </div>
+                        <div>
+                          <strong style={{ color: colors.text }}>Submitted:</strong>{' '}
+                          {formatDateTime(currentApplication.appliedAt)}
+                        </div>
+                        <div>
+                          <strong style={{ color: colors.text }}>Status:</strong>{' '}
+                          {currentApplication.status.replace('_', ' ')}
+                        </div>
+                        {currentApplication.coverNote && (
+                          <div>
+                            <strong style={{ color: colors.text }}>Cover Note:</strong>{' '}
+                            {currentApplication.coverNote}
+                          </div>
+                        )}
+                      </div>
+                      <Link
+                        to="/jobs/employee-workspace"
+                        style={{
+                          marginTop: '14px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          borderRadius: '12px',
+                          border: `1px solid ${colors.border}`,
+                          background: 'transparent',
+                          color: colors.text,
+                          padding: '10px 14px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          textDecoration: 'none',
+                        }}
+                      >
+                        Open My Applications
+                      </Link>
+                    </section>
+
+                    <section
+                      style={{
+                        padding: '16px',
+                        borderRadius: '14px',
+                        border: `1px solid ${colors.border}`,
+                        background: colors.surface,
+                      }}
+                    >
+                      <h3
+                        style={{
+                          margin: '0 0 10px 0',
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          color: colors.text,
+                        }}
+                      >
+                        Employer Email Notification
+                      </h3>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          fontSize: '13px',
+                          color: colors.textSecondary,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            color: '#10B981',
+                            fontWeight: 700,
+                          }}
+                        >
+                          <Mail style={{ width: '15px', height: '15px' }} />
+                          Notification sent
+                        </div>
+                        <div>
+                          <strong style={{ color: colors.text }}>Recipient:</strong>{' '}
+                          {currentApplication.employerNotification?.email}
+                        </div>
+                        <div>
+                          <strong style={{ color: colors.text }}>Sent:</strong>{' '}
+                          {currentApplication.employerNotification
+                            ? formatDateTime(currentApplication.employerNotification.sentAt)
+                            : 'Pending'}
+                        </div>
+                        <div>
+                          <strong style={{ color: colors.text }}>Attachments:</strong>{' '}
+                          {currentApplication.documents?.length || 0} file(s)
+                        </div>
+                      </div>
+                      {(currentApplication.documents?.length || 0) > 0 && (
+                        <div
+                          style={{
+                            marginTop: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                          }}
+                        >
+                          {currentApplication.documents?.map((doc) => (
+                            <div
+                              key={doc.id}
+                              style={{ fontSize: '12px', color: colors.textSecondary }}
+                            >
+                              {doc.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  </div>
+                )}
+              </section>
             )}
 
             {/* ── Nice to Have ── */}
@@ -1915,21 +2086,21 @@ export default function JobDetailPage() {
               <section>
                 <h2
                   style={{
-                    fontSize: "18px",
+                    fontSize: '18px',
                     fontWeight: 700,
                     color: colors.text,
-                    margin: "0 0 12px 0",
+                    margin: '0 0 12px 0',
                   }}
                 >
                   Nice to Have
                 </h2>
                 <p
                   style={{
-                    fontSize: "15px",
+                    fontSize: '15px',
                     lineHeight: 1.7,
                     color: colors.textSecondary,
                     margin: 0,
-                    whiteSpace: "pre-wrap",
+                    whiteSpace: 'pre-wrap',
                   }}
                 >
                   {job.nice_to_have}
@@ -1941,27 +2112,25 @@ export default function JobDetailPage() {
             {job.equity_statement && (
               <section
                 style={{
-                  padding: "20px",
-                  background: isDark
-                    ? "rgba(139, 92, 246, 0.08)"
-                    : "rgba(139, 92, 246, 0.05)",
-                  borderRadius: "16px",
+                  padding: '20px',
+                  background: isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(139, 92, 246, 0.05)',
+                  borderRadius: '16px',
                   border: `1px solid rgba(139, 92, 246, 0.2)`,
                 }}
               >
                 <h2
                   style={{
-                    fontSize: "16px",
+                    fontSize: '16px',
                     fontWeight: 700,
-                    color: "#a855f7",
-                    margin: "0 0 8px 0",
+                    color: '#a855f7',
+                    margin: '0 0 8px 0',
                   }}
                 >
                   Equity Statement
                 </h2>
                 <p
                   style={{
-                    fontSize: "14px",
+                    fontSize: '14px',
                     lineHeight: 1.7,
                     color: colors.textSecondary,
                     margin: 0,
@@ -1977,31 +2146,31 @@ export default function JobDetailPage() {
               <div>
                 <h2
                   style={{
-                    fontSize: "14px",
+                    fontSize: '14px',
                     fontWeight: 600,
                     color: colors.textMuted,
-                    margin: "0 0 10px 0",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
+                    margin: '0 0 10px 0',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
                   }}
                 >
                   Tags
                 </h2>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {tags.map((tag) => (
                     <Link
                       key={tag}
                       to={`/jobs?tag=${encodeURIComponent(tag)}`}
                       style={{
-                        borderRadius: "9999px",
+                        borderRadius: '9999px',
                         border: `1px solid ${colors.border}`,
                         background: colors.surface,
-                        padding: "6px 14px",
-                        fontSize: "12px",
+                        padding: '6px 14px',
+                        fontSize: '12px',
                         fontWeight: 500,
                         color: colors.textSecondary,
-                        textDecoration: "none",
-                        transition: "all 0.2s",
+                        textDecoration: 'none',
+                        transition: 'all 0.2s',
                       }}
                     >
                       {tag}
@@ -2015,10 +2184,10 @@ export default function JobDetailPage() {
             {(job.external_apply_url || job.company_website) && (
               <div
                 style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "12px",
-                  paddingTop: "12px",
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                  paddingTop: '12px',
                   borderTop: `1px solid ${colors.border}`,
                 }}
               >
@@ -2028,21 +2197,21 @@ export default function JobDetailPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      borderRadius: "14px",
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '14px',
                       background: colors.accent,
-                      padding: "12px 24px",
-                      fontSize: "14px",
+                      padding: '12px 24px',
+                      fontSize: '14px',
                       fontWeight: 600,
-                      color: "#000",
-                      textDecoration: "none",
-                      boxShadow: "0 4px 14px rgba(255, 214, 0, 0.3)",
-                      transition: "all 0.2s",
+                      color: '#000',
+                      textDecoration: 'none',
+                      boxShadow: '0 4px 14px rgba(255, 214, 0, 0.3)',
+                      transition: 'all 0.2s',
                     }}
                   >
-                    <ExternalLink style={{ width: "16px", height: "16px" }} />
+                    <ExternalLink style={{ width: '16px', height: '16px' }} />
                     Apply on Company Site
                   </a>
                 )}
@@ -2052,21 +2221,21 @@ export default function JobDetailPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      borderRadius: "14px",
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '14px',
                       border: `1px solid ${colors.border}`,
                       background: colors.surface,
-                      padding: "12px 24px",
-                      fontSize: "14px",
+                      padding: '12px 24px',
+                      fontSize: '14px',
                       fontWeight: 500,
                       color: colors.text,
-                      textDecoration: "none",
-                      transition: "all 0.2s",
+                      textDecoration: 'none',
+                      transition: 'all 0.2s',
                     }}
                   >
-                    <ExternalLink style={{ width: "16px", height: "16px" }} />
+                    <ExternalLink style={{ width: '16px', height: '16px' }} />
                     Company Website
                   </a>
                 )}
@@ -2076,26 +2245,32 @@ export default function JobDetailPage() {
             {/* ── Stats Footer ── */}
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "24px",
-                paddingTop: "16px",
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '24px',
+                paddingTop: '16px',
                 borderTop: `1px solid ${colors.border}`,
-                fontSize: "13px",
+                fontSize: '13px',
                 color: colors.textMuted,
               }}
             >
-              {typeof job.view_count === "number" && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                  <FileText style={{ width: "14px", height: "14px" }} aria-hidden="true" />
+              {typeof job.view_count === 'number' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <FileText style={{ width: '14px', height: '14px' }} aria-hidden="true" />
                   {job.view_count} views
                 </span>
               )}
-              {typeof job.application_count === "number" && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                  <Briefcase style={{ width: "14px", height: "14px" }} aria-hidden="true" />
+              {typeof job.application_count === 'number' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Briefcase style={{ width: '14px', height: '14px' }} aria-hidden="true" />
                   {job.application_count} applications
+                </span>
+              )}
+              {job.posting_date && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Clock style={{ width: '14px', height: '14px' }} aria-hidden="true" />
+                  Posted {job.posting_date}
                 </span>
               )}
             </div>

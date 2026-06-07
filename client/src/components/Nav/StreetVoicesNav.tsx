@@ -59,8 +59,8 @@ const streetVoicesItems = [
 ] as const;
 
 const streetVoicesPlatformItems = [
-  { label: 'Street Profile', path: '/profile', icon: User, match: ['/profile', '/settings', '/creatives'] },
-  { label: 'Word On The Street', path: '/forum', icon: MessageCircle, match: ['/forum', '/word-on-the-street'] },
+  { label: 'Street Profile', path: '/profiles', icon: User, match: ['/profile', '/profiles', '/myprofile', '/settings', '/creatives'] },
+  { label: 'Word On The Street', path: '/word-on-the-street', icon: MessageCircle, match: ['/forum', '/word-on-the-street'] },
   { label: 'Street Gallery', path: '/gallery', icon: Image, match: ['/gallery'] },
   { label: 'Groups', path: '/groups', icon: Users, match: ['/groups'] },
   { label: 'News', path: '/news', icon: FileText, match: ['/news'] },
@@ -158,14 +158,14 @@ function NavItem({
       type="button"
       onClick={() => onNavigate(path)}
       className={cn(
-        'group flex h-10 w-full items-center gap-3 rounded-xl px-4 text-left text-sm font-medium transition-colors',
+        'group flex h-12 w-full items-center gap-4 rounded-[18px] border px-5 text-left text-[15px] font-semibold transition-colors',
         active
-          ? 'bg-white/12 text-white shadow-[inset_3px_0_0_#FFD600] dark:bg-white/12 dark:text-white'
-          : 'text-[#AEB0C0] hover:bg-white/8 hover:text-white dark:text-[#AEB0C0]',
+          ? 'border-[#2A2B31] bg-[#111111] text-white dark:border-[#2A2B31] dark:bg-[#111111] dark:text-white'
+          : 'border-transparent text-[#AEB0C0] hover:border-[#2A2B31] hover:bg-[#111111] hover:text-white dark:text-[#AEB0C0]',
       )}
       aria-current={active ? 'page' : undefined}
     >
-      <Icon size={20} className="shrink-0" />
+      <Icon size={22} className="shrink-0" />
       <span className="truncate">{label}</span>
     </button>
   );

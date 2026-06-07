@@ -27,6 +27,10 @@ export const AGENT_ICONS: Record<string, string> = {
   "calendar_agent": `${CDN}/calendar-clock.svg`,
   "social-agent": `${CDN}/share-variant.svg`,
   "social_agent": `${CDN}/share-variant.svg`,
+  "groups-agent": `${CDN}/account-group.svg`,
+  "groups_agent": `${CDN}/account-group.svg`,
+  "messaging-agent": `${CDN}/message-text.svg`,
+  "messaging_agent": `${CDN}/message-text.svg`,
   "communication-memory": `${CDN}/database-sync.svg`,
   "communication_memory": `${CDN}/database-sync.svg`,
 
@@ -96,6 +100,30 @@ export const AGENT_ICONS: Record<string, string> = {
   "scraping_agent": `${CDN}/web.svg`,
   "scraper-memory": `${CDN}/database-sync.svg`,
   "scraper_memory": `${CDN}/database-sync.svg`,
+
+  // Marketing
+  "marketing-manager": `${CDN}/bullhorn.svg`,
+  "marketing_manager": `${CDN}/bullhorn.svg`,
+  "market-analysis-agent": `${CDN}/chart-bar.svg`,
+  "market_analysis_agent": `${CDN}/chart-bar.svg`,
+
+  // Employment
+  "employment-counsellor": `${CDN}/briefcase-account.svg`,
+  "employment_counsellor": `${CDN}/briefcase-account.svg`,
+  "resume-cover-letter-agent": `${CDN}/file-account.svg`,
+  "resume_cover_letter_agent": `${CDN}/file-account.svg`,
+
+  // Personal Assistant
+  "personal-assistant": `${CDN}/robot-happy.svg`,
+  "personal_assistant": `${CDN}/robot-happy.svg`,
+
+  // Data
+  "open-data-agent": `${CDN}/database-search.svg`,
+  "open_data_agent": `${CDN}/database-search.svg`,
+
+  // Legal
+  "legal-agent": `${CDN}/scale-balance.svg`,
+  "legal_agent": `${CDN}/scale-balance.svg`,
 };
 
 /** Icon for the group itself — uses the lead agent's icon. */
@@ -132,6 +160,12 @@ export const TEAM_COLORS: Record<string, string> = {
   grant_writing: "#8B5CF6",
   research: "#06B6D4",
   scraping: "#F97316",
+  marketing: "#EA580C",
+  employment: "#7C3AED",
+  personal_assistant: "#2563EB",
+  data: "#0F766E",
+  legal: "#4F46E5",
+  social: "#3B82F6",
 };
 
 /** Team display names keyed by slug. */
@@ -144,4 +178,10 @@ export const TEAM_DISPLAY_NAMES: Record<string, string> = {
   grant_writing: "Grant Writing",
   research: "Research",
   scraping: "Scraping",
+  marketing: "Marketing",
+  employment: "Employment",
+  personal_assistant: "Personal Assistant",
+  data: "Data",
+  legal: "Legal",
+  social: "Social",
 };

@@ -6,6 +6,7 @@ import MermaidErrorBoundary from '~/components/Messages/Content/MermaidErrorBoun
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
 import Mermaid from '~/components/Messages/Content/Mermaid';
 import StreetBotServiceResults from '~/components/Chat/Messages/Content/StreetBotServiceResults';
+import StreetProfileResults from '~/components/Chat/Messages/Content/StreetProfileResults';
 import useHasAccess from '~/hooks/Roles/useHasAccess';
 import { useFileDownload } from '~/data-provider';
 import { useCodeBlockContext } from '~/Providers';
@@ -48,6 +49,13 @@ const isStreetBotServiceResultBlock = (className: string | undefined, content: s
   );
 };
 
+const isStreetProfileResultBlock = (className: string | undefined): boolean => {
+  if (!isStreetBot) {
+    return false;
+  }
+  return getLanguageName(className) === 'street-profile-results';
+};
+
 export const code: React.ElementType = memo(({ className, children }: TCodeProps) => {
   const canRunCode = useHasAccess({
     permissionType: PermissionTypes.RUN_CODE,
@@ -75,6 +83,8 @@ export const code: React.ElementType = memo(({ className, children }: TCodeProps
         <Mermaid id={`mermaid-${blockIndex}`}>{content}</Mermaid>
       </MermaidErrorBoundary>
     );
+  } else if (!isSingleLine && isStreetProfileResultBlock(className)) {
+    return <StreetProfileResults raw={content} />;
   } else if (!isSingleLine && isStreetBotServiceResultBlock(className, content)) {
     return <StreetBotServiceResults raw={content} />;
   } else if (isSingleLine) {
@@ -104,6 +114,8 @@ export const codeNoExecution: React.ElementType = memo(({ className, children }:
     return children;
   } else if (lang === 'mermaid') {
     return <Mermaid>{content}</Mermaid>;
+  } else if (content.split('\n').length > 1 && isStreetProfileResultBlock(className)) {
+    return <StreetProfileResults raw={content} />;
   } else if (content.split('\n').length > 1 && isStreetBotServiceResultBlock(className, content)) {
     return <StreetBotServiceResults raw={content} />;
   } else if (content.split('\n').length === 1) {

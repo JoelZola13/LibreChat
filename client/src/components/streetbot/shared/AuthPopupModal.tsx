@@ -1,19 +1,38 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { useRegisterUserMutation } from 'librechat-data-provider/react-query';
+import type { TError, TRegisterUser } from 'librechat-data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useLoginUserMutation } from '~/data-provider';
+import {
+  clearPendingProviderSignup,
+  readPendingProviderSignup,
+} from '~/components/streetbot/shared/providerSignup';
+import { ensureStreetProfileForUser } from '~/components/streetbot/profile/academyProfileSync';
+import { ensureUserProfileForSignup } from '~/components/streetbot/lib/auth/userProfileSync';
+import { maybeAnalytics } from '~/components/streetbot/lib/analytics-sdk';
 import { useGlassStyles } from './useGlassStyles';
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: 'login' | 'register';
+  successRedirect?: string;
 };
 
 type UserType = 'user' | 'provider';
+type PendingSignupTracking = {
+  displayName: string;
+  role: 'service_user' | 'user';
+};
 
-export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }: Props) {
+export default function AuthPopupModal({
+  isOpen,
+  onClose,
+  initialTab = 'login',
+  successRedirect = '/home',
+}: Props) {
   const navigate = useNavigate();
   const { error: authError, setError: setAuthError, isAuthenticated } = useAuthContext();
   const { isDark, colors } = useGlassStyles();
@@ -22,8 +41,11 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
   );
   const [userType, setUserType] = useState<UserType>('user');
   const [formError, setFormError] = useState<string | null>(null);
+  const [formNotice, setFormNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginAttempted, setLoginAttempted] = useState(false);
+  const pendingSignupTrackingRef = useRef<PendingSignupTracking | null>(null);
+  const pendingProviderSignup = useMemo(() => readPendingProviderSignup(), []);
 
   // Direct login mutation — works even when AuthContext provides a noop login
   // (e.g. on public pages that use publicAuthValue).
@@ -34,12 +56,25 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
         navigate(`/login/2fa?tempToken=${tempToken}`, { replace: true });
         return;
       }
+      const signupTracking = pendingSignupTrackingRef.current;
+      const loggedInUserId = String(data.user?.id || data.user?._id || '').trim();
+      if (signupTracking && loggedInUserId) {
+        pendingSignupTrackingRef.current = null;
+        void ensureUserProfileForSignup({
+          userId: loggedInUserId,
+          displayName: signupTracking.displayName,
+          fullName: signupTracking.displayName,
+          role: signupTracking.role,
+        }).catch((error) => {
+          console.error('Failed to cache StreetBot signup profile after login', error);
+        });
+      }
       // Dispatch token event so AuthContextProvider picks up the new session
       window.dispatchEvent(new CustomEvent('tokenUpdated', { detail: data.token }));
       setIsSubmitting(false);
       setLoginAttempted(false);
       onClose();
-      navigate('/home', { replace: true });
+      navigate(successRedirect, { replace: true });
     },
     onError: (error: unknown) => {
       setIsSubmitting(false);
@@ -68,12 +103,141 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!pendingProviderSignup) {
+      return;
+    }
+
+    setUserType('provider');
+    setFormData((prev) => ({
+      ...prev,
+      name: pendingProviderSignup.name ?? prev.name,
+      email: pendingProviderSignup.email ?? prev.email,
+      orgName: pendingProviderSignup.organizationName,
+      roleTitle: pendingProviderSignup.organizationRole,
+    }));
+  }, [pendingProviderSignup]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab === 'register' ? 'register' : 'login');
+    }
+  }, [initialTab, isOpen]);
+
   // Clear errors when switching tabs or closing
   useEffect(() => {
     setFormError(null);
     setIsSubmitting(false);
     setLoginAttempted(false);
   }, [activeTab, isOpen]);
+
+  const registerUser = useRegisterUserMutation({
+    onMutate: () => {
+      setIsSubmitting(true);
+      setFormError(null);
+      setFormNotice(null);
+    },
+    onSuccess: (response, variables) => {
+      if (response.registered === false) {
+        setIsSubmitting(false);
+        setFormNotice('That email may already have an account. Try logging in to continue.');
+        setActiveTab('login');
+        setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+        return;
+      }
+
+      const registeredUserId = String(response.user?.id || response.user?._id || '').trim();
+      if (registeredUserId) {
+        const displayName =
+          String(variables.name || response.user?.name || '').trim() ||
+          variables.email.split('@')[0];
+        const providerRole = String(variables.organizationRole || '').trim();
+        const role = variables.accountType === 'provider' ? 'service_user' : 'user';
+        pendingSignupTrackingRef.current = {
+          displayName,
+          role,
+        };
+
+        void ensureUserProfileForSignup({
+          userId: registeredUserId,
+          displayName,
+          fullName: displayName,
+          role,
+        }).catch((error) => {
+          console.error('Failed to cache StreetBot signup profile', error);
+        });
+
+        void ensureStreetProfileForUser({
+          userId: registeredUserId,
+          user: {
+            id: registeredUserId,
+            _id: registeredUserId,
+            name: displayName,
+            username: variables.username || response.user?.username,
+            email: variables.email,
+            avatar: response.user?.avatar,
+          },
+          profile: {
+            display_name: displayName,
+            username: variables.username || response.user?.username,
+            primary_roles:
+              variables.accountType === 'provider'
+                ? [providerRole || 'Service Provider']
+                : ['Creative', 'Community Member'],
+            bio:
+              variables.accountType === 'provider' && variables.organizationName
+                ? `${displayName} represents ${variables.organizationName} on Street Voices.`
+                : `${displayName} is building their Street Voices profile.`,
+            tagline:
+              variables.accountType === 'provider'
+                ? 'Sharing services and opportunities through Street Voices.'
+                : 'Connected through the Street Voices community.',
+            contact_email: variables.email,
+            is_public: true,
+            show_in_directory: true,
+            open_to_messages: true,
+          },
+        }).catch((error) => {
+          console.error('Failed to create Street Profile after signup', error);
+        });
+      } else {
+        pendingSignupTrackingRef.current = {
+          displayName: String(variables.name || '').trim() || variables.email.split('@')[0],
+          role: variables.accountType === 'provider' ? 'service_user' : 'user',
+        };
+      }
+
+      try {
+        maybeAnalytics()?.events.auth.signedUp({
+          signup_method: 'email',
+          entry_point: 'auth_popup',
+        });
+      } catch {
+        // Analytics is best-effort and should never block signup.
+      }
+
+      clearPendingProviderSignup();
+
+      if (response.requiresEmailVerification === true) {
+        setIsSubmitting(false);
+        setFormNotice(`Account created. Check ${variables.email} to verify your email, then log in.`);
+        setActiveTab('login');
+        setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+        return;
+      }
+
+      setLoginAttempted(true);
+      login({ email: variables.email.trim(), password: variables.password });
+    },
+    onError: (error: unknown) => {
+      setIsSubmitting(false);
+      const message =
+        (error as TError).response?.data?.message ||
+        (error as Error)?.message ||
+        'Unable to create account.';
+      setFormError(message);
+    },
+  });
 
   // Close modal on successful authentication after a login attempt
   useEffect(() => {
@@ -164,6 +328,7 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
 
   const handleSubmit = () => {
     setFormError(null);
+    setFormNotice(null);
     if (setAuthError) setAuthError(undefined);
 
     if (activeTab === 'login') {
@@ -175,9 +340,61 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
       setLoginAttempted(true);
       login({ email: formData.email.trim(), password: formData.password });
     } else {
-      onClose();
-      navigate('/register');
+      const name = formData.name.trim();
+      const email = formData.email.trim();
+      const orgName = formData.orgName.trim();
+      const roleTitle = formData.roleTitle.trim();
+      const minPasswordLength = 8;
+
+      if (name.length < 3) {
+        setFormError('Please enter your full name.');
+        return;
+      }
+
+      if (!/\S+@\S+\.\S+/.test(email)) {
+        setFormError('Please enter a valid email address.');
+        return;
+      }
+
+      if (userType === 'provider' && (!orgName || !roleTitle)) {
+        setFormError('Please enter your organization name and role.');
+        return;
+      }
+
+      if (formData.password.length < minPasswordLength) {
+        setFormError(`Password must be at least ${minPasswordLength} characters.`);
+        return;
+      }
+
+      if (formData.password !== formData.confirmPassword) {
+        setFormError('The passwords did not match.');
+        return;
+      }
+
+      if (!acceptTerms) {
+        setFormError('Please agree to the Terms of Service and Privacy Policy.');
+        return;
+      }
+
+      const payload: TRegisterUser = {
+        name,
+        email,
+        username: '',
+        password: formData.password,
+        confirm_password: formData.confirmPassword,
+        newsletterOptIn: false,
+        accountType: userType,
+        organizationName: userType === 'provider' ? orgName : undefined,
+        organizationRole: userType === 'provider' ? roleTitle : undefined,
+      };
+
+      registerUser.mutate(payload);
     }
+  };
+
+  const handleSocialLogin = (provider: string) => {
+    onClose();
+    window.location.href = `/oauth/${provider}`;
   };
 
   const updateField = (field: string, value: string) => {
@@ -220,6 +437,45 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
       />
     );
   };
+
+  const socialButton = (
+    provider: 'google' | 'facebook',
+    icon: React.ReactNode,
+    label: string,
+  ) => (
+    <button
+      onClick={() => handleSocialLogin(provider)}
+      style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        height: 46,
+        borderRadius: 12,
+        border: `1.5px solid ${t.socialBorder}`,
+        background: t.socialBg,
+        color: t.socialText,
+        fontSize: 13,
+        fontWeight: 500,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        letterSpacing: '0.01em',
+        transition: 'border-color 0.2s, background 0.2s',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = t.socialBorderHover;
+        e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : '#eef0f3';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = t.socialBorder;
+        e.currentTarget.style.background = t.socialBg;
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 
   return createPortal(
     <div
@@ -345,6 +601,51 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
 
         {/* ── Body ── */}
         <div style={{ padding: '24px 28px 28px' }}>
+          {/* Social Login */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+            {socialButton(
+              'google',
+              <svg width="18" height="18" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>,
+              'Google',
+            )}
+            {socialButton(
+              'facebook',
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+              </svg>,
+              'Facebook',
+            )}
+          </div>
+
+          {/* Or divider */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              margin: '20px 0',
+            }}
+          >
+            <span style={{ flex: 1, height: 1, background: t.dividerLine }} />
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: t.dividerText,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              or
+            </span>
+            <span style={{ flex: 1, height: 1, background: t.dividerLine }} />
+          </div>
+
           {/* User / Provider toggle (Sign Up only) */}
           {activeTab === 'register' && (
             <div
@@ -486,6 +787,21 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
               {formError || authError}
             </div>
           )}
+          {formNotice && (
+            <div style={{
+              marginTop: 12,
+              padding: '10px 14px',
+              borderRadius: 10,
+              background: isDark ? 'rgba(34, 197, 94, 0.12)' : 'rgba(34, 197, 94, 0.08)',
+              border: `1px solid ${isDark ? 'rgba(34, 197, 94, 0.25)' : 'rgba(34, 197, 94, 0.2)'}`,
+              color: isDark ? '#86efac' : '#15803d',
+              fontSize: 13,
+              fontWeight: 500,
+              lineHeight: 1.45,
+            }}>
+              {formNotice}
+            </div>
+          )}
 
           {/* Forgot password (login only) */}
           {activeTab === 'login' && (
@@ -535,7 +851,13 @@ export default function AuthPopupModal({ isOpen, onClose, initialTab = 'login' }
               e.currentTarget.style.boxShadow = t.submitShadow;
             }}
           >
-            {isSubmitting ? 'Logging in…' : activeTab === 'login' ? 'Log In' : 'Create Account'}
+            {isSubmitting
+              ? activeTab === 'login'
+                ? 'Logging in…'
+                : 'Creating account…'
+              : activeTab === 'login'
+                ? 'Log In'
+                : 'Create Account'}
           </button>
 
           {/* Toggle between login/register */}

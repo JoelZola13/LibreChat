@@ -8,6 +8,10 @@ import type { JobApplication, ApplicationStatus } from "./types";
 
 type FilterTab = "all" | ApplicationStatus | "withdrawn";
 
+type MyApplicationsPageProps = {
+  embedded?: boolean;
+};
+
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Send }> = {
   applied: { label: "Applied", color: "#3B82F6", icon: Send },
   screening: { label: "Screening", color: "#8B5CF6", icon: Clock },
@@ -40,7 +44,7 @@ function getUserId(): string {
   return id;
 }
 
-export default function MyApplicationsPage() {
+export default function MyApplicationsPage({ embedded = false }: MyApplicationsPageProps) {
   const { isDark, colors, glassCard, glassSurface } = useGlassStyles();
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
@@ -94,33 +98,47 @@ export default function MyApplicationsPage() {
   };
 
   return (
-    <div style={{ position: "relative", minHeight: "100%" }}>
-      <GlassBackground />
+    <div style={{ position: "relative", minHeight: embedded ? "auto" : "100%" }}>
+      {!embedded && <GlassBackground />}
 
-      <div style={{ position: "relative", zIndex: 1, padding: "48px 24px 60px", maxWidth: "900px", margin: "0 auto" }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          padding: embedded ? "0" : "48px 24px 60px",
+          maxWidth: embedded ? "none" : "900px",
+          margin: embedded ? 0 : "0 auto",
+        }}
+      >
         {/* Back link */}
-        <Link
-          to="/jobs"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            fontSize: "0.875rem",
-            color: colors.textSecondary,
-            textDecoration: "none",
-            marginBottom: "24px",
-          }}
-        >
-          <ArrowLeft size={16} /> Back to Jobs
-        </Link>
+        {!embedded && (
+          <Link
+            to="/jobs"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "0.875rem",
+              color: colors.textSecondary,
+              textDecoration: "none",
+              marginBottom: "24px",
+            }}
+          >
+            <ArrowLeft size={16} /> Back to Jobs
+          </Link>
+        )}
 
         {/* Header */}
-        <h1 style={{ fontSize: "clamp(1.75rem, 3vw, 2.5rem)", fontWeight: 700, color: colors.text, margin: "0 0 8px" }}>
-          My Applications
-        </h1>
-        <p style={{ color: colors.textSecondary, margin: "0 0 32px", fontSize: "1rem" }}>
-          Track your job applications and their status
-        </p>
+        {!embedded && (
+          <>
+            <h1 style={{ fontSize: "clamp(1.75rem, 3vw, 2.5rem)", fontWeight: 700, color: colors.text, margin: "0 0 8px" }}>
+              My Applications
+            </h1>
+            <p style={{ color: colors.textSecondary, margin: "0 0 32px", fontSize: "1rem" }}>
+              Track your job applications and their status
+            </p>
+          </>
+        )}
 
         {/* Stats */}
         <div style={{ display: "flex", gap: "16px", marginBottom: "32px", flexWrap: "wrap" }}>

@@ -104,6 +104,7 @@ export default function useResumableSSE(
   const setShowStopButton = useSetRecoilState(store.showStopButtonByIndex(runIndex));
 
   const sseRef = useRef<SSE | null>(null);
+  const activeStreamIdRef = useRef<string | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const submissionRef = useRef<TSubmission | null>(null);
@@ -158,6 +159,7 @@ export default function useResumableSSE(
       const baseUrl = `${apiBaseUrl()}/api/agents/chat/stream/${encodeURIComponent(currentStreamId)}`;
       const url = isResume ? `${baseUrl}?resume=true` : baseUrl;
       console.log('[ResumableSSE] Subscribing to stream:', url, { isResume });
+      activeStreamIdRef.current = currentStreamId;
 
       const sse = new SSE(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -196,6 +198,7 @@ export default function useResumableSSE(
             clearStepMaps();
             // Optimistically remove from active jobs
             removeActiveJob(currentStreamId);
+            activeStreamIdRef.current = null;
             (startupConfig?.balance?.enabled ?? false) && balanceQuery.refetch();
             sse.close();
             setStreamId(null);
@@ -342,6 +345,7 @@ export default function useResumableSSE(
           console.error('[ResumableSSE] Error processing message:', error);
           sse.close();
           removeActiveJob(currentStreamId);
+          activeStreamIdRef.current = null;
           errorHandler({
             data: {
               text: 'Street Bot had trouble reading the server response. Please try again.',
@@ -369,10 +373,11 @@ export default function useResumableSSE(
         const responseCode = e.responseCode;
 
         // 404 means job doesn't exist (completed/deleted) - don't retry
-        if (responseCode === 404) {
-          console.log('[ResumableSSE] Stream not found (404) - job completed or expired');
-          sse.close();
-          removeActiveJob(currentStreamId);
+          if (responseCode === 404) {
+            console.log('[ResumableSSE] Stream not found (404) - job completed or expired');
+            sse.close();
+            removeActiveJob(currentStreamId);
+            activeStreamIdRef.current = null;
           setIsSubmitting(false);
           setShowStopButton(false);
           setStreamId(null);
@@ -408,6 +413,7 @@ export default function useResumableSSE(
           console.log('[ResumableSSE] Server-sent error event received:', e.data);
           sse.close();
           removeActiveJob(currentStreamId);
+          activeStreamIdRef.current = null;
 
           try {
             const errorData = parseStreamPayload(e.data);
@@ -485,6 +491,7 @@ export default function useResumableSSE(
           errorHandler({ data: undefined, submission: currentSubmission as EventSubmission });
           // Optimistically remove from active jobs on max retries
           removeActiveJob(currentStreamId);
+          activeStreamIdRef.current = null;
           setIsSubmitting(false);
           setShowStopButton(false);
           setStreamId(null);
@@ -501,6 +508,10 @@ export default function useResumableSSE(
         // (error handler will set up the reconnect timeout)
         if (reconnectAttemptRef.current > 0) {
           console.log('[ResumableSSE] Stream closed for reconnect - preserving state');
+          return;
+        }
+        if (activeStreamIdRef.current === currentStreamId) {
+          console.log('[ResumableSSE] Stream abort observed while active - preserving state');
           return;
         }
 
@@ -642,12 +653,18 @@ export default function useResumableSSE(
       }
       // Close SSE but do NOT dispatch cancel - navigation should not abort
       if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
+        if (activeStreamIdRef.current) {
+          console.log('[ResumableSSE] No submission during active stream - preserving connection');
+        } else {
+          sseRef.current.close();
+          sseRef.current = null;
+        }
       }
       setStreamId(null);
       reconnectAttemptRef.current = 0;
-      submissionRef.current = null;
+      if (!activeStreamIdRef.current) {
+        submissionRef.current = null;
+      }
       return;
     }
 
@@ -706,8 +723,12 @@ export default function useResumableSSE(
       // Reset reconnect counter before closing (so abort handler doesn't think we're reconnecting)
       reconnectAttemptRef.current = 0;
       if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
+        if (activeStreamIdRef.current) {
+          console.log('[ResumableSSE] Cleanup during active stream - preserving connection');
+        } else {
+          sseRef.current.close();
+          sseRef.current = null;
+        }
       }
       // Clear handler maps to prevent memory leaks and stale state
       clearStepMaps();

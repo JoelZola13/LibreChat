@@ -14,6 +14,7 @@ import { ensureStreetProfileForAcademyUser } from '../profile/academyProfileSync
 import {
   filterVisibleAcademyCourses,
   filterVisibleAcademyPrograms,
+  getAcademyProgramCourseDisplayTitle,
   getAcademyLearningPathFromCollection,
   getLearningPathDurationLabel,
   resolveLearningPathCourses,
@@ -29,6 +30,7 @@ import {
 } from './academyCourseMeta';
 import { createEnrollmentApplication } from './api/enrollment-applications';
 import { fileToAcademyAsset } from './academyFileAssets';
+import AcademyNavigationChrome, { ACADEMY_DESKTOP_CONTENT_LEFT } from './AcademyNavigationChrome';
 
 type Course = {
   id: string;
@@ -63,20 +65,23 @@ type EnrollmentFormState = {
 const INTEREST_OPTIONS = [
   'Entrepreneurship',
   'Freelancing',
+  'Journalism',
   'Podcasting',
   'Networking',
   'Photography',
   'Videography',
+  'Broadcasting',
   'None of the above',
 ];
 
 const MEDIA_TRAINING_DETAILS = {
   heading: 'Media Training Workshops',
   description:
-    'To further bridge the gap between marginalized communities and mainstream media, Street Voices has partnered with the Toronto Public Library to offer a free 8-week workshop series. Our facilitators, experts in their fields, will provide unique insights into podcasting, social media management, videography, and networking.',
+    'To further bridge the gap between marginalized communities and mainstream media, Street Voices has partnered with the Toronto Public Library to offer a free August-November workshop series. Learners move through journalism in August, videography in September, broadcasting in October, and Networking with Kadiatu in November.',
   location:
     'Workshops will be held in person at the Lillian H. Smith Branch of the Toronto Public Library, 239 College St, Toronto, ON M5T 1R5, in partnership with the library.',
-  schedule: 'Sessions will be held on Wednesdays from 6 - 8 pm.',
+  schedule:
+    'Sessions will be held on Wednesdays from 6 - 8 pm: Aug 5, 12, 19, 26; Sep 2, 9, 16, 23, 30; Oct 7, 14, 21, 28; Nov 4, 11, 18, 25.',
   cta: 'Sound interesting? Sign up below.',
 };
 
@@ -236,7 +241,10 @@ export default function AcademyEnrollmentPage() {
     [enrolledCourseIds, targetCourses],
   );
 
-  const detailTitle = path?.title ?? resolvedCourse?.title ?? 'Academy enrollment';
+  const detailTitle =
+    path?.title ||
+    getAcademyProgramCourseDisplayTitle(resolvedCourse?.title) ||
+    'Academy enrollment';
   const detailDescription =
     path?.description ??
     resolvedCourse?.description ??
@@ -246,7 +254,7 @@ export default function AcademyEnrollmentPage() {
   const detailLearningPoints =
     path?.whatYoullLearn ?? (resolvedCourse ? getCourseLearningPoints(resolvedCourse) : []);
   const detailLevel = path?.level ?? formatCourseLevel(resolvedCourse?.level);
-  const cohortMeta = getCourseCohortMeta(resolvedCourse?.id);
+  const cohortMeta = getCourseCohortMeta(resolvedCourse?.id, resolvedCourse?.title);
   const detailDuration = path
     ? getLearningPathDurationLabel(path, visibleCatalogCourses)
     : cohortMeta.durationLabel;
@@ -371,9 +379,9 @@ export default function AcademyEnrollmentPage() {
         force: true,
       });
 
-      setMessage('Enrollment confirmed. Opening My Courses...');
+      setMessage('Enrollment confirmed. Opening Student Workspace...');
       window.setTimeout(() => {
-        window.location.href = `${basePath}/my-courses`;
+        window.location.href = `${basePath}/student-workspace`;
       }, 700);
     } catch (error) {
       setMessage(
@@ -388,7 +396,14 @@ export default function AcademyEnrollmentPage() {
 
   if (!loading && !learningPathsLoading && !path && !resolvedCourse) {
     return (
-      <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 40px' }}>
+      <div
+        style={{
+          minHeight: '100vh',
+          background: colors.bg,
+          padding: `88px 24px 40px ${ACADEMY_DESKTOP_CONTENT_LEFT}px`,
+        }}
+      >
+        <AcademyNavigationChrome />
         <div style={{ maxWidth: 960, margin: '0 auto' }}>
           <div
             className="rounded-[28px] border p-10 text-center"
@@ -415,7 +430,14 @@ export default function AcademyEnrollmentPage() {
 
   if (learningPathsLoading && slug && !path) {
     return (
-      <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 40px' }}>
+      <div
+        style={{
+          minHeight: '100vh',
+          background: colors.bg,
+          padding: `88px 24px 40px ${ACADEMY_DESKTOP_CONTENT_LEFT}px`,
+        }}
+      >
+        <AcademyNavigationChrome />
         <div style={{ maxWidth: 1080, margin: '0 auto' }}>
           <div
             className="h-64 rounded-[28px]"
@@ -427,7 +449,14 @@ export default function AcademyEnrollmentPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 40px' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: colors.bg,
+        padding: `88px 24px 40px ${ACADEMY_DESKTOP_CONTENT_LEFT}px`,
+      }}
+    >
+      <AcademyNavigationChrome />
       <div style={{ maxWidth: 1180, margin: '0 auto' }}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -524,11 +553,11 @@ export default function AcademyEnrollmentPage() {
               </div>
               {pendingCourses.length === 0 && (
                 <a
-                  href={`${basePath}/my-courses`}
+                  href={`${basePath}/student-workspace`}
                   className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
                   style={{ background: colors.accent, color: '#000' }}
                 >
-                  Open My Courses
+                  Open Student Workspace
                   <ArrowRight className="h-4 w-4" />
                 </a>
               )}
@@ -710,8 +739,8 @@ export default function AcademyEnrollmentPage() {
                     className="mb-2 block text-sm font-medium"
                     style={{ color: colors.textSecondary }}
                   >
-                    What are some challenges you've faced in pursuing a career in media/journalism?
-                    *
+                    What are some challenges you have faced in pursuing a career in
+                    media/journalism? *
                   </label>
                   <textarea
                     value={form.challenges}

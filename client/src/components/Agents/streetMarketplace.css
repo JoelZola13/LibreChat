@@ -1,0 +1,126 @@
+/**
+ * Street Bot — Agent Marketplace styling layer.
+ * Scoped under `.sv-market` so nothing leaks into the rest of LibreChat.
+ * Brand: Street Voices gold (#FFD600) on the dark Street Bot surface.
+ */
+
+.sv-market {
+  --sv-gold: #ffd600;
+  --sv-gold-soft: rgba(255, 214, 0, 0.14);
+  --sv-gold-line: rgba(255, 214, 0, 0.4);
+}
+
+/* Soft gold aurora behind the hero. */
+.sv-hero-glow {
+  background:
+    radial-gradient(58% 130% at 50% -20%, rgba(255, 214, 0, 0.12), transparent 60%),
+    radial-gradient(40% 80% at 85% 0%, rgba(171, 104, 255, 0.08), transparent 70%);
+  pointer-events: none;
+}
+
+/* Gold gradient wordmark used for the hero title accent. */
+.sv-gold-text {
+  background: linear-gradient(92deg, #ffe45c 0%, #ffd600 42%, #e0a800 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Gold ring + lift for orchestrator "hub" avatars. */
+.sv-hub-ring {
+  box-shadow:
+    0 0 0 2px rgba(255, 214, 0, 0.9),
+    0 10px 24px -10px rgba(0, 0, 0, 0.7);
+}
+
+/* Marketplace card — dark glass tile with a gold hover state. */
+.sv-card {
+  position: relative;
+  isolation: isolate;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+.sv-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(160deg, rgba(255, 214, 0, 0.35), transparent 45%);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: 0;
+  pointer-events: none;
+}
+.sv-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--sv-gold-line);
+  box-shadow: 0 18px 40px -22px rgba(255, 214, 0, 0.55);
+}
+.sv-card:hover::before {
+  opacity: 1;
+}
+.sv-card:focus-visible {
+  outline: 2px solid var(--sv-gold);
+  outline-offset: 2px;
+}
+
+/* Gold pill / chip helpers. */
+.sv-pill-gold {
+  background: var(--sv-gold);
+  color: #1a1c24;
+}
+.sv-chip-gold {
+  background: var(--sv-gold-soft);
+  color: var(--sv-gold);
+  border: 1px solid var(--sv-gold-line);
+}
+
+/* Primary gold CTA. */
+.sv-cta {
+  background: var(--sv-gold);
+  color: #1a1c24;
+  font-weight: 600;
+  transition:
+    filter 0.15s ease,
+    transform 0.15s ease;
+}
+.sv-cta:hover {
+  filter: brightness(1.06);
+}
+.sv-cta:active {
+  transform: scale(0.98);
+}
+
+/* Hide the horizontal scrollbar on the mobile category scroller. */
+.sv-market .scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sv-market .scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Entrance animation for the grid. */
+@keyframes sv-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sv-fade-up {
+  animation: sv-fade-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

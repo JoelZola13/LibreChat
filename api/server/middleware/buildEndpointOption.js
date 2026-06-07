@@ -13,15 +13,24 @@ const { getEndpointsConfig } = require('~/server/services/Config');
 const agents = require('~/server/services/Endpoints/agents');
 const { updateFilesUsage } = require('~/models');
 const { getMessages } = require('~/models/Message');
-const {
-  detectStreetBotIntent,
-  isStreetBotEndpoint,
-} = require('/app/tools/streetbot-fastpath.cjs');
+let streetBotFastPathTools;
+try {
+  streetBotFastPathTools = require('/app/tools/streetbot-fastpath.cjs');
+} catch (_) {
+  streetBotFastPathTools = require('../../../tools/streetbot-fastpath.cjs');
+}
+const { detectStreetBotIntent, isStreetBotEndpoint } = streetBotFastPathTools;
+let streetBotTelemetry;
+try {
+  streetBotTelemetry = require('/app/tools/streetbot-telemetry.cjs');
+} catch (_) {
+  streetBotTelemetry = require('../../../tools/streetbot-telemetry.cjs');
+}
 const {
   annotateStreetBotRequestTrace,
   runInStreetBotTrace,
   startStreetBotRequestTrace,
-} = require('/app/tools/streetbot-telemetry.cjs');
+} = streetBotTelemetry;
 
 const buildFunction = {
   [EModelEndpoint.agents]: agents.buildOptions,
@@ -337,6 +346,14 @@ const maybeApplyStreetBotServiceToolChoice = async (req, parsedBody) => {
 
   req._streetbotFastPath = {
     endpoint,
+    selectedSpec: parsedBody?.spec || req.body?.spec || '',
+    selectedModel: parsedBody?.model || req.body?.model || '',
+    selectedLabel:
+      parsedBody?.modelLabel ||
+      parsedBody?.modelDisplayLabel ||
+      req.body?.modelLabel ||
+      req.body?.modelDisplayLabel ||
+      '',
     userText,
     normalized: String(detectedIntent?.normalized || '').trim(),
     toolBase,
@@ -432,9 +449,14 @@ async function buildEndpointOption(req, res, next) {
         defaultParamsEndpoint,
       });
       parsedBody = applyStreetBotModelDefaults(endpoint, endpointsConfig, req.config, parsedBody);
+      parsedBody.modelLabel =
+        currentModelSpec.preset?.modelLabel ??
+        currentModelSpec.label ??
+        parsedBody.modelLabel;
       await maybeApplyStreetBotServiceToolChoice(req, parsedBody);
-      if (currentModelSpec.iconURL != null && currentModelSpec.iconURL !== '') {
-        parsedBody.iconURL = currentModelSpec.iconURL;
+      const specIconURL = currentModelSpec.iconURL || currentModelSpec.preset?.iconURL;
+      if (specIconURL != null && specIconURL !== '') {
+        parsedBody.iconURL = specIconURL;
       }
     } catch (error) {
       logger.error(`Error parsing model spec for endpoint ${endpoint}`, error);
@@ -442,8 +464,13 @@ async function buildEndpointOption(req, res, next) {
     }
   } else if (parsedBody.spec && appConfig.modelSpecs?.list) {
     const modelSpec = appConfig.modelSpecs.list.find((s) => s.name === parsedBody.spec);
-    if (modelSpec?.iconURL) {
-      parsedBody.iconURL = modelSpec.iconURL;
+    parsedBody.modelLabel =
+      modelSpec?.preset?.modelLabel ??
+      modelSpec?.label ??
+      parsedBody.modelLabel;
+    const specIconURL = modelSpec?.iconURL || modelSpec?.preset?.iconURL;
+    if (specIconURL) {
+      parsedBody.iconURL = specIconURL;
     }
   }
 

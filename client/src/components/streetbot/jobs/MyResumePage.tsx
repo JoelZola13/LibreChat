@@ -57,6 +57,10 @@ import type {
   JobApplication,
 } from "./types";
 
+type MyResumePageProps = {
+  embedded?: boolean;
+};
+
 // ── Helpers ──
 
 function getUserId(): string {
@@ -90,7 +94,7 @@ function formatDate(d: string): string {
 // MyResumePage
 // ══════════════════════════════════════════════════════════════════════════════
 
-export default function MyResumePage() {
+export default function MyResumePage({ embedded = false }: MyResumePageProps) {
   const { isDark, colors, glassCard, glassSurface } = useGlassStyles();
   const userId = useMemo(() => getUserId(), []);
 
@@ -1310,25 +1314,35 @@ ${parts.join("")}
   const hasCoverLetters = getCoverLetters(userId).length > 0 || uploadedDocs.filter((d) => d.kind === "cover_letter").length > 0;
 
   return (
-    <div style={{ position: "relative", minHeight: "100%" }}>
-      <GlassBackground />
+    <div style={{ position: "relative", minHeight: embedded ? "auto" : "100%" }}>
+      {!embedded && <GlassBackground />}
 
-      <div style={{ position: "relative", zIndex: 1, maxWidth: "860px", margin: "0 auto", padding: "24px 16px 80px" }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: embedded ? "none" : "860px",
+          margin: embedded ? 0 : "0 auto",
+          padding: embedded ? "0" : "24px 16px 80px",
+        }}
+      >
 
         {/* ═══ HEADER — clean and simple ═══ */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-          <Link
-            to="/jobs"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: "6px",
-              borderRadius: "12px", border: `1px solid ${colors.border}`,
-              background: colors.surface, backdropFilter: "blur(24px)",
-              padding: "8px 14px", fontSize: "13px", fontWeight: 500,
-              color: colors.textSecondary, textDecoration: "none",
-            }}
-          >
-            <ArrowLeft style={{ width: "14px", height: "14px" }} /> Jobs
-          </Link>
+          {!embedded && (
+            <Link
+              to="/jobs"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "6px",
+                borderRadius: "12px", border: `1px solid ${colors.border}`,
+                background: colors.surface, backdropFilter: "blur(24px)",
+                padding: "8px 14px", fontSize: "13px", fontWeight: 500,
+                color: colors.textSecondary, textDecoration: "none",
+              }}
+            >
+              <ArrowLeft style={{ width: "14px", height: "14px" }} /> Jobs
+            </Link>
+          )}
           <h1 style={{ fontSize: "24px", fontWeight: 800, color: colors.text, margin: 0 }}>
             My Documents
           </h1>
@@ -1374,11 +1388,7 @@ ${parts.join("")}
             ) : resumeView === "upload" ? (
               <ResumeUploader
                 userId={userId} kind="resume"
-                onComplete={() => {
-                  setResumeView("main");
-                  setUploadedDocs(getUploadedDocuments(userId));
-                  setToast("Resume saved!");
-                }}
+                onComplete={() => { setResumeView("main"); setUploadedDocs(getUploadedDocuments(userId)); }}
                 onCancel={() => setResumeView("main")}
                 colors={colors} isDark={isDark} glassCard={glassCard}
               />
@@ -1464,30 +1474,6 @@ ${parts.join("")}
                           >
                             <Pencil size={13} /> Edit
                           </button>
-                          <button
-                            onClick={() => {
-                              if (!window.confirm(`Delete "${v.label}"? This can't be undone.`)) return;
-                              deleteResumeVersion(userId, v.id);
-                              const remaining = getResumeVersions(userId);
-                              setResumeVersions(remaining);
-                              // If the deleted version was active, switch to another or clear.
-                              if (activeVersionId === v.id) {
-                                const next = remaining.find((r) => r.isDefault) || remaining[0] || null;
-                                setActiveVersionId(next?.id ?? null);
-                                if (next) {
-                                  setResume(next.resume);
-                                } else {
-                                  setMode("preview");
-                                }
-                              }
-                              setLastSaved(`Deleted "${v.label}"`);
-                            }}
-                            aria-label={`Delete ${v.label}`}
-                            title="Delete resume"
-                            style={{ padding: "6px 10px", borderRadius: "10px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#EF4444", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
                         </div>
                       ))}
                       {/* Uploaded resumes */}
@@ -1546,56 +1532,12 @@ ${parts.join("")}
                       <h3 style={{ fontSize: "1rem", fontWeight: 600, color: colors.text, margin: 0 }}>
                         Editing: {resumeVersions.find((v) => v.id === activeVersionId)?.label || "Resume"}
                       </h3>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                         {lastSaved && (
                           <span style={{ fontSize: "0.7rem", color: colors.textMuted, display: "inline-flex", alignItems: "center", gap: "4px" }}>
                             <Save style={{ width: "11px", height: "11px" }} /> {lastSaved}
                           </span>
                         )}
-                        <button
-                          onClick={() => {
-                            saveResume(resume);
-                            if (activeVersionId) {
-                              const versions = getResumeVersions(userId);
-                              const v = versions.find((ver) => ver.id === activeVersionId);
-                              if (v) saveResumeVersion({ ...v, resume });
-                              setResumeVersions(getResumeVersions(userId));
-                            }
-                            setLastSaved(new Date().toLocaleTimeString());
-                            setToast("Resume saved!");
-                          }}
-                          aria-label="Save resume"
-                          style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: "none", background: "#FFD600", color: "#000", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 8px rgba(255, 214, 0, 0.25)" }}
-                        >
-                          <Save size={14} /> Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            const label = window.prompt("Name this resume version:", `Copy of ${resumeVersions.find((v) => v.id === activeVersionId)?.label || "Resume"}`);
-                            if (!label || !label.trim()) return;
-                            const now = new Date().toISOString();
-                            const newVersion = {
-                              id: `resume_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                              userId,
-                              label: label.trim(),
-                              isDefault: false,
-                              createdAt: now,
-                              updatedAt: now,
-                              resume,
-                            };
-                            saveResumeVersion(newVersion);
-                            const refreshed = getResumeVersions(userId);
-                            setResumeVersions(refreshed);
-                            setActiveVersionId(newVersion.id);
-                            setLastSaved(new Date().toLocaleTimeString());
-                            setToast(`Saved as "${label.trim()}"`);
-                          }}
-                          aria-label="Save as new version"
-                          title="Save current edits as a brand new resume version"
-                          style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
-                        >
-                          <Plus size={13} /> Save as new
-                        </button>
                         <button
                           onClick={() => setMode("preview")}
                           style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "10px", border: `1px solid ${colors.border}`, background: "transparent", color: colors.text, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
@@ -1630,11 +1572,7 @@ ${parts.join("")}
             ) : coverLetterView === "upload" ? (
               <ResumeUploader
                 userId={userId} kind="cover_letter"
-                onComplete={() => {
-                  setCoverLetterView("main");
-                  setUploadedDocs(getUploadedDocuments(userId));
-                  setToast("Cover letter saved!");
-                }}
+                onComplete={() => { setCoverLetterView("main"); setUploadedDocs(getUploadedDocuments(userId)); }}
                 onCancel={() => setCoverLetterView("main")}
                 colors={colors} isDark={isDark} glassCard={glassCard}
               />

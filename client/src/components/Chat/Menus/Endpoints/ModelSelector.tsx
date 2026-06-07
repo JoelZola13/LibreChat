@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { TooltipAnchor } from '@librechat/client';
+import { useSearchParams } from 'react-router-dom';
 import { getConfigDefaults } from 'librechat-data-provider';
 import type { ModelSelectorProps } from '~/common';
 import {
@@ -14,9 +15,11 @@ import { getSelectedIcon, getDisplayValue } from './utils';
 import { CustomMenu as Menu } from './CustomMenu';
 import DialogManager from './DialogManager';
 import { useLocalize } from '~/hooks';
+import StreetAgentIcon, { getMarketplaceAgentIconId } from '~/components/Agents/StreetAgentIcon';
 
 function ModelSelectorContent() {
   const localize = useLocalize();
+  const [searchParams] = useSearchParams();
 
   const {
     // LibreChat
@@ -37,16 +40,6 @@ function ModelSelectorContent() {
     keyDialogEndpoint,
   } = useModelSelectorContext();
 
-  const selectedIcon = useMemo(
-    () =>
-      getSelectedIcon({
-        mappedEndpoints: mappedEndpoints ?? [],
-        selectedValues,
-        modelSpecs,
-        endpointsConfig,
-      }),
-    [mappedEndpoints, selectedValues, modelSpecs, endpointsConfig],
-  );
   const selectedDisplayValue = useMemo(
     () =>
       getDisplayValue({
@@ -58,6 +51,33 @@ function ModelSelectorContent() {
       }),
     [localize, agentsMap, modelSpecs, selectedValues, mappedEndpoints],
   );
+  const selectedIcon = useMemo(
+    () =>
+      getSelectedIcon({
+        mappedEndpoints: mappedEndpoints ?? [],
+        selectedValues,
+        modelSpecs,
+        endpointsConfig,
+        displayValue: selectedDisplayValue,
+      }),
+    [mappedEndpoints, selectedValues, modelSpecs, endpointsConfig, selectedDisplayValue],
+  );
+  const forcedAgentIconId = useMemo(
+    () =>
+      getMarketplaceAgentIconId(
+        searchParams.get('agentModel'),
+        searchParams.get('spec'),
+        selectedValues.modelSpec,
+        selectedDisplayValue,
+        selectedValues.model,
+      ),
+    [searchParams, selectedDisplayValue, selectedValues.model, selectedValues.modelSpec],
+  );
+  const selectedIconNode = forcedAgentIconId ? (
+    <StreetAgentIcon id={forcedAgentIconId} className="h-5 w-5" />
+  ) : (
+    selectedIcon
+  );
 
   const trigger = (
     <TooltipAnchor
@@ -68,9 +88,9 @@ function ModelSelectorContent() {
           className="my-1 flex h-10 w-full max-w-[70vw] items-center justify-center gap-2 rounded-xl border border-border-light bg-presentation px-3 py-2 text-sm text-text-primary hover:bg-surface-active-alt"
           aria-label={localize('com_ui_select_model')}
         >
-          {selectedIcon && React.isValidElement(selectedIcon) && (
+          {selectedIconNode && React.isValidElement(selectedIconNode) && (
             <div className="flex flex-shrink-0 items-center justify-center overflow-hidden">
-              {selectedIcon}
+              {selectedIconNode}
             </div>
           )}
           <span className="flex-grow truncate text-left">{selectedDisplayValue}</span>

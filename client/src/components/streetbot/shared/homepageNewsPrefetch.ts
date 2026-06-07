@@ -9,6 +9,7 @@
  * its useState initialiser, so the component finds warm data on first render.
  */
 import { readLocalCache, readSessionCache, writeLocalCache, writeSessionCache } from './perfCache';
+import { FALLBACK_NEWS_ARTICLES } from '../news/fallbackNews';
 
 /* ------------------------------------------------------------------ */
 /* Types (mirrors HomepageNews.tsx — kept minimal to avoid coupling)   */
@@ -41,8 +42,8 @@ interface ApiNewsArticle {
 /* ------------------------------------------------------------------ */
 
 const API_BASE = '/sbapi';
-const CACHE_KEY = 'streetbot:homepage-news:v1';
-const LOCAL_CACHE_KEY = 'streetbot:homepage-news:v1:local';
+const CACHE_KEY = 'streetbot:homepage-news:v3';
+const LOCAL_CACHE_KEY = 'streetbot:homepage-news:v3:local';
 const SESSION_CACHE_TTL_MS = 10 * 60 * 1000;
 const LOCAL_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const FALLBACK_IMAGE = '/assets/street-news-placeholder.png';
@@ -109,6 +110,30 @@ function getPrimaryCategory(raw: unknown, categories: unknown): string {
   return toTitleCase(picked);
 }
 
+function mapArticleToNewsItem(item: ApiNewsArticle): NewsItem | null {
+  const id = String(item?.id ?? '');
+  const title = String(item?.title ?? '');
+  if (!id || !title) return null;
+
+  const slug = typeof item?.slug === 'string' && item.slug.trim() ? item.slug : '';
+  return {
+    id,
+    title,
+    image: String(item?.image_url ?? item?.feature_image_url ?? FALLBACK_IMAGE) || FALLBACK_IMAGE,
+    category: getPrimaryCategory(item?.category, item?.categories),
+    isInternal: true,
+    href: slug ? `/news/${slug}` : `/news/${id}`,
+    publishedAt: typeof item?.published_at === 'string' ? item.published_at : undefined,
+  };
+}
+
+function getFallbackHomepageNews(): NewsItem[] {
+  return FALLBACK_NEWS_ARTICLES
+    .map((item) => mapArticleToNewsItem(item as ApiNewsArticle))
+    .filter((item): item is NewsItem => Boolean(item))
+    .slice(0, 12);
+}
+
 function getArticleRefFromHref(href: string): string | null {
   if (!href || !href.startsWith('/news/')) return null;
   const ref = href.slice('/news/'.length).split(/[?#]/)[0];
@@ -139,7 +164,7 @@ function warmHomepageNewsDetails(items: NewsItem[]): void {
     return;
   }
 
-  window.setTimeout(runPrefetch, 120);
+  globalThis.setTimeout(runPrefetch, 120);
 }
 
 /* ------------------------------------------------------------------ */
@@ -172,23 +197,8 @@ async function fetchLatestHomepageNews(): Promise<NewsItem[]> {
 
     const mapped: NewsItem[] = (rawItems as ApiNewsArticle[])
       .filter((item) => isStreetVoicesStory(item))
-      .map((item) => {
-        const id = String(item?.id ?? '');
-        const slug = typeof item?.slug === 'string' && item.slug.trim() ? item.slug : '';
-        const category = getPrimaryCategory(item?.category, item?.categories);
-        return {
-          id,
-          title: String(item?.title ?? ''),
-          image:
-            String(item?.image_url ?? item?.feature_image_url ?? FALLBACK_IMAGE) ||
-            FALLBACK_IMAGE,
-          category,
-          isInternal: true,
-          href: slug ? `/news/${slug}` : `/news/${id}`,
-          publishedAt: typeof item?.published_at === 'string' ? item.published_at : undefined,
-        };
-      })
-      .filter((item) => item.id && item.title)
+      .map(mapArticleToNewsItem)
+      .filter((item): item is NewsItem => Boolean(item))
       .sort((a, b) => {
         const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
         const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
@@ -204,9 +214,11 @@ async function fetchLatestHomepageNews(): Promise<NewsItem[]> {
       return mapped;
     }
 
-    return cachedItems ?? [];
+    const fallback = getFallbackHomepageNews();
+    return cachedItems ?? fallback;
   } catch {
-    return cachedItems ?? [];
+    const fallback = getFallbackHomepageNews();
+    return cachedItems ?? fallback;
   }
 }
 
@@ -268,7 +280,8 @@ export function getHomepageNewsSync(): NewsItem[] | null {
     cachedItems = fromLocal;
     return cachedItems;
   }
-  return null;
+  cachedItems = getFallbackHomepageNews();
+  return cachedItems;
 }
 
 // Fire immediately when this module is imported

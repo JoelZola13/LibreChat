@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <circle cx="512" cy="512" r="512" fill="#FDD500" />
+  <text
+    x="50%"
+    y="57%"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Arial Black, Helvetica, Arial, sans-serif"
+    font-size="470"
+    font-weight="900"
+    letter-spacing="-28"
+    fill="#000000"
+  >
+    SV
+  </text>
+</svg>

@@ -10,8 +10,10 @@ interface AiTutorFloatingButtonProps {
   courseId?: string;
   lessonId?: string;
   position?: string;
+  theme?: string;
   initialMessage?: string;
   showPulse?: boolean;
+  onClick?: () => void;
 }
 
 export function AiTutorFloatingButton({

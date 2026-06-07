@@ -7,11 +7,18 @@ import { SB_API_BASE } from '~/components/streetbot/shared/apiConfig';
 import { readSessionCache, writeSessionCache } from '../shared/perfCache';
 import { normalizeArticle, normalizeAggregatedItem } from './newsConstants';
 import { prefetchTopArticles, seedArticleCache } from './articlePrefetch';
+import { FALLBACK_NEWS_ARTICLES } from './fallbackNews';
 import type { Article } from './newsTypes';
 
 const INTERNAL_KEY = 'streetbot:news:internal:v1';
-const AGGREGATED_KEY = 'streetbot:news:aggregated:v1';
+const AGGREGATED_KEY = 'streetbot:news:aggregated:v6';
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+function seedFallbackArticles(): Article[] {
+  const normalized = FALLBACK_NEWS_ARTICLES.map((article) => normalizeArticle(article, 'internal'));
+  normalized.forEach((article) => seedArticleCache(article));
+  return normalized;
+}
 
 export interface PrefetchResult {
   internal: Article[];
@@ -49,21 +56,24 @@ export function prefetchNews(): Promise<PrefetchResult> {
     .then((r) => (r.ok ? r.json() : []))
     .then((data) => {
       const items = data.items || data;
-      if (!Array.isArray(items)) return [] as Article[];
+      if (!Array.isArray(items)) return seedFallbackArticles();
       const normalized = items.map((a: Article) => normalizeArticle(a, 'internal'));
+      if (normalized.length === 0) return seedFallbackArticles();
       writeSessionCache(INTERNAL_KEY, normalized);
       normalized.forEach((article) => seedArticleCache(article));
       prefetchTopArticles(normalized, 8);
       return normalized;
     })
-    .catch(() => [] as Article[]);
+    .catch(() => seedFallbackArticles());
 
-  const fetchAggregated = fetch(`${SB_API_BASE}/api/news-cms/aggregator/feed?limit=20`)
+  const fetchAggregated = fetch(`${SB_API_BASE}/api/news-cms/aggregator/feed?limit=80&image_v=4`)
     .then((r) => (r.ok ? r.json() : { items: [] }))
     .then((data) => {
       const items = data.items || data;
       if (!Array.isArray(items)) return [] as Article[];
-      const normalized = items.map((item: Record<string, unknown>) => normalizeAggregatedItem(item));
+      const normalized = items.map((item: Record<string, unknown>, index) =>
+        normalizeAggregatedItem(item, index),
+      );
       writeSessionCache(AGGREGATED_KEY, normalized);
       return normalized;
     })
@@ -83,10 +93,13 @@ export function prefetchNews(): Promise<PrefetchResult> {
 export function getPrefetchedSync(): PrefetchResult | null {
   const cachedInternal = readSessionCache<Article[]>(INTERNAL_KEY, CACHE_TTL_MS);
   const cachedAggregated = readSessionCache<Article[]>(AGGREGATED_KEY, CACHE_TTL_MS);
-  if (cachedInternal && cachedAggregated) {
-    return { internal: cachedInternal, aggregated: cachedAggregated };
+  if (cachedInternal || cachedAggregated) {
+    return {
+      internal: cachedInternal && cachedInternal.length > 0 ? cachedInternal : seedFallbackArticles(),
+      aggregated: cachedAggregated ?? [],
+    };
   }
-  return null;
+  return { internal: seedFallbackArticles(), aggregated: cachedAggregated ?? [] };
 }
 
 // Start prefetching immediately when this module is imported

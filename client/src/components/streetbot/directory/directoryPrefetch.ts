@@ -8,10 +8,11 @@
  * useDirectorySearch, so the hook finds warm cache on mount and skips the fetch.
  */
 import { readSessionCache, writeSessionCache } from '../shared/perfCache';
+import { DIRECTORY_SEARCH_API_URL, DIRECTORY_SERVICES_SEARCH_API_URL } from '../shared/apiConfig';
 import type { SearchResult } from './useDirectorySearch';
 
-const SEARCH_URL = '/api/directory/search';
-const SBP_SEARCH_URL = '/sbapi/services/search';
+const SEARCH_URL = DIRECTORY_SEARCH_API_URL;
+const SBP_SEARCH_URL = DIRECTORY_SERVICES_SEARCH_API_URL;
 const DIRECTORY_SEARCH_CACHE_PREFIX = 'streetbot:directory:search:v5:';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 

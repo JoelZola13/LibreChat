@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useActiveUser } from "../shared/useActiveUser";
 import { useUserRole } from "~/components/streetbot/lib/auth/useUserRole";
-import { SB_API_BASE } from "~/components/streetbot/shared/apiConfig";
+import { SB_API_BASE, STREETBOT_READ_API_BASE } from "~/components/streetbot/shared/apiConfig";
 import { readSessionCache, writeSessionCache } from '../shared/perfCache';
 import { SERVICE_CACHE_PREFIX, SERVICE_CACHE_TTL_MS } from './serviceDetailPrefetch';
 import { useGlassStyles } from "../shared/useGlassStyles";
@@ -107,6 +107,9 @@ interface Review {
 
 import { getOrCreateUserId } from '~/components/streetbot/shared/getOrCreateUserId';
 
+const DIRECTORY_CONTACT_ACCENT = "var(--sv-directory-contact-accent)";
+const DIRECTORY_CONTACT_ACCENT_SOFT = "var(--sv-directory-contact-accent-soft)";
+
 function formatPhone(phone?: string): string {
   if (!phone) return "";
   const digits = phone.replace(/\D/g, "");
@@ -142,7 +145,7 @@ function applyClaimStatus(service: Service, claimStatus?: ClaimServiceStatus | n
 
   return {
     ...service,
-    claimed_by: claimStatus.is_claimed ? claimStatus.claimed_by : null,
+    claimed_by: claimStatus.is_claimed ? (claimStatus.claimed_by ?? undefined) : undefined,
     is_verified: Boolean(claimStatus.is_verified),
   };
 }
@@ -255,7 +258,7 @@ export default function ServiceDetailPage() {
     setLoading(true);
     setError(null);
 
-    fetch(`${SB_API_BASE}/services/${serviceId}`)
+    fetch(`${STREETBOT_READ_API_BASE}/services/${serviceId}`)
       .then((res) => {
         if (!res.ok) throw new Error("Service not found");
         return res.json();
@@ -302,7 +305,7 @@ export default function ServiceDetailPage() {
     if (!serviceId || !authUser?.id) return;
     const uid = getOrCreateUserId(authUser.id);
     if (uid === 'demo-user') return;
-    fetch(`${SB_API_BASE}/services/favorites?user_id=${encodeURIComponent(uid)}`)
+    fetch(`${STREETBOT_READ_API_BASE}/services/favorites?user_id=${encodeURIComponent(uid)}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data: { id: number }[]) => {
         if (Array.isArray(data)) {
@@ -315,7 +318,7 @@ export default function ServiceDetailPage() {
   // Fetch reviews
   useEffect(() => {
     if (!serviceId) return;
-    fetch(`${SB_API_BASE}/services/${serviceId}/reviews`)
+    fetch(`${STREETBOT_READ_API_BASE}/services/${serviceId}/reviews`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setReviews(Array.isArray(data) ? data : []))
       .catch(() => {});
@@ -399,7 +402,7 @@ export default function ServiceDetailPage() {
   useEffect(() => {
     if (!service?.category_names?.length) return;
     const cat = service.category_names[0];
-    fetch(`${SB_API_BASE}/services?categories=${encodeURIComponent(cat)}&limit=6`)
+    fetch(`${STREETBOT_READ_API_BASE}/services?categories=${encodeURIComponent(cat)}&limit=6`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         const items = Array.isArray(data) ? data : data.results || [];
@@ -1334,7 +1337,7 @@ export default function ServiceDetailPage() {
                     textDecoration: "none",
                   }}
                 >
-                  <MapPin size={18} color={colors.accent} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <MapPin size={18} color={DIRECTORY_CONTACT_ACCENT} style={{ flexShrink: 0, marginTop: 2 }} />
                   <span style={{ fontSize: 14, lineHeight: 1.5 }}>{service.address}</span>
                 </a>
               )}
@@ -1350,8 +1353,8 @@ export default function ServiceDetailPage() {
                     textDecoration: "none",
                   }}
                 >
-                  <Phone size={18} color={colors.accent} style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: 14, fontWeight: 500 }}>{formatPhone(service.phone)}</span>
+                  <Phone size={18} color={DIRECTORY_CONTACT_ACCENT} style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 500, color: DIRECTORY_CONTACT_ACCENT }}>{formatPhone(service.phone)}</span>
                 </a>
               )}
 
@@ -1432,8 +1435,8 @@ export default function ServiceDetailPage() {
                       borderRadius: 12,
                       fontSize: 14,
                       fontWeight: 600,
-                      background: "rgba(59, 130, 246, 0.15)",
-                      color: "#3b82f6",
+                      background: DIRECTORY_CONTACT_ACCENT_SOFT,
+                      color: DIRECTORY_CONTACT_ACCENT,
                       border: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",

@@ -10,9 +10,17 @@ import {
   Award,
   BookOpen,
   CalendarDays,
+  ChevronRight,
+  ClipboardList,
+  FileQuestion,
+  Gauge,
+  Inbox,
   Loader2,
+  MessageSquare,
+  Plus,
   Sparkles,
   Target,
+  TrendingUp,
   Video,
   type LucideIcon,
 } from 'lucide-react';
@@ -29,6 +37,7 @@ import {
   filterVisibleAcademyPrograms,
   getLearningPathDurationLabel,
 } from './academyLearningPaths';
+import AcademyNavigationChrome, { ACADEMY_DESKTOP_CONTENT_LEFT } from './AcademyNavigationChrome';
 
 type Course = {
   id: string;
@@ -75,49 +84,125 @@ type ScheduleItem = {
 
 const instructorWorkspaceSamples = {
   stats: [
-    { label: 'Assignments posted', value: 8, detail: '5 open · 3 graded' },
-    { label: 'Quizzes & tests', value: 5, detail: '4 published · 1 draft' },
-    { label: 'Submissions', value: 42, detail: '11 waiting for review' },
-    { label: 'Class average', value: '86%', detail: 'Across sample courses' },
+    {
+      label: 'Assignments Posted',
+      value: 8,
+      detail: '5 open · 3 graded',
+      icon: ClipboardList,
+      tone: '#FFD600',
+    },
+    {
+      label: 'Quizzes & Tests',
+      value: 5,
+      detail: '4 published · 1 draft',
+      icon: FileQuestion,
+      tone: '#A855F7',
+    },
+    {
+      label: 'Submissions',
+      value: 42,
+      detail: '11 waiting for review',
+      icon: Inbox,
+      tone: '#38BDF8',
+    },
+    {
+      label: 'Class Average',
+      value: '86%',
+      detail: 'Across all active courses',
+      icon: Gauge,
+      tone: '#22C55E',
+    },
+  ],
+  schedule: [
+    {
+      date: 'MAY 20',
+      day: 'TUE',
+      title: 'Live Session: Know Your Rights Q&A',
+      time: '10:00 AM - 11:00 AM',
+      course: 'Know Your Rights',
+      badge: 'Live Session',
+      tone: '#FFD600',
+    },
+    {
+      date: 'MAY 22',
+      day: 'THU',
+      title: 'Assignment Due: Rights Scenario Reflection',
+      time: '11:59 PM',
+      course: 'Know Your Rights',
+      badge: 'Due Soon',
+      tone: '#EAB308',
+    },
+    {
+      date: 'MAY 23',
+      day: 'FRI',
+      title: 'Workshop: Digital Safety Basics',
+      time: '2:00 PM - 3:30 PM',
+      course: 'Digital Literacy Basics',
+      badge: 'Workshop',
+      tone: '#8B5CF6',
+    },
   ],
   queue: [
     {
-      learner: 'Joel Zola',
+      learner: 'Jamal Johnson',
       item: 'Rights Scenario Reflection',
       course: 'Know Your Rights',
-      type: 'Assignment',
-      status: 'Needs feedback',
+      submitted: 'Submitted 2 hours ago',
+      status: 'Needs Review',
       grade: 'Pending',
+      score: null,
     },
     {
-      learner: 'Amara Reid',
+      learner: 'Aaliyah Martinez',
       item: 'Media Literacy Mini Test',
       course: 'Digital Literacy Basics',
-      type: 'Test',
+      submitted: 'Submitted 4 hours ago',
       status: 'Auto-graded',
       grade: '28 / 30',
+      score: '28 / 30',
     },
     {
-      learner: 'Miles Carter',
+      learner: 'Luis Hernandez',
       item: 'Community Resource Map',
       course: 'Communication Essentials',
-      type: 'Assignment',
-      status: 'Submitted today',
+      submitted: 'Submitted today',
+      status: 'Needs Review',
       grade: 'Pending',
+      score: null,
     },
     {
-      learner: 'Nia Brooks',
-      item: 'Know Your Rights Checkpoint Quiz',
+      learner: 'Tasha Green',
+      item: 'Kyr Checkpoint',
       course: 'Know Your Rights',
-      type: 'Quiz',
+      submitted: 'Submitted today',
       status: 'Returned',
       grade: '18 / 20',
+      score: '18 / 20',
     },
   ],
   gradebook: [
-    { course: 'Know Your Rights', students: 18, graded: '14 / 18', average: '88%' },
-    { course: 'Communication Essentials', students: 15, graded: '9 / 15', average: '82%' },
-    { course: 'Digital Literacy Basics', students: 21, graded: '21 / 21', average: '91%' },
+    { course: 'Know Your Rights', students: 18, graded: '14 graded', average: 88 },
+    { course: 'Communication Essentials', students: 15, graded: '9 graded', average: 82 },
+    { course: 'Digital Literacy Basics', students: 21, graded: '19 graded', average: 91 },
+  ],
+  progress: [
+    { course: 'Know Your Rights', lessons: '18 / 20 lessons', progress: 90, tone: '#FFD600' },
+    {
+      course: 'Digital Literacy Basics',
+      lessons: '16 / 20 lessons',
+      progress: 80,
+      tone: '#22C55E',
+    },
+    {
+      course: 'Communication Essentials',
+      lessons: '12 / 16 lessons',
+      progress: 75,
+      tone: '#3B82F6',
+    },
+    { course: 'Journalism', lessons: '4 Wednesdays', progress: 0, tone: '#8B5CF6' },
+    { course: 'Videography', lessons: '5 Wednesdays', progress: 0, tone: '#06B6D4' },
+    { course: 'Broadcasting', lessons: '4 Wednesdays', progress: 0, tone: '#F97316' },
+    { course: 'Networking with Kadiatu', lessons: '4 Wednesdays', progress: 0, tone: '#FFD600' },
   ],
 };
 
@@ -257,7 +342,8 @@ export default function AcademyInstructorPage({
       text: isDark ? '#fff' : '#111',
       textSecondary: isDark ? 'rgba(255,255,255,0.72)' : '#4b5563',
       textMuted: isDark ? 'rgba(255,255,255,0.45)' : '#6b7280',
-      accent: '#F97316',
+      accent: '#FFD600',
+      accentText: isDark ? '#FFD600' : '#111827',
     }),
     [isDark],
   );
@@ -889,7 +975,7 @@ export default function AcademyInstructorPage({
       tab: 'add-course',
       label: 'Add Course',
       href: embedded ? '#instructor-add-course' : `${basePath}/add-course`,
-      icon: Video,
+      icon: Plus,
     },
   ];
 
@@ -939,7 +1025,7 @@ export default function AcademyInstructorPage({
                   <div
                     className="flex min-w-[76px] flex-col items-center rounded-[20px] px-3 py-3 text-center"
                     style={{
-                      background: isDark ? 'rgba(249,115,22,0.15)' : 'rgba(249,115,22,0.12)',
+                      background: isDark ? 'rgba(255,214,0,0.15)' : 'rgba(255,214,0,0.12)',
                     }}
                   >
                     <span
@@ -1117,7 +1203,7 @@ export default function AcademyInstructorPage({
         }}
       >
         <div className="mb-6 flex items-center gap-3">
-          <div className="rounded-xl p-2.5" style={{ background: 'rgba(249,115,22,0.15)' }}>
+          <div className="rounded-xl p-2.5" style={{ background: 'rgba(255,214,0,0.15)' }}>
             <Sparkles className="h-6 w-6" style={{ color: colors.accent }} />
           </div>
           <div>
@@ -1135,8 +1221,8 @@ export default function AcademyInstructorPage({
           <div
             className="mb-4 rounded-[18px] border px-4 py-3 text-sm"
             style={{
-              borderColor: 'rgba(249,115,22,0.26)',
-              background: 'rgba(249,115,22,0.08)',
+              borderColor: 'rgba(255,214,0,0.26)',
+              background: 'rgba(255,214,0,0.08)',
               color: colors.text,
             }}
           >
@@ -1361,9 +1447,9 @@ export default function AcademyInstructorPage({
                       onClick={() => toggleMeetingDay(day)}
                       className="rounded-full px-3 py-2 text-sm font-semibold"
                       style={{
-                        background: isSelected ? 'rgba(249,115,22,0.14)' : colors.cardBg,
+                        background: isSelected ? 'rgba(255,214,0,0.14)' : colors.cardBg,
                         color: isSelected ? colors.accent : colors.textSecondary,
-                        border: `1px solid ${isSelected ? 'rgba(249,115,22,0.26)' : colors.border}`,
+                        border: `1px solid ${isSelected ? 'rgba(255,214,0,0.26)' : colors.border}`,
                       }}
                     >
                       {day}
@@ -1397,7 +1483,7 @@ export default function AcademyInstructorPage({
               className="flex flex-1 items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-opacity disabled:opacity-50"
               style={{
                 background: colors.accent,
-                color: '#fff',
+                color: '#000',
                 border: 'none',
                 cursor: generating ? 'wait' : 'pointer',
               }}
@@ -1524,7 +1610,7 @@ export default function AcademyInstructorPage({
                     {isEditing && (
                       <span
                         className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
-                        style={{ background: 'rgba(249,115,22,0.14)', color: colors.accent }}
+                        style={{ background: 'rgba(255,214,0,0.14)', color: colors.accent }}
                       >
                         Editing
                       </span>
@@ -1555,9 +1641,9 @@ export default function AcademyInstructorPage({
                       }
                       className="rounded-full px-4 py-2 text-sm font-semibold"
                       style={{
-                        background: isEditing ? 'rgba(249,115,22,0.12)' : colors.cardBg,
+                        background: isEditing ? 'rgba(255,214,0,0.12)' : colors.cardBg,
                         color: isEditing ? colors.accent : colors.text,
-                        border: `1px solid ${isEditing ? 'rgba(249,115,22,0.22)' : colors.border}`,
+                        border: `1px solid ${isEditing ? 'rgba(255,214,0,0.22)' : colors.border}`,
                       }}
                     >
                       {isEditing ? 'Cancel Edit' : 'Edit'}
@@ -1629,7 +1715,7 @@ export default function AcademyInstructorPage({
         style={{ borderColor: colors.border, background: colors.cardBgStrong }}
       >
         <div className="mb-5 flex items-center gap-3">
-          <div className="rounded-xl p-2.5" style={{ background: 'rgba(249,115,22,0.15)' }}>
+          <div className="rounded-xl p-2.5" style={{ background: 'rgba(255,214,0,0.15)' }}>
             <Target className="h-6 w-6" style={{ color: colors.accent }} />
           </div>
           <div>
@@ -1695,7 +1781,7 @@ export default function AcademyInstructorPage({
                     className="rounded-[20px] border p-4 text-left transition-colors"
                     style={{
                       borderColor: isSelected ? colors.accent : colors.border,
-                      background: isSelected ? 'rgba(249,115,22,0.12)' : colors.cardBg,
+                      background: isSelected ? 'rgba(255,214,0,0.12)' : colors.cardBg,
                     }}
                   >
                     <div
@@ -1754,7 +1840,7 @@ export default function AcademyInstructorPage({
             type="submit"
             disabled={creatingPath || !pathTitle.trim() || selectedPathCourseIds.length === 0}
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition-opacity disabled:opacity-60"
-            style={{ background: colors.accent, color: '#fff', border: 'none' }}
+            style={{ background: colors.accent, color: '#000', border: 'none' }}
           >
             {creatingPath ? (
               <>
@@ -2350,7 +2436,7 @@ export default function AcademyInstructorPage({
                         ? 'rgba(34,197,94,0.14)'
                         : assignedElsewhere
                           ? 'rgba(148,163,184,0.14)'
-                          : 'rgba(249,115,22,0.14)',
+                          : 'rgba(255,214,0,0.14)',
                       color: isMine
                         ? '#22c55e'
                         : assignedElsewhere
@@ -2389,7 +2475,7 @@ export default function AcademyInstructorPage({
                         : assignedElsewhere
                           ? colors.cardBg
                           : colors.accent,
-                      color: isMine ? '#ef4444' : assignedElsewhere ? colors.textSecondary : '#fff',
+                      color: isMine ? '#ef4444' : assignedElsewhere ? colors.textSecondary : '#000',
                       border: `1px solid ${isMine ? 'rgba(239,68,68,0.22)' : isMine || assignedElsewhere ? colors.border : colors.accent}`,
                     }}
                   >
@@ -2447,7 +2533,7 @@ export default function AcademyInstructorPage({
             Academy
           </a>
           <span style={{ color: colors.textMuted }}>/</span>
-          <span className="text-sm font-medium" style={{ color: colors.accent }}>
+          <span className="text-sm font-medium" style={{ color: colors.accentText }}>
             Instructor
           </span>
         </div>
@@ -2455,31 +2541,42 @@ export default function AcademyInstructorPage({
 
       {(!embedded || showEmbeddedHeader) && (
         <section
-          className="mb-6 rounded-[28px] border p-6 md:p-8"
-          style={{ borderColor: colors.border, background: colors.cardBgStrong }}
+          className="mb-6 overflow-hidden rounded-[28px] border p-6 md:p-8"
+          style={{
+            borderColor: colors.border,
+            background: isDark
+              ? 'linear-gradient(135deg, rgba(2,8,15,0.98), rgba(11,23,32,0.94) 52%, rgba(255,214,0,0.09))'
+              : 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(245,248,255,0.98) 46%, rgba(255,249,224,0.94) 100%)',
+            boxShadow: isDark
+              ? '0 24px 70px rgba(0,0,0,0.32), 0 0 42px rgba(255,214,0,0.08)'
+              : '0 18px 46px rgba(31,41,55,0.10), 0 0 32px rgba(255,214,0,0.12)',
+          }}
         >
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-7 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <div
                 className="mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]"
-                style={{ background: 'rgba(249,115,22,0.16)', color: colors.accent }}
+                style={{ background: 'rgba(255,214,0,0.12)', color: colors.accentText }}
               >
                 <BookOpen className="h-3.5 w-3.5" />
-                {embedded ? 'Teaching Workspace' : 'Instructor Workspace'}
+                Street Voices Academy
               </div>
               <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
                 {embedded ? 'Teaching Workspace' : 'Instructor Workspace'}
               </h1>
-              <p className="mt-3 max-w-2xl text-base" style={{ color: colors.textSecondary }}>
-                Create, manage, and lead your courses from one place. Build learning experiences,
-                run live sessions, and support your students every step of the way.
+              <p className="mt-4 text-xl font-semibold" style={{ color: colors.text }}>
+                Amplify. Educate. Empower.
               </p>
-              <p className="mt-3 text-sm font-medium" style={{ color: colors.textMuted }}>
-                Everything you need to guide learners from start to completion — all in one place.
+              <p
+                className="mt-3 max-w-2xl text-sm leading-6"
+                style={{ color: colors.textSecondary }}
+              >
+                Create, manage, and lead courses with the same bold, practical energy that powers
+                Street Voices. Keep learners supported, visible, and moving forward.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 lg:max-w-[430px] lg:justify-end">
+            <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[520px] lg:grid-cols-3">
               {topTabs.map((item) => (
                 <a
                   key={item.tab}
@@ -2492,146 +2589,420 @@ export default function AcademyInstructorPage({
                     setEmbeddedActiveTab(item.tab);
                     onActiveTabChange?.(item.tab);
                   }}
-                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold"
+                  className="inline-flex min-h-[68px] items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5"
                   style={{
-                    background: activeTab === item.tab ? colors.accent : colors.cardBg,
-                    color: activeTab === item.tab ? '#fff' : colors.text,
-                    border: `1px solid ${activeTab === item.tab ? colors.accent : colors.border}`,
+                    background:
+                      activeTab === item.tab
+                        ? 'linear-gradient(135deg, #FFD600, #F5C400)'
+                        : isDark
+                          ? 'rgba(255,255,255,0.055)'
+                          : 'rgba(255,255,255,0.72)',
+                    color: activeTab === item.tab ? '#000' : colors.text,
+                    borderColor: activeTab === item.tab ? 'rgba(255,214,0,0.9)' : colors.border,
+                    boxShadow:
+                      activeTab === item.tab ? '0 14px 32px rgba(255,214,0,0.28)' : undefined,
                   }}
                 >
-                  <item.icon className="h-4 w-4" />
+                  <item.icon
+                    className="h-5 w-5"
+                    style={{
+                      color: activeTab === item.tab ? '#000' : isDark ? '#FFD600' : '#111827',
+                    }}
+                  />
                   {item.label}
                 </a>
               ))}
             </div>
           </div>
         </section>
-	      )}
+      )}
 
-	      <section
-	        className="mb-6 rounded-[28px] border p-6"
-	        style={{ borderColor: colors.border, background: colors.cardBgStrong }}
-	      >
-	        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-	          <div>
-	            <p
-	              className="text-xs font-semibold uppercase tracking-[0.2em]"
-	              style={{ color: colors.accent }}
-	            >
-	              Sample class operations
-	            </p>
-	            <h2 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
-	              Assignments, quizzes, tests, submissions, and grades
-	            </h2>
-	            <p className="mt-2 max-w-3xl text-sm" style={{ color: colors.textSecondary }}>
-	              The instructor workspace is populated with sample classroom data so the workflow
-	              shows what teachers will manage day to day.
-	            </p>
-	          </div>
-	          <a
-	            href={`${basePath}/courses`}
-	            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-	            style={{
-	              background: colors.cardBg,
-	              color: colors.text,
-	              border: `1px solid ${colors.border}`,
-	            }}
-	          >
-	            Open course workspace
-	          </a>
-	        </div>
+      <section
+        className="mb-6 rounded-[28px] border p-5 md:p-6"
+        style={{
+          borderColor: colors.border,
+          background: isDark
+            ? 'linear-gradient(90deg, rgba(84,109,132,0.20), rgba(83,87,126,0.16), rgba(255,214,0,0.06))'
+            : 'linear-gradient(90deg, rgba(255,255,255,0.92), rgba(245,248,255,0.92), rgba(255,249,224,0.76))',
+          boxShadow: isDark ? '0 18px 55px rgba(0,0,0,0.24)' : '0 16px 40px rgba(31,41,55,0.08)',
+          backdropFilter: 'blur(24px) saturate(150%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+        }}
+      >
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p
+              className="text-xs font-semibold uppercase tracking-[0.2em]"
+              style={{ color: colors.accentText }}
+            >
+              Academy Operations
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold" style={{ color: colors.text }}>
+              Lead courses the Street Voices way
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm" style={{ color: colors.textSecondary }}>
+              Track deadlines, submissions, course pace, and learner progress in a workspace built
+              for practical community education.
+            </p>
+          </div>
+          <a
+            href={`${basePath}/courses`}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+            style={{
+              background: '#FFD600',
+              color: '#000',
+              border: '1px solid rgba(255,214,0,0.9)',
+              boxShadow: '0 10px 24px rgba(255,214,0,0.18)',
+            }}
+          >
+            Open course workspace
+            <ChevronRight className="h-4 w-4" />
+          </a>
+        </div>
 
-	        <div className="grid gap-3 md:grid-cols-4">
-	          {instructorWorkspaceSamples.stats.map((item) => (
-	            <div
-	              key={item.label}
-	              className="rounded-[20px] border p-4"
-	              style={{ borderColor: colors.border, background: colors.cardBg }}
-	            >
-	              <div className="text-2xl font-bold" style={{ color: colors.text }}>
-	                {item.value}
-	              </div>
-	              <p className="mt-1 text-sm font-semibold" style={{ color: colors.text }}>
-	                {item.label}
-	              </p>
-	              <p className="mt-2 text-xs leading-5" style={{ color: colors.textSecondary }}>
-	                {item.detail}
-	              </p>
-	            </div>
-	          ))}
-	        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          {instructorWorkspaceSamples.stats.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-[20px] border p-4"
+              style={{
+                borderColor: colors.border,
+                background:
+                  'linear-gradient(135deg, rgba(255,255,255,0.075), rgba(255,255,255,0.035))',
+              }}
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+                  style={{
+                    background: `${item.tone}22`,
+                    boxShadow: `0 0 0 6px ${item.tone}10`,
+                  }}
+                >
+                  <item.icon className="h-5 w-5" style={{ color: item.tone }} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold" style={{ color: colors.text }}>
+                    {item.value}
+                  </div>
+                  <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                    {item.label}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-2 text-xs leading-5" style={{ color: colors.textSecondary }}>
+                {item.detail}
+              </p>
+            </div>
+          ))}
+        </div>
 
-	        <div className="mt-5 grid gap-5 lg:grid-cols-[1.2fr,0.8fr]">
-	          <div className="overflow-hidden rounded-[22px] border" style={{ borderColor: colors.border }}>
-	            {instructorWorkspaceSamples.queue.map((item, index) => (
-	              <div
-	                key={`${item.learner}-${item.item}`}
-	                className="grid gap-3 px-4 py-4 md:grid-cols-[120px,1fr,145px,120px]"
-	                style={{
-	                  background: index % 2 === 0 ? colors.cardBg : colors.cardBgStrong,
-	                  borderTop: index === 0 ? undefined : `1px solid ${colors.border}`,
-	                }}
-	              >
-	                <span className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: colors.accent }}>
-	                  {item.type}
-	                </span>
-	                <div>
-	                  <p className="font-semibold" style={{ color: colors.text }}>
-	                    {item.item}
-	                  </p>
-	                  <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
-	                    {item.learner} · {item.course}
-	                  </p>
-	                </div>
-	                <span className="text-sm" style={{ color: colors.textSecondary }}>
-	                  {item.status}
-	                </span>
-	                <span className="text-sm font-semibold" style={{ color: colors.text }}>
-	                  {item.grade}
-	                </span>
-	              </div>
-	            ))}
-	          </div>
+        <div className="mt-5 grid gap-5 xl:grid-cols-[1fr,1.08fr,1.28fr]">
+          <div
+            className="rounded-[22px] border p-4"
+            style={{ borderColor: colors.border, background: 'rgba(2,8,15,0.56)' }}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p
+                className="text-xs font-semibold uppercase tracking-[0.18em]"
+                style={{ color: '#FFD600' }}
+              >
+                Upcoming Schedule
+              </p>
+              <a
+                href={`${basePath}/schedule`}
+                className="text-xs font-semibold"
+                style={{ color: '#FFD600' }}
+              >
+                View full calendar
+              </a>
+            </div>
+            <div className="space-y-3">
+              {instructorWorkspaceSamples.schedule.map((item) => (
+                <div
+                  key={`${item.date}-${item.title}`}
+                  className="grid gap-3 rounded-2xl border p-3 sm:grid-cols-[56px,1fr,auto]"
+                  style={{ borderColor: colors.border, background: 'rgba(255,255,255,0.045)' }}
+                >
+                  <div
+                    className="rounded-xl border px-2 py-2 text-center"
+                    style={{ borderColor: colors.border, background: 'rgba(255,255,255,0.04)' }}
+                  >
+                    <div className="text-[10px] font-bold" style={{ color: item.tone }}>
+                      {item.date.split(' ')[0]}
+                    </div>
+                    <div className="text-lg font-bold leading-5" style={{ color: colors.text }}>
+                      {item.date.split(' ')[1]}
+                    </div>
+                    <div className="text-[10px]" style={{ color: colors.textMuted }}>
+                      {item.day}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                      {item.title}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
+                      {item.time}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
+                      {item.course}
+                    </p>
+                  </div>
+                  <span
+                    className="self-center rounded-full px-3 py-1 text-xs font-semibold"
+                    style={{ background: `${item.tone}22`, color: item.tone }}
+                  >
+                    {item.badge}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-	          <div className="rounded-[22px] border p-4" style={{ borderColor: colors.border, background: colors.cardBg }}>
-	            <h3 className="text-lg font-semibold" style={{ color: colors.text }}>
-	              Gradebook snapshot
-	            </h3>
-	            <div className="mt-4 space-y-3">
-	              {instructorWorkspaceSamples.gradebook.map((item) => (
-	                <div
-	                  key={item.course}
-	                  className="rounded-2xl border p-3"
-	                  style={{ borderColor: colors.border, background: colors.cardBgStrong }}
-	                >
-	                  <div className="flex items-center justify-between gap-3">
-	                    <p className="font-semibold" style={{ color: colors.text }}>
-	                      {item.course}
-	                    </p>
-	                    <span className="text-sm font-bold" style={{ color: colors.accent }}>
-	                      {item.average}
-	                    </span>
-	                  </div>
-	                  <p className="mt-2 text-xs" style={{ color: colors.textSecondary }}>
-	                    {item.students} students · {item.graded} graded
-	                  </p>
-	                </div>
-	              ))}
-	            </div>
-	          </div>
-	        </div>
-	      </section>
+          <div
+            className="rounded-[22px] border p-4"
+            style={{ borderColor: colors.border, background: 'rgba(2,8,15,0.56)' }}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p
+                className="text-xs font-semibold uppercase tracking-[0.18em]"
+                style={{ color: '#FFD600' }}
+              >
+                Review Queue
+              </p>
+              <a
+                href={`${basePath}/courses`}
+                className="text-xs font-semibold"
+                style={{ color: '#FFD600' }}
+              >
+                View submissions
+              </a>
+            </div>
+            <div className="space-y-3">
+              {instructorWorkspaceSamples.queue.map((item) => (
+                <div
+                  key={`${item.learner}-${item.item}`}
+                  className="grid gap-3 rounded-2xl border p-3 sm:grid-cols-[1fr,auto]"
+                  style={{ borderColor: colors.border, background: 'rgba(255,255,255,0.045)' }}
+                >
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                      {item.learner}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: colors.textSecondary }}>
+                      {item.item}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: colors.textMuted }}>
+                      {item.submitted}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 sm:justify-end">
+                    <span
+                      className="rounded-full px-3 py-1 text-xs font-semibold"
+                      style={{
+                        background:
+                          item.status === 'Auto-graded'
+                            ? 'rgba(34,197,94,0.16)'
+                            : item.status === 'Returned'
+                              ? 'rgba(139,92,246,0.16)'
+                              : 'rgba(234,179,8,0.16)',
+                        color:
+                          item.status === 'Auto-graded'
+                            ? '#22C55E'
+                            : item.status === 'Returned'
+                              ? '#A78BFA'
+                              : '#EAB308',
+                      }}
+                    >
+                      {item.status}
+                    </span>
+                    {item.score ? (
+                      <span
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold"
+                        style={{ borderColor: colors.border, color: colors.text }}
+                      >
+                        {item.score}
+                      </span>
+                    ) : (
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          className="rounded-xl border p-2"
+                          style={{ borderColor: colors.border, color: colors.text }}
+                          aria-label={`Inspect ${item.item}`}
+                        >
+                          <TrendingUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-xl border p-2"
+                          style={{ borderColor: colors.border, color: colors.text }}
+                          aria-label={`Message ${item.learner}`}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-	      {renderTabContent()}
-	    </>
-	  );
+          <div className="grid gap-5">
+            <div
+              className="rounded-[22px] border p-4"
+              style={{ borderColor: colors.border, background: 'rgba(2,8,15,0.56)' }}
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p
+                  className="text-xs font-semibold uppercase tracking-[0.18em]"
+                  style={{ color: '#FFD600' }}
+                >
+                  Gradebook Snapshot
+                </p>
+                <a
+                  href={`${basePath}/courses`}
+                  className="text-xs font-semibold"
+                  style={{ color: '#FFD600' }}
+                >
+                  View gradebook
+                </a>
+              </div>
+              <div className="space-y-3">
+                {instructorWorkspaceSamples.gradebook.map((item) => (
+                  <div key={item.course}>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                          {item.course}
+                        </p>
+                        <p className="text-xs" style={{ color: colors.textMuted }}>
+                          {item.students} students · {item.graded}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold" style={{ color: colors.text }}>
+                        {item.average}%
+                      </span>
+                    </div>
+                    <div
+                      className="h-2 rounded-full"
+                      style={{ background: 'rgba(255,255,255,0.1)' }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${item.average}%`,
+                          background: 'linear-gradient(90deg, #FFD600, #FFF1A6)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div
+              className="rounded-[22px] border p-4"
+              style={{ borderColor: colors.border, background: 'rgba(2,8,15,0.56)' }}
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p
+                  className="text-xs font-semibold uppercase tracking-[0.18em]"
+                  style={{ color: '#FFD600' }}
+                >
+                  Course Progress
+                </p>
+                <a
+                  href={`${basePath}/courses`}
+                  className="text-xs font-semibold"
+                  style={{ color: '#FFD600' }}
+                >
+                  View all courses
+                </a>
+              </div>
+              <div className="space-y-3">
+                {instructorWorkspaceSamples.progress.map((item) => (
+                  <div key={item.course} className="grid grid-cols-[1fr,auto] items-center gap-3">
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: colors.text }}>
+                        {item.course}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-xs" style={{ color: colors.textMuted }}>
+                          {item.lessons}
+                        </span>
+                        <div
+                          className="h-1.5 min-w-[92px] flex-1 rounded-full"
+                          style={{ background: 'rgba(255,255,255,0.1)' }}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${item.progress}%`, background: item.tone }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold" style={{ color: colors.text }}>
+                      {item.progress}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[22px] border px-5 py-4"
+          style={{ borderColor: 'rgba(255,214,0,0.32)', background: 'rgba(255,214,0,0.06)' }}
+        >
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{ background: 'rgba(255,214,0,0.12)', color: '#FFD600' }}
+            >
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-semibold" style={{ color: '#FFD600' }}>
+                Amplify. Educate. Empower.
+              </p>
+              <p className="text-sm" style={{ color: colors.textSecondary }}>
+                Every lesson you lead helps learners build confidence, skills, and stronger
+                community voice.
+              </p>
+            </div>
+          </div>
+          <a
+            href={`${basePath}/courses`}
+            className="inline-flex items-center gap-2 rounded-xl border px-5 py-3 text-sm font-semibold"
+            style={{ borderColor: '#FFD600', background: '#FFD600', color: '#000' }}
+          >
+            View Impact Stats
+            <ChevronRight className="h-4 w-4" />
+          </a>
+        </div>
+      </section>
+
+      {renderTabContent()}
+    </>
+  );
 
   if (embedded) {
     return <div>{pageContent}</div>;
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 40px' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: colors.bg,
+        padding: `88px 24px 40px ${ACADEMY_DESKTOP_CONTENT_LEFT}px`,
+      }}
+    >
+      <AcademyNavigationChrome />
       <div style={{ maxWidth: 1240, margin: '0 auto' }}>{pageContent}</div>
     </div>
   );
@@ -2725,7 +3096,7 @@ function buildLearningPathPayload(title: string, courses: Course[], instructorId
     hours,
     level,
     delivery_mode: 'Online and In person',
-    color: '#F97316',
+    color: '#FFD600',
     requirements: [
       'No previous Academy experience is required to begin.',
       'Be ready to move through the selected courses in order.',

@@ -100,6 +100,19 @@ const injectAgentIntoAgentsMap = (queryClient: QueryClient, agent: any) => {
   }
 };
 
+const getSelectionSearch = (params: URLSearchParams) => {
+  const selectionParams = new URLSearchParams();
+  ['spec', 'agentModel', 'agent_id'].forEach((key) => {
+    const value = params.get(key);
+    if (value) {
+      selectionParams.set(key, value);
+    }
+  });
+
+  const selectionSearch = selectionParams.toString();
+  return selectionSearch ? `?${selectionSearch}` : '';
+};
+
 /**
  * Hook that processes URL query parameters to initialize chat with specified settings and prompt.
  * Handles model switching, prompt auto-filling, and optional auto-submission with race condition protection.
@@ -286,7 +299,11 @@ export default function useQueryParams({
       if (data.text?.trim()) {
         submitMessage(data);
 
-        const newUrl = window.location.pathname;
+        const currentParams = new URLSearchParams(window.location.search);
+        currentParams.delete('prompt');
+        currentParams.delete('q');
+        currentParams.delete('submit');
+        const newUrl = `${window.location.pathname}${getSelectionSearch(currentParams)}`;
         window.history.replaceState({}, '', newUrl);
 
         console.log('Message submitted with conversation state:', conversation);
@@ -307,6 +324,9 @@ export default function useQueryParams({
       delete queryParams.prompt;
       delete queryParams.q;
       delete queryParams.submit;
+      if (!queryParams.spec && queryParams.agentModel?.startsWith('agent/')) {
+        queryParams.spec = queryParams.agentModel;
+      }
       const validSettings = processValidSettings(queryParams);
 
       return { decodedPrompt, validSettings, shouldAutoSubmit };
@@ -352,7 +372,7 @@ export default function useQueryParams({
 
         // Only clean URL if there's no pending submission
         if (!pendingSubmitRef.current) {
-          const newUrl = window.location.pathname;
+          const newUrl = `${window.location.pathname}${getSelectionSearch(currentParams)}`;
           window.history.replaceState({}, '', newUrl);
         }
       };

@@ -2,6 +2,11 @@ import { useMemo } from "react";
 import { useTheme } from "@/app/providers/theme-provider";
 import { useResponsive } from "../hooks/useResponsive";
 
+const ORB_PURPLE_RGB = "139, 92, 246"; // #8B5CF6
+const ORB_BLUE_RGB = "60, 177, 204"; // #3CB1CC
+const ORB_PINK_RGB = "236, 72, 153"; // #EC4899
+const ORB_GOLD_RGB = "255, 214, 0"; // #FFD600
+
 /**
  * Glassmorphism Design System Hook
  * Provides consistent glass styles across the application
@@ -163,11 +168,13 @@ export function useGlassStyles() {
         width: isMobile ? "400px" : "800px",
         height: isMobile ? "400px" : "800px",
         background: isDark
-          ? "radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(139, 92, 246, 0.2) 30%, transparent 60%)"
+          ? `radial-gradient(circle, rgba(${ORB_PURPLE_RGB}, 0.28) 0%, rgba(${ORB_PURPLE_RGB}, 0.10) 30%, transparent 60%)`
           : "none",
         pointerEvents: "none" as const,
         zIndex: 0,
         filter: isMobile ? "blur(30px)" : "blur(40px)",
+        animation: "sv-glass-orb-purple-flow 42s ease-in-out infinite alternate",
+        willChange: "transform",
       },
       pink: {
         position: "fixed" as const,
@@ -176,11 +183,13 @@ export function useGlassStyles() {
         width: isMobile ? "300px" : "600px",
         height: isMobile ? "300px" : "600px",
         background: isDark
-          ? "radial-gradient(circle, rgba(236, 72, 153, 0.4) 0%, rgba(236, 72, 153, 0.15) 30%, transparent 60%)"
+          ? `radial-gradient(circle, rgba(${ORB_PINK_RGB}, 0.18) 0%, rgba(${ORB_PINK_RGB}, 0.07) 30%, transparent 60%)`
           : "none",
         pointerEvents: "none" as const,
         zIndex: 0,
         filter: isMobile ? "blur(45px)" : "blur(60px)",
+        animation: "sv-glass-orb-pink-flow 45s ease-in-out infinite alternate",
+        willChange: "transform",
       },
       cyan: {
         position: "fixed" as const,
@@ -189,11 +198,13 @@ export function useGlassStyles() {
         width: isMobile ? "350px" : "700px",
         height: isMobile ? "350px" : "700px",
         background: isDark
-          ? "radial-gradient(circle, rgba(6, 182, 212, 0.35) 0%, rgba(6, 182, 212, 0.1) 30%, transparent 60%)"
+          ? `radial-gradient(circle, rgba(${ORB_BLUE_RGB}, 0.24) 0%, rgba(${ORB_BLUE_RGB}, 0.08) 30%, transparent 60%)`
           : "none",
         pointerEvents: "none" as const,
         zIndex: 0,
         filter: isMobile ? "blur(38px)" : "blur(50px)",
+        animation: "sv-glass-orb-blue-flow 43s ease-in-out infinite alternate",
+        willChange: "transform",
       },
       gold: {
         position: "fixed" as const,
@@ -202,11 +213,13 @@ export function useGlassStyles() {
         width: isMobile ? "200px" : "400px",
         height: isMobile ? "200px" : "400px",
         background: isDark
-          ? "radial-gradient(circle, rgba(255, 214, 0, 0.25) 0%, transparent 50%)"
+          ? `radial-gradient(circle, rgba(${ORB_GOLD_RGB}, 0.12) 0%, transparent 50%)`
           : "none",
         pointerEvents: "none" as const,
         zIndex: 0,
         filter: isMobile ? "blur(30px)" : "blur(40px)",
+        animation: "sv-glass-orb-gold-flow 46s ease-in-out infinite alternate",
+        willChange: "transform",
       },
     }),
     [isDark, isMobile]

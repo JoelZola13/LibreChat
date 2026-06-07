@@ -4,6 +4,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import { getCourseSubmissionList, type CourseSubmissionListItem } from './api/assignments';
 import { useAcademyUserId } from './useAcademyUserId';
 import { sbFetch } from '../shared/sbFetch';
+import AcademyNavigationChrome, { ACADEMY_DESKTOP_CONTENT_LEFT } from './AcademyNavigationChrome';
 
 type Course = {
   id: string;
@@ -131,7 +132,14 @@ export default function AcademyInstructorSubmissionListPage() {
   const EmptyIcon = isQuizList ? FileQuestion : ClipboardList;
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 40px' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: colors.bg,
+        padding: `88px 24px 40px ${ACADEMY_DESKTOP_CONTENT_LEFT}px`,
+      }}
+    >
+      <AcademyNavigationChrome />
       <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <a

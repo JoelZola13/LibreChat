@@ -9,6 +9,10 @@ import type {
 } from 'librechat-data-provider';
 import type { useLocalize } from '~/hooks';
 import SpecIcon from '~/components/Chat/Menus/Endpoints/components/SpecIcon';
+import StreetAgentIcon, {
+  getMarketplaceAgentIconId,
+} from '~/components/Agents/StreetAgentIcon';
+import StreetBotMarketplaceIcon from '~/components/Agents/StreetBotMarketplaceIcon';
 import { Endpoint, SelectedValues } from '~/common';
 
 export function filterItems<
@@ -103,11 +107,13 @@ export function getSelectedIcon({
   selectedValues,
   modelSpecs,
   endpointsConfig,
+  displayValue,
 }: {
   mappedEndpoints: Endpoint[];
   selectedValues: SelectedValues;
   modelSpecs: TModelSpec[];
   endpointsConfig: TEndpointsConfig;
+  displayValue?: string;
 }): React.ReactNode | null {
   const { endpoint, model, modelSpec } = selectedValues;
 
@@ -128,6 +134,28 @@ export function getSelectedIcon({
 
   if (endpoint && model) {
     const selectedEndpoint = mappedEndpoints.find((e) => e.value === endpoint);
+    const modelLabel =
+      selectedEndpoint?.agentNames?.[model] ||
+      selectedEndpoint?.assistantNames?.[model] ||
+      displayValue ||
+      '';
+    const marketplaceIconId = getMarketplaceAgentIconId(
+      modelLabel,
+      displayValue,
+      selectedEndpoint?.modelIcons?.[model],
+      model,
+    );
+    if (marketplaceIconId) {
+      return React.createElement(StreetAgentIcon, {
+        id: marketplaceIconId,
+        className: 'h-5 w-5',
+      });
+    }
+
+    if (model === 'streetbot-0.1') {
+      return React.createElement(StreetBotMarketplaceIcon, { className: 'h-5 w-5' });
+    }
+
     if (!selectedEndpoint) {
       return null;
     }

@@ -15,6 +15,7 @@ export type Article = {
   author_name?: string;
   category?: string;
   categories?: string[];
+  source?: string;
   tags?: string[];
   image_url?: string;
   feature_image_url?: string;
@@ -30,6 +31,7 @@ export type Article = {
   source_type?: "internal" | "aggregated";
   source_name?: string;
   source_url?: string;
+  feed_rank?: number;
 };
 
 export type Comment = {

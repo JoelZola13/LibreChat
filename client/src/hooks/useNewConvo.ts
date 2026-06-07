@@ -41,6 +41,38 @@ import { usePauseGlobalAudio } from './Audio';
 import { useHasAccess } from '~/hooks';
 import store from '~/store';
 
+const getSelectionParams = (
+  currentSearchParams: URLSearchParams | undefined,
+  conversation: Partial<TConversation>,
+) => {
+  const params = new URLSearchParams(currentSearchParams?.toString() ?? '');
+  params.delete('prompt');
+  params.delete('q');
+  params.delete('submit');
+
+  const spec = conversation.spec ?? '';
+  if (spec) {
+    params.set('spec', spec);
+    if (spec.startsWith('agent/')) {
+      params.set('agentModel', spec);
+    } else {
+      params.delete('agentModel');
+    }
+  } else {
+    params.delete('spec');
+    params.delete('agentModel');
+  }
+
+  if (conversation.agent_id) {
+    params.set('agent_id', conversation.agent_id);
+  } else {
+    params.delete('agent_id');
+  }
+
+  const search = params.toString();
+  return search ? `?${search}` : '';
+};
+
 const useNewConvo = (index = 0) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -196,8 +228,10 @@ const useNewConvo = (index = 0) => {
           }
 
           const models =
-            modelsConfig?.[defaultEndpoint] ??
-            (activePreset?.model ? [String(activePreset.model)] : []);
+            activePreset?.spec && activePreset?.model
+              ? [String(activePreset.model)]
+              : modelsConfig?.[defaultEndpoint] ??
+                (activePreset?.model ? [String(activePreset.model)] : []);
           const defaultParamsEndpoint =
             getDefaultParamsEndpoint(endpointsConfig, defaultEndpoint) ??
             (endpointType === EModelEndpoint.custom ? EModelEndpoint.openAI : undefined);
@@ -245,20 +279,19 @@ const useNewConvo = (index = 0) => {
           return;
         }
 
-        const searchParamsString = searchParams?.toString();
-        const getParams = () => (searchParamsString ? `?${searchParamsString}` : '');
+        const params = getSelectionParams(searchParams, conversation);
 
         if (conversation.conversationId === Constants.NEW_CONVO && !modelsData) {
           const appTitle = localStorage.getItem(LocalStorageKeys.APP_TITLE) ?? '';
           if (appTitle) {
             document.title = appTitle;
           }
-          const path = `/c/${Constants.NEW_CONVO}${getParams()}`;
+          const path = `/c/${Constants.NEW_CONVO}${params}`;
           navigate(path, { state: { focusChat: true } });
           return;
         }
 
-        const path = `/c/${conversation.conversationId}${getParams()}`;
+        const path = `/c/${conversation.conversationId}${params}`;
         navigate(path, {
           replace: true,
           state: disableFocus ? {} : { focusChat: true },

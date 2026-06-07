@@ -3,16 +3,42 @@
   <head>
     <meta charset="utf-8" />
     <base href="/" />
-    <meta name="theme-color" content="#171717" />
+    <meta name="theme-color" content="#1f2027" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="description" content="LibreChat - An open source chat application with support for multiple AI models" />
+    <meta
+      name="description"
+      content="STREET VOICES is a social enterprise and media platform with an online directory that provides access to free and subsidized services in the Greater Toronto Area."
+    />
     <title>Street Voices</title>
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png" />
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon-180x180.png" />
+    <meta property="og:title" content="Street Voices" />
+    <meta
+      property="og:description"
+      content="STREET VOICES is a social enterprise and media platform with an online directory that provides access to free and subsidized services in the Greater Toronto Area."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Street Voices" />
+    <meta property="og:url" content="https://streetvoices-directory.pages.dev/" />
+    <meta property="og:image" content="https://streetvoices-directory.pages.dev/sv2-favicon.svg" />
+    <meta name="twitter:title" content="Street Voices" />
+    <meta
+      name="twitter:description"
+      content="STREET VOICES is a social enterprise and media platform with an online directory that provides access to free and subsidized services in the Greater Toronto Area."
+    />
+    <meta name="twitter:image" content="https://streetvoices-directory.pages.dev/sv2-favicon.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="./sv2-favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./sv2-favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./sv2-favicon-16x16.png" />
+    <link rel="shortcut icon" href="./sv2-favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./sv2-apple-touch-icon-180x180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+    <link rel="preload" href="./fonts/Rubik-variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./fonts/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./fonts/Inter-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./assets/streetvoices-text.svg" as="image" />
+    <link rel="preload" href="./assets/streetvoices-text-dark.svg" as="image" />
     <style>
       html,
       body {
@@ -20,21 +46,78 @@
         padding: 0;
         height: 100%;
       }
+
+      button[aria-label='Toggle theme']:not(.sv-theme-toggle-button),
+      a[aria-label='Settings'] {
+        display: none !important;
+      }
+
+      [aria-label='Select a model']:has(.sv-streetbot-chip-icon)::before,
+      [aria-label='Select a model']:has(img[src*='streetbot-icon-home'])::before {
+        content: none !important;
+        display: none !important;
+      }
+
+      nav#chat-history-nav
+        [role='grid'][aria-label='Conversations']
+        [role='button'][aria-label$=' conversation']
+        .flex.grow.items-center.gap-2
+        > div:has(img[src*='street-voices-bot']),
+      nav#chat-history-nav
+        [role='grid'][aria-label='Conversations']
+        [role='button'][aria-label$=' conversation']
+        img[src*='street-voices-bot'] {
+        display: none !important;
+      }
+
     </style>
     <script>
+      window.__SV_LOCAL_SHELL_VERSION = '20260606c';
+      const streetBotRefreshParams = new URLSearchParams(window.location.search);
+      if (streetBotRefreshParams.has('sv-refresh')) {
+        try {
+          sessionStorage.setItem('streetbot:sw-reset-reloaded:v20260606c', '1');
+        } catch {}
+        streetBotRefreshParams.delete('sv-refresh');
+        const streetBotRefreshSearch = streetBotRefreshParams.toString();
+        window.history.replaceState(
+          window.history.state,
+          '',
+          window.location.pathname +
+            (streetBotRefreshSearch ? `?${streetBotRefreshSearch}` : '') +
+            window.location.hash,
+        );
+      }
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+          .then((registrations) => registrations.forEach((registration) => registration.unregister()))
+          .catch(() => {});
+      }
+
+      if ('caches' in window) {
+        caches.keys()
+          .then((keys) => keys.forEach((key) => caches.delete(key)))
+          .catch(() => {});
+      }
+
+      if (window.location.pathname === '/c/new') {
+        document.documentElement.setAttribute('data-sv-streetbot-chat', 'true');
+      }
+
       const theme = localStorage.getItem('color-theme');
       const loadingContainerStyle = document.createElement('style');
       let backgroundColor;
 
       if (theme === 'dark') {
-        backgroundColor = '#0d0d0d';
+        backgroundColor = '#1f2027';
       } else if (theme === 'light') {
-        backgroundColor = '#ffffff';
+        backgroundColor = '#f7f8fc';
       } else if (theme === 'system') {
         const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        backgroundColor = prefersDarkScheme ? '#0d0d0d' : '#ffffff';
+        backgroundColor = prefersDarkScheme ? '#1f2027' : '#f7f8fc';
       } else {
-        backgroundColor = '#ffffff';
+        backgroundColor = '#1f2027';
       }
 
       loadingContainerStyle.innerHTML = `
@@ -47,6 +130,115 @@
         }
       `;
       document.head.appendChild(loadingContainerStyle);
+    </script>
+    <script>
+      (function () {
+        var CACHE_KEY = 'streetbot:homepage-news:v1';
+        var FALLBACK_IMG = '/assets/street-news-placeholder.png';
+        try {
+          if (localStorage.getItem('streetbot:disable-perf-cache') === '1') return;
+          var raw = sessionStorage.getItem(CACHE_KEY);
+          if (raw) {
+            var entry = JSON.parse(raw);
+            if (entry && typeof entry.cachedAt === 'number' && Date.now() - entry.cachedAt < 300000) return;
+          }
+        } catch (e) {}
+
+        fetch('/sbapi/news/articles?status=published&limit=30')
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function (payload) {
+            var items = Array.isArray(payload) ? payload : (payload && payload.items);
+            if (!Array.isArray(items)) return;
+
+            function isSV(a) {
+              if (typeof a.source === 'string' && a.source.toLowerCase().indexOf('street voices') !== -1) return true;
+              var cats = [];
+              if (Array.isArray(a.categories)) cats = cats.concat(a.categories);
+              if (typeof a.category === 'string' && a.category.trim()) {
+                if (a.category.trim().charAt(0) === '[') {
+                  try { var p = JSON.parse(a.category); if (Array.isArray(p)) cats = cats.concat(p); else cats.push(a.category); } catch (_) { cats.push(a.category); }
+                } else { cats.push(a.category); }
+              }
+              for (var i = 0; i < cats.length; i++) {
+                if (typeof cats[i] === 'string' && cats[i].toLowerCase().replace(/-/g, ' ').indexOf('street voices') !== -1) return true;
+              }
+              return false;
+            }
+
+            function toTitle(s) {
+              return s.toLowerCase().split(/[\s-]+/).filter(Boolean).map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+            }
+
+            function getCat(a) {
+              var cats = [];
+              if (Array.isArray(a.categories)) cats = cats.concat(a.categories);
+              if (typeof a.category === 'string' && a.category.trim()) {
+                if (a.category.trim().charAt(0) === '[') {
+                  try { var p = JSON.parse(a.category); if (Array.isArray(p)) cats = cats.concat(p); else cats.push(a.category); } catch (_) { cats.push(a.category); }
+                } else { cats.push(a.category); }
+              }
+              var norm = cats.filter(function (c) { return typeof c === 'string'; }).map(function (c) { return c.toLowerCase().replace(/-/g, ' ').trim(); }).filter(Boolean);
+              var pick = null;
+              for (var i = 0; i < norm.length; i++) { if (norm[i] !== 'street voices') { pick = norm[i]; break; } }
+              return toTitle(pick || norm[0] || 'news');
+            }
+
+            var mapped = items.filter(isSV).map(function (a) {
+              var id = String(a.id || '');
+              var slug = typeof a.slug === 'string' && a.slug.trim() ? a.slug : '';
+              return {
+                id: id,
+                title: String(a.title || ''),
+                image: String(a.image_url || a.feature_image_url || FALLBACK_IMG) || FALLBACK_IMG,
+                category: getCat(a),
+                isInternal: true,
+                href: slug ? '/news/' + slug : '/news/' + id,
+                publishedAt: typeof a.published_at === 'string' ? a.published_at : undefined
+              };
+            }).filter(function (n) { return n.id && n.title; })
+              .sort(function (a, b) {
+                var ta = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+                var tb = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+                return tb - ta;
+              }).slice(0, 12);
+
+            try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ value: mapped, cachedAt: Date.now() })); } catch (_) {}
+            for (var j = 0; j < Math.min(3, mapped.length); j++) {
+              if (mapped[j].image && mapped[j].image !== FALLBACK_IMG) { new Image().src = mapped[j].image; }
+            }
+          })
+          .catch(function () {});
+      })();
+    </script>
+    <script>
+      (function () {
+        var PREFIX = 'streetbot:directory:search:v5:';
+        var PARAMS = 'q=&page=0&per_page=12&facets=category_names%2Ccity%2Cservice_type%2Cages_served%2Cgender_served';
+        var KEY = PREFIX + PARAMS;
+        try {
+          if (localStorage.getItem('streetbot:disable-perf-cache') === '1') return;
+          var raw = sessionStorage.getItem(KEY);
+          if (raw) {
+            var entry = JSON.parse(raw);
+            if (entry && typeof entry.cachedAt === 'number' && Date.now() - entry.cachedAt < 300000) return;
+          }
+        } catch (e) {}
+
+        function tryFetch(url) {
+          return fetch(url + '?' + PARAMS).then(function (r) {
+            if (!r.ok) throw new Error(r.status);
+            var ct = r.headers.get('content-type') || '';
+            if (ct.indexOf('application/json') === -1) throw new Error('not json');
+            return r.json();
+          }).then(function (payload) {
+            try { sessionStorage.setItem(KEY, JSON.stringify({ value: payload, cachedAt: Date.now() })); } catch (_) {}
+          });
+        }
+
+        tryFetch('/api/directory/search').catch(function () {
+          return tryFetch('/sbapi/services/search');
+        }).catch(function () {});
+      })();
     </script>
     <script defer type="module" src="/src/main.jsx"></script>
   </head>

@@ -8,7 +8,7 @@ import MobileMenuDrawer, { getMobileNavLinkStyle, getMobileSectionHeaderStyle, g
 
 // Navigation items matching StreetBot Pro — navKey maps to ROLE_PAGES keys
 const navItems = [
-  { label: 'Street Profile', href: '/profile', navKey: 'profile' },
+  { label: 'Street Profile', href: '/profiles', navKey: 'profile' },
   { label: 'Street Gallery', href: '/gallery', navKey: 'gallery' },
   { label: 'Job Board', href: '/jobs', navKey: 'jobs' },
   { label: 'Academy', href: '/learning', navKey: 'learning' },
@@ -18,7 +18,7 @@ const navItems = [
 
 const productsDropdown = [
   { label: 'Street Voices', href: '/', navKey: null },
-  { label: 'Word on the Street', href: '/forum', navKey: 'forum' },
+  { label: 'Word on the Street', href: '/word-on-the-street', navKey: 'forum' },
   { label: 'Groups', href: '/groups', navKey: 'groups' },
   { label: 'Messages', href: '/messages', navKey: 'messages' },
   { label: 'Calendar', href: '/calendar', navKey: 'calendar' },

@@ -9,6 +9,7 @@ const CMS_HEADERS = {
   "Content-Type": "application/json",
 };
 const SETTINGS_STORAGE_KEY = "streetbot:user-settings";
+const LOCAL_STREET_PROFILES_KEY = "streetvoices:local-street-profiles";
 
 type AcademySyncUser = {
   id?: string | null;
@@ -20,7 +21,9 @@ type AcademySyncUser = {
   avatar_url?: string | null;
 };
 
-type DirectusStreetProfileRecord = {
+type StreetProfileRoleHint = AcademyProfileRole | "member";
+
+export type DirectusStreetProfileRecord = {
   id: string;
   user_id: string;
   username?: string | null;
@@ -61,8 +64,10 @@ type DirectusStreetProfileRecord = {
 type EnsureStreetProfileOptions = {
   userId?: string | null;
   user?: AcademySyncUser | null;
-  roleHint?: AcademyProfileRole | null;
+  roleHint?: StreetProfileRoleHint | null;
   force?: boolean;
+  profile?: Partial<DirectusStreetProfileRecord> | null;
+  overwrite?: boolean;
 };
 
 const inflightEnsures = new Map<string, Promise<DirectusStreetProfileRecord | null>>();
@@ -106,22 +111,100 @@ const CMS_PROFILE_FIELDS = [
 ].join(",");
 const BATCH_SYNC_STORAGE_KEY = "streetbot:academy-profile-sync:last-run";
 
+function readLocalStreetProfiles(): DirectusStreetProfileRecord[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STREET_PROFILES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((profile): profile is DirectusStreetProfileRecord =>
+          Boolean(profile) &&
+          typeof profile === "object" &&
+          typeof profile.id === "string" &&
+          typeof profile.user_id === "string",
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalStreetProfiles(profiles: DirectusStreetProfileRecord[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LOCAL_STREET_PROFILES_KEY, JSON.stringify(profiles.slice(0, 200)));
+  } catch {
+    // Local profile sync is a browser fallback for unavailable CMS environments.
+  }
+}
+
+function getFilterEquals(filter: Record<string, unknown>, field: string) {
+  const candidate = filter[field];
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return undefined;
+  return (candidate as Record<string, unknown>)._eq;
+}
+
+function matchesLocalProfileFilter(profile: DirectusStreetProfileRecord, filter: Record<string, unknown>): boolean {
+  const andFilters = filter._and;
+  if (Array.isArray(andFilters)) {
+    return andFilters.every((item) =>
+      item && typeof item === "object" && !Array.isArray(item)
+        ? matchesLocalProfileFilter(profile, item as Record<string, unknown>)
+        : true,
+    );
+  }
+
+  const userId = getFilterEquals(filter, "user_id");
+  if (userId !== undefined && profile.user_id !== String(userId)) return false;
+
+  const username = getFilterEquals(filter, "username");
+  if (username !== undefined && String(profile.username || "").toLowerCase() !== String(username).toLowerCase()) return false;
+
+  const showInDirectory = getFilterEquals(filter, "show_in_directory");
+  if (showInDirectory !== undefined && Boolean(profile.show_in_directory) !== Boolean(showInDirectory)) return false;
+
+  const isPublic = getFilterEquals(filter, "is_public");
+  if (isPublic !== undefined && Boolean(profile.is_public) !== Boolean(isPublic)) return false;
+
+  return true;
+}
+
+function listLocalStreetProfiles(filter: Record<string, unknown>, limit: number) {
+  return readLocalStreetProfiles().filter((profile) => matchesLocalProfileFilter(profile, filter)).slice(0, limit);
+}
+
+function upsertLocalStreetProfile(profile: DirectusStreetProfileRecord) {
+  const profiles = readLocalStreetProfiles();
+  const nextProfiles = [
+    profile,
+    ...profiles.filter((item) => item.id !== profile.id && item.user_id !== profile.user_id),
+  ];
+  writeLocalStreetProfiles(nextProfiles);
+  return profile;
+}
+
 async function cmsListProfiles(filter: Record<string, unknown>, fields = CMS_PROFILE_FIELDS, limit = 10) {
   const params = new URLSearchParams({
     filter: JSON.stringify(filter),
     limit: String(limit),
     fields,
   });
-  const response = await fetch(`${CMS_URL}/items/street_profiles?${params.toString()}`, {
-    headers: CMS_HEADERS,
-  });
+  try {
+    const response = await fetch(`${CMS_URL}/items/street_profiles?${params.toString()}`, {
+      headers: CMS_HEADERS,
+    });
 
-  if (!response.ok) {
-    throw new Error(response.statusText || "Failed to load Street Profiles");
+    if (!response.ok) {
+      throw new Error(response.statusText || "Failed to load Street Profiles");
+    }
+
+    const data = await response.json();
+    return Array.isArray(data?.data) ? (data.data as DirectusStreetProfileRecord[]) : [];
+  } catch (error) {
+    console.info("Street Profile CMS list unavailable; using local profile cache.", error);
+    return listLocalStreetProfiles(filter, limit);
   }
-
-  const data = await response.json();
-  return Array.isArray(data?.data) ? (data.data as DirectusStreetProfileRecord[]) : [];
 }
 
 async function cmsFindProfileByUserId(userId: string, fields = CMS_PROFILE_FIELDS) {
@@ -135,29 +218,51 @@ async function cmsFindProfileByUsername(username: string, fields = CMS_PROFILE_F
 }
 
 async function cmsCreateProfile(data: Partial<DirectusStreetProfileRecord>) {
-  const response = await fetch(`${CMS_URL}/items/street_profiles`, {
-    method: "POST",
-    headers: CMS_HEADERS,
-    body: JSON.stringify(data),
-  });
+  try {
+    const response = await fetch(`${CMS_URL}/items/street_profiles`, {
+      method: "POST",
+      headers: CMS_HEADERS,
+      body: JSON.stringify(data),
+    });
 
-  if (!response.ok) {
-    throw new Error(response.statusText || "Failed to create Street Profile");
+    if (!response.ok) {
+      throw new Error(response.statusText || "Failed to create Street Profile");
+    }
+
+    const payload = await response.json();
+    return payload?.data as DirectusStreetProfileRecord;
+  } catch (error) {
+    console.info("Street Profile CMS create unavailable; creating a local Street Profile.", error);
+    const now = new Date().toISOString();
+    return upsertLocalStreetProfile({
+      ...(data as DirectusStreetProfileRecord),
+      id: data.id || `local-street-profile-${data.user_id || Date.now()}`,
+      user_id: String(data.user_id || `local-user-${Date.now()}`),
+      username: data.username || `street-${Date.now()}`,
+      display_name: data.display_name || "Street Voices Member",
+      created_at: data.created_at || now,
+      updated_at: now,
+    });
   }
-
-  const payload = await response.json();
-  return payload?.data as DirectusStreetProfileRecord;
 }
 
 async function cmsUpdateProfile(id: string, data: Partial<DirectusStreetProfileRecord>) {
-  const response = await fetch(`${CMS_URL}/items/street_profiles/${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    headers: CMS_HEADERS,
-    body: JSON.stringify(data),
-  });
+  try {
+    const response = await fetch(`${CMS_URL}/items/street_profiles/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: CMS_HEADERS,
+      body: JSON.stringify(data),
+    });
 
-  if (!response.ok) {
-    throw new Error(response.statusText || "Failed to update Street Profile");
+    if (!response.ok) {
+      throw new Error(response.statusText || "Failed to update Street Profile");
+    }
+  } catch (error) {
+    console.info("Street Profile CMS update unavailable; updating local profile cache.", error);
+    const existing = readLocalStreetProfiles().find((profile) => profile.id === id);
+    if (existing) {
+      upsertLocalStreetProfile({ ...existing, ...data, updated_at: new Date().toISOString() });
+    }
   }
 }
 
@@ -198,7 +303,7 @@ function buildDisplayName(userId: string, user?: AcademySyncUser | null) {
     String(user?.email || "").split("@")[0].trim();
 
   if (!candidate) {
-    return `Academy Learner ${getUserIdSuffix(userId).toUpperCase()}`;
+    return `Street Voices Member ${getUserIdSuffix(userId).toUpperCase()}`;
   }
 
   return candidate
@@ -208,40 +313,67 @@ function buildDisplayName(userId: string, user?: AcademySyncUser | null) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function buildDefaultRoles(role: AcademyProfileRole) {
-  return role === "instructor" ? ["Instructor", "Facilitator"] : ["Student", "Community Learner"];
+function buildDefaultRoles(role: StreetProfileRoleHint) {
+  if (role === "instructor") {
+    return ["Instructor", "Facilitator"];
+  }
+  if (role === "student") {
+    return ["Student", "Community Learner"];
+  }
+  return ["Creative", "Community Member"];
 }
 
-function buildDefaultSkills(role: AcademyProfileRole) {
-  return role === "instructor"
-    ? ["Workshop Design", "Facilitation", "Community Teaching"]
-    : ["Communication", "Confidence Building", "Peer Learning"];
+function buildDefaultSkills(role: StreetProfileRoleHint) {
+  if (role === "instructor") {
+    return ["Workshop Design", "Facilitation", "Community Teaching"];
+  }
+  if (role === "student") {
+    return ["Communication", "Confidence Building", "Peer Learning"];
+  }
+  return ["Storytelling", "Community Building", "Collaboration"];
 }
 
-function buildDefaultBio(displayName: string, role: AcademyProfileRole) {
-  return role === "instructor"
-    ? `${displayName} teaches and facilitates learning through Street Voices Academy.`
-    : `${displayName} is learning and growing through Street Voices Academy.`;
+function buildDefaultBio(displayName: string, role: StreetProfileRoleHint) {
+  if (role === "instructor") {
+    return `${displayName} teaches and facilitates learning through Street Voices Academy.`;
+  }
+  if (role === "student") {
+    return `${displayName} is learning and growing through Street Voices Academy.`;
+  }
+  return `${displayName} is building their Street Voices profile.`;
 }
 
-function buildDefaultTagline(role: AcademyProfileRole) {
-  return role === "instructor"
-    ? "Teaching and building learning experiences through Street Voices Academy."
-    : "Learning and growing through Street Voices Academy.";
+function buildDefaultTagline(role: StreetProfileRoleHint) {
+  if (role === "instructor") {
+    return "Teaching and building learning experiences through Street Voices Academy.";
+  }
+  if (role === "student") {
+    return "Learning and growing through Street Voices Academy.";
+  }
+  return "Connected through the Street Voices community.";
 }
 
-function buildDefaultOpenTo(role: AcademyProfileRole) {
-  return role === "instructor"
-    ? ["Teaching", "Mentorship", "Workshops"]
-    : ["Learning", "Peer Community"];
+function buildDefaultOpenTo(role: StreetProfileRoleHint) {
+  if (role === "instructor") {
+    return ["Teaching", "Mentorship", "Workshops"];
+  }
+  if (role === "student") {
+    return ["Learning", "Peer Community"];
+  }
+  return ["Networking", "Collaboration", "Messages"];
 }
 
-function buildUsernameCandidates(userId: string, user?: AcademySyncUser | null) {
+function buildUsernameCandidates(
+  userId: string,
+  user?: AcademySyncUser | null,
+  preferredUsername?: string | null,
+) {
   const seeded = findAcademyStreetProfileByUserId(userId);
   const emailLocalPart = String(user?.email || "").split("@")[0].trim();
   const suffix = getUserIdSuffix(userId);
   const rawCandidates = [
     String(seeded?.username || "").trim(),
+    String(preferredUsername || "").replace(/^@+/, "").trim(),
     String(user?.username || "").replace(/^@+/, "").trim(),
     emailLocalPart,
     buildDisplayName(userId, user),
@@ -268,11 +400,19 @@ function buildUsernameCandidates(userId: string, user?: AcademySyncUser | null) 
     candidates.push(`student-${suffix}`);
   }
 
+  if (!seen.has(`street-${suffix}`)) {
+    candidates.push(`street-${suffix}`);
+  }
+
   return candidates;
 }
 
-async function resolveAvailableUsername(userId: string, user?: AcademySyncUser | null) {
-  const candidates = buildUsernameCandidates(userId, user);
+async function resolveAvailableUsername(
+  userId: string,
+  user?: AcademySyncUser | null,
+  preferredUsername?: string | null,
+) {
+  const candidates = buildUsernameCandidates(userId, user, preferredUsername);
 
   for (const candidate of candidates) {
     const existing = await cmsFindProfileByUsername(candidate);
@@ -284,9 +424,13 @@ async function resolveAvailableUsername(userId: string, user?: AcademySyncUser |
   return `academy-${getUserIdSuffix(userId)}`;
 }
 
-function buildProfileSeed(userId: string, user?: AcademySyncUser | null, roleHint: AcademyProfileRole | null = null) {
+function buildProfileSeed(
+  userId: string,
+  user?: AcademySyncUser | null,
+  roleHint: StreetProfileRoleHint | null = null,
+) {
   const seeded = findAcademyStreetProfileByUserId(userId);
-  const academyRole = seeded?.academy_role ?? roleHint ?? "student";
+  const academyRole = seeded?.academy_role ?? roleHint ?? "member";
   const displayName = buildDisplayName(userId, user);
 
   return {
@@ -307,7 +451,7 @@ function buildProfileSeed(userId: string, user?: AcademySyncUser | null, roleHin
     website: seeded?.website || null,
     availability_status: seeded?.availability_status || "open",
     open_to: seeded?.open_to || buildDefaultOpenTo(academyRole),
-    contact_email: seeded?.contact_email || null,
+    contact_email: seeded?.contact_email || user?.email || null,
     contact_preference: seeded?.contact_preference || "form",
     is_public: true,
     is_featured: seeded?.is_featured || false,
@@ -379,6 +523,48 @@ function buildPatch(existing: DirectusStreetProfileRecord, seed: Partial<Directu
   if (existing.show_in_directory == null && seed.show_in_directory != null) {
     patch.show_in_directory = seed.show_in_directory;
   }
+
+  return patch;
+}
+
+function buildExplicitPatch(profile?: Partial<DirectusStreetProfileRecord> | null) {
+  const patch: Partial<DirectusStreetProfileRecord> = {};
+  if (!profile) {
+    return patch;
+  }
+
+  const allowedFields: (keyof DirectusStreetProfileRecord)[] = [
+    "display_name",
+    "primary_roles",
+    "secondary_skills",
+    "bio",
+    "tagline",
+    "avatar_url",
+    "cover_url",
+    "city",
+    "country",
+    "location_display",
+    "portfolio_items",
+    "external_links",
+    "website",
+    "availability_status",
+    "open_to",
+    "contact_email",
+    "contact_preference",
+    "is_public",
+    "is_featured",
+    "is_verified",
+    "show_in_directory",
+    "open_to_messages",
+    "completeness_score",
+  ];
+
+  allowedFields.forEach((field) => {
+    const value = profile[field];
+    if (value !== undefined) {
+      (patch as Record<string, unknown>)[field] = value;
+    }
+  });
 
   return patch;
 }
@@ -504,6 +690,8 @@ export async function ensureStreetProfileForAcademyUser({
   user,
   roleHint,
   force = false,
+  profile,
+  overwrite = false,
 }: EnsureStreetProfileOptions) {
   const normalizedUserId = String(userId || "").trim();
   if (!normalizedUserId) {
@@ -518,13 +706,19 @@ export async function ensureStreetProfileForAcademyUser({
   const request = (async () => {
     try {
       const existing = await cmsFindProfileByUserId(normalizedUserId);
-      const seed = buildProfileSeed(normalizedUserId, user, roleHint);
+      const seed = {
+        ...buildProfileSeed(normalizedUserId, user, roleHint),
+        ...(profile || {}),
+      };
 
       if (existing) {
-        const patch = buildPatch(existing, seed);
+        const patch = {
+          ...buildPatch(existing, seed),
+          ...(overwrite ? buildExplicitPatch(profile) : {}),
+        };
 
-        if (!String(existing.username || "").trim()) {
-          patch.username = await resolveAvailableUsername(normalizedUserId, user);
+        if (!String(existing.username || "").trim() || (overwrite && profile?.username)) {
+          patch.username = await resolveAvailableUsername(normalizedUserId, user, profile?.username);
         }
 
         if (Object.keys(patch).length > 0) {
@@ -545,8 +739,9 @@ export async function ensureStreetProfileForAcademyUser({
         }
       }
 
-      const username = await resolveAvailableUsername(normalizedUserId, user);
+      const username = await resolveAvailableUsername(normalizedUserId, user, profile?.username);
       const created = await cmsCreateProfile({
+        ...seed,
         user_id: normalizedUserId,
         display_name: seed.display_name || buildDisplayName(normalizedUserId, user),
         username,
@@ -569,4 +764,15 @@ export async function ensureStreetProfileForAcademyUser({
 
   inflightEnsures.set(normalizedUserId, request);
   return request;
+}
+
+export function ensureStreetProfileForUser(options: Omit<EnsureStreetProfileOptions, "force" | "roleHint"> & {
+  roleHint?: StreetProfileRoleHint | null;
+  force?: boolean;
+}) {
+  return ensureStreetProfileForAcademyUser({
+    ...options,
+    roleHint: options.roleHint ?? "member",
+    force: options.force ?? true,
+  });
 }

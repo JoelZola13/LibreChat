@@ -38,7 +38,7 @@ export function AcademyProfileLink({ compact = false }: AcademyProfileLinkProps)
 
   return (
     <a
-      href="/profile"
+      href="/profiles"
       aria-label="Profile"
       title={profileName}
       className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/80 p-1.5 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-white"

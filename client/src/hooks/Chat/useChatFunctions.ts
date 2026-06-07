@@ -28,7 +28,7 @@ import type { SetterOrUpdater } from 'recoil';
 import type { TAskFunction, ExtendedFile } from '~/common';
 import useSetFilesToDelete from '~/hooks/Files/useSetFilesToDelete';
 import useGetSender from '~/hooks/Conversations/useGetSender';
-import { logger, createDualMessageContent } from '~/utils';
+import { logger, getModelSpecIconURL, createDualMessageContent } from '~/utils';
 import store, { useGetEphemeralAgent } from '~/store';
 import useUserKey from '~/hooks/Input/useUserKey';
 import { useAuthContext } from '~/hooks';
@@ -103,7 +103,28 @@ export default function useChatFunctions({
       return;
     }
 
-    const conversation = cloneDeep(immutableConversation);
+    let conversation = cloneDeep(immutableConversation);
+    const startupConfig = queryClient.getQueryData<TStartupConfig>([QueryKeys.startupConfig]);
+    const urlSpec =
+      typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('spec') : '';
+    const selectedSpecName = urlSpec ?? conversation?.spec ?? '';
+    const selectedSpec =
+      selectedSpecName && startupConfig?.modelSpecs?.list
+        ? startupConfig.modelSpecs.list.find((spec) => spec.name === selectedSpecName)
+        : null;
+    if (selectedSpec?.preset) {
+      conversation = {
+        ...(conversation ?? {}),
+        ...selectedSpec.preset,
+        spec: selectedSpec.name,
+        iconURL: getModelSpecIconURL(selectedSpec),
+        modelLabel:
+          selectedSpec.preset.modelLabel ??
+          selectedSpec.label ??
+          conversation?.modelLabel ??
+          null,
+      } as TConversation;
+    }
 
     const endpoint = conversation?.endpoint;
     if (endpoint === null) {
@@ -179,7 +200,6 @@ export default function useChatFunctions({
     }
 
     const endpointsConfig = queryClient.getQueryData<TEndpointsConfig>([QueryKeys.endpoints]);
-    const startupConfig = queryClient.getQueryData<TStartupConfig>([QueryKeys.startupConfig]);
     const isCustomConversationEndpoint =
       !!endpoint && !Object.values(EModelEndpoint).includes(endpoint as EModelEndpoint);
     const endpointType =

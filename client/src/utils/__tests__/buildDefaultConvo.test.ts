@@ -19,6 +19,33 @@ const baseConversation: TConversation = {
 };
 
 describe('buildDefaultConvo - defaultParamsEndpoint', () => {
+  describe('Street Profile model specs', () => {
+    it('keeps the selected Street Profile agent when the available model list is stale', () => {
+      const preset: TConversation = {
+        ...baseConversation,
+        endpoint: 'Street Bot' as EModelEndpoint,
+        endpointType: EModelEndpoint.custom,
+        model: 'agent/street_profile_agent',
+        spec: 'agent/street_profile_agent',
+        modelLabel: 'Street Profile Agent',
+      };
+
+      const result = buildDefaultConvo({
+        models: ['streetbot-0.1'],
+        conversation: baseConversation,
+        endpoint: 'Street Bot' as EModelEndpoint,
+        lastConversationSetup: preset,
+        defaultParamsEndpoint: EModelEndpoint.openAI,
+      });
+
+      expect(result.endpoint).toBe('Street Bot');
+      expect(result.endpointType).toBe(EModelEndpoint.custom);
+      expect(result.model).toBe('agent/street_profile_agent');
+      expect(result.spec).toBe('agent/street_profile_agent');
+      expect(result.modelLabel).toBe('Street Profile Agent');
+    });
+  });
+
   describe('custom endpoint with defaultParamsEndpoint: anthropic', () => {
     const models = ['anthropic/claude-opus-4.5', 'anthropic/claude-sonnet-4'];
 

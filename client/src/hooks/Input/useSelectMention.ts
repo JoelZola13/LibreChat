@@ -45,9 +45,10 @@ export default function useSelectMention({
       if (!spec) {
         return;
       }
-      const { preset } = spec;
+      const preset = { ...spec.preset };
       preset.iconURL = getModelSpecIconURL(spec);
       preset.spec = spec.name;
+      preset.modelLabel = preset.modelLabel ?? spec.label ?? spec.name;
       const { endpoint } = preset;
       const newEndpoint = endpoint ?? '';
       if (!newEndpoint) {

@@ -287,7 +287,7 @@ export default function BookingPage() {
     if (window.history.length > 1) {
       navigate(-1);
     } else {
-      navigate(`/settings`);
+      navigate(`/myprofile`);
     }
   };
 
@@ -492,7 +492,7 @@ export default function BookingPage() {
                 Back to Profile
               </button>
               <button
-                onClick={() => navigate("/profile")}
+                onClick={() => navigate("/profiles")}
                 style={{
                   padding: "12px 28px",
                   borderRadius: "12px",

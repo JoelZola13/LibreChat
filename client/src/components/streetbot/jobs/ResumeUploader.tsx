@@ -20,21 +20,12 @@ const ACCEPTED_TYPES = [
 ];
 const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
 
-type ReadState = "idle" | "reading" | "ready" | "error";
-
 export default function ResumeUploader({ userId, kind, onComplete, onCancel, colors, isDark, glassCard }: Props) {
   const [file, setFile] = useState<File | null>(null);
+  const [base64Data, setBase64Data] = useState<string>("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [readState, setReadState] = useState<ReadState>("idle");
-  // Store base64 in a ref, not state. Re-renders never blow it away, and
-  // setting it doesn't trigger another render. Read happens immediately on
-  // selection so we use a fresh File reference — Safari / Chrome on macOS
-  // revoke File-object access if you delay too long, which throws
-  // NotReadableError on a later read.
-  const base64DataRef = useRef<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docLabel = kind === "resume" ? "Resume" : "Cover Letter";
 
@@ -55,38 +46,14 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
     }
     setFile(f);
     setLabel(f.name.replace(/\.[^.]+$/, "")); // Default label = filename without extension
-    base64DataRef.current = "";
-    setReadState("reading");
 
-    // Use the modern Promise-based File API (file.arrayBuffer) instead of
-    // FileReader. FileReader hits NotReadableError on macOS for iCloud /
-    // Downloads-folder / sandboxed files. arrayBuffer is more reliable.
-    (async () => {
-      try {
-        const buf = await f.arrayBuffer();
-        // Chunked base64 encoding so large files don't blow the call stack on
-        // String.fromCharCode.
-        const bytes = new Uint8Array(buf);
-        const chunkSize = 0x8000; // 32 KB
-        let binary = "";
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          binary += String.fromCharCode.apply(
-            null,
-            Array.from(bytes.subarray(i, i + chunkSize)) as unknown as number[],
-          );
-        }
-        const base64 = btoa(binary);
-        const dataUrl = `data:${f.type || "application/octet-stream"};base64,${base64}`;
-        base64DataRef.current = dataUrl;
-        setReadState("ready");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setReadState("error");
-        setError(
-          `Couldn't read file: ${msg}. Try copying the file to your Desktop or Downloads folder and re-selecting it (iCloud-synced files sometimes block browser reads).`,
-        );
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setBase64Data(e.target.result as string);
       }
-    })();
+    };
+    reader.readAsDataURL(f);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -97,26 +64,11 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
   }, [handleFile]);
 
   const handleSave = () => {
-    if (!file) {
-      setError("Please choose a file first.");
-      return;
-    }
-    if (readState === "reading") {
-      setError("Still reading the file — try again in a moment.");
-      return;
-    }
-    if (readState === "error" || !base64DataRef.current) {
-      setError("File isn't readable. Click the X above and select the file again.");
-      return;
-    }
+    if (!file || !base64Data) return;
     if (!label.trim()) {
       setError("Please provide a label for your document.");
       return;
     }
-    if (isSaving) return;
-
-    setError("");
-    setIsSaving(true);
 
     const doc: UploadedDocument = {
       id: `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -126,23 +78,14 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
-      base64Data: base64DataRef.current,
+      base64Data,
       keywords: extractBasicKeywords(label.trim()),
       isDefault: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    try {
-      saveUploadedDocument(doc);
-    } catch (err) {
-      // localStorage QuotaExceededError shows up here when the browser is full.
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(`Couldn't save: ${msg}. Try deleting older documents and uploading again.`);
-      setIsSaving(false);
-      return;
-    }
-    setIsSaving(false);
+    saveUploadedDocument(doc);
     onComplete();
   };
 
@@ -263,34 +206,20 @@ export default function ResumeUploader({ userId, kind, onComplete, onCancel, col
         >
           Cancel
         </button>
-        {file && (() => {
-          const busy = isSaving || readState === "reading";
-          const buttonLabel = isSaving
-            ? "Saving…"
-            : readState === "reading"
-              ? "Reading file…"
-              : `Save ${docLabel}`;
-          return (
-            <button
-              onClick={handleSave}
-              disabled={busy}
-              aria-disabled={busy}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: "8px",
-                padding: "12px 28px", borderRadius: "12px", border: "none",
-                background: busy
-                  ? (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")
-                  : "linear-gradient(135deg, #FFD600, #E6C200)",
-                color: busy ? colors.textMuted : "#000",
-                fontWeight: 700, fontSize: "0.85rem",
-                cursor: busy ? "wait" : "pointer",
-                boxShadow: busy ? "none" : "0 4px 14px rgba(255,214,0,0.3)",
-              }}
-            >
-              <Check size={16} /> {buttonLabel}
-            </button>
-          );
-        })()}
+        {file && (
+          <button
+            onClick={handleSave}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "8px",
+              padding: "12px 28px", borderRadius: "12px", border: "none",
+              background: "linear-gradient(135deg, #FFD600, #E6C200)",
+              color: "#000", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(255,214,0,0.3)",
+            }}
+          >
+            <Check size={16} /> Save {docLabel}
+          </button>
+        )}
       </div>
     </div>
   );

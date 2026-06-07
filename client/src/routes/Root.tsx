@@ -52,7 +52,7 @@ function GlobalActions() {
   );
 
   // Only show on chat pages (home / conversations), hide on all other pages
-  const isChatPage = pathname === '/' || pathname === '/home' || pathname.startsWith('/c/');
+  const isChatPage = pathname === '/' || pathname.startsWith('/c/');
   if (!isChatPage) return null;
 
   return (
@@ -156,6 +156,15 @@ export default function Root() {
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
 
   useEffect(() => {
+    if (!isStreetBot) {
+      return;
+    }
+
+    setNavVisible(true);
+    localStorage.setItem('navVisible', JSON.stringify(true));
+  }, [pathname]);
+
+  useEffect(() => {
     if (!isStreetBot || !isAuthenticated || isSmallScreen) {
       return;
     }
@@ -216,13 +225,36 @@ export default function Root() {
       pathname === '/how-it-works' ||
       pathname === '/terms' ||
       pathname === '/privacy' ||
+      pathname === '/agents' ||
+      pathname.startsWith('/agents/') ||
+      pathname === '/profile' ||
+      pathname.startsWith('/profile/') ||
+      pathname === '/profiles' ||
+      pathname.startsWith('/profiles/') ||
+      pathname === '/creatives' ||
+      pathname.startsWith('/creatives/') ||
+      pathname === '/groups' ||
+      pathname.startsWith('/groups/') ||
+      pathname === '/word-on-the-street' ||
+      pathname.startsWith('/word-on-the-street/') ||
+      pathname === '/forum' ||
+      pathname.startsWith('/forum/') ||
       pathname === '/news' ||
       pathname.startsWith('/news/') ||
+      pathname === '/notifications' ||
+      pathname.startsWith('/notifications/') ||
+      pathname === '/messages' ||
+      pathname.startsWith('/messages/') ||
       pathname === '/directory' ||
       pathname.startsWith('/directory/') ||
       pathname === '/gallery' ||
       pathname.startsWith('/gallery/') ||
-      pathname.startsWith('/creatives/');
+      pathname === '/jobs' ||
+      pathname.startsWith('/jobs/') ||
+      pathname === '/academy' ||
+      pathname.startsWith('/academy/') ||
+      pathname === '/learning' ||
+      pathname.startsWith('/learning/');
 
     if (!isPublicPage) {
       // Auth is still resolving (silentRefresh in flight) — show a minimal
@@ -242,10 +274,22 @@ export default function Root() {
         <GlobalActions />
         <div className="flex" style={{ height: '100dvh', position: 'relative', zIndex: 1 }}>
           <div className="relative z-0 flex h-full w-full overflow-hidden">
-            <div className="relative flex h-full max-w-full flex-1 flex-col overflow-y-auto">
-              <Outlet
-                context={{ navVisible: false, setNavVisible: () => {} } satisfies ContextType}
-              />
+            {!isDirectory && <Nav navVisible={navVisible} setNavVisible={setNavVisible} />}
+            <div
+              className="relative flex h-full max-w-full flex-1 flex-col overflow-y-auto"
+              style={
+                !isDirectory && isSmallScreen
+                  ? {
+                      transform: navVisible ? `translateX(${NAV_WIDTH.MOBILE}px)` : 'translateX(0)',
+                      transition: 'transform 0.2s ease-out',
+                    }
+                  : undefined
+              }
+            >
+              {!isDirectory && (
+                <MobileNav navVisible={navVisible} setNavVisible={setNavVisible} />
+              )}
+              <Outlet context={{ navVisible, setNavVisible } satisfies ContextType} />
             </div>
           </div>
         </div>

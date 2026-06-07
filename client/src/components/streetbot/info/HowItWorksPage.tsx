@@ -113,7 +113,7 @@ const steps = [
 
 export default function HowItWorksPage() {
   const { isMobile, isTablet } = useResponsive();
-  const { colors } = useGlassStyles();
+  const { isDark, colors } = useGlassStyles();
   const navigate = useNavigate();
 
   return (
@@ -135,7 +135,7 @@ export default function HowItWorksPage() {
               background: 'transparent',
               border: 'none',
               padding: 0,
-              color: '#FDD30B',
+              color: isDark ? '#FDD30B' : '#111827',
               fontSize: 15,
               fontWeight: 500,
               fontFamily: 'Rubik, sans-serif',
@@ -260,7 +260,6 @@ export default function HowItWorksPage() {
             )}
           </div>
         ))}
-
       </main>
       <SiteFooter />
     </div>

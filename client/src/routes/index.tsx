@@ -94,9 +94,6 @@ const SocialMediaPage = lazy(() => import('~/components/streetbot/social-media/S
 const StoragePage = lazy(() => import('~/components/streetbot/storage/StoragePage'));
 const DatabasePage = lazy(() => import('~/components/streetbot/database/DatabasePage'));
 const GrantWriterPage = lazy(() => import('~/components/streetbot/grantwriter/GrantWriterPage'));
-const AgentMarketplacePage = lazy(
-  () => import('~/components/streetbot/agents/AgentMarketplacePage'),
-);
 const CreativeProfilePage = lazy(
   () => import('~/components/streetbot/profile/CreativeProfilePage'),
 );
@@ -174,10 +171,35 @@ const CreativeAcademyRedirect = () => {
   const { username } = useParams<{ username?: string }>();
   return (
     <Navigate
-      to={username ? `/creatives/${username}?tab=academy` : '/profile?tab=academy'}
+      to={username ? `/profiles/${username}?tab=academy` : '/profiles?tab=academy'}
       replace
     />
   );
+};
+
+const ProfilesRedirect = () => {
+  const location = useLocation();
+  return <Navigate to={`/profiles${location.search}${location.hash}`} replace />;
+};
+
+const LegacyCreativeProfileRedirect = ({
+  target,
+}: {
+  target?: 'academy-section' | 'book';
+}) => {
+  const { username } = useParams<{ username?: string }>();
+  const location = useLocation();
+  const base = username ? `/profiles/${username}` : '/profiles';
+  const suffix = target === 'book' ? '/book' : '';
+  const academyQuery = target === 'academy-section' ? '?tab=academy' : '';
+  const search = academyQuery || location.search;
+  return <Navigate to={`${base}${suffix}${search}${location.hash}`} replace />;
+};
+
+const LegacyForumRedirect = () => {
+  const location = useLocation();
+  const suffix = location.pathname.replace(/^\/forum/, '');
+  return <Navigate to={`/word-on-the-street${suffix}${location.search}${location.hash}`} replace />;
 };
 
 // Local 3180 Analytics provider — gated on VITE_ANALYTICS_ENABLED.
@@ -322,20 +344,53 @@ export const router = createBrowserRouter(
                 </Suspense>
               ),
             },
-            { path: 'agents', element: sbPage(AgentMarketplacePage) },
-            { path: 'agents/:team', element: sbPage(AgentMarketplacePage) },
+            {
+              path: 'agents',
+              element: (
+                <MarketplaceProvider>
+                  <Suspense fallback={<SBPageFallback />}>
+                    <AgentMarketplace />
+                  </Suspense>
+                </MarketplaceProvider>
+              ),
+            },
+            {
+              path: 'agents/:category',
+              element: (
+                <MarketplaceProvider>
+                  <Suspense fallback={<SBPageFallback />}>
+                    <AgentMarketplace />
+                  </Suspense>
+                </MarketplaceProvider>
+              ),
+            },
             // Street Bot Pro pages — shared across both variants
-            { path: 'profile', element: guardedSbPage('profile', ProfilePage) },
-            { path: 'profile/*', element: guardedSbPage('profile', ProfilePage) },
+            { path: 'profile', element: <ProfilesRedirect /> },
+            { path: 'profile/*', element: <ProfilesRedirect /> },
+            { path: 'profiles', element: guardedSbPage('profile', ProfilePage) },
+            { path: 'profiles/:username/academy', element: <CreativeAcademyRedirect /> },
+            {
+              path: 'profiles/:username/academy/:section',
+              element: guardedSbPage('profile', StreetProfileAcademySectionPage),
+            },
+            { path: 'profiles/:username/book', element: guardedSbPage('profile', BookingPage) },
+            { path: 'profiles/:username', element: guardedSbPage('profile', CreativeProfilePage) },
+            { path: 'profiles/*', element: guardedSbPage('profile', ProfilePage) },
             { path: 'creatives/:username/academy', element: <CreativeAcademyRedirect /> },
             {
               path: 'creatives/:username/academy/:section',
-              element: guardedSbPage('profile', StreetProfileAcademySectionPage),
+              element: <LegacyCreativeProfileRedirect target="academy-section" />,
             },
-            { path: 'creatives/:username', element: guardedSbPage('profile', CreativeProfilePage) },
-            { path: 'creatives/:username/book', element: guardedSbPage('profile', BookingPage) },
+            { path: 'creatives/:username/book', element: <LegacyCreativeProfileRedirect target="book" /> },
+            { path: 'creatives/:username', element: <LegacyCreativeProfileRedirect /> },
             { path: 'groups', element: guardedSbPage('groups', GroupsPage) },
+            { path: 'groups/create', element: guardedSbPage('groups', GroupsPage) },
             { path: 'groups/:groupId', element: guardedSbPage('groups', GroupDetailPage) },
+            { path: 'groups/*', element: guardedSbPage('groups', GroupsPage) },
+            { path: 'word-on-the-street', element: guardedSbPage('forum', ForumPage) },
+            { path: 'word-on-the-street/*', element: guardedSbPage('forum', ForumPage) },
+            { path: 'forum', element: <LegacyForumRedirect /> },
+            { path: 'forum/*', element: <LegacyForumRedirect /> },
             { path: 'news/dashboard', element: guardedSbPage('news', NewsDashboardPage) },
             { path: 'news/editor', element: guardedSbPage('news', NewsEditorPage) },
             { path: 'news/editor/:id', element: guardedSbPage('news', NewsEditorPage) },
@@ -395,13 +450,17 @@ export const router = createBrowserRouter(
               path: 'settings/academy/:section',
               element: guardedSbPage('settings', StreetProfileAcademySectionPage),
             },
+            {
+              path: 'myprofile/academy/:section',
+              element: guardedSbPage('settings', StreetProfileAcademySectionPage),
+            },
+            { path: 'myprofile', element: guardedSbPage('settings', MyProfilePage) },
+            { path: 'myprofile/*', element: guardedSbPage('settings', MyProfilePage) },
             { path: 'settings', element: guardedSbPage('settings', MyProfilePage) },
             { path: 'settings/*', element: guardedSbPage('settings', MyProfilePage) },
             // StreetBot-only pages
             ...(isStreetBot
               ? [
-                  { path: 'forum', element: guardedSbPage('forum', ForumPage) },
-                  { path: 'forum/*', element: guardedSbPage('forum', ForumPage) },
                   { path: 'gallery', element: guardedSbPage('gallery', GalleryPage) },
                   { path: 'gallery/*', element: guardedSbPage('gallery', GalleryPage) },
                   { path: 'calendar', element: guardedSbPage('calendar', CalendarPage) },

@@ -6,12 +6,38 @@
  */
 import axios from 'axios';
 import { emitAcademyDataUpdated, shouldBroadcastAcademyDataUpdate } from './academyDataSync';
-import { SB_API_BASE } from './apiConfig';
+import { SB_API_BASE, shouldUseLocalReadApiProxy, streetBotReadApiPath } from './apiConfig';
+
+function normalizeAcademyEnrollmentPath(path: string, method: string): string {
+  if (method !== 'GET') return path;
+
+  const [basePath, queryString] = path.split('?');
+  const isEnrollmentCollection =
+    basePath === '/api/academy/enrollments' || basePath === '/sbapi/api/academy/enrollments';
+
+  if (!isEnrollmentCollection || !queryString) return path;
+
+  const params = new URLSearchParams(queryString);
+  const userId = params.get('user_id');
+  if (!userId) return path;
+
+  params.delete('user_id');
+  const rewrittenBase = basePath.startsWith('/sbapi')
+    ? '/sbapi/api/academy/enrollments'
+    : '/api/academy/enrollments';
+  const remainingQuery = params.toString();
+
+  return `${rewrittenBase}/${encodeURIComponent(userId)}${remainingQuery ? `?${remainingQuery}` : ''}`;
+}
 
 /** Read the current LibreChat JWT from axios defaults. */
 function getAuthToken(): string | undefined {
   const header = axios.defaults.headers.common['Authorization'];
   if (typeof header === 'string' && header.startsWith('Bearer ')) {
+    const token = header.slice('Bearer '.length).trim();
+    if (!token || token === 'undefined' || token === 'null') {
+      return undefined;
+    }
     return header;
   }
   return undefined;
@@ -25,12 +51,19 @@ function getAuthToken(): string | undefined {
  * @param init  Standard RequestInit options
  */
 export async function sbFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const url = path.startsWith('/sbapi') ? path : `${SB_API_BASE}${path}`;
-  const authHeader = getAuthToken();
   const normalizedMethod = String(init.method || 'GET').toUpperCase();
+  const normalizedPath = normalizeAcademyEnrollmentPath(path, normalizedMethod);
+  const relativeUrl =
+    normalizedPath.startsWith('/sbapi') || normalizedPath.startsWith('/api/streetbot/')
+      ? normalizedPath
+      : `${SB_API_BASE}${normalizedPath}`;
+  const url = shouldUseLocalReadApiProxy(normalizedMethod)
+    ? streetBotReadApiPath(relativeUrl)
+    : relativeUrl;
+  const authHeader = getAuthToken();
 
   const headers: Record<string, string> = {
-    ...(init.headers as Record<string, string> || {}),
+    ...((init.headers as Record<string, string>) || {}),
   };
 
   if (authHeader) {
@@ -46,7 +79,9 @@ export async function sbFetch(path: string, init: RequestInit = {}): Promise<Res
   if (!init.signal) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15_000);
-    const response = await fetch(url, { ...init, headers, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+    const response = await fetch(url, { ...init, headers, signal: controller.signal }).finally(() =>
+      clearTimeout(timeoutId),
+    );
     if (shouldBroadcastAcademyDataUpdate(url, normalizedMethod, response)) {
       emitAcademyDataUpdated({ method: normalizedMethod, path: url });
     }
@@ -61,7 +96,10 @@ export async function sbFetch(path: string, init: RequestInit = {}): Promise<Res
 }
 
 /** Convenience: GET + parse JSON */
-export async function sbGet<T = unknown>(path: string, params?: Record<string, string>): Promise<T> {
+export async function sbGet<T = unknown>(
+  path: string,
+  params?: Record<string, string>,
+): Promise<T> {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
   const res = await sbFetch(`${path}${qs}`);
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);

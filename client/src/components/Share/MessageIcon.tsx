@@ -5,6 +5,11 @@ import type { TMessageProps } from '~/common';
 import MessageEndpointIcon from '../Endpoints/MessageEndpointIcon';
 import ConvoIconURL from '~/components/Endpoints/ConvoIconURL';
 import { getIconEndpoint, logger } from '~/utils';
+import StreetAgentIcon, {
+  getMarketplaceAgentIconId,
+  isStreetBotModelId,
+} from '~/components/Agents/StreetAgentIcon';
+import StreetBotMarketplaceIcon from '~/components/Agents/StreetBotMarketplaceIcon';
 
 export default function MessageIcon(
   props: Pick<TMessageProps, 'message' | 'conversation'> & {
@@ -32,6 +37,18 @@ export default function MessageIcon(
   const assistantAvatar = (assistant ? assistant.metadata?.avatar : '') ?? '';
   const agentName = (agent ? agent.name : '') ?? '';
   const agentAvatar = (agent ? agent?.avatar?.filepath : '') ?? '';
+  const selectedModel = String(message?.model ?? conversation?.model ?? '');
+  const messageSettingsRecord = messageSettings as Record<string, unknown>;
+  const selectedAgentIconId = getMarketplaceAgentIconId(
+    String((conversation as { spec?: string | null } | null)?.spec ?? ''),
+    String(message?.sender ?? ''),
+    String(messageSettingsRecord.sender ?? ''),
+    String(messageSettingsRecord.chatGptLabel ?? ''),
+    String(messageSettingsRecord.modelLabel ?? ''),
+    String(message?.modelLabel ?? conversation?.modelLabel ?? ''),
+    selectedModel,
+    iconURL,
+  );
   const avatarURL = useMemo(() => {
     let result = '';
     if (assistant) {
@@ -49,7 +66,19 @@ export default function MessageIcon(
     agentName,
     agentAvatar,
   });
-  if (message?.isCreatedByUser !== true && iconURL && iconURL.includes('http')) {
+  if (message?.isCreatedByUser !== true && iconURL) {
+    if (selectedAgentIconId) {
+      return (
+        <span className="flex h-[28.8px] w-[28.8px] items-center justify-center">
+          <StreetAgentIcon id={selectedAgentIconId} className="h-5 w-5" />
+        </span>
+      );
+    }
+
+    if (isStreetBotModelId(selectedModel)) {
+      return <StreetBotMarketplaceIcon className="h-[28.8px] w-[28.8px]" />;
+    }
+
     return (
       <ConvoIconURL
         iconURL={iconURL}
@@ -79,11 +108,23 @@ export default function MessageIcon(
     );
   }
 
+  if (selectedAgentIconId) {
+    return (
+      <span className="flex h-[28.8px] w-[28.8px] items-center justify-center">
+        <StreetAgentIcon id={selectedAgentIconId} className="h-5 w-5" />
+      </span>
+    );
+  }
+
+  if (isStreetBotModelId(selectedModel)) {
+    return <StreetBotMarketplaceIcon className="h-[28.8px] w-[28.8px]" />;
+  }
+
   return (
     <MessageEndpointIcon
       {...messageSettings}
       endpoint={endpoint}
-      iconURL={avatarURL}
+      iconURL={avatarURL || iconURL}
       model={message?.model ?? conversation?.model}
       assistantName={assistantName}
       agentName={agentName}

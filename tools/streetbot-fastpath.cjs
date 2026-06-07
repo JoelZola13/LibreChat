@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { logger } = require('@librechat/data-schemas');
@@ -11,6 +12,18 @@ const {
   getViolationInfo,
 } = require('@librechat/api');
 const { saveMessage, saveConvo, getMessages } = require('~/models');
+let PgPool;
+try {
+  ({ Pool: PgPool } = require('pg'));
+} catch (_) {
+  PgPool = null;
+}
+let streetBotTelemetry;
+try {
+  streetBotTelemetry = require('/app/tools/streetbot-telemetry.cjs');
+} catch (_) {
+  streetBotTelemetry = require('./streetbot-telemetry.cjs');
+}
 const {
   annotateStreetBotRequestTrace,
   applyStreetBotSpanAttributes,
@@ -20,7 +33,7 @@ const {
   getStreetBotTraceIdentifiers,
   summarizeStreetBotText,
   withStreetBotSpan,
-} = require('/app/tools/streetbot-telemetry.cjs');
+} = streetBotTelemetry;
 
 const SERVICE_KEYWORDS = [
   'service',
@@ -425,6 +438,116 @@ const STREETBOT_TEXT_STREAM_DELAY_MS = 38;
 const TITLECASE_SERVICE_NAME_PATTERN =
   /\b(?:[A-Z][A-Za-z'’&.-]*)(?:\s+(?:[A-Z][A-Za-z'’&.-]*|of|the|and|for|to|at|on)){1,5}\b/;
 
+const STREET_PROFILE_AGENT_IDS = new Set([
+  'agent/street_profile_agent',
+  'agent/profiles_agent',
+  'agent/messaging_agent',
+  'agent/groups_agent',
+  'agent/word_on_the_street_agent',
+]);
+const STREET_PROFILE_AGENT_LABEL_TO_ID = new Map([
+  ['street profile agent', 'agent/street_profile_agent'],
+  ['profiles agent', 'agent/profiles_agent'],
+  ['messaging agent', 'agent/messaging_agent'],
+  ['messages agent', 'agent/messaging_agent'],
+  ['groups agent', 'agent/groups_agent'],
+  ['word on the street agent', 'agent/word_on_the_street_agent'],
+]);
+const STREET_PROFILE_AGENT_ICON_URLS = new Map([
+  ['agent/street_profile_agent', '/images/agent-marketplace-icons/street-profile.svg?v=20260606a'],
+  ['agent/profiles_agent', '/images/agent-marketplace-icons/profiles.svg?v=20260605b'],
+  ['agent/messaging_agent', '/images/agent-marketplace-icons/messaging.svg?v=20260605b'],
+  ['agent/groups_agent', '/images/agent-marketplace-icons/groups.svg?v=20260605b'],
+  ['agent/word_on_the_street_agent', '/images/agent-marketplace-icons/word-on-the-street.svg?v=20260605b'],
+]);
+const STREET_PROFILE_API_BASES = [
+  process.env.STREET_PROFILE_AGENT_API_BASE,
+  process.env.NANOBOT_STREET_PROFILE_API_BASE,
+  'http://localhost:8003',
+  'http://host.docker.internal:3180/sbapi',
+  'http://localhost:3180/sbapi',
+].filter(Boolean);
+const STREET_PROFILE_SOCIAL_DB_URLS = [
+  process.env.STREET_PROFILE_SOCIAL_DATABASE_URL,
+  process.env.SV_SOCIAL_DATABASE_URL,
+  process.env.SOCIAL_DATABASE_URL,
+  process.env.DATABASE_URL,
+].filter(Boolean);
+let streetProfilePgPool;
+let streetProfilePgPoolKey = '';
+
+const LOCAL_STREET_PROFILE_GROUPS = [
+  {
+    name: 'Street Voices Creators Circle',
+    member_count: 42,
+    message_count: 18,
+    tags: ['collaboration', 'portfolio', 'community'],
+    last_message: 'Fatima is looking for one more photographer for the weekend shoot.',
+  },
+  {
+    name: 'Media Training Cohort',
+    member_count: 31,
+    message_count: 24,
+    tags: ['academy', 'media-training', 'assignments'],
+    last_message: 'The interview checklist is pinned in Messages before Thursday lab.',
+  },
+  {
+    name: 'Toronto Photographers',
+    member_count: 128,
+    message_count: 73,
+    tags: ['photography', 'toronto', 'photo-walks'],
+    last_message:
+      'Saturday golden-hour walk is starting near Kensington Market. Bring a 35mm if you have one.',
+  },
+  {
+    name: 'Black Videographers Network',
+    member_count: 96,
+    message_count: 61,
+    tags: ['videography', 'black-creatives', 'crew-calls'],
+    last_message: 'Looking for a second shooter for a community safety reel this weekend.',
+  },
+  {
+    name: 'Grant & Funding Leads',
+    member_count: 143,
+    message_count: 88,
+    tags: ['grants', 'funding', 'deadlines'],
+    last_message: 'New arts council deadline added. The budget template is pinned.',
+  },
+];
+
+const LOCAL_WORD_ON_THE_STREET_POSTS = [
+  {
+    title: 'REEL: the crowd finishing the hook at last night\'s open mic',
+    author_name: 'DJ Solaris',
+    category_name: 'Success Stories',
+    reply_count: 42,
+    like_count: 156,
+  },
+  {
+    title: 'Looking for collaborators for a Street Voices mini-doc',
+    author_name: 'Fatima Hassan',
+    category_name: 'Creative Collaborations',
+    reply_count: 14,
+    like_count: 39,
+  },
+  {
+    title: 'First media-training cohort is ready for interview week',
+    author_name: 'Suki Park',
+    category_name: 'Success Stories',
+    reply_count: 9,
+    like_count: 28,
+  },
+  {
+    title: 'Mural progress check: youth wall needs two more painters',
+    author_name: 'Ghost',
+    category_name: 'Creative Collaborations',
+    reply_count: 17,
+    like_count: 51,
+  },
+];
+
+const MESSAGE_DRAFT_FENCE = /```street-profile-message-draft\s*([\s\S]*?)```/gi;
+
 let ragModulePromise;
 
 function isStreetBotEndpoint(endpoint) {
@@ -456,6 +579,1045 @@ function normalizeStreetBotResponseText(value) {
   }
 
   return text.slice(lastMatch.index).trim();
+}
+
+function normalizeStreetProfileAgentId(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return '';
+  }
+  const normalized = text
+    .replace(/^spec-agent\//, 'agent/')
+    .replace(/^spec-/, '')
+    .replace(/^agent%2F/i, 'agent/')
+    .toLowerCase();
+  if (STREET_PROFILE_AGENT_IDS.has(normalized)) {
+    return normalized;
+  }
+  return STREET_PROFILE_AGENT_LABEL_TO_ID.get(normalized) || '';
+}
+
+function getSelectedStreetProfileAgent(req) {
+  const fastPath = req?._streetbotFastPath || {};
+  const values = [
+    fastPath.selectedSpec,
+    fastPath.selectedModel,
+    fastPath.selectedLabel,
+    req?.body?.spec,
+    req?.body?.model,
+    req?.body?.modelLabel,
+    req?.body?.modelDisplayLabel,
+    req?.body?.endpointOption?.spec,
+    req?.body?.endpointOption?.modelOptions?.model,
+    req?.body?.endpointOption?.model_parameters?.model,
+    req?.body?.endpointOption?.model_parameters?.modelLabel,
+  ];
+  for (const value of values) {
+    const agentId = normalizeStreetProfileAgentId(value);
+    if (agentId) {
+      return agentId;
+    }
+  }
+  return '';
+}
+
+function getSelectedStreetProfileAgentIconURL(req) {
+  const selectedAgent = getSelectedStreetProfileAgent(req);
+  return STREET_PROFILE_AGENT_ICON_URLS.get(selectedAgent) || '';
+}
+
+async function fetchStreetProfileJson(pathname) {
+  for (const base of STREET_PROFILE_API_BASES) {
+    const url = `${String(base).replace(/\/$/, '')}${pathname}`;
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(4000),
+      });
+      const contentType = String(response.headers.get('content-type') || '');
+      if (!response.ok || !contentType.includes('application/json')) {
+        continue;
+      }
+      return await response.json();
+    } catch (error) {
+      logger.debug('[street-profile-agent] local API fetch failed', {
+        url,
+        error: error?.message || String(error || ''),
+      });
+    }
+  }
+  return null;
+}
+
+function getStreetProfileDockerPgUrls() {
+  if (!PgPool) {
+    return [];
+  }
+  try {
+    const output = childProcess.execFileSync(
+      'docker',
+      ['inspect', 'nanobot-social-postgres', '--format', '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 1200 },
+    );
+    return output
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((host) => `postgresql://social:social_password@${host}:5432/social`);
+  } catch (error) {
+    logger.debug('[street-profile-agent] local social postgres inspect failed', {
+      error: error?.message || String(error || ''),
+    });
+    return [];
+  }
+}
+
+function getStreetProfilePgCandidates() {
+  const urls = [
+    ...STREET_PROFILE_SOCIAL_DB_URLS,
+    'postgresql://social:social_password@localhost:5432/social',
+    'postgresql://social:social_password@nanobot-social-postgres:5432/social',
+    ...getStreetProfileDockerPgUrls(),
+  ];
+  return [...new Set(urls.filter(Boolean))];
+}
+
+async function withStreetProfilePgClient(work) {
+  if (!PgPool) {
+    return null;
+  }
+
+  const candidates = getStreetProfilePgCandidates();
+  if (streetProfilePgPool && streetProfilePgPoolKey) {
+    candidates.unshift(streetProfilePgPoolKey);
+  }
+
+  for (const connectionString of [...new Set(candidates)]) {
+    let pool = streetProfilePgPoolKey === connectionString ? streetProfilePgPool : null;
+    try {
+      if (!pool) {
+        pool = new PgPool({
+          connectionString,
+          max: 1,
+          connectionTimeoutMillis: 1500,
+          idleTimeoutMillis: 10_000,
+          query_timeout: 5000,
+        });
+      }
+      const client = await pool.connect();
+      try {
+        const result = await work(client);
+        streetProfilePgPool = pool;
+        streetProfilePgPoolKey = connectionString;
+        return result;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      if (pool && pool !== streetProfilePgPool) {
+        await pool.end().catch(() => {});
+      }
+      logger.debug('[street-profile-agent] local social postgres query failed', {
+        host: connectionString.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@'),
+        error: error?.message || String(error || ''),
+      });
+    }
+  }
+
+  return null;
+}
+
+function formatSocialProfileList(rows) {
+  return rows
+    .slice(0, 5)
+    .map((profile) => {
+      const username = profile.username ? `@${profile.username}` : '';
+      return `- ${[profile.display_name, username, profile.location].filter(Boolean).join(' | ')}`;
+    })
+    .join('\n');
+}
+
+function formatDbGroupList(rows) {
+  return rows
+    .slice(0, 8)
+    .map(
+      (group) =>
+        `- ${group.name || group.slug || group.id}: ${Number(group.member_count || 0).toLocaleString()} members, ${Number(group.message_count || 0).toLocaleString()} messages, ${group.type || 'channel'}`,
+    )
+    .join('\n');
+}
+
+function formatDbMessageList(rows) {
+  return rows
+    .slice(0, 8)
+    .map((message) => {
+      const channel = message.channel_name || message.channel_slug || 'channel';
+      const author = message.display_name || message.username || 'Unknown';
+      const content = String(message.content || '').replace(/\s+/g, ' ').trim();
+      return `- ${channel}: ${author} - ${content.slice(0, 180)}`;
+    })
+    .join('\n');
+}
+
+function formatDbPostList(rows) {
+  return rows
+    .slice(0, 8)
+    .map((post) => {
+      const author = post.display_name || post.username || 'Unknown';
+      const content = String(post.content || '').replace(/\s+/g, ' ').trim();
+      return `- ${author}: ${content.slice(0, 180)} (${Number(post.like_count || 0).toLocaleString()} likes, ${Number(post.comment_count || 0).toLocaleString()} comments)`;
+    })
+    .join('\n');
+}
+
+function cleanStreetProfileItem(item) {
+  if (!item || typeof item !== 'object') {
+    return {};
+  }
+  const next = {};
+  for (const [key, value] of Object.entries(item)) {
+    if (value == null) {
+      continue;
+    }
+    if (value instanceof Date) {
+      next[key] = value.toISOString();
+      continue;
+    }
+    if (typeof value === 'bigint') {
+      next[key] = Number(value);
+      continue;
+    }
+    next[key] = value;
+  }
+  return next;
+}
+
+function buildStreetProfileCardsPayload(kind, title, total, items, extra = {}) {
+  return {
+    kind,
+    title,
+    total: Number(total || 0),
+    items: Array.isArray(items) ? items.map(cleanStreetProfileItem).slice(0, 8) : [],
+    ...extra,
+  };
+}
+
+function withStreetProfileCards(intro, payload) {
+  return `${String(intro || '').trim()}\n\n\`\`\`street-profile-results\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+}
+
+function normalizeStreetProfileUsername(value = '') {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/@.*$/, '')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 36);
+}
+
+async function uniqueStreetProfileUsername(client, baseUsername) {
+  const base = normalizeStreetProfileUsername(baseUsername) || 'street-profile-user';
+  let candidate = base;
+  for (let index = 0; index < 50; index += 1) {
+    const { rows } = await client.query('SELECT id FROM users WHERE username = $1 LIMIT 1', [
+      candidate,
+    ]);
+    if (!rows.length) {
+      return candidate;
+    }
+    candidate = `${base}-${index + 2}`;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
+
+function getLibreChatIdentityForStreetProfile(req) {
+  const user = req?.user || {};
+  const id = String(user.id || user._id || '').trim();
+  const email = String(user.email || '').trim();
+  const name = String(user.name || user.username || email || 'Street Profile User').trim();
+  return {
+    casdoorId: String(user.openidId || user.idOnTheSource || id || email).trim(),
+    username: String(user.username || email || name).trim(),
+    displayName: name,
+    email: email || `${(id || name).replace(/[^a-zA-Z0-9._-]/g, '_')}@streetvoices.local`,
+    avatarUrl: String(user.avatar || user.image || '').trim() || null,
+  };
+}
+
+async function ensureLocalSocialUserForLibreChat(req) {
+  const identity = getLibreChatIdentityForStreetProfile(req);
+  if (!identity.casdoorId) {
+    return null;
+  }
+
+  return withStreetProfilePgClient(async (client) => {
+    const existing = await client.query(
+      `SELECT id, username, display_name, email, avatar_url
+       FROM users
+       WHERE casdoor_id = $1 OR email = $2
+       LIMIT 1`,
+      [identity.casdoorId, identity.email],
+    );
+    if (existing.rows[0]) {
+      const updated = await client.query(
+        `UPDATE users
+         SET casdoor_id = $2,
+             display_name = $3,
+             email = $4,
+             avatar_url = $5,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, username, display_name, email, avatar_url`,
+        [
+          existing.rows[0].id,
+          identity.casdoorId,
+          identity.displayName,
+          identity.email,
+          identity.avatarUrl,
+        ],
+      );
+      return updated.rows[0] || existing.rows[0];
+    }
+
+    const username = await uniqueStreetProfileUsername(
+      client,
+      identity.username || identity.email || identity.displayName,
+    );
+    const inserted = await client.query(
+      `INSERT INTO users (id, casdoor_id, username, display_name, email, avatar_url, created_at, updated_at)
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())
+       RETURNING id, username, display_name, email, avatar_url`,
+      [identity.casdoorId, username, identity.displayName, identity.email, identity.avatarUrl],
+    );
+    return inserted.rows[0] || null;
+  });
+}
+
+function stripRecipientNoise(value = '') {
+  return String(value || '')
+    .trim()
+    .replace(/^@/, '')
+    .replace(/\s+(?:a message|message|dm)$/i, '')
+    .trim();
+}
+
+function extractStreetProfileMessageRequest(value = '') {
+  const text = String(value || '').trim();
+  if (!text) {
+    return null;
+  }
+
+  const patterns = [
+    /\b(?:message|dm)\s+(.+?)\s+(?:saying|that says|and say|to say|with)\s+["“]?([\s\S]+?)["”]?\s*$/i,
+    /\b(?:send|write)\s+(?:a\s+)?(?:message|dm)\s+to\s+(.+?)\s+(?:saying|that says|and say|to say|with|:)\s+["“]?([\s\S]+?)["”]?\s*$/i,
+    /\b(?:tell)\s+(.+?)\s+["“]([\s\S]+?)["”]\s*$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) {
+      continue;
+    }
+    const recipientQuery = stripRecipientNoise(match[1]);
+    const content = String(match[2] || '')
+      .trim()
+      .replace(/^["“]+|["”]+$/g, '')
+      .trim();
+    if (recipientQuery && content) {
+      return { recipientQuery, content };
+    }
+  }
+
+  return null;
+}
+
+function isStreetProfileMessageConfirmation(value = '') {
+  return /\b(yes|yep|yeah|send it|send that|confirm|confirmed|go ahead|do it)\b/i.test(
+    String(value || '').trim(),
+  );
+}
+
+async function findLocalSocialRecipient(query, senderId = '') {
+  const normalized = String(query || '').trim();
+  if (!normalized) {
+    return null;
+  }
+  const handle = normalized.replace(/^@/, '').toLowerCase();
+  return withStreetProfilePgClient(async (client) => {
+    const { rows } = await client.query(
+      `SELECT id, username, display_name, email, avatar_url, is_agent
+       FROM users
+       WHERE id <> COALESCE($2, '')
+         AND (
+           lower(username) = lower($1)
+           OR lower(display_name) = lower($1)
+           OR lower(email) = lower($1)
+           OR username ILIKE $3
+           OR display_name ILIKE $3
+           OR email ILIKE $3
+         )
+       ORDER BY
+         CASE
+           WHEN lower(username) = lower($1) THEN 0
+           WHEN lower(display_name) = lower($1) THEN 1
+           WHEN lower(email) = lower($1) THEN 2
+           ELSE 3
+         END,
+         is_agent ASC,
+         display_name ASC
+       LIMIT 5`,
+      [handle || normalized, senderId, `%${normalized}%`],
+    );
+    return rows[0] || null;
+  });
+}
+
+async function findDirectoryProfileForMessage(query) {
+  const params = new URLSearchParams({ limit: '3', page: '1', view: 'directory', search: query });
+  const data = await fetchStreetProfileJson(`/street-profiles/directory?${params.toString()}`);
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.profiles) ? data.profiles : [];
+  return items[0] || null;
+}
+
+function buildStreetProfileMessageDraftText(draft) {
+  const recipientName = draft.recipient?.display_name || draft.recipient?.username || draft.recipientQuery;
+  return [
+    `I found ${recipientName} in local Messages. Here is the draft I can send:`,
+    '',
+    `> ${draft.content}`,
+    '',
+    'Reply “send it” to send this DM.',
+    '',
+    '```street-profile-message-draft',
+    JSON.stringify(draft, null, 2),
+    '```',
+  ].join('\n');
+}
+
+function extractLatestStreetProfileMessageDraft(messages = []) {
+  for (const message of [...messages].reverse()) {
+    const text = String(message?.text || '').trim();
+    if (!text || !text.includes('```street-profile-message-draft')) {
+      continue;
+    }
+    MESSAGE_DRAFT_FENCE.lastIndex = 0;
+    let match;
+    let latest = null;
+    while ((match = MESSAGE_DRAFT_FENCE.exec(text)) !== null) {
+      try {
+        latest = JSON.parse(match[1]);
+      } catch (_) {
+        latest = null;
+      }
+    }
+    if (latest?.recipient?.id && latest?.content && !latest.sent) {
+      return latest;
+    }
+  }
+  return null;
+}
+
+async function ensureDmChannelAndSendMessage(senderId, recipientId, content, metadata = {}) {
+  return withStreetProfilePgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const existing = await client.query(
+        `SELECT c.id
+         FROM channels c
+         WHERE c.type = 'DM'
+           AND c.is_archived = false
+           AND EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = $1)
+           AND EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = $2)
+         LIMIT 1`,
+        [senderId, recipientId],
+      );
+
+      let channelId = existing.rows[0]?.id;
+      if (!channelId) {
+        const created = await client.query(
+          `INSERT INTO channels (id, name, slug, type, created_at, updated_at)
+           VALUES (gen_random_uuid()::text, NULL, $1, 'DM', NOW(), NOW())
+           RETURNING id`,
+          [`dm-${senderId}-${recipientId}`],
+        );
+        channelId = created.rows[0].id;
+        await client.query(
+          `INSERT INTO channel_members (id, channel_id, user_id, role, joined_at)
+           VALUES
+             (gen_random_uuid()::text, $1, $2, 'member', NOW()),
+             (gen_random_uuid()::text, $1, $3, 'member', NOW())
+           ON CONFLICT (channel_id, user_id) DO NOTHING`,
+          [channelId, senderId, recipientId],
+        );
+      }
+
+      const message = await client.query(
+        `INSERT INTO messages (id, channel_id, author_id, content, metadata, created_at, updated_at)
+         VALUES (gen_random_uuid()::text, $1, $2, $3, $4::jsonb, NOW(), NOW())
+         RETURNING id, channel_id, author_id, content, created_at`,
+        [channelId, senderId, content, JSON.stringify(metadata || {})],
+      );
+      await client.query('UPDATE channels SET updated_at = NOW() WHERE id = $1', [channelId]);
+      await client.query('COMMIT');
+      return { channelId, message: message.rows[0] };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    }
+  });
+}
+
+async function buildStreetProfileMessageSendResponse(req, userText) {
+  const request = extractStreetProfileMessageRequest(userText);
+  if (!request) {
+    return null;
+  }
+
+  const sender = await ensureLocalSocialUserForLibreChat(req);
+  if (!sender?.id) {
+    return {
+      responseText:
+        'I can draft the message, but I could not find or create your local Messages identity yet.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+
+  const recipient = await findLocalSocialRecipient(request.recipientQuery, sender.id);
+  if (!recipient?.id) {
+    const directoryProfile = await findDirectoryProfileForMessage(request.recipientQuery);
+    const directoryName = directoryProfile?.display_name || directoryProfile?.username;
+    return {
+      responseText: directoryName
+        ? `${directoryName} exists in the Street Profile directory, but I do not see a local Messages account for them yet, so I cannot deliver a DM to that profile from chat.`
+        : `I could not find a local Messages profile matching “${request.recipientQuery}”.`,
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+
+  const draft = {
+    kind: 'dm',
+    recipientQuery: request.recipientQuery,
+    recipient: cleanStreetProfileItem(recipient),
+    content: request.content,
+    createdAt: new Date().toISOString(),
+    sent: false,
+  };
+  return {
+    responseText: buildStreetProfileMessageDraftText(draft),
+    searchResult: { ok: true, returned_count: 1, items: [recipient], has_more: false },
+  };
+}
+
+async function buildStreetProfileMessageConfirmationResponse(req, userText, conversationId) {
+  if (!isStreetProfileMessageConfirmation(userText) || !conversationId || conversationId === 'new') {
+    return null;
+  }
+
+  const history = await getMessages({ conversationId, user: req.user.id }).catch(() => []);
+  const draft = extractLatestStreetProfileMessageDraft(history);
+  if (!draft) {
+    return null;
+  }
+
+  const sender = await ensureLocalSocialUserForLibreChat(req);
+  if (!sender?.id) {
+    return {
+      responseText: 'I found the draft, but I could not find your local Messages identity to send it.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+
+  const recipientId = String(draft.recipient?.id || '').trim();
+  if (!recipientId || recipientId === sender.id) {
+    return {
+      responseText: 'I found the draft, but the recipient is not valid anymore.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+
+  const sent = await ensureDmChannelAndSendMessage(sender.id, recipientId, draft.content, {
+    source: 'street_profile_agent',
+    draftCreatedAt: draft.createdAt || null,
+  });
+  const recipientName =
+    draft.recipient?.display_name || draft.recipient?.username || draft.recipientQuery || 'that profile';
+  return {
+    responseText: `Sent to ${recipientName}. You can open it in Messages: /messages?channel=dm-${encodeURIComponent(sent.channelId)}`,
+    searchResult: {
+      ok: true,
+      returned_count: 1,
+      items: [{ channel_id: sent.channelId, message_id: sent.message?.id, recipient: draft.recipient }],
+      has_more: false,
+    },
+  };
+}
+
+async function fetchLocalSocialOverview() {
+  return withStreetProfilePgClient(async (client) => {
+    const users = await client.query('SELECT count(*)::int AS count FROM users');
+    const channels = await client.query("SELECT count(*)::int AS count FROM channels WHERE is_archived = false");
+    const messages = await client.query('SELECT count(*)::int AS count FROM messages WHERE deleted_at IS NULL');
+    const posts = await client.query('SELECT count(*)::int AS count FROM feed_posts WHERE deleted_at IS NULL');
+    return {
+      userCount: Number(users.rows[0]?.count || 0),
+      channelCount: Number(channels.rows[0]?.count || 0),
+      messageCount: Number(messages.rows[0]?.count || 0),
+      postCount: Number(posts.rows[0]?.count || 0),
+    };
+  });
+}
+
+async function fetchLocalSocialProfiles(limit = 5) {
+  return withStreetProfilePgClient(async (client) => {
+    const { rows } = await client.query(
+      `
+      SELECT id, username, display_name, location, bio, website, status, updated_at
+      FROM users
+      ORDER BY updated_at DESC NULLS LAST, display_name ASC
+      LIMIT $1
+      `,
+      [Math.min(Math.max(Number(limit) || 5, 1), 20)],
+    );
+    return rows;
+  });
+}
+
+async function fetchLocalSocialGroups(limit = 8) {
+  return withStreetProfilePgClient(async (client) => {
+    const { rows } = await client.query(
+      `
+      SELECT c.id, c.name, c.slug, c.description, c.type,
+             count(DISTINCT cm.user_id)::int AS member_count,
+             count(DISTINCT m.id)::int AS message_count,
+             max(m.created_at) AS last_message_at
+      FROM channels c
+      LEFT JOIN channel_members cm ON cm.channel_id = c.id
+      LEFT JOIN messages m ON m.channel_id = c.id AND m.deleted_at IS NULL
+      WHERE c.is_archived = false
+      GROUP BY c.id
+      ORDER BY last_message_at DESC NULLS LAST, c.updated_at DESC NULLS LAST, c.name ASC
+      LIMIT $1
+      `,
+      [Math.min(Math.max(Number(limit) || 8, 1), 50)],
+    );
+    return rows;
+  });
+}
+
+async function fetchLocalSocialMessages(limit = 8) {
+  return withStreetProfilePgClient(async (client) => {
+    const { rows } = await client.query(
+      `
+      SELECT m.id, m.content, m.created_at,
+             c.name AS channel_name, c.slug AS channel_slug,
+             u.username, u.display_name
+      FROM messages m
+      JOIN channels c ON c.id = m.channel_id
+      JOIN users u ON u.id = m.author_id
+      WHERE m.deleted_at IS NULL AND COALESCE(NULLIF(trim(m.content), ''), '') <> ''
+      ORDER BY m.created_at DESC
+      LIMIT $1
+      `,
+      [Math.min(Math.max(Number(limit) || 8, 1), 50)],
+    );
+    return rows;
+  });
+}
+
+async function fetchLocalSocialPosts(limit = 8) {
+  return withStreetProfilePgClient(async (client) => {
+    const { rows } = await client.query(
+      `
+      SELECT p.id, p.content, p.visibility, p.created_at,
+             u.username, u.display_name,
+             (SELECT count(*)::int FROM feed_likes fl WHERE fl.post_id = p.id) AS like_count,
+             (SELECT count(*)::int FROM feed_comments fc WHERE fc.post_id = p.id) AS comment_count
+      FROM feed_posts p
+      JOIN users u ON u.id = p.author_id
+      WHERE p.deleted_at IS NULL
+      ORDER BY p.created_at DESC
+      LIMIT $1
+      `,
+      [Math.min(Math.max(Number(limit) || 8, 1), 50)],
+    );
+    return rows;
+  });
+}
+
+function formatProfileList(items) {
+  return items
+    .slice(0, 5)
+    .map((profile) => {
+      const name = profile.display_name || profile.username || 'Unnamed profile';
+      const username = profile.username ? `@${profile.username}` : '';
+      const role = Array.isArray(profile.primary_roles) ? profile.primary_roles[0] : '';
+      const location = profile.location_display || profile.city || '';
+      return `- ${[name, username, role, location].filter(Boolean).join(' | ')}`;
+    })
+    .join('\n');
+}
+
+async function buildProfilesAgentResponse(userText) {
+  const query = new URLSearchParams({ limit: '5', page: '1', view: 'directory' });
+  const searchMatch = userText.match(/\b(?:search|find|look for|show)\s+(.{2,80})/i);
+  if (searchMatch?.[1]) {
+    query.set('search', searchMatch[1].trim());
+  }
+  const data = await fetchStreetProfileJson(`/street-profiles/directory?${query.toString()}`);
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.profiles) ? data.profiles : [];
+  const total = Number(data?.total ?? items.length) || 0;
+  if (!data) {
+    return {
+      text:
+        'Profiles Agent is selected, but I could not reach the local Street Profile directory API from this chat worker right now.',
+      count: 0,
+      payload: buildStreetProfileCardsPayload('profiles', 'Street Profiles', 0, []),
+    };
+  }
+  const localProfiles = await fetchLocalSocialProfiles(5);
+  const payload = buildStreetProfileCardsPayload('profiles', 'Street Profiles', total, items, {
+    summary: {
+      local_site_users: Array.isArray(localProfiles) ? localProfiles.length : 0,
+    },
+    related: {
+      local_profiles: Array.isArray(localProfiles)
+        ? localProfiles.map(cleanStreetProfileItem).slice(0, 5)
+        : [],
+    },
+  });
+  return {
+    text: withStreetProfileCards(
+      `Profiles Agent pulled the live local Street Profile directory. I found ${total.toLocaleString()} profiles.`,
+      payload,
+    ),
+    count: total,
+    payload,
+  };
+}
+
+async function buildGroupsAgentResponse() {
+  const dbGroups = await fetchLocalSocialGroups(8);
+  const overview = await fetchLocalSocialOverview();
+  if (Array.isArray(dbGroups) && dbGroups.length && overview) {
+    const payload = buildStreetProfileCardsPayload(
+      'groups',
+      'Street Profile Groups',
+      overview.channelCount,
+      dbGroups,
+      {
+        summary: {
+          local_site_users: overview.userCount,
+          local_messages: overview.messageCount,
+        },
+      },
+    );
+    return {
+      text: withStreetProfileCards(
+        `Groups Agent pulled the live local Groups data. I found ${overview.channelCount.toLocaleString()} active groups/channels.`,
+        payload,
+      ),
+      count: overview.channelCount,
+      payload,
+    };
+  }
+
+  const totalMembers = LOCAL_STREET_PROFILE_GROUPS.reduce(
+    (sum, group) => sum + Number(group.member_count || 0),
+    0,
+  );
+  const totalMessages = LOCAL_STREET_PROFILE_GROUPS.reduce(
+    (sum, group) => sum + Number(group.message_count || 0),
+    0,
+  );
+  const groups = LOCAL_STREET_PROFILE_GROUPS.map(
+    (group) =>
+      `- ${group.name}: ${group.member_count} members, ${group.message_count} messages, ${group.tags.join(', ')}`,
+  ).join('\n');
+  return {
+    text: withStreetProfileCards(
+      `Groups Agent pulled the local Groups fallback data. I found ${LOCAL_STREET_PROFILE_GROUPS.length} Street Profile groups.`,
+      buildStreetProfileCardsPayload(
+        'groups',
+        'Street Profile Groups',
+        LOCAL_STREET_PROFILE_GROUPS.length,
+        LOCAL_STREET_PROFILE_GROUPS,
+        { summary: { total_members: totalMembers, total_messages: totalMessages } },
+      ),
+    ),
+    count: LOCAL_STREET_PROFILE_GROUPS.length,
+    payload: buildStreetProfileCardsPayload(
+      'groups',
+      'Street Profile Groups',
+      LOCAL_STREET_PROFILE_GROUPS.length,
+      LOCAL_STREET_PROFILE_GROUPS,
+    ),
+  };
+}
+
+async function buildMessagingAgentResponse() {
+  const dbMessages = await fetchLocalSocialMessages(8);
+  const overview = await fetchLocalSocialOverview();
+  if (Array.isArray(dbMessages) && dbMessages.length && overview) {
+    const payload = buildStreetProfileCardsPayload(
+      'messages',
+      'Street Profile Messages',
+      overview.messageCount,
+      dbMessages,
+      {
+        summary: {
+          active_groups: overview.channelCount,
+        },
+      },
+    );
+    return {
+      text: withStreetProfileCards(
+        `Messaging Agent pulled the live local Messages data. I found ${overview.messageCount.toLocaleString()} messages across ${overview.channelCount.toLocaleString()} active groups/channels.`,
+        payload,
+      ),
+      count: overview.messageCount,
+      payload,
+    };
+  }
+
+  const totalMessages = LOCAL_STREET_PROFILE_GROUPS.reduce(
+    (sum, group) => sum + Number(group.message_count || 0),
+    0,
+  );
+  const messages = LOCAL_STREET_PROFILE_GROUPS.slice(0, 5)
+    .map((group) => `- ${group.name}: ${group.last_message}`)
+    .join('\n');
+  return {
+    text: withStreetProfileCards(
+      `Messaging Agent pulled the local message fallback context. I found ${totalMessages.toLocaleString()} page-backed messages across ${LOCAL_STREET_PROFILE_GROUPS.length} groups.`,
+      buildStreetProfileCardsPayload(
+        'messages',
+        'Street Profile Messages',
+        totalMessages,
+        LOCAL_STREET_PROFILE_GROUPS.map((group) => ({
+          id: group.id || group.name,
+          channel_name: group.name,
+          content: group.last_message,
+          message_count: group.message_count,
+        })),
+      ),
+    ),
+    count: totalMessages,
+    payload: buildStreetProfileCardsPayload('messages', 'Street Profile Messages', totalMessages, []),
+  };
+}
+
+async function buildWordOnTheStreetAgentResponse() {
+  const dbPosts = await fetchLocalSocialPosts(8);
+  const overview = await fetchLocalSocialOverview();
+  if (Array.isArray(dbPosts) && dbPosts.length && overview) {
+    const payload = buildStreetProfileCardsPayload(
+      'posts',
+      'Word on the Street',
+      overview.postCount,
+      dbPosts,
+    );
+    return {
+      text: withStreetProfileCards(
+        `Word on the Street Agent pulled the live local feed. I found ${overview.postCount.toLocaleString()} local feed posts.`,
+        payload,
+      ),
+      count: overview.postCount,
+      payload,
+    };
+  }
+  if (overview) {
+    const payload = buildStreetProfileCardsPayload(
+      'posts',
+      'Word on the Street',
+      overview.postCount,
+      [],
+    );
+    return {
+      text: withStreetProfileCards(
+        `Word on the Street Agent checked the live local feed. I found ${overview.postCount.toLocaleString()} local feed posts right now.`,
+        payload,
+      ),
+      count: overview.postCount,
+      payload,
+    };
+  }
+
+  const posts = LOCAL_WORD_ON_THE_STREET_POSTS.map(
+    (post) =>
+      `- ${post.title} by ${post.author_name} (${post.category_name}, ${post.reply_count} replies, ${post.like_count} likes)`,
+  ).join('\n');
+  return {
+    text: withStreetProfileCards(
+      `Word on the Street Agent pulled the local fallback feed. I found ${LOCAL_WORD_ON_THE_STREET_POSTS.length} highlighted posts.`,
+      buildStreetProfileCardsPayload(
+        'posts',
+        'Word on the Street',
+        LOCAL_WORD_ON_THE_STREET_POSTS.length,
+        LOCAL_WORD_ON_THE_STREET_POSTS,
+      ),
+    ),
+    count: LOCAL_WORD_ON_THE_STREET_POSTS.length,
+    payload: buildStreetProfileCardsPayload(
+      'posts',
+      'Word on the Street',
+      LOCAL_WORD_ON_THE_STREET_POSTS.length,
+      LOCAL_WORD_ON_THE_STREET_POSTS,
+    ),
+  };
+}
+
+async function buildStreetProfileFamilyResponse(req, userText, runProgressPhase) {
+  const selectedAgent = getSelectedStreetProfileAgent(req);
+  if (!selectedAgent) {
+    return null;
+  }
+
+  const conversationId = String(req?.body?.conversationId || '').trim();
+  const confirmationResponse = await buildStreetProfileMessageConfirmationResponse(
+    req,
+    userText,
+    conversationId,
+  );
+  if (confirmationResponse) {
+    return confirmationResponse;
+  }
+
+  const messageSendResponse = await buildStreetProfileMessageSendResponse(req, userText);
+  if (messageSendResponse) {
+    return messageSendResponse;
+  }
+
+  const normalized = String(userText || '').toLowerCase();
+  const wantsOverview = /\b(across|overview|all|everything|overall|areas?|connected|summary|summarize)\b/.test(normalized);
+  const wantsProfiles =
+    selectedAgent === 'agent/profiles_agent' ||
+    /\b(profile|profiles|people|directory|creator|creators)\b/.test(normalized);
+  const wantsGroups = selectedAgent === 'agent/groups_agent' || /\b(groups?|members?)\b/.test(normalized);
+  const wantsMessages =
+    selectedAgent === 'agent/messaging_agent' || /\b(messages?|dms?|inbox|chat)\b/.test(normalized);
+  const wantsWord =
+    selectedAgent === 'agent/word_on_the_street_agent' ||
+    /\b(word on the street|posts?|feed|news|announcements?)\b/.test(normalized);
+
+  const run = (phase, work) =>
+    typeof runProgressPhase === 'function' ? runProgressPhase(phase, work, { selectedAgent }) : work();
+
+  if (selectedAgent === 'agent/street_profile_agent') {
+    if (!wantsOverview && wantsProfiles && !wantsGroups && !wantsMessages && !wantsWord) {
+      const profileOnlyResponse = await run('checking_street_profiles', () =>
+        buildProfilesAgentResponse(userText),
+      );
+      return {
+        responseText: `Street Profile Agent routed this to Profiles. ${profileOnlyResponse.text}`,
+        searchResult: {
+          ok: true,
+          returned_count: profileOnlyResponse.count,
+          items: [],
+          has_more: false,
+          selectedAgent,
+        },
+      };
+    }
+    if (!wantsOverview && wantsGroups && !wantsProfiles && !wantsMessages && !wantsWord) {
+      const groupsOnlyResponse = await buildGroupsAgentResponse();
+      return {
+        responseText: `Street Profile Agent routed this to Groups. ${groupsOnlyResponse.text}`,
+        searchResult: {
+          ok: true,
+          returned_count: groupsOnlyResponse.count,
+          items: [],
+          has_more: false,
+          selectedAgent,
+        },
+      };
+    }
+    if (!wantsOverview && wantsMessages && !wantsProfiles && !wantsGroups && !wantsWord) {
+      const messagesOnlyResponse = await buildMessagingAgentResponse();
+      return {
+        responseText: `Street Profile Agent routed this to Messaging. ${messagesOnlyResponse.text}`,
+        searchResult: {
+          ok: true,
+          returned_count: messagesOnlyResponse.count,
+          items: [],
+          has_more: false,
+          selectedAgent,
+        },
+      };
+    }
+    if (!wantsOverview && wantsWord && !wantsProfiles && !wantsGroups && !wantsMessages) {
+      const wordOnlyResponse = await buildWordOnTheStreetAgentResponse();
+      return {
+        responseText: `Street Profile Agent routed this to Word on the Street. ${wordOnlyResponse.text}`,
+        searchResult: {
+          ok: true,
+          returned_count: wordOnlyResponse.count,
+          items: [],
+          has_more: false,
+          selectedAgent,
+        },
+      };
+    }
+
+    const profileResponse = await run('checking_street_profiles', () => buildProfilesAgentResponse(userText));
+    const groupsResponse = await buildGroupsAgentResponse();
+    const messagingResponse = await buildMessagingAgentResponse();
+    const wordResponse = await buildWordOnTheStreetAgentResponse();
+    const overviewPayload = {
+      kind: 'overview',
+      title: 'Street Profile',
+      sections: [profileResponse, groupsResponse, messagingResponse, wordResponse]
+        .map((response) => response?.payload)
+        .filter(Boolean),
+      summary: {
+        profiles: profileResponse.count,
+        groups: groupsResponse.count,
+        messages: messagingResponse.count,
+        posts: wordResponse.count,
+      },
+    };
+    return {
+      responseText: withStreetProfileCards(
+        'Street Profile Agent pulled the connected local Street Profile areas.',
+        overviewPayload,
+      ),
+      searchResult: {
+        ok: true,
+        returned_count: profileResponse.count,
+        items: [],
+        has_more: false,
+        selectedAgent,
+      },
+    };
+  }
+
+  let result;
+  if (wantsProfiles) {
+    result = await run('checking_street_profiles', () => buildProfilesAgentResponse(userText));
+  } else if (wantsGroups) {
+    result = await buildGroupsAgentResponse();
+  } else if (wantsMessages) {
+    result = await buildMessagingAgentResponse();
+  } else if (wantsWord) {
+    result = await buildWordOnTheStreetAgentResponse();
+  } else {
+    result = {
+      text:
+        'I am connected to the Street Profile local data areas. Ask me for profiles, messages, groups, or Word on the Street posts and I will pull from that local context.',
+      count: 0,
+    };
+  }
+
+  return {
+    responseText: result.text,
+    searchResult: {
+      ok: true,
+      returned_count: result.count,
+      items: [],
+      has_more: false,
+      selectedAgent,
+    },
+  };
 }
 
 function looksLikeStreetBotModelFailureText(value) {
@@ -575,9 +1737,9 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function emitStreetBotMessageDelta(streamId, responseMessageId, value) {
+function emitStreetBotMessageDelta(streamId, responseMessageId, value, { force = false } = {}) {
   const text = String(value || '');
-  if (!STREETBOT_FASTPATH_STREAMING_ENABLED || !streamId || !responseMessageId || !text) {
+  if ((!STREETBOT_FASTPATH_STREAMING_ENABLED && !force) || !streamId || !responseMessageId || !text) {
     return;
   }
   GenerationJobManager.emitChunk(streamId, {
@@ -591,8 +1753,8 @@ function emitStreetBotMessageDelta(streamId, responseMessageId, value) {
   });
 }
 
-function emitStreetBotResponseStepStart(streamId, runId, index = 1) {
-  if (!STREETBOT_FASTPATH_STREAMING_ENABLED || !streamId || !runId) {
+function emitStreetBotResponseStepStart(streamId, runId, index = 1, { force = false } = {}) {
+  if ((!STREETBOT_FASTPATH_STREAMING_ENABLED && !force) || !streamId || !runId) {
     return null;
   }
 
@@ -655,15 +1817,16 @@ async function emitStreetBotMessageText(
   {
     preferredSize = STREETBOT_TEXT_STREAM_CHUNK_SIZE,
     delayMs = STREETBOT_TEXT_STREAM_DELAY_MS,
+    force = false,
   } = {},
 ) {
-  if (!STREETBOT_FASTPATH_STREAMING_ENABLED) {
+  if (!STREETBOT_FASTPATH_STREAMING_ENABLED && !force) {
     return;
   }
 
   const chunks = splitStreetBotTextChunks(value, preferredSize);
   for (let index = 0; index < chunks.length; index += 1) {
-    emitStreetBotMessageDelta(streamId, responseTargetId, chunks[index]);
+    emitStreetBotMessageDelta(streamId, responseTargetId, chunks[index], { force });
     if (delayMs > 0 && index < chunks.length - 1) {
       await sleep(delayMs);
     }
@@ -2710,10 +3873,14 @@ function buildRenderedCategoryResponse(payload, userText = '', rawUserContext = 
 
 function getStreetBotDisplayLabel(endpoint = '', fallback = '') {
   const normalized = String(endpoint || '').trim();
+  const fallbackLabel = String(fallback || '').trim();
   if (/^Street Bot(?: 0\.1(?: Pro)?| Pro)?$/i.test(normalized)) {
+    if (fallbackLabel && !/^Street Bot(?: 0\.1(?: Pro)?| Pro)?$/i.test(fallbackLabel)) {
+      return fallbackLabel;
+    }
     return 'Street Bot';
   }
-  return String(fallback || '').trim() || 'Street Bot';
+  return fallbackLabel || 'Street Bot';
 }
 
 function getStreetBotEnvEndpointConfig(endpoint = '') {
@@ -3706,6 +4873,8 @@ async function streetbotFastPath(req, res, _next) {
     const userMessageId = crypto.randomUUID();
     const responseMessageId = crypto.randomUUID();
     const isNewConvo = !reqConversationId || reqConversationId === 'new';
+    const selectedStreetProfileAgent = getSelectedStreetProfileAgent(req);
+    const forceStreetProfileTextStream = Boolean(selectedStreetProfileAgent);
     let progressStepIndex = 0;
     const nextProgressStepIndex = () => progressStepIndex++;
     const runProgressPhase = (phaseKey, work, metadata = {}) =>
@@ -3728,6 +4897,23 @@ async function streetbotFastPath(req, res, _next) {
       user: userId,
       endpoint: endpointOption.endpoint,
     };
+
+    await GenerationJobManager.updateMetadata(streamId, {
+      conversationId,
+      responseMessageId,
+      sender: getStreetBotDisplayLabel(
+        endpointOption.endpoint,
+        endpointOption.model_parameters?.modelLabel || req.body?.modelDisplayLabel,
+      ),
+      model: endpointOption.modelOptions?.model || endpointOption.model_parameters?.model,
+      iconURL: getSelectedStreetProfileAgentIconURL(req) || endpointOption.iconURL,
+      userMessage: {
+        messageId: userMessageId,
+        parentMessageId: userMessage.parentMessageId,
+        conversationId,
+        text: userText,
+      },
+    });
 
     GenerationJobManager.emitChunk(streamId, {
       created: true,
@@ -3764,26 +4950,36 @@ async function streetbotFastPath(req, res, _next) {
     });
 
     if (toolBase === 'conversation') {
-      try {
-        responseText = await runStreetBotConversationModel(
-          req,
-          endpointOption,
-          conversationId,
-          userText,
-          runProgressPhase,
-          streamId,
-          responseMessageId,
-          nextProgressStepIndex,
-        );
-        responseAlreadyStreamed = STREETBOT_FASTPATH_STREAMING_ENABLED;
-      } catch (error) {
-        logger.warn('[streetbot-fastpath] conversation model unavailable, using fallback', {
-          error: error?.message || String(error || ''),
-        });
-        responseText = buildStreetBotGeneralFallback(userText, error);
-        responseAlreadyStreamed = false;
+      const streetProfileFamilyResponse = await buildStreetProfileFamilyResponse(
+        req,
+        userText,
+        runProgressPhase,
+      );
+      if (streetProfileFamilyResponse) {
+        responseText = streetProfileFamilyResponse.responseText;
+        searchResult = streetProfileFamilyResponse.searchResult;
+      } else {
+        try {
+          responseText = await runStreetBotConversationModel(
+            req,
+            endpointOption,
+            conversationId,
+            userText,
+            runProgressPhase,
+            streamId,
+            responseMessageId,
+            nextProgressStepIndex,
+          );
+          responseAlreadyStreamed = STREETBOT_FASTPATH_STREAMING_ENABLED;
+        } catch (error) {
+          logger.warn('[streetbot-fastpath] conversation model unavailable, using fallback', {
+            error: error?.message || String(error || ''),
+          });
+          responseText = buildStreetBotGeneralFallback(userText, error);
+          responseAlreadyStreamed = false;
+        }
+        searchResult = { ok: true, returned_count: 0, items: [], has_more: false };
       }
-      searchResult = { ok: true, returned_count: 0, items: [], has_more: false };
     } else if (toolBase !== 'smalltalk') {
       const { searchServicesInternal, buildMoreResults, categoriesInternal } = await getRagModule();
       const requestUserContext = getStreetBotUserContext(req.body?._streetbotUserContext);
@@ -4009,11 +5205,16 @@ async function streetbotFastPath(req, res, _next) {
       };
     }
 
-    if (STREETBOT_FASTPATH_STREAMING_ENABLED && !responseAlreadyStreamed && responseText) {
+    if (
+      (STREETBOT_FASTPATH_STREAMING_ENABLED || forceStreetProfileTextStream) &&
+      !responseAlreadyStreamed &&
+      responseText
+    ) {
       const responseStep = emitStreetBotResponseStepStart(
         streamId,
         responseMessageId,
         nextProgressStepIndex(),
+        { force: forceStreetProfileTextStream },
       );
       const visibleResponseText =
         stripStreetBotServicePayloadForDisplay(responseText) || responseText;
@@ -4023,10 +5224,14 @@ async function streetbotFastPath(req, res, _next) {
         visibleResponseText,
         {
           delayMs: toolBase === 'smalltalk' ? STREETBOT_TEXT_STREAM_DELAY_MS : 0,
+          force: forceStreetProfileTextStream,
         },
       );
       responseAlreadyStreamed = true;
     }
+
+    const selectedStreetProfileIconURL = getSelectedStreetProfileAgentIconURL(req);
+    const responseIconURL = selectedStreetProfileIconURL || endpointOption.iconURL;
 
     const responseMessage = {
       messageId: responseMessageId,
@@ -4041,9 +5246,14 @@ async function streetbotFastPath(req, res, _next) {
       isCreatedByUser: false,
       user: userId,
       endpoint: endpointOption.endpoint,
+      model: endpointOption.modelOptions?.model || endpointOption.model_parameters?.model,
       unfinished: false,
       error: false,
     };
+
+    if (responseIconURL) {
+      responseMessage.iconURL = responseIconURL;
+    }
 
     if (req.body?.agent_id) {
       responseMessage.agent_id = req.body.agent_id;
@@ -4067,8 +5277,8 @@ async function streetbotFastPath(req, res, _next) {
     if (endpointOption.spec) {
       convoData.spec = endpointOption.spec;
     }
-    if (endpointOption.iconURL) {
-      convoData.iconURL = endpointOption.iconURL;
+    if (responseIconURL) {
+      convoData.iconURL = responseIconURL;
     }
 
     const finalEvent = {
@@ -4092,16 +5302,20 @@ async function streetbotFastPath(req, res, _next) {
     const pollStart = Date.now();
     const pollIntervalMs = 25;
     const subscriberTimeoutMs = 5000;
+    const emitFinalAndComplete = async () => {
+      await GenerationJobManager.emitDone(streamId, finalEvent);
+      setTimeout(() => {
+        GenerationJobManager.completeJob(streamId);
+      }, 100);
+    };
     const waitForSubscriber = () => {
       if (job.emitter.listenerCount() > 0) {
-        GenerationJobManager.emitDone(streamId, finalEvent);
-        GenerationJobManager.completeJob(streamId);
+        void emitFinalAndComplete();
         return;
       }
       if (Date.now() - pollStart > subscriberTimeoutMs) {
         logger.warn('[streetbot-fastpath] subscriber timeout', { streamId });
-        GenerationJobManager.emitDone(streamId, finalEvent);
-        GenerationJobManager.completeJob(streamId);
+        void emitFinalAndComplete();
         return;
       }
       setTimeout(waitForSubscriber, pollIntervalMs);

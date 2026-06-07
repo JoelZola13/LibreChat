@@ -37,7 +37,10 @@ const buildDefaultConvo = ({
     };
   }
 
-  const availableModels = models;
+  const pinnedSpecModel =
+    setupForParsing?.spec && setupForParsing?.model ? String(setupForParsing.model) : '';
+  const availableModels =
+    pinnedSpecModel && !models.includes(pinnedSpecModel) ? [pinnedSpecModel, ...models] : models;
   const model = setupForParsing?.model ?? lastSelectedModel?.[endpoint] ?? '';
 
   let possibleModels: string[];

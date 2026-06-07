@@ -1,5 +1,6 @@
 import debounce from 'lodash/debounce';
 import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { EModelEndpoint, isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import type * as t from 'librechat-data-provider';
 import type { Endpoint, SelectedValues } from '~/common';
@@ -60,6 +61,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
   const { data: endpointsConfig } = useGetEndpointsQuery();
   const { endpoint, model, spec, agent_id, assistant_id, conversation, newConversation } =
     useModelSelectorChatContext();
+  const [searchParams, setSearchParams] = useSearchParams();
   const localize = useLocalize();
   const { announcePolite } = useLiveAnnouncer();
   const modelSpecs = useMemo(() => {
@@ -191,6 +193,23 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
       model,
       modelSpec: spec.name,
     });
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('prompt');
+    nextParams.delete('q');
+    nextParams.delete('submit');
+    nextParams.set('spec', spec.name);
+    if (spec.name.startsWith('agent/')) {
+      nextParams.set('agentModel', spec.name);
+    } else {
+      nextParams.delete('agentModel');
+    }
+    if (spec.preset.agent_id) {
+      nextParams.set('agent_id', spec.preset.agent_id);
+    } else {
+      nextParams.delete('agent_id');
+    }
+    setSearchParams(nextParams, { replace: true });
   };
 
   const handleSelectEndpoint = (endpoint: Endpoint) => {

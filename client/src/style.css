@@ -1,9 +1,99 @@
+@import './components/streetbot/shared/glassmorphism.css';
+
+/* Self-hosted Rubik variable font (eliminates external Google Fonts roundtrip) */
+@font-face {
+  font-family: 'Rubik';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('/fonts/Rubik-variable.woff2') format('woff2');
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+.sv-donate-nav-label {
+  font-weight: 900 !important;
+  font-variation-settings: "wght" 900;
+  -webkit-text-stroke: 0.18px currentColor;
+  text-shadow: 0.18px 0 0 currentColor;
+  letter-spacing: 0;
+}
+
+.sv-nav-action-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.sv-nav-action-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: #FFD600;
+  opacity: 0;
+  transform: scale(0.9);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.sv-nav-action-button:hover,
+.sv-nav-action-button:focus-visible {
+  background-color: #FFD600 !important;
+  color: #000 !important;
+  border-color: #FFD600 !important;
+  transform: translateY(-1px);
+}
+
+.sv-nav-action-button:hover::before,
+.sv-nav-action-button:focus-visible::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.sv-nav-action-button:active {
+  transform: translateY(0);
+}
+
+.sv-nav-action-button--donate {
+  background: rgba(0, 0, 0, 0.38) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+}
+
+.sv-nav-action-button--login {
+  background: #fff !important;
+  border-color: #fff !important;
+  color: #000 !important;
+}
+
+html.light .sv-nav-action-button--donate {
+  background: rgba(17, 19, 24, 0.08) !important;
+  border-color: rgba(17, 19, 24, 0.14) !important;
+  color: #111318 !important;
+}
+
+html.light .sv-nav-action-button--login {
+  background: #111318 !important;
+  border-color: #111318 !important;
+  color: #fff !important;
+}
+
 /* Custom Variables */
 :root {
+  --sv-home-search-bar-font-size: 15px;
+  --sv-search-bar-font-size: 14px;
   --white: #fff;
   --black: #000;
   --gray-20: #ececf1;
@@ -63,61 +153,91 @@
   --markdown-font-size: 1rem;
 }
 html {
-  --brand-purple: #ab68ff;
-  --presentation: var(--white);
-  --text-primary: var(--gray-800);
-  --text-secondary: var(--gray-600);
-  --text-secondary-alt: var(--gray-500);
-  --text-tertiary: var(--gray-500);
+  /* -------------------------------------------------------------------------- */
+  /* StreetBot theme (light)                                                    */
+  /* -------------------------------------------------------------------------- */
+
+  --sb-color-background: #f7f8fc;
+  --sb-color-surface: #ffffff;
+  --sb-color-surface-muted: #f3f4f8;
+  --sb-color-surface-soft: #eceef4;
+  --sb-color-text-primary: #1a1c24;
+  --sb-color-text-secondary: #4b4d59;
+  --sb-color-accent: #ffb300;
+  --sb-color-border: rgba(17, 24, 39, 0.12);
+  --sb-color-sidebar-bg: rgba(255, 255, 255, 0.92);
+  --sb-color-sidebar-border: rgba(17, 24, 39, 0.1);
+  --sb-color-chip-bg: rgba(240, 241, 247, 0.95);
+  --sb-color-chip-border: rgba(17, 24, 39, 0.12);
+  --sb-color-input-bg: rgba(255, 255, 255, 0.9);
+  --sb-color-input-border: rgba(17, 24, 39, 0.14);
+  --sb-color-overlay-surface: rgba(255, 255, 255, 0.9);
+  --sb-color-overlay-muted: rgba(17, 24, 39, 0.06);
+  --sb-color-soft-border: rgba(17, 24, 39, 0.08);
+  --sb-color-floating-bg: rgba(255, 255, 255, 0.98);
+
+  /* LibreChat theme variables mapped to StreetBot */
+  --brand-purple: var(--sb-color-accent);
+  --presentation: transparent;
+  --text-primary: var(--sb-color-text-primary);
+  --text-secondary: var(--sb-color-text-secondary);
+  --text-secondary-alt: var(--sb-color-text-secondary);
+  --text-tertiary: var(--sb-color-text-secondary);
   --text-warning: var(--amber-500);
-  --text-destructive: var(--red-600);
-  --ring-primary: var(--gray-500);
-  --header-primary: var(--white);
-  --header-hover: var(--gray-50);
-  --header-button-hover: var(--gray-50);
-  --surface-active: var(--gray-100);
-  --surface-active-alt: var(--gray-200);
-  --surface-hover: var(--gray-200);
-  --surface-hover-alt: var(--gray-300);
-  --surface-primary: var(--white);
-  --surface-primary-alt: var(--gray-50);
-  --surface-primary-contrast: var(--gray-100);
-  --surface-secondary: var(--gray-50);
-  --surface-secondary-alt: var(--gray-200);
-  --surface-tertiary: var(--gray-100);
-  --surface-tertiary-alt: var(--white);
-  --surface-dialog: var(--white);
-  --surface-submit: var(--green-700);
-  --surface-submit-hover: var(--green-800);
+  --ring-primary: var(--sb-color-accent);
+
+  --header-primary: var(--sb-color-sidebar-bg);
+  --header-hover: var(--sb-color-chip-bg);
+  --header-button-hover: var(--sb-color-chip-bg);
+
+  --surface-active: var(--sb-color-surface-soft);
+  --surface-active-alt: var(--sb-color-surface-muted);
+  --surface-hover: var(--sb-color-surface-muted);
+  --surface-hover-alt: var(--sb-color-surface-soft);
+
+  --surface-primary: var(--sb-color-background);
+  --surface-primary-alt: var(--sb-color-surface);
+  --surface-primary-contrast: var(--sb-color-surface-muted);
+  --surface-secondary: var(--sb-color-surface);
+  --surface-secondary-alt: var(--sb-color-surface-muted);
+  --surface-tertiary: var(--sb-color-surface-soft);
+  --surface-tertiary-alt: var(--sb-color-surface);
+
+  --surface-dialog: var(--sb-color-overlay-surface);
+  --surface-submit: var(--sb-color-accent);
+  --surface-submit-hover: #f2aa00;
   --surface-destructive: var(--red-700);
   --surface-destructive-hover: var(--red-800);
-  --surface-chat: var(--white);
-  --border-light: var(--gray-200);
-  --border-medium-alt: var(--gray-300);
-  --border-medium: var(--gray-300);
-  --border-heavy: var(--gray-400);
-  --border-xheavy: var(--gray-500);
-  --border-destructive: var(--red-600);
-  /* These are test styles */
+  --surface-chat: transparent;
+  --sv-directory-contact-accent: #3CB1CC;
+  --sv-directory-contact-accent-soft: rgba(60, 177, 204, 0.15);
+  --sv-directory-logo-tint-opacity: 0;
 
-  --background: 0 0% 100%;
-  --foreground: 0 0% 3.9%;
+  --border-light: var(--sb-color-border);
+  --border-medium-alt: var(--sb-color-sidebar-border);
+  --border-medium: var(--sb-color-border);
+  --border-heavy: rgba(17, 24, 39, 0.18);
+  --border-xheavy: rgba(17, 24, 39, 0.28);
+
+  /* Shadcn/ui tokens (HSL) */
+  --background: 228 45.5% 97.8%;
+  --foreground: 228 16.1% 12.2%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 3.9%;
-  --primary: 0 0% 9%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 0 0% 96.1%;
-  --secondary-foreground: 0 0% 9%;
-  --muted: 0 0% 96.1%;
-  --muted-foreground: 0 0% 45.1%;
-  --accent: 0 0% 96.1%;
-  --accent-foreground: 0 0% 9%;
+  --card-foreground: 228 16.1% 12.2%;
+  --primary: 42.1 100% 50%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 228 26.3% 96.3%;
+  --secondary-foreground: 228 16.1% 12.2%;
+  --muted: 228 26.3% 96.3%;
+  --muted-foreground: 231.4 8.5% 32.2%;
+  --accent: 42.1 100% 50%;
+  --accent-foreground: 0 0% 0%;
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 89.8%;
-  --input: 0 0% 89.8%;
-  --ring: 0 0% 3.9%;
-  --radius: 0.5rem;
+  --border: 225 26.7% 88%;
+  --input: 0 0% 100%;
+  --ring: 42.1 100% 50%;
+  --radius: 0.75rem;
   --chart-1: 12 76% 61%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
@@ -126,59 +246,85 @@ html {
   --switch-unchecked: 0 0% 58%;
 }
 .dark {
-  --brand-purple: #ab68ff;
-  --presentation: var(--gray-800);
-  --text-primary: var(--gray-100);
-  --text-secondary: var(--gray-300);
-  --text-secondary-alt: var(--gray-400);
-  --text-tertiary: var(--gray-500);
+  /* -------------------------------------------------------------------------- */
+  /* StreetBot theme (dark)                                                     */
+  /* -------------------------------------------------------------------------- */
+
+  --sb-color-background: #1f2027;
+  --sb-color-surface: #343640;
+  --sb-color-surface-muted: #2a2c36;
+  --sb-color-surface-soft: #292b34;
+  --sb-color-text-primary: #dddde2;
+  --sb-color-text-secondary: #afafaf;
+  --sb-color-accent: #ffd600;
+  --sb-color-border: rgba(188, 189, 208, 0.18);
+  --sb-color-sidebar-bg: rgba(20, 21, 29, 0.96);
+  --sb-color-sidebar-border: rgba(188, 189, 208, 0.12);
+  --sb-color-chip-bg: rgba(35, 36, 44, 0.82);
+  --sb-color-chip-border: rgba(188, 189, 208, 0.18);
+  --sb-color-input-bg: rgba(40, 41, 51, 0.55);
+  --sb-color-input-border: rgba(188, 189, 208, 0.22);
+  --sb-color-overlay-surface: rgba(44, 45, 56, 0.85);
+  --sb-color-overlay-muted: rgba(36, 37, 46, 0.35);
+  --sb-color-soft-border: rgba(188, 189, 208, 0.08);
+  --sb-color-floating-bg: rgba(32, 33, 42, 0.95);
+
+  --brand-purple: var(--sb-color-accent);
+  --presentation: transparent;
+  --text-primary: var(--sb-color-text-primary);
+  --text-secondary: var(--sb-color-text-secondary);
+  --text-secondary-alt: var(--sb-color-text-secondary);
+  --text-tertiary: rgba(221, 221, 226, 0.72);
   --text-warning: var(--amber-500);
-  --text-destructive: var(--red-600);
-  --header-primary: var(--gray-700);
-  --header-hover: var(--gray-600);
-  --header-button-hover: var(--gray-700);
-  --surface-active: var(--gray-500);
-  --surface-active-alt: var(--gray-700);
-  --surface-hover: var(--gray-600);
-  --surface-hover-alt: var(--gray-600);
-  --surface-primary: var(--gray-900);
-  --surface-primary-alt: var(--gray-850);
-  --surface-primary-contrast: var(--gray-850);
-  --surface-secondary: var(--gray-800);
-  --surface-secondary-alt: var(--gray-800);
-  --surface-tertiary: var(--gray-700);
-  --surface-tertiary-alt: var(--gray-700);
-  --surface-dialog: var(--gray-850);
-  --surface-submit: var(--green-700);
-  --surface-submit-hover: var(--green-800);
+
+  --header-primary: var(--sb-color-sidebar-bg);
+  --header-hover: var(--sb-color-chip-bg);
+  --header-button-hover: var(--sb-color-chip-bg);
+
+  --surface-active: var(--sb-color-surface);
+  --surface-active-alt: var(--sb-color-surface-soft);
+  --surface-hover: var(--sb-color-surface-soft);
+  --surface-hover-alt: var(--sb-color-surface);
+
+  --surface-primary: var(--sb-color-background);
+  --surface-primary-alt: var(--sb-color-sidebar-bg);
+  --surface-primary-contrast: var(--sb-color-surface-muted);
+  --surface-secondary: var(--sb-color-surface-muted);
+  --surface-secondary-alt: var(--sb-color-surface);
+  --surface-tertiary: var(--sb-color-surface-soft);
+  --surface-tertiary-alt: var(--sb-color-surface-muted);
+
+  --surface-dialog: var(--sb-color-overlay-surface);
+  --surface-submit: var(--sb-color-accent);
+  --surface-submit-hover: #f2cb00;
   --surface-destructive: var(--red-800);
   --surface-destructive-hover: var(--red-900);
-  --surface-chat: var(--gray-700);
-  --border-light: var(--gray-700);
-  --border-medium-alt: var(--gray-600);
-  --border-medium: var(--gray-600);
-  --border-heavy: var(--gray-500);
-  --border-xheavy: var(--gray-400);
-  --border-destructive: var(--red-500);
-  /* These are test styles */
+  --surface-chat: transparent;
+  --sv-directory-logo-tint-opacity: 0.24;
 
-  --background: 0 0% 7%;
-  --foreground: 0 0% 98%;
-  --card: 0 0% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 0 0% 9%;
-  --secondary: 0 0% 14.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 14.9%;
-  --muted-foreground: 0 0% 63.9%;
-  --accent: 0 0% 14.9%;
-  --accent-foreground: 0 0% 98%;
+  --border-light: var(--sb-color-sidebar-border);
+  --border-medium-alt: var(--sb-color-border);
+  --border-medium: var(--sb-color-border);
+  --border-heavy: rgba(188, 189, 208, 0.28);
+  --border-xheavy: rgba(188, 189, 208, 0.38);
+
+  --background: 232.5 11.4% 13.7%;
+  --foreground: 240 7.9% 87.6%;
+  --card: 230 10.3% 22.7%;
+  --card-foreground: 240 7.9% 87.6%;
+  --primary: 50.4 100% 50%;
+  --primary-foreground: 232.5 11.4% 13.7%;
+  --secondary: 230 12.5% 18.8%;
+  --secondary-foreground: 240 7.9% 87.6%;
+  --muted: 230 12.5% 18.8%;
+  --muted-foreground: 0 0% 68.6%;
+  --accent: 50.4 100% 50%;
+  --accent-foreground: 232.5 11.4% 13.7%;
   --destructive: 0 62.8% 40.6%;
   --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 14.9%;
-  --input: 0 0% 14.9%;
-  --ring: 0 0% 83.1%;
+  --border: 230 12.5% 25%;
+  --input: 230 12.5% 18.8%;
+  --ring: 50.4 100% 50%;
   --chart-1: 220 70% 50%;
   --chart-2: 160 60% 45%;
   --chart-3: 30 80% 55%;
@@ -1516,10 +1662,21 @@ html {
   height: 100%;
 }
 
+body {
+  background-color: var(--sb-color-background);
+  color: var(--text-primary);
+}
+
 .dark body,
 .dark html {
   --tw-bg-opacity: 1;
-  background-color: rgba(23, 23, 23, var(--tw-bg-opacity));
+  background-color: var(--sb-color-background);
+}
+
+/* StreetBot-style glass sidebar */
+.nav {
+  backdrop-filter: blur(24px);
+  border-right: 1px solid var(--sb-color-sidebar-border);
 }
 
 #__next,
@@ -2925,4 +3082,474 @@ html {
 
 .sharepoint-picker-bg {
   background-color: #f5f5f5;
+}
+
+@keyframes streetbot-blink {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(255, 214, 0, 0));
+  }
+  45% {
+    transform: scale(0.96);
+    filter: drop-shadow(0 0 4px rgba(255, 214, 0, 0.25));
+  }
+  60% {
+    transform: scale(1.02);
+    filter: drop-shadow(0 0 6px rgba(255, 214, 0, 0.35));
+  }
+}
+
+.streetbot-blink {
+  animation: streetbot-blink 1.6s ease-in-out infinite;
+}
+
+@media (max-width: 640px) {
+  .sv-new-chat-landing-logo,
+  .sv-new-chat-landing-logo svg,
+  .sv-new-chat-landing-logo img,
+  .sv-new-chat-landing-logo [data-sv-inline-logo='true'] {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .sv-new-chat-landing-logo svg,
+  .sv-new-chat-landing-logo img,
+  .sv-new-chat-landing-logo [data-sv-inline-logo='true'] {
+    overflow: visible;
+  }
+}
+
+/* Sidebar scroll - hover-only visibility like StreetBot Pro */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+  transition: background-color 0.3s ease 0.3s;
+}
+
+.sidebar-scroll:hover {
+  scrollbar-color: rgba(120, 121, 140, 0.85) transparent;
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 121, 140, 0.85);
+  transition-delay: 0s;
+}
+
+/* ── Street Voices nav items ── */
+.sb-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.125rem;
+  font-family: Rubik, sans-serif;
+  font-weight: 400;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  position: relative;
+  border: 1px solid transparent;
+}
+
+.sb-nav-item + .sb-nav-item {
+  margin-top: 2px;
+}
+
+/* Dark mode nav items */
+.dark .sb-nav-item { color: #9C9DB5; }
+.dark .sb-nav-item:hover { background: rgba(255, 255, 255, 0.06); color: #E6E7F2; border-color: rgba(188, 189, 208, 0.08); }
+.dark .sb-nav-item:active { background: rgba(255, 255, 255, 0.1); }
+.dark .sb-nav-item.sb-nav-active { background: rgba(255, 214, 0, 0.08); color: #FFD600; border-color: rgba(255, 214, 0, 0.15); box-shadow: inset 0 0 12px rgba(255, 214, 0, 0.04); }
+
+/* Light mode nav items */
+.light .sb-nav-item { color: #4b5563; }
+.light .sb-nav-item:hover { background: rgba(0, 0, 0, 0.05); color: #1a1c24; border-color: rgba(0, 0, 0, 0.06); }
+.light .sb-nav-item:active { background: rgba(0, 0, 0, 0.08); }
+.light .sb-nav-item.sb-nav-active { background: rgba(180, 150, 0, 0.1); color: #9a7b00; border-color: rgba(180, 150, 0, 0.2); box-shadow: inset 0 0 12px rgba(180, 150, 0, 0.06); }
+.light .sb-nav-item.sb-nav-active::before { background: #b89a00; }
+
+.sb-nav-item:active { transform: scale(0.98); }
+
+.sb-nav-item:hover .sb-nav-icon { opacity: 1; }
+.dark .sb-nav-item:hover .sb-nav-icon { filter: brightness(0) invert(1); }
+.light .sb-nav-item:hover .sb-nav-icon { filter: none; }
+
+.sb-nav-item.sb-nav-active .sb-nav-icon { opacity: 1; }
+.dark .sb-nav-item.sb-nav-active .sb-nav-icon { filter: brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(15deg); }
+.light .sb-nav-item.sb-nav-active .sb-nav-icon { filter: sepia(1) saturate(5) hue-rotate(15deg) brightness(0.7); }
+
+.sb-nav-item.sb-nav-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border-radius: 0 3px 3px 0;
+  background: #FFD600;
+}
+
+/* Minimized variant */
+.sb-nav-item.sb-nav-minimized {
+  justify-content: center;
+  gap: 0;
+  padding: 12px;
+}
+
+/* Icon base — use filter to make currentColor SVGs visible */
+.sb-nav-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.65;
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+/* SVGs with currentColor render black by default in <img> tags — invert for dark mode */
+.dark .sb-nav-icon { filter: brightness(0) invert(1); opacity: 0.65; }
+.light .sb-nav-icon { filter: none; opacity: 0.55; }
+
+/* ── Top action buttons (Home, Search, Notifications, etc.) ── */
+.sb-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 1.125rem;
+  font-family: Rubik, sans-serif;
+  font-weight: 400;
+  transition: background 0.18s ease, color 0.18s ease;
+  margin-bottom: 0;
+}
+
+.sb-action-btn + .sb-action-btn,
+.sb-action-btn + a[data-testid='nav-new-chat-button'],
+a[data-testid='nav-new-chat-button'] + .sb-action-btn {
+  margin-top: 2px;
+}
+
+.dark .sb-action-btn { color: #9C9DB5; }
+.dark .sb-action-btn:hover { background: rgba(255, 255, 255, 0.06); color: #E6E7F2; }
+.dark .sb-action-btn:active { background: rgba(255, 255, 255, 0.1); }
+
+.light .sb-action-btn { color: #4b5563; }
+.light .sb-action-btn:hover { background: rgba(0, 0, 0, 0.05); color: #1a1c24; }
+.light .sb-action-btn:active { background: rgba(0, 0, 0, 0.08); }
+
+.sb-action-btn:hover .sb-action-icon { opacity: 1; }
+
+.sb-action-btn.sb-action-minimized {
+  justify-content: center;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+/* Action icons — same currentColor fix */
+.sb-action-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+.dark .sb-action-icon { filter: brightness(0) invert(1); opacity: 0.7; }
+.light .sb-action-icon { filter: none; opacity: 0.6; }
+.dark .sb-action-btn:hover .sb-action-icon { filter: brightness(0) invert(1); opacity: 1; }
+.light .sb-action-btn:hover .sb-action-icon { filter: none; opacity: 1; }
+
+/* ── StreetBot 3190 sidebar parity overrides ── */
+nav#chat-history-nav {
+  font-family: Rubik, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+html[data-theme="dark"] .nav,
+html.dark .nav,
+html[data-theme="dark"] nav#chat-history-nav,
+html.dark nav#chat-history-nav {
+  background: #000 !important;
+  border-right: 0.5px solid rgba(255, 255, 255, 0.045) !important;
+}
+
+html[data-theme="light"] .nav,
+html.light .nav,
+html:not(.dark) .nav,
+html[data-theme="light"] nav#chat-history-nav,
+html.light nav#chat-history-nav,
+html:not(.dark) nav#chat-history-nav {
+  background: #fff !important;
+  border-right: 0.5px solid rgba(0, 0, 0, 0.10) !important;
+}
+
+html[data-theme="dark"] nav#chat-history-nav > .flex-1.flex-col,
+html.dark nav#chat-history-nav > .flex-1.flex-col {
+  background: #000 !important;
+}
+
+html[data-theme="light"] nav#chat-history-nav > .flex-1.flex-col,
+html.light nav#chat-history-nav > .flex-1.flex-col,
+html:not(.dark) nav#chat-history-nav > .flex-1.flex-col {
+  background: #fff !important;
+}
+
+#sv-sidebar-header {
+  padding: 18px 16px 14px 16px !important;
+  width: 260px !important;
+  min-height: 64px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+#sv-sidebar-header[data-minimized="true"] {
+  width: auto !important;
+  min-height: 56px !important;
+  padding: 8px 0 !important;
+  justify-content: center !important;
+}
+
+#sv-sidebar-header > div,
+#sv-sidebar-header .sv-logo-img {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#sv-sidebar-header .sv-sidebar-logo-expanded {
+  display: block;
+  width: 148px;
+  height: auto;
+}
+
+#sv-sidebar-header .sv-sidebar-logo-lockup {
+  display: block;
+  width: 160px !important;
+  height: 28px !important;
+  flex-shrink: 0;
+}
+
+#sv-sidebar-header .sv-sidebar-logo-mark {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+#sv-header-collapse {
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-left: auto !important;
+  flex-shrink: 0 !important;
+}
+
+#sv-header-collapse svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+html:not(.dark) .sv-logo-img {
+  filter: brightness(0) !important;
+}
+
+.dark .sv-logo-img {
+  filter: none !important;
+}
+
+.sv-sidebar-icon {
+  width: 18px !important;
+  height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  object-fit: contain !important;
+  display: block !important;
+  flex-shrink: 0 !important;
+}
+
+.dark .sv-sidebar-icon,
+.dark #sv-sidebar-nav-list img {
+  filter: brightness(0) invert(1) !important;
+  opacity: 1 !important;
+}
+
+html:not(.dark) .sv-sidebar-icon {
+  filter: brightness(0) !important;
+}
+
+.dark #sv-sidebar-static svg,
+.dark nav#chat-history-nav svg {
+  color: white !important;
+}
+
+#sv-sidebar-static {
+  padding: 4px 10px 0 !important;
+}
+
+#sv-sidebar-nav-list {
+  padding: 12px 10px 0 !important;
+  margin-top: 10px !important;
+  max-height: none !important;
+  overflow-y: visible !important;
+  overflow-x: visible !important;
+  border-top: 1px solid rgba(127, 127, 136, 0.18) !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+
+.sv-sidebar-btn {
+  position: relative;
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  border-radius: 14px;
+  padding: 9px 12px;
+  min-height: 40px;
+  font-size: 14px;
+  line-height: 1.125rem;
+  outline: none;
+  font-family: Rubik, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 400;
+}
+
+.sv-sidebar-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+nav#chat-history-nav h3 {
+  font-family: Rubik, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+
+/* ── Glass presentation overrides ──
+   With --presentation: transparent, menus/dropdowns need an opaque glass surface.
+   Target elements using bg-presentation that also have shadow-lg (dropdown indicators). */
+.dark .bg-presentation.shadow-lg,
+.dark .bg-presentation.shadow-sm {
+  background: var(--sb-color-overlay-surface) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+.light .bg-presentation.shadow-lg,
+.light .bg-presentation.shadow-sm {
+  background: var(--sb-color-overlay-surface) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* Buttons using bg-presentation need a subtle glass surface */
+.dark .bg-presentation.rounded-xl {
+  background: var(--sb-color-chip-bg) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.light .bg-presentation.rounded-xl {
+  background: var(--sb-color-chip-bg) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Sticky mobile nav and banner retain their background */
+.dark .bg-presentation.sticky {
+  background: var(--sb-color-sidebar-bg) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+.light .bg-presentation.sticky {
+  background: var(--sb-color-sidebar-bg) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* Reversible dark-mode logo tint for directory cards. Tune/remove the variable above. */
+.service-card__banner {
+  isolation: isolate;
+}
+
+.service-card__banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: rgba(0, 0, 0, var(--sv-directory-logo-tint-opacity, 0));
+}
+
+.service-card__banner > img {
+  position: relative;
+  z-index: 0;
+}
+
+.service-card__banner > :not(img) {
+  z-index: 2;
+}
+
+/* Reversible homepage Latest News hover glow. Tune the component variables. */
+.sv-latest-news-link {
+  box-shadow: var(--sv-latest-news-shadow);
+  transition:
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.sv-latest-news-link:hover,
+.sv-latest-news-link:focus-visible {
+  box-shadow: var(--sv-latest-news-hover-shadow);
+  opacity: 0.96;
+  transform: translateY(-1px);
+}
+
+/* Light mode body background — orbs handled by GlassBackground React component */
+.light body,
+.light html {
+  background-color: var(--sb-color-background);
+}
+
+button[data-location-active="true"] {
+  color: #3b82f6 !important;
+  background-color: rgba(59, 130, 246, 0.16) !important;
+}
+
+button[data-location-active="false"] {
+  color: var(--text-tertiary) !important;
+  background-color: transparent !important;
 }

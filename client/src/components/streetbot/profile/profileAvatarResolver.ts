@@ -123,6 +123,10 @@ export function getStreetProfileAvatarUrl(profile?: StreetProfileAvatarLike | nu
   }
 
   const existingAvatarUrl = String(profile.avatar_url || "").trim();
+  if (!existingAvatarUrl) {
+    return buildInitialsFallback(profile);
+  }
+
   if (!shouldUsePhotoPlaceholder(existingAvatarUrl)) {
     return existingAvatarUrl;
   }

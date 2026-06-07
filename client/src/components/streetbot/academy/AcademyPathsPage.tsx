@@ -4,8 +4,11 @@ import { useLocation } from 'react-router-dom';
 import { sbFetch } from '../shared/sbFetch';
 import { getCourseCardArt, getLearningPathCardArt } from './academyCardArt';
 import {
+  buildAcademyFallbackCourses,
   filterVisibleAcademyCourses,
   filterVisibleAcademyPrograms,
+  getAcademyProgramCourseDisplayTitle,
+  getAcademyProgramCourseSchedule,
   getLearningPathDisplayCourseCount,
   getLearningPathDisplayCourseTitles,
   getLearningPathDurationLabel,
@@ -61,6 +64,10 @@ export default function AcademyPathsPage() {
     () => filterVisibleAcademyPrograms(learningPaths),
     [learningPaths],
   );
+  const fallbackCourses = useMemo(
+    () => buildAcademyFallbackCourses(visibleLearningPaths),
+    [visibleLearningPaths],
+  );
 
   const visibleCourses = useMemo(
     () => filterVisibleAcademyCourses(courses, visibleLearningPaths),
@@ -76,7 +83,10 @@ export default function AcademyPathsPage() {
 
       if (coursesResp.ok) {
         const courseData = await coursesResp.json();
-        setCourses(Array.isArray(courseData) ? courseData : []);
+        const nextCourses = Array.isArray(courseData) ? courseData : [];
+        setCourses(nextCourses.length > 0 ? nextCourses : fallbackCourses);
+      } else {
+        setCourses(fallbackCourses);
       }
 
       if (enrollmentsResp.ok) {
@@ -86,7 +96,7 @@ export default function AcademyPathsPage() {
     }
 
     load();
-  }, [userId]);
+  }, [fallbackCourses, userId]);
 
   const activeEnrollments = useMemo(
     () => enrollments.filter((enrollment) => enrollment.status !== 'dropped'),
@@ -173,26 +183,16 @@ export default function AcademyPathsPage() {
               <a href={`${basePath}/courses`} style={tabStyle(false)}>
                 Courses
               </a>
-              <a href={`${basePath}/my-courses`} style={tabStyle(false)}>
-                My Courses
+              <a href={`${basePath}/student-workspace`} style={tabStyle(false)}>
+                Student Workspace
               </a>
-              <a href={`${basePath}/saved`} style={tabStyle(false)}>
+              <a href={`${basePath}/student-workspace?tab=saved`} style={tabStyle(false)}>
                 Saved
               </a>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {activeEnrollments.length > 0 && (
-              <a
-                href={`${basePath}/dashboard`}
-                className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-                style={{ background: colors.accent, color: '#000' }}
-              >
-                Open Dashboard
-                <ArrowRight className="h-4 w-4" />
-              </a>
-            )}
             <a
               href={basePath}
               className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
@@ -203,7 +203,7 @@ export default function AcademyPathsPage() {
               }}
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Homepage
+              Back to Academy
             </a>
           </div>
         </div>
@@ -291,11 +291,14 @@ export default function AcademyPathsPage() {
                         </button>
                       </div>
 
-                      <h3
-                        className="text-3xl font-semibold leading-tight md:text-4xl"
-                        style={{ color: colors.text }}
-                      >
-                        {summary.path.title}
+                      <h3 className="text-3xl font-semibold leading-tight md:text-4xl">
+                        <a
+                          href={`${basePath}/paths/${summary.path.slug}`}
+                          className="transition-colors hover:!text-[#FFD600]"
+                          style={{ color: colors.text }}
+                        >
+                          {summary.path.title}
+                        </a>
                       </h3>
                       <p
                         className="mt-3 text-base leading-7"
@@ -331,8 +334,15 @@ export default function AcademyPathsPage() {
                         </p>
                         <div className="space-y-3">
                           {featuredCourses.length > 0
-                            ? featuredCourses.map((course) => {
+                            ? featuredCourses.map((course, index) => {
                                 const courseVisual = getCourseCardArt(course);
+                                const displayTitle = getAcademyProgramCourseDisplayTitle(
+                                  course.title,
+                                );
+                                const schedule = getAcademyProgramCourseSchedule(
+                                  summary.path,
+                                  displayTitle,
+                                );
 
                                 return (
                                   <div
@@ -346,7 +356,7 @@ export default function AcademyPathsPage() {
                                     <div className="flex items-start gap-3">
                                       <img
                                         src={courseVisual.src}
-                                        alt={course.title}
+                                        alt={displayTitle}
                                         className="h-16 w-20 rounded-2xl object-cover"
                                         onError={(event) => {
                                           if (
@@ -360,18 +370,22 @@ export default function AcademyPathsPage() {
                                       />
                                       <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
                                         <div>
-                                          <p
-                                            className="text-sm font-semibold"
+                                          <a
+                                            href={`${basePath}/courses/${course.id}`}
+                                            className="text-sm font-semibold transition-colors hover:!text-[#FFD600]"
                                             style={{ color: colors.text }}
                                           >
-                                            {course.title}
-                                          </p>
+                                            {displayTitle}
+                                          </a>
                                           <p
                                             className="mt-1 text-xs"
                                             style={{ color: colors.textSecondary }}
                                           >
-                                            {(course.level || 'Beginner').toLowerCase()}
-                                            {course.duration ? ` · ${course.duration}` : ''}
+                                            {schedule
+                                              ? `${schedule.month} · ${schedule.dates.join(', ')}`
+                                              : `${(course.level || 'Beginner').toLowerCase()}${
+                                                  course.duration ? ` · ${course.duration}` : ''
+                                                }`}
                                           </p>
                                         </div>
                                         <a
@@ -379,47 +393,59 @@ export default function AcademyPathsPage() {
                                           className="text-xs font-semibold"
                                           style={{ color: colors.accent }}
                                         >
-                                          Learn More
+                                          Step {index + 1}
                                         </a>
                                       </div>
                                     </div>
                                   </div>
                                 );
                               })
-                            : fallbackCourseTitles.map((courseTitle, index) => (
-                                <div
-                                  key={`${summary.path.slug}-${courseTitle}-${index}`}
-                                  className="rounded-2xl border px-4 py-3 text-sm"
-                                  style={{
-                                    borderColor: colors.border,
-                                    background: colors.cardBgStrong,
-                                    color: colors.text,
-                                  }}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <p
-                                        className="text-sm font-semibold"
-                                        style={{ color: colors.text }}
+                            : fallbackCourseTitles.map((courseTitle, index) => {
+                                const displayTitle =
+                                  getAcademyProgramCourseDisplayTitle(courseTitle);
+                                const schedule = getAcademyProgramCourseSchedule(
+                                  summary.path,
+                                  displayTitle,
+                                );
+
+                                return (
+                                  <div
+                                    key={`${summary.path.slug}-${courseTitle}-${index}`}
+                                    className="rounded-2xl border px-4 py-3 text-sm"
+                                    style={{
+                                      borderColor: colors.border,
+                                      background: colors.cardBgStrong,
+                                      color: colors.text,
+                                    }}
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <a
+                                          href={`${basePath}/courses?search=${encodeURIComponent(displayTitle)}`}
+                                          className="text-sm font-semibold transition-colors hover:!text-[#FFD600]"
+                                          style={{ color: colors.text }}
+                                        >
+                                          {displayTitle}
+                                        </a>
+                                        <p
+                                          className="mt-1 text-xs"
+                                          style={{ color: colors.textSecondary }}
+                                        >
+                                          {schedule
+                                            ? `${schedule.month} · ${schedule.dates.join(', ')}`
+                                            : `Included in ${summary.path.title}`}
+                                        </p>
+                                      </div>
+                                      <span
+                                        className="text-xs font-semibold"
+                                        style={{ color: colors.accent }}
                                       >
-                                        {courseTitle}
-                                      </p>
-                                      <p
-                                        className="mt-1 text-xs"
-                                        style={{ color: colors.textSecondary }}
-                                      >
-                                        Included in {summary.path.title}
-                                      </p>
+                                        Step {index + 1}
+                                      </span>
                                     </div>
-                                    <span
-                                      className="text-xs font-semibold"
-                                      style={{ color: colors.accent }}
-                                    >
-                                      Step {index + 1}
-                                    </span>
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                         </div>
                       </div>
 

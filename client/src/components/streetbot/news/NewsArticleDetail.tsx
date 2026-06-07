@@ -20,18 +20,16 @@ import {
   Check,
   Clock,
   Loader2,
-  Play,
-  Pause,
-  Volume2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { SB_API_BASE } from "~/components/streetbot/shared/apiConfig";
+import { SB_API_BASE, STREETBOT_READ_API_BASE } from "~/components/streetbot/shared/apiConfig";
 import { readSessionCache, writeSessionCache } from '../shared/perfCache';
 import { useGlassStyles } from '../shared/useGlassStyles';
 import { useAuthContext } from '~/hooks';
 import { useUserRole } from '../lib/auth/useUserRole';
 import { useResponsive } from '../hooks/useResponsive';
 import AuthPopupModal from '../shared/AuthPopupModal';
+import { readStoredBoolean } from '../shared/safeStorage';
 
 import type { Article, Comment, GalleryImage } from './newsTypes';
 import {
@@ -56,215 +54,6 @@ const fadeInStyle = `
   animation: newsDetailFadeIn 0.3s ease-out both;
 }
 `;
-
-/* ─── Listen to Article (OpenAI-style TTS) ─── */
-function ListenBar({ articleTitle, articleContent, colors }: {
-  articleTitle: string;
-  articleContent: string;
-  colors: ReturnType<typeof useGlassStyles>["colors"];
-}) {
-  const [state, setState] = useState<'idle' | 'generating' | 'playing' | 'paused'>('idle');
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const progressRef = useRef<HTMLDivElement>(null);
-
-  // Estimate read time (average 150 wpm for speech)
-  const wordCount = articleContent.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length;
-  const estimatedMins = Math.ceil(wordCount / 150);
-
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const generateAudio = async () => {
-    setState('generating');
-    try {
-      // Strip HTML tags for clean text
-      const plainText = articleContent.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-      // Keep text very short for local Qwen TTS (slow on MPS for long text)
-      // ~50 words generates in ~10-15 seconds
-      const truncated = plainText.split(/\s+/).slice(0, 50).join(' ');
-      const fullText = `${articleTitle}. ${truncated}`;
-
-      // Call local TTS endpoint
-      const resp = await fetch('/sbapi/v1/audio/speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: fullText,
-          voice: 'Vivian',
-          model: 'qwen-tts',
-        }),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        console.error('TTS endpoint error:', resp.status, errText);
-        setState('idle');
-        return;
-      }
-
-      // The endpoint returns the audio file directly as binary
-      const contentType = resp.headers.get('content-type') || '';
-      if (contentType.includes('audio') || contentType.includes('octet-stream')) {
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
-        setState('playing');
-      } else {
-        // JSON response with a file path
-        const data = await resp.json();
-        if (data.file) {
-          setAudioUrl(`/sbapi/audio/${data.file}`);
-          setState('playing');
-        } else if (data.url) {
-          setAudioUrl(data.url);
-          setState('playing');
-        } else {
-          console.error('Unexpected TTS response:', data);
-          setState('idle');
-        }
-      }
-    } catch (err) {
-      console.error('TTS generation failed:', err);
-      setState('idle');
-    }
-  };
-
-  useEffect(() => {
-    if (!audioUrl || state !== 'playing') return;
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-    audio.playbackRate = playbackRate;
-
-    audio.addEventListener('loadedmetadata', () => setDuration(audio.duration));
-    audio.addEventListener('timeupdate', () => setCurrentTime(audio.currentTime));
-    audio.addEventListener('ended', () => setState('idle'));
-    audio.play().catch(() => setState('paused'));
-
-    return () => { audio.pause(); audio.src = ''; };
-  }, [audioUrl]);
-
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.playbackRate = playbackRate;
-  }, [playbackRate]);
-
-  const togglePlay = () => {
-    if (!audioUrl) { generateAudio(); return; }
-    if (state === 'playing') {
-      audioRef.current?.pause();
-      setState('paused');
-    } else {
-      audioRef.current?.play();
-      setState('playing');
-    }
-  };
-
-  const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!progressRef.current || !audioRef.current || !duration) return;
-    const rect = progressRef.current.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    audioRef.current.currentTime = pct * duration;
-  };
-
-  const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const isActive = state !== 'idle';
-
-  return (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '14px 0', margin: '8px 0 4px',
-        borderTop: `1px solid ${colors.border}`,
-        borderBottom: `1px solid ${colors.border}`,
-      }}
-    >
-      {/* Play/Pause button */}
-      <button
-        onClick={togglePlay}
-        disabled={state === 'generating'}
-        style={{
-          width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
-          background: state === 'generating' ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.06)',
-          color: colors.text,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'background 0.15s',
-          flexShrink: 0,
-        }}
-      >
-        {state === 'generating' ? (
-          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-        ) : state === 'playing' ? (
-          <Pause size={16} fill="currentColor" />
-        ) : (
-          <Play size={16} fill="currentColor" style={{ marginLeft: 2 }} />
-        )}
-      </button>
-
-      {/* Label */}
-      <span style={{ fontSize: '0.82rem', fontWeight: 500, color: colors.text, whiteSpace: 'nowrap' }}>
-        {state === 'generating' ? 'Generating audio...' : 'Listen to article'}
-      </span>
-
-      {/* Progress bar (only when audio is active) */}
-      {isActive && duration > 0 ? (
-        <div
-          ref={progressRef}
-          onClick={seekTo}
-          style={{
-            flex: 1, height: 4, borderRadius: 2, cursor: 'pointer',
-            background: 'rgba(255,255,255,0.1)',
-            position: 'relative',
-          }}
-        >
-          <div style={{
-            height: '100%', borderRadius: 2,
-            background: colors.accent,
-            width: `${pct}%`,
-            transition: 'width 0.1s linear',
-          }} />
-        </div>
-      ) : (
-        <div style={{ flex: 1 }} />
-      )}
-
-      {/* Time */}
-      <span style={{ fontSize: '0.75rem', color: colors.textMuted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-        {isActive && duration > 0
-          ? `${formatTime(currentTime)} / ${formatTime(duration)}`
-          : `~${estimatedMins} min`
-        }
-      </span>
-
-      {/* Speed control */}
-      {isActive && (
-        <button
-          onClick={() => setPlaybackRate(r => r >= 2 ? 0.75 : +(r + 0.25).toFixed(2))}
-          style={{
-            padding: '2px 8px', borderRadius: 10, border: `1px solid ${colors.border}`,
-            background: 'transparent', color: colors.textMuted,
-            fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer',
-            fontFamily: 'monospace',
-          }}
-        >
-          {playbackRate}x
-        </button>
-      )}
-
-      {/* Volume icon */}
-      {isActive && (
-        <Volume2 size={16} style={{ color: colors.textMuted, flexShrink: 0 }} />
-      )}
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
 
 /* ─── EditorialImage ─── */
 interface EditorialImageProps {
@@ -454,8 +243,18 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
   const dark = isDarkTheme(theme);
   const { isMobile, isTablet } = useResponsive();
   const { navVisible } = (useOutletContext<ContextType>() ?? { navVisible: false });
-  const sidebarMinimized = JSON.parse(localStorage.getItem('sidebarMinimized') ?? 'true');
+  const sidebarMinimized = readStoredBoolean('sidebarMinimized', true);
   const navLeft = (isMobile || isTablet) ? 0 : isDirectory ? 0 : navVisible ? (sidebarMinimized ? 80 : 275) : 0;
+  const articleControlBg = dark ? NEWS_T.glassSubtle : "rgba(255,255,255,0.88)";
+  const articleControlBorder = dark ? colors.border : "rgba(17,24,39,0.18)";
+  const articleControlColor = dark ? colors.text : "#111827";
+  const articleControlShadow = dark ? undefined : "0 8px 22px rgba(17,24,39,0.18)";
+  const articleActionBg = dark ? NEWS_T.glassSubtle : "rgba(255,255,255,0.92)";
+  const articleActionBorder = dark ? colors.border : "rgba(17,24,39,0.20)";
+  const articleActionColor = dark ? colors.textSecondary : "#1F2937";
+  const articleHeroFade = dark
+    ? "linear-gradient(transparent 40%, rgba(12,10,9,0.8) 80%, #0C0A09 100%)"
+    : "linear-gradient(transparent 38%, rgba(255,255,255,0.20) 66%, rgba(248,250,252,0.98) 100%)";
 
   // Memoized styles for list renders (tags, comments)
   const tagStyle = useMemo(() => ({
@@ -536,8 +335,8 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
         const encoded = encodeURIComponent(slug);
         const looksLikeId = /^[0-9]+$/.test(slug);
 
-        const slugUrl = `${SB_API_BASE}/news/articles/slug/${encoded}`;
-        const idUrl = `${SB_API_BASE}/news/articles/${encoded}`;
+        const slugUrl = `${STREETBOT_READ_API_BASE}/news/articles/slug/${encoded}`;
+        const idUrl = `${STREETBOT_READ_API_BASE}/news/articles/${encoded}`;
 
         // Fire both requests in parallel, take the first success
         const results = await Promise.allSettled([
@@ -574,7 +373,7 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
 
         // Fetch comments
         if (data.id) {
-          fetch(`${SB_API_BASE}/news/articles/${encodeURIComponent(data.id)}/comments`, { signal })
+          fetch(`${STREETBOT_READ_API_BASE}/news/articles/${encodeURIComponent(data.id)}/comments`, { signal })
             .then((r) => (r.ok ? r.json() : []))
             .then((c) => { if (!signal.aborted && Array.isArray(c)) setComments(c); })
             .catch(() => {});
@@ -582,7 +381,7 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
 
         // Check bookmark status
         if (userId && data.id) {
-          fetch(`${SB_API_BASE}/news/bookmarks/${encodeURIComponent(userId)}`, { signal })
+          fetch(`${STREETBOT_READ_API_BASE}/news/bookmarks/${encodeURIComponent(userId)}`, { signal })
             .then((r) => (r.ok ? r.json() : []))
             .then((bookmarks) => {
               if (!signal.aborted && Array.isArray(bookmarks)) {
@@ -758,11 +557,12 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
             onClick={() => navigate("/news")}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
             style={{
-              background: NEWS_T.glassSubtle,
+              background: articleControlBg,
               backdropFilter: "blur(24px)",
               WebkitBackdropFilter: "blur(24px)",
-              border: `1px solid ${colors.border}`,
-              color: colors.text,
+              border: `1px solid ${articleControlBorder}`,
+              color: articleControlColor,
+              boxShadow: articleControlShadow,
             }}
           >
             <ArrowLeft size={16} />
@@ -788,7 +588,7 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
               style={{ maxHeight: "60vh", width: "100%" }}
             />
             {/* Bottom gradient fade */}
-            <div className="absolute inset-0" style={{ background: "linear-gradient(transparent 40%, rgba(12,10,9,0.8) 80%, #0C0A09 100%)" }} />
+            <div className="absolute inset-0" style={{ background: articleHeroFade }} />
             {/* Category badge top-left */}
             {article.category && (
               <span
@@ -803,10 +603,11 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
               onClick={toggleBookmark}
               className="absolute top-6 right-6 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
               style={{
-                background: isBookmarked ? colors.accent : "rgba(0,0,0,0.5)",
+                background: isBookmarked ? colors.accent : dark ? "rgba(0,0,0,0.5)" : "rgba(17,24,39,0.86)",
                 backdropFilter: "blur(12px)",
-                border: `1px solid ${colors.border}`,
+                border: `1px solid ${dark ? colors.border : "rgba(255,255,255,0.72)"}`,
                 color: isBookmarked ? NEWS_T.bgDeep : "#fff",
+                boxShadow: dark ? undefined : "0 8px 20px rgba(17,24,39,0.22)",
               }}
               aria-label={isBookmarked ? "Remove bookmark" : "Bookmark"}
             >
@@ -816,7 +617,7 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
         )}
 
         {/* Article content */}
-        <div className="relative z-10" style={{ marginTop: hasHeroImage ? -60 : 100 }}>
+        <div className="relative z-10" style={{ marginTop: hasHeroImage ? (dark ? -60 : 0) : 100 }}>
           <motion.article
             className="max-w-[720px] mx-auto px-6"
             initial="hidden"
@@ -893,9 +694,10 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
                   onClick={toggleLike}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
                   style={{
-                    background: isLiked ? "rgba(239,68,68,0.15)" : NEWS_T.glassSubtle,
-                    border: `1px solid ${isLiked ? "rgba(239,68,68,0.3)" : colors.border}`,
-                    color: isLiked ? "#EF4444" : colors.textSecondary,
+                    background: isLiked ? "rgba(239,68,68,0.15)" : articleActionBg,
+                    border: `1px solid ${isLiked ? "rgba(239,68,68,0.3)" : articleActionBorder}`,
+                    color: isLiked ? "#EF4444" : articleActionColor,
+                    boxShadow: dark ? undefined : "0 4px 12px rgba(17,24,39,0.08)",
                   }}
                 >
                   <Heart size={16} fill={isLiked ? "currentColor" : "none"} />
@@ -906,7 +708,12 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
                 <button
                   onClick={() => commentRef.current?.scrollIntoView({ behavior: "smooth" })}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
-                  style={{ background: NEWS_T.glassSubtle, border: `1px solid ${colors.border}`, color: colors.textSecondary }}
+                  style={{
+                    background: articleActionBg,
+                    border: `1px solid ${articleActionBorder}`,
+                    color: articleActionColor,
+                    boxShadow: dark ? undefined : "0 4px 12px rgba(17,24,39,0.08)",
+                  }}
                 >
                   <MessageCircle size={16} />
                   {comments.length > 0 && comments.length}
@@ -917,9 +724,10 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
                   onClick={toggleBookmark}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105"
                   style={{
-                    background: isBookmarked ? "rgba(250,204,21,0.15)" : NEWS_T.glassSubtle,
-                    border: `1px solid ${isBookmarked ? NEWS_T.borderAccent : colors.border}`,
-                    color: isBookmarked ? colors.accent : colors.textSecondary,
+                    background: isBookmarked ? "rgba(250,204,21,0.15)" : articleActionBg,
+                    border: `1px solid ${isBookmarked ? NEWS_T.borderAccent : articleActionBorder}`,
+                    color: isBookmarked ? colors.accent : articleActionColor,
+                    boxShadow: dark ? undefined : "0 4px 12px rgba(17,24,39,0.08)",
                   }}
                 >
                   <Bookmark size={16} fill={isBookmarked ? "currentColor" : "none"} />
@@ -930,9 +738,10 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
                   onClick={handleShare}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 ml-auto"
                   style={{
-                    background: copied ? "rgba(34,197,94,0.15)" : NEWS_T.glassSubtle,
-                    border: `1px solid ${copied ? "rgba(34,197,94,0.3)" : colors.border}`,
-                    color: copied ? "#22C55E" : colors.textSecondary,
+                    background: copied ? "rgba(34,197,94,0.15)" : articleActionBg,
+                    border: `1px solid ${copied ? "rgba(34,197,94,0.3)" : articleActionBorder}`,
+                    color: copied ? "#22C55E" : articleActionColor,
+                    boxShadow: dark ? undefined : "0 4px 12px rgba(17,24,39,0.08)",
                   }}
                 >
                   {copied ? <Check size={16} /> : <Share2 size={16} />}
@@ -956,15 +765,6 @@ const NewsArticleDetail: React.FC<NewsArticleDetailProps> = ({ slug }) => {
                 )}
               </div>
             </motion.header>
-
-            {/* Listen to article — OpenAI style */}
-            {article.content && (
-              <ListenBar
-                articleTitle={article.title}
-                articleContent={article.content}
-                colors={colors}
-              />
-            )}
 
             {/* Article body */}
             <motion.div

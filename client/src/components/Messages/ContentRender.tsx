@@ -71,17 +71,23 @@ const ContentRender = memo(
     const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
 
     const iconData: TMessageIcon = useMemo(
-      () => ({
-        endpoint: msg?.endpoint ?? conversation?.endpoint,
-        model: msg?.model ?? conversation?.model,
-        iconURL: msg?.iconURL,
-        modelLabel: messageLabel,
-        isCreatedByUser: msg?.isCreatedByUser,
-      }),
+      () => {
+        const assistantIconURL =
+          msg?.iconURL || (!msg?.isCreatedByUser ? conversation?.iconURL : undefined);
+
+        return {
+          endpoint: msg?.endpoint ?? conversation?.endpoint,
+          model: msg?.model ?? conversation?.model,
+          iconURL: assistantIconURL,
+          modelLabel: messageLabel,
+          isCreatedByUser: msg?.isCreatedByUser,
+        };
+      },
       [
         messageLabel,
         conversation?.endpoint,
         conversation?.model,
+        conversation?.iconURL,
         msg?.model,
         msg?.iconURL,
         msg?.endpoint,

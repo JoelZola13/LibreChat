@@ -1,31 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useMediaQuery } from '@librechat/client';
 import { useTheme } from '~/components/streetbot/shared/theme-provider';
-import { sbFetch } from '~/components/streetbot/shared/sbFetch';
+import { useActiveUser } from '~/components/streetbot/shared/useActiveUser';
 import { useAuthContext } from '~/hooks/AuthContext';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type NotificationRecord = {
-  id: string;
-  user_id: string;
-  title: string;
-  message: string;
-  source: string;
-  type: string;
-  href?: string;
-  is_read: boolean;
-  read_at?: string;
-  created_at: string;
-};
-
-type NotificationSummary = {
-  user_id: string;
-  unread_count: number;
-  total_count: number;
-};
+import NavDropdown from '~/components/streetbot/shared/NavDropdown';
+import { STREET_PROFILE_NAV_ITEMS } from '~/components/streetbot/shared/streetProfileNavItems';
+import { getSeamlessNavBarStyle } from '~/components/streetbot/shared/glassNav';
+import {
+  formatNotificationTimeAgo,
+  getNotificationSourceColor,
+  getNotificationSourceLabel,
+  loadStreetNotificationSummary,
+  loadStreetNotifications,
+  markAllStreetNotificationsRead,
+  markStreetNotificationRead,
+  getCachedNotificationUserId,
+  type NotificationRecord,
+  type NotificationSummary,
+} from './notificationData';
 
 // ---------------------------------------------------------------------------
 // Inline SVG Icons (replacing lucide-react)
@@ -174,22 +167,6 @@ const CheckCheckIcon = ({ size = 20, color = 'currentColor', style }: IconProps)
   </svg>
 );
 
-const CheckIcon = ({ size = 20, color = 'currentColor', style }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={style}
-  >
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
 const AlertCircleIcon = ({ size = 20, color = 'currentColor', style }: IconProps) => (
   <svg
     width={size}
@@ -212,47 +189,19 @@ const AlertCircleIcon = ({ size = 20, color = 'currentColor', style }: IconProps
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatTimeAgo(isoString: string): string {
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return '';
-
-  const now = new Date();
-  const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffSeconds < 30) return 'just now';
-  if (diffSeconds < 60) return `${diffSeconds}s ago`;
-
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
 function sourceLabel(source: string): string {
-  switch (source) {
-    case 'messages':
-      return 'Messages';
-    case 'tasks':
-      return 'Tasks';
-    case 'calendar':
-      return 'Calendar';
-    case 'jobs':
-      return 'Job Board';
-    case 'system':
-      return 'System';
-    default:
-      return source ? source.charAt(0).toUpperCase() + source.slice(1) : 'App';
-  }
+  return getNotificationSourceLabel(source);
 }
 
 // Spin keyframe id (injected once)
 const SPIN_KEYFRAME_ID = 'sbp-notif-spin';
+const NOTIFICATIONS_MAIN_NAV_LINKS = [
+  { label: 'Street Gallery', to: '/gallery' },
+  { label: 'Academy', to: '/academy' },
+  { label: 'Job Board', to: '/jobs' },
+  { label: 'Directory', to: '/directory' },
+  { label: 'News', to: '/news' },
+];
 function ensureSpinKeyframe() {
   if (document.getElementById(SPIN_KEYFRAME_ID)) return;
   const style = document.createElement('style');
@@ -270,7 +219,9 @@ export default function NotificationsPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const { user } = useAuthContext();
-  const userId = user?.id || 'anonymous';
+  const { activeUser } = useActiveUser();
+  const userId = user?.id || activeUser?.id || getCachedNotificationUserId() || 'anonymous';
+  const isMobile = useMediaQuery('(max-width: 768px), (max-height: 500px)');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -281,32 +232,64 @@ export default function NotificationsPage() {
 
   const [activeView, setActiveView] = useState<'all' | 'unread'>('all');
   const [activeSource, setActiveSource] = useState<string>('all');
+  const [isTopNavScrolled, setIsTopNavScrolled] = useState(false);
+  const loadRequestRef = useRef(0);
+  const summaryRequestRef = useRef(0);
 
   // Inject spin keyframe for the refresh icon
   useEffect(() => {
     ensureSpinKeyframe();
   }, []);
 
+  useEffect(() => {
+    const readScrollTop = (event?: Event) => {
+      const target = event?.target;
+      if (target instanceof Element && target.closest('nav#chat-history-nav')) {
+        return;
+      }
+
+      const targetScrollTop = target instanceof Element ? target.scrollTop : 0;
+      const scrollTop = Math.max(
+        window.scrollY,
+        document.documentElement.scrollTop,
+        document.body.scrollTop,
+        targetScrollTop,
+      );
+
+      setIsTopNavScrolled(scrollTop > 8);
+    };
+
+    readScrollTop();
+    window.addEventListener('scroll', readScrollTop, { passive: true });
+    document.addEventListener('scroll', readScrollTop, { capture: true, passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', readScrollTop);
+      document.removeEventListener('scroll', readScrollTop, true);
+    };
+  }, []);
+
   // Theme colors -- glassmorphism translucent values
   const colors = useMemo(
     () => ({
       bg: isDark ? 'var(--sb-color-background)' : 'var(--sb-color-background)',
-      surface: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.8)',
-      surfaceHover: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
-      surface2: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.85)',
-      border: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-      borderHover: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.12)',
+      surface: isDark ? 'rgba(24, 25, 34, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+      surfaceHover: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F2F3F5',
+      surface2: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E7F3FF',
+      border: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(17, 24, 39, 0.10)',
+      borderHover: isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(17, 24, 39, 0.14)',
       text: isDark ? '#fff' : '#1a1c24',
-      textSecondary: isDark ? 'rgba(255, 255, 255, 0.7)' : '#4b4d59',
-      textMuted: isDark ? 'rgba(255, 255, 255, 0.5)' : '#6b7280',
+      textSecondary: isDark ? 'rgba(248, 250, 252, 0.72)' : '#65676B',
+      textMuted: isDark ? 'rgba(248, 250, 252, 0.56)' : '#65676B',
       accent: '#FFD700',
       accentHover: '#e6c200',
-      unreadBg: isDark ? 'rgba(255, 214, 0, 0.12)' : 'rgba(255, 214, 0, 0.15)',
+      unreadBg: isDark ? 'rgba(255, 255, 255, 0.04)' : '#fff',
       accentText: isDark ? '#FFD700' : '#000',
+      fbBlue: '#1877F2',
       danger: '#ef4444',
       glassShadow: isDark
-        ? '0 8px 32px rgba(0, 0, 0, 0.3)'
-        : '0 4px 20px rgba(0, 0, 0, 0.08)',
+        ? '0 24px 60px rgba(0, 0, 0, 0.45)'
+        : '0 12px 32px rgba(0, 0, 0, 0.18)',
     }),
     [isDark],
   );
@@ -314,12 +297,10 @@ export default function NotificationsPage() {
   // ------- Data loading -------
 
   const loadSummary = useCallback(async () => {
+    const requestId = ++summaryRequestRef.current;
     try {
-      const resp = await sbFetch(
-        `/api/notifications/summary?user_id=${encodeURIComponent(userId)}`,
-      );
-      if (!resp.ok) throw new Error(`Failed to load summary (${resp.status})`);
-      const data = (await resp.json()) as NotificationSummary;
+      const data = await loadStreetNotificationSummary(userId);
+      if (requestId !== summaryRequestRef.current) return;
       setSummary(data);
     } catch (err) {
       console.error('Failed to load notification summary', err);
@@ -329,6 +310,7 @@ export default function NotificationsPage() {
 
   const loadNotifications = useCallback(
     async (opts?: { silent?: boolean }) => {
+      const requestId = ++loadRequestRef.current;
       if (!opts?.silent) {
         setLoading(true);
         setError(null);
@@ -344,13 +326,14 @@ export default function NotificationsPage() {
           offset: '0',
           limit: '100',
         });
-        const resp = await sbFetch(`/api/notifications?${params.toString()}`);
-        if (!resp.ok) {
-          throw new Error(`Failed to load notifications (${resp.status})`);
-        }
-        const data = (await resp.json()) as NotificationRecord[];
+        const data = await loadStreetNotifications(userId, {
+          unreadOnly,
+          limit: Number(params.get('limit') || 100),
+        });
+        if (requestId !== loadRequestRef.current) return;
         setNotifications(Array.isArray(data) ? data : []);
       } catch (err: unknown) {
+        if (requestId !== loadRequestRef.current) return;
         console.error('Failed to load notifications', err);
         // Graceful fallback -- show empty state instead of error when API is unavailable
         setNotifications([]);
@@ -362,6 +345,7 @@ export default function NotificationsPage() {
           setError(null); // Friendly fallback for now
         }
       } finally {
+        if (requestId !== loadRequestRef.current) return;
         setLoading(false);
         setRefreshing(false);
       }
@@ -390,7 +374,7 @@ export default function NotificationsPage() {
   }, [notifications, activeSource]);
 
   const unreadCount = useMemo(() => {
-    if (summary) return summary.unread_count;
+    if (summary && summary.total_count > 0) return summary.unread_count;
     return notifications.filter((n) => !n.is_read).length;
   }, [notifications, summary]);
 
@@ -411,14 +395,8 @@ export default function NotificationsPage() {
         );
       }
 
-      // Skip API for fallback/demo notifications
-      if (notificationId.startsWith('fallback-')) return;
-
       try {
-        const resp = await sbFetch(`/api/notifications/${notificationId}/read`, {
-          method: 'POST',
-        });
-        if (!resp.ok) throw new Error(`Mark read failed (${resp.status})`);
+        await markStreetNotificationRead(userId, notificationId);
       } catch (err) {
         console.error('Failed to mark notification read', err);
         // Re-sync on failure
@@ -432,17 +410,13 @@ export default function NotificationsPage() {
         void loadNotifications({ silent: true });
       }
     },
-    [activeView, loadNotifications, loadSummary],
+    [activeView, loadNotifications, loadSummary, userId],
   );
 
   const markAllRead = useCallback(async () => {
     try {
       setRefreshing(true);
-      const resp = await sbFetch('/api/notifications/read-all', {
-        method: 'POST',
-        body: JSON.stringify({ user_id: userId }),
-      });
-      if (!resp.ok) throw new Error(`Mark all read failed (${resp.status})`);
+      await markAllStreetNotificationsRead(userId, notifications);
 
       if (activeView === 'unread') {
         setNotifications([]);
@@ -486,25 +460,20 @@ export default function NotificationsPage() {
     if (notif.source === 'messages') return MessageCircleIcon;
     if (notif.source === 'tasks') return ListTodoIcon;
     if (notif.source === 'calendar') return CalendarIcon;
+    if (notif.source === 'documents' || notif.source === 'storage' || notif.source === 'news') {
+      return MegaphoneIcon;
+    }
     if (notif.source === 'jobs') return BriefcaseIcon;
+    if (notif.source === 'academy') return BellIcon;
+    if (notif.source === 'gallery') return BellIcon;
+    if (notif.source === 'groups') return MessageCircleIcon;
+    if (notif.source === 'profile') return BellIcon;
+    if (notif.source === 'social' || notif.source === 'forum') return MessageCircleIcon;
     return BellIcon;
   };
 
   const sourceColor = (source: string) => {
-    switch (source) {
-      case 'messages':
-        return '#00FFDD';
-      case 'tasks':
-        return '#FFD700';
-      case 'calendar':
-        return '#3b82f6';
-      case 'jobs':
-        return '#22c55e';
-      case 'system':
-        return '#FF0055';
-      default:
-        return colors.accent;
-    }
+    return getNotificationSourceColor(source);
   };
 
   // ------- Shared inline styles -------
@@ -521,26 +490,97 @@ export default function NotificationsPage() {
   // ------- Render -------
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px', minHeight: '70vh', position: 'relative', zIndex: 1, fontFamily: 'Rubik, sans-serif' }}>
-      {/* Header */}
+    <>
+      <div
+        translate="no"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          ...getSeamlessNavBarStyle(isDark, isTopNavScrolled),
+          padding: '8px clamp(160px, 16.45vw, 220px)',
+          boxSizing: 'border-box',
+          display: isMobile ? 'none' : 'block',
+        }}
+      >
+        <nav
+          aria-label="Street Voices main navigation"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 28,
+            minHeight: 38,
+            height: 48,
+            maxWidth: 859,
+            width: 'min(859px, calc(100vw - 320px))',
+            margin: '0 auto',
+            fontFamily: 'Rubik, sans-serif',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <NavDropdown
+            label="Street Profile"
+            href="/profiles"
+            items={STREET_PROFILE_NAV_ITEMS}
+            textColor={colors.text}
+            fontSize={14}
+            buttonStyle={{ fontWeight: 800 }}
+            menuMinWidth={240}
+          />
+          {NOTIFICATIONS_MAIN_NAV_LINKS.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              style={{
+                color: colors.text,
+                fontSize: 14,
+                fontWeight: 800,
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                minHeight: 38,
+              }}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
       <div
         style={{
+          maxWidth: 780,
+          margin: '0 auto',
+          padding: isMobile ? '68px 14px 24px' : '86px 24px 24px',
+          minHeight: '70vh',
+          position: 'relative',
+          zIndex: 1,
+          fontFamily: 'Rubik, sans-serif',
+        }}
+      >
+      <div
+        style={{
+          ...glassCardBase,
+          padding: isMobile ? 14 : 16,
+          marginBottom: 12,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
           gap: 16,
           flexWrap: 'wrap',
-          marginBottom: 18,
         }}
       >
         <div>
           <h1
             style={{
               margin: 0,
-              fontSize: '1.8rem',
-              fontWeight: 800,
+              fontSize: isMobile ? 26 : 28,
+              fontWeight: 900,
               color: colors.text,
               fontFamily: 'Rubik, sans-serif',
+              letterSpacing: 0,
             }}
           >
             Notifications
@@ -549,7 +589,7 @@ export default function NotificationsPage() {
             style={{
               marginTop: 6,
               color: colors.textSecondary,
-              fontSize: '0.95rem',
+              fontSize: 14,
               fontFamily: 'Rubik, sans-serif',
             }}
           >
@@ -563,7 +603,15 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 10,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            width: isMobile ? '100%' : undefined,
+          }}
+        >
           {/* Refresh button */}
           <button
             type="button"
@@ -575,10 +623,10 @@ export default function NotificationsPage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
-              padding: '10px 16px',
-              borderRadius: 12,
+              padding: isMobile ? '10px 14px' : '10px 16px',
+              borderRadius: 999,
               border: `1px solid ${colors.border}`,
-              background: colors.surface,
+              background: isDark ? 'rgba(255,255,255,0.08)' : '#F2F3F5',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
               color: colors.text,
@@ -612,13 +660,13 @@ export default function NotificationsPage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
-              padding: '10px 16px',
-              borderRadius: 12,
-              border: `1px solid ${colors.accent}`,
-              background: isDark ? colors.accent : 'transparent',
+              padding: isMobile ? '10px 14px' : '10px 16px',
+              borderRadius: 999,
+              border: 'none',
+              background: colors.accent,
               color: '#000',
               fontSize: 14,
-              fontWeight: 600,
+              fontWeight: 900,
               fontFamily: 'Rubik, sans-serif',
               cursor: unreadCount === 0 ? 'not-allowed' : 'pointer',
               opacity: unreadCount === 0 ? 0.55 : 1,
@@ -633,17 +681,15 @@ export default function NotificationsPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div
         style={{
-          padding: 14,
-          marginBottom: 14,
+          padding: isMobile ? '0 0 12px' : '0 8px 12px',
+          marginBottom: 6,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: 12,
           flexWrap: 'wrap',
-          ...glassCardBase,
         }}
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -653,17 +699,16 @@ export default function NotificationsPage() {
               type="button"
               onClick={() => setActiveView(view)}
               style={{
-                padding: '8px 14px',
+                padding: '9px 13px',
                 borderRadius: 999,
-                border: `1px solid ${activeView === view ? colors.accent : colors.border}`,
-                background:
-                  activeView === view ? 'rgba(255, 214, 0, 0.15)' : colors.surface,
+                border: 'none',
+                background: activeView === view ? colors.surface2 : 'transparent',
                 backdropFilter: 'blur(8px)',
                 WebkitBackdropFilter: 'blur(8px)',
-                color: activeView === view ? colors.accentText : colors.text,
+                color: activeView === view ? colors.fbBlue : colors.text,
                 cursor: 'pointer',
-                fontSize: 13,
-                fontWeight: 600,
+                fontSize: 15,
+                fontWeight: 800,
                 fontFamily: 'Rubik, sans-serif',
                 transition: 'all 0.2s ease',
               }}
@@ -673,12 +718,20 @@ export default function NotificationsPage() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            width: isMobile ? '100%' : undefined,
+          }}
+        >
           <span
             style={{
               color: colors.textSecondary,
               fontSize: 12,
-              fontWeight: 600,
+              fontWeight: 800,
               textTransform: 'uppercase',
               fontFamily: 'Rubik, sans-serif',
             }}
@@ -690,16 +743,17 @@ export default function NotificationsPage() {
             onChange={(e) => setActiveSource(e.target.value)}
             style={{
               padding: '8px 12px',
-              borderRadius: 12,
+              borderRadius: 10,
               border: `1px solid ${colors.border}`,
-              background: colors.surface,
+              background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
               color: colors.text,
               fontSize: 13,
               fontFamily: 'Rubik, sans-serif',
               outline: 'none',
-              minWidth: 160,
+              minWidth: isMobile ? 0 : 160,
+              width: isMobile ? '100%' : undefined,
               cursor: 'pointer',
             }}
           >
@@ -778,7 +832,7 @@ export default function NotificationsPage() {
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ ...glassCardBase, padding: 8 }}>
           {filteredNotifications.map((notif) => {
             const Icon = getIconComponent(notif);
             const accent = sourceColor(notif.source);
@@ -794,45 +848,43 @@ export default function NotificationsPage() {
                 style={{
                   textAlign: 'left',
                   width: '100%',
-                  borderRadius: 16,
-                  border: `1px solid ${isUnread ? 'rgba(255, 214, 0, 0.25)' : colors.border}`,
-                  background: isUnread ? colors.unreadBg : colors.surface,
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  boxShadow: isUnread
-                    ? `${colors.glassShadow}, 0 0 20px rgba(255, 214, 0, 0.1)`
-                    : colors.glassShadow,
-                  padding: 16,
+                  borderRadius: 10,
+                  border: 'none',
+                  background: 'transparent',
+                  padding: '10px 12px',
                   cursor: 'pointer',
                   display: 'grid',
-                  gridTemplateColumns: '48px 1fr auto',
-                  gap: 14,
-                  alignItems: 'start',
-                  transition: 'all 0.25s ease',
+                  gridTemplateColumns: '56px 1fr 12px',
+                  gap: 12,
+                  alignItems: 'center',
+                  transition: 'background 160ms ease',
                   fontFamily: 'Rubik, sans-serif',
                 }}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.background = colors.surfaceHover;
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.background = 'transparent';
+                }}
               >
-                {/* Icon container */}
                 <div
                   style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 14,
-                    background: `${accent}20`,
-                    border: `1px solid ${accent}40`,
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
+                    position: 'relative',
+                    width: 56,
+                    height: 56,
+                    borderRadius: '50%',
+                    background: accent,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: `0 4px 12px ${accent}20`,
+                    color: accent === '#FFD600' ? '#111' : '#fff',
+                    boxShadow: '0 8px 18px rgba(0, 0, 0, 0.22)',
                   }}
                   aria-hidden
                 >
-                  <Icon size={20} color={accent} />
+                  <Icon size={22} color={accent === '#FFD600' ? '#111' : '#fff'} />
                 </div>
 
-                {/* Content */}
                 <div style={{ minWidth: 0 }}>
                   <div
                     style={{
@@ -852,47 +904,16 @@ export default function NotificationsPage() {
                     >
                       {notif.title}
                     </div>
-                    {/* Source badge */}
-                    <div
-                      style={{
-                        fontSize: 11,
-                        padding: '4px 10px',
-                        borderRadius: 999,
-                        border: `1px solid ${colors.border}`,
-                        background: colors.surface2,
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        color: colors.textSecondary,
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      {sourceLabel(notif.source)}
-                    </div>
-                    {/* Unread dot */}
-                    {isUnread && (
-                      <div
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 999,
-                          background: colors.accent,
-                          boxShadow: `0 0 8px ${colors.accent}`,
-                        }}
-                        aria-label="Unread"
-                      />
-                    )}
                   </div>
 
-                  {/* Message preview */}
                   {notif.message && (
                     <div
                       style={{
-                        marginTop: 8,
-                        color: colors.textSecondary,
-                        fontSize: 13,
-                        lineHeight: 1.5,
+                        marginTop: 3,
+                        color: colors.text,
+                        fontSize: 14,
+                        lineHeight: 1.35,
+                        fontWeight: isUnread ? 800 : 500,
                         overflow: 'hidden',
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
@@ -903,65 +924,34 @@ export default function NotificationsPage() {
                     </div>
                   )}
 
-                  {/* Time ago */}
-                  <div style={{ marginTop: 10, color: colors.textMuted, fontSize: 12 }}>
-                    {formatTimeAgo(notif.created_at)}
-                    {notif.href ? ` \u2022 opens ${notif.href}` : ''}
+                  <div
+                    style={{
+                      marginTop: 4,
+                      color: isUnread ? colors.fbBlue : colors.textMuted,
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {formatNotificationTimeAgo(notif.created_at)} · {sourceLabel(notif.source)}
                   </div>
                 </div>
 
-                {/* Action button */}
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {!notif.is_read ? (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '8px 12px',
-                        borderRadius: 10,
-                        border: `1px solid ${isDark ? 'rgba(255, 214, 0, 0.4)' : 'rgba(146, 112, 12, 0.4)'}`,
-                        background: isDark
-                          ? 'rgba(255, 214, 0, 0.15)'
-                          : 'rgba(255, 214, 0, 0.25)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        color: colors.accentText,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        boxShadow: '0 2px 8px rgba(255, 214, 0, 0.15)',
-                      }}
-                    >
-                      <CheckIcon size={14} />
-                      Mark read
-                    </span>
-                  ) : (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '8px 12px',
-                        borderRadius: 10,
-                        border: `1px solid ${colors.border}`,
-                        background: colors.surface,
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        color: colors.textMuted,
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      <CheckIcon size={14} />
-                      Read
-                    </span>
-                  )}
-                </div>
+                <span
+                  aria-label={isUnread ? 'Unread' : undefined}
+                  style={{
+                    width: 11,
+                    height: 11,
+                    borderRadius: '50%',
+                    background: isUnread ? colors.fbBlue : 'transparent',
+                    justifySelf: 'center',
+                  }}
+                />
               </button>
             );
           })}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

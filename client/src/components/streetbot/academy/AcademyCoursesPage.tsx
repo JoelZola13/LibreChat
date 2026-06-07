@@ -3,14 +3,17 @@ import { ArrowLeft, ArrowRight, Clock, Heart, Search } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { sbFetch } from '../shared/sbFetch';
 import {
+  buildAcademyFallbackCourses,
   filterVisibleAcademyCourses,
   filterVisibleAcademyPrograms,
+  getAcademyProgramCourseDisplayTitle,
   getLearningPathCourseMap,
 } from './academyLearningPaths';
 import { getCourseCardArt } from './academyCardArt';
 import { useAcademyLearningPaths } from './useAcademyLearningPaths';
 import { useAcademyUserId } from './useAcademyUserId';
 import { useAcademySavedItems } from './useAcademySavedItems';
+import AcademyNavigationChrome, { ACADEMY_DESKTOP_CONTENT_LEFT } from './AcademyNavigationChrome';
 
 type Course = {
   id: string;
@@ -43,13 +46,23 @@ export default function AcademyCoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(
+    () => new URLSearchParams(location.search).get('search') ?? '',
+  );
   const [selectedLevel, setSelectedLevel] = useState('All');
   const { isCourseSaved, toggleCourseSaved } = useAcademySavedItems();
   const visibleLearningPaths = useMemo(
     () => filterVisibleAcademyPrograms(learningPaths),
     [learningPaths],
   );
+  const fallbackCourses = useMemo(
+    () => buildAcademyFallbackCourses(visibleLearningPaths),
+    [visibleLearningPaths],
+  );
+
+  useEffect(() => {
+    setSearchQuery(new URLSearchParams(location.search).get('search') ?? '');
+  }, [location.search]);
 
   const colors = useMemo(
     () => ({
@@ -76,7 +89,10 @@ export default function AcademyCoursesPage() {
 
         if (coursesResp.ok) {
           const data = await coursesResp.json();
-          setCourses(Array.isArray(data) ? data : []);
+          const courseData = Array.isArray(data) ? data : [];
+          setCourses(courseData.length > 0 ? courseData : fallbackCourses);
+        } else {
+          setCourses(fallbackCourses);
         }
 
         if (enrollmentsResp.ok) {
@@ -89,7 +105,7 @@ export default function AcademyCoursesPage() {
     }
 
     load();
-  }, [currentUserId]);
+  }, [currentUserId, fallbackCourses]);
 
   const activeEnrollments = useMemo(
     () => enrollments.filter((enrollment) => enrollment.status !== 'dropped'),
@@ -152,47 +168,31 @@ export default function AcademyCoursesPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, padding: '88px 24px 48px' }}>
-      <div style={{ maxWidth: 1160, margin: '0 auto' }}>
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div
+      style={{
+        minHeight: '100vh',
+        background: colors.bg,
+        padding: `88px 24px 48px ${ACADEMY_DESKTOP_CONTENT_LEFT}px`,
+      }}
+    >
+      <AcademyNavigationChrome />
+      <div style={{ maxWidth: 1500, margin: '0 auto' }}>
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold md:text-4xl" style={{ color: colors.text }}>
-              Pick a single course.
-            </h1>
-            <p
-              className="mt-3 max-w-2xl text-sm md:text-base"
-              style={{ color: colors.textSecondary }}
-            >
-              Choose one course now, or go back to programs for a full plan.
-            </p>
             <div
-              className="mt-5 inline-flex items-center gap-2 rounded-full p-1"
+              className="inline-flex items-center gap-2 rounded-full p-1"
               style={{ background: colors.cardBgStrong }}
             >
-              <a href={`${basePath}/paths`} style={tabStyle(false)}>
-                Programs
+              <a href={`${basePath}/student-workspace`} style={tabStyle(false)}>
+                Student Workspace
               </a>
-              <a href={`${basePath}/courses`} style={tabStyle(true)}>
-                Courses
-              </a>
-              <a href={`${basePath}/my-courses`} style={tabStyle(false)}>
-                My Courses
-              </a>
-              <a href={`${basePath}/saved`} style={tabStyle(false)}>
+              <a href={`${basePath}/student-workspace?tab=saved`} style={tabStyle(false)}>
                 Saved
               </a>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <a
-              href={`${basePath}/dashboard`}
-              className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
-              style={{ background: colors.accent, color: '#000' }}
-            >
-              Open Dashboard
-              <ArrowRight className="h-4 w-4" />
-            </a>
             <a
               href={basePath}
               className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold"
@@ -203,7 +203,7 @@ export default function AcademyCoursesPage() {
               }}
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Homepage
+              Back to Academy
             </a>
           </div>
         </div>
@@ -241,7 +241,7 @@ export default function AcademyCoursesPage() {
           </select>
         </section>
 
-        <section className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <section className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {isLoading &&
             [1, 2, 3].map((item) => (
               <div
@@ -256,6 +256,7 @@ export default function AcademyCoursesPage() {
               const linkedPaths = coursePathMap.get(course.id) ?? [];
               const enrollment = activeEnrollments.find((entry) => entry.course_id === course.id);
               const visual = getCourseCardArt(course);
+              const displayTitle = getAcademyProgramCourseDisplayTitle(course.title);
 
               return (
                 <article
@@ -273,7 +274,7 @@ export default function AcademyCoursesPage() {
                   >
                     <img
                       src={visual.src}
-                      alt={course.title}
+                      alt={displayTitle}
                       className="h-[220px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       onError={(event) => {
                         if (event.currentTarget.dataset.fallbackApplied === 'true') {
@@ -305,8 +306,14 @@ export default function AcademyCoursesPage() {
                           </span>
                         ))}
                       </div>
-                      <h2 className="text-2xl font-semibold" style={{ color: colors.text }}>
-                        {course.title}
+                      <h2 className="text-2xl font-semibold">
+                        <a
+                          href={`${basePath}/courses/${course.id}`}
+                          className="transition-colors hover:!text-[#FFD600]"
+                          style={{ color: colors.text }}
+                        >
+                          {displayTitle}
+                        </a>
                       </h2>
                     </div>
                     <button
@@ -409,8 +416,7 @@ export default function AcademyCoursesPage() {
               color: colors.textSecondary,
             }}
           >
-            No courses match this filter yet. Try a different level, search, or switch back to
-            Programs.
+            No courses match this filter yet. Try a different level or search.
           </div>
         )}
       </div>

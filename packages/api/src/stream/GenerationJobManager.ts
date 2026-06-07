@@ -723,22 +723,19 @@ class GenerationJobManagerClass {
 
     const jobData = await this.jobStore.getJob(streamId);
 
-    // If job already complete/error, send final event or error
-    // Error status takes precedence to ensure errors aren't misreported as successes
+    // If a final event was emitted before a late subscriber connected, replay it immediately.
+    // Error status still takes precedence to ensure errors aren't misreported as successes.
     setImmediate(() => {
-      if (jobData && ['complete', 'error', 'aborted'].includes(jobData.status)) {
-        // Check for error status FIRST and prioritize error handling
-        if (jobData.status === 'error' && (runtime.errorEvent || jobData.error)) {
-          const errorToSend = runtime.errorEvent ?? jobData.error;
-          if (errorToSend) {
-            logger.debug(
-              `[GenerationJobManager] Sending stored error to late subscriber: ${streamId}`,
-            );
-            onError?.(errorToSend);
-          }
-        } else if (runtime.finalEvent) {
-          onDone?.(runtime.finalEvent);
+      if (jobData?.status === 'error' && (runtime.errorEvent || jobData.error)) {
+        const errorToSend = runtime.errorEvent ?? jobData.error;
+        if (errorToSend) {
+          logger.debug(
+            `[GenerationJobManager] Sending stored error to late subscriber: ${streamId}`,
+          );
+          onError?.(errorToSend);
         }
+      } else if (runtime.finalEvent) {
+        onDone?.(runtime.finalEvent);
       }
     });
 

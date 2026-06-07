@@ -1,29 +1,34 @@
 // Module-level prefetch — fires jobs API call at import time, before mount
 import './jobsPrefetch';
 
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { isDirectory } from '~/config/appVariant';
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { SB_API_BASE } from '~/components/streetbot/shared/apiConfig';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SB_API_BASE, STREETBOT_READ_API_BASE } from '~/components/streetbot/shared/apiConfig';
 import { readSessionCache } from '../shared/perfCache';
 import { useGlassStyles } from '../shared/useGlassStyles';
 import { useResponsive } from '../hooks/useResponsive';
-import { useUserRole } from '../lib/auth/useUserRole';
+import { getSeamlessNavBarStyle } from '../shared/glassNav';
+import { useTopNavScrolled } from '../shared/useTopNavScrolled';
+import NavDropdown from '../shared/NavDropdown';
+import {
+  STREET_PROFILE_NAV_ITEMS,
+  isStreetProfileNavActive,
+} from '../shared/streetProfileNavItems';
+import StreetPagination from '../shared/StreetPagination';
 import { isJobApplied, withdrawApplicationByJob } from './jobsStorage';
 import { enrichJobsSchedule } from './jobSchedule';
 import type { Job } from './types';
 import {
   Search,
-  SlidersHorizontal,
   Briefcase,
   Star,
   Heart,
-  FileText,
   X,
   MapPin,
   DollarSign,
   Clock,
   Eye,
+  Plus,
   Share2,
   Sparkles,
   GraduationCap,
@@ -33,14 +38,14 @@ import {
   Loader2,
   SearchX,
   Shield,
-} from "lucide-react";
+} from 'lucide-react';
 
 // Inline userId helper (replaces @/lib/userId)
 function getOrCreateUserId(): string {
-  const key = "sb_user_id";
+  const key = 'sb_user_id';
   let userId = localStorage.getItem(key);
   if (!userId) {
-    userId = "user_" + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    userId = 'user_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
     localStorage.setItem(key, userId);
   }
   return userId;
@@ -48,10 +53,10 @@ function getOrCreateUserId(): string {
 
 // Salary parser for filtering and sorting
 function parseSalaryFromJob(job: Job): { min: number; max: number } | null {
-  const text = job.salary_range || job.compensation || "";
+  const text = job.salary_range || job.compensation || '';
   if (!text) return null;
   // Match patterns like "$55,000-65,000", "$16.50/hour", "$35-50/hour", "55000-65000"
-  const numbers = text.replace(/[$,]/g, "").match(/(\d+(?:\.\d+)?)/g);
+  const numbers = text.replace(/[$,]/g, '').match(/(\d+(?:\.\d+)?)/g);
   if (!numbers || numbers.length === 0) return null;
   const vals = numbers.map(Number).filter((n) => !isNaN(n));
   if (vals.length === 0) return null;
@@ -67,62 +72,64 @@ function parseSalaryFromJob(job: Job): { min: number; max: number } | null {
 type JobColors = ReturnType<typeof useGlassStyles>['colors'];
 
 const JOBS_API_URL = `${SB_API_BASE}/jobs`;
+const JOBS_READ_API_URL = `${STREETBOT_READ_API_BASE}/jobs`;
+const JOBS_CACHE_KEY = 'streetbot:jobs:listings:v3';
 
 // Job type imported from ./types
 
 // Sample job logos - using file-based SVGs for better rendering
 const SAMPLE_LOGOS = {
-  techstart: "/job-logos/techstart.svg",
-  mapleleaf: "/job-logos/mapleleaf.svg",
-  grounded: "/job-logos/grounded.svg",
-  creative: "/job-logos/creative-collective.svg",
-  quickship: "/job-logos/quickship.svg",
-  digitalink: "/job-logos/digitalink.svg",
-  northern: "/job-logos/northern-tech.svg",
-  celebrate: "/job-logos/celebrate.svg",
-  urbanHarvest: "/job-logos/urban-harvest.svg",
-  brightFutures: "/job-logos/bright-futures.svg",
-  buildright: "/job-logos/buildright.svg",
-  metroHealth: "/job-logos/metro-health.svg",
-  communityCare: "/job-logos/community-care.svg",
-  peakFitness: "/job-logos/peak-fitness.svg",
-  goodEats: "/job-logos/good-eats.svg",
-  ecoClean: "/job-logos/eco-clean.svg",
-  transitTo: "/job-logos/transit-to.svg",
-  firstNationsCu: "/job-logos/first-nations-cu.svg",
-  spectrumMedia: "/job-logos/spectrum-media.svg",
-  secureGuard: "/job-logos/secure-guard.svg",
-  apexDistribution: "/job-logos/apex-distribution.svg",
-  sparkDigital: "/job-logos/spark-digital.svg",
-  streetHope: "/job-logos/street-hope.svg",
-  beanBrew: "/job-logos/bean-brew.svg",
-  default: "/job-logos/default-job.svg",
+  techstart: '/job-logos/techstart.svg',
+  mapleleaf: '/job-logos/mapleleaf.svg',
+  grounded: '/job-logos/grounded.svg',
+  creative: '/job-logos/creative-collective.svg',
+  quickship: '/job-logos/quickship.svg',
+  digitalink: '/job-logos/digitalink.svg',
+  northern: '/job-logos/northern-tech.svg',
+  celebrate: '/job-logos/celebrate.svg',
+  urbanHarvest: '/job-logos/urban-harvest.svg',
+  brightFutures: '/job-logos/bright-futures.svg',
+  buildright: '/job-logos/buildright.svg',
+  metroHealth: '/job-logos/metro-health.svg',
+  communityCare: '/job-logos/community-care.svg',
+  peakFitness: '/job-logos/peak-fitness.svg',
+  goodEats: '/job-logos/good-eats.svg',
+  ecoClean: '/job-logos/eco-clean.svg',
+  transitTo: '/job-logos/transit-to.svg',
+  firstNationsCu: '/job-logos/first-nations-cu.svg',
+  spectrumMedia: '/job-logos/spectrum-media.svg',
+  secureGuard: '/job-logos/secure-guard.svg',
+  apexDistribution: '/job-logos/apex-distribution.svg',
+  sparkDigital: '/job-logos/spark-digital.svg',
+  streetHope: '/job-logos/street-hope.svg',
+  beanBrew: '/job-logos/bean-brew.svg',
+  default: '/job-logos/default-job.svg',
 };
 
 // Organization name to logo mapping for database jobs
 const ORGANIZATION_LOGOS: Record<string, string> = {
   // Database organizations
-  "Access Alliance Multicultural Health": "/job-logos/access-alliance.svg",
-  "Beats & Rhymes Youth Program": "/job-logos/beats-rhymes.svg",
-  "Big Brothers Big Sisters Toronto": "/job-logos/big-brothers.svg",
-  "Black Voices Media Collective": "/job-logos/black-voices-media.svg",
-  "CAMH Community Programs": "/job-logos/camh.svg",
-  "Community Care Network": "/job-logos/community-care.svg",
-  "Community Connect Network": "/job-logos/community-connect.svg",
-  "Housing First Program": "/job-logos/housing-first.svg",
-  "Housing Justice Coalition": "/job-logos/housing-justice.svg",
-  "North York Community Pantry": "/job-logos/north-york-pantry.svg",
-  "Parks & Recreation Community Programs": "/job-logos/parks-rec.svg",
-  "Regent Park Arts Collective": "/job-logos/regent-park-arts.svg",
-  "Safe Haven Community Center": "/job-logos/safe-haven.svg",
-  "Social Planning Council": "/job-logos/social-planning.svg",
-  "Street Voices": "/job-logos/street-voices.svg?v=4",
-  "Street Voices Community Services": "/job-logos/street-voices.svg?v=4",
-  "TechForGood Initiative": "/job-logos/techforgood.svg",
-  "The Stop Community Food Centre": "/job-logos/the-stop.svg",
-  "Youth Achievement Center": "/job-logos/youth-achievement.svg",
-  "Youth Services Bureau": "/job-logos/youth-services-bureau.svg",
-  "Youth Wellness Hub": "/job-logos/youth-wellness-hub.svg",
+  'Access Alliance Multicultural Health': '/job-logos/access-alliance.svg',
+  'Beats & Rhymes Youth Program': '/job-logos/beats-rhymes.svg',
+  'Big Brothers Big Sisters Toronto': '/job-logos/big-brothers.svg',
+  'Black Voices Media Collective': '/job-logos/black-voices-media.svg',
+  'CAMH Community Programs': '/job-logos/camh.svg',
+  'Community Care Network': '/job-logos/community-care.svg',
+  'Community Connect Network': '/job-logos/community-connect.svg',
+  'Housing First Program': '/job-logos/housing-first.svg',
+  'Housing Justice Coalition': '/job-logos/housing-justice.svg',
+  'North York Community Pantry': '/job-logos/north-york-pantry.svg',
+  'Parks & Recreation Community Programs': '/job-logos/parks-rec.svg',
+  'Regent Park Arts Collective': '/job-logos/regent-park-arts.svg',
+  'Safe Haven Community Center': '/job-logos/safe-haven.svg',
+  'Social Planning Council': '/job-logos/social-planning.svg',
+  'Street Voices': '/job-logos/street-voices.svg?v=2',
+  'Street Voices Community Services': '/job-logos/street-voices.svg?v=2',
+  'TechForGood Initiative': '/job-logos/techforgood.svg',
+  'The Stop Community Food Centre': '/job-logos/the-stop.svg',
+  'Youth Achievement Center': '/job-logos/youth-achievement.svg',
+  'Youth Services Bureau': '/job-logos/youth-services-bureau.svg',
+  'Youth Wellness Hub': '/job-logos/youth-wellness-hub.svg',
 };
 
 // Get logo URL for a job based on organization name
@@ -132,411 +139,432 @@ function getLogoForJob(job: Job): string {
     return ORGANIZATION_LOGOS[job.organization];
   }
   // Use default job logo
-  return "/job-logos/default-job.svg";
+  return '/job-logos/default-job.svg';
 }
 
 const SAMPLE_JOBS: Job[] = [
   {
-    id: "sample-1",
-    title: "Junior Web Developer",
-    organization: "TechStart Toronto",
+    id: 'sample-1',
+    title: 'Junior Web Developer',
+    organization: 'TechStart Toronto',
     logo_url: SAMPLE_LOGOS.techstart,
-    opportunity_type: "Full-time",
-    category: "Technology",
-    location: "Toronto, ON",
-    compensation: "$55,000-65,000/year",
-    description: "Join our growing team building web applications for local businesses. Work with React, Node.js, and modern tools. Great mentorship program for those starting their tech career.",
-    tags: "javascript,react,nodejs,entry level",
+    opportunity_type: 'Full-time',
+    category: 'Technology',
+    location: 'Toronto, ON',
+    compensation: '$55,000-65,000/year',
+    description:
+      'Join our growing team building web applications for local businesses. Work with React, Node.js, and modern tools. Great mentorship program for those starting their tech career.',
+    tags: 'javascript,react,nodejs,entry level',
     is_featured: true,
     training_provided: true,
     no_experience_required: true,
     view_count: 342,
     application_count: 28,
-    deadline: "2025-02-15",
-    posting_date: "2025-01-15",
+    deadline: '2025-02-15',
+    posting_date: '2025-01-15',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-2",
-    title: "Social Media Coordinator",
-    organization: "Maple Leaf Marketing",
+    id: 'sample-2',
+    title: 'Social Media Coordinator',
+    organization: 'Maple Leaf Marketing',
     logo_url: SAMPLE_LOGOS.mapleleaf,
-    opportunity_type: "Full-time",
-    category: "Media",
-    location: "Vancouver, BC",
-    compensation: "$45,000-52,000/year",
-    description: "Manage social media accounts for our diverse client roster. Create engaging content, track analytics, and grow online communities. Creative thinkers wanted!",
-    tags: "social media,marketing,content creation",
+    opportunity_type: 'Full-time',
+    category: 'Media',
+    location: 'Vancouver, BC',
+    compensation: '$45,000-52,000/year',
+    description:
+      'Manage social media accounts for our diverse client roster. Create engaging content, track analytics, and grow online communities. Creative thinkers wanted!',
+    tags: 'social media,marketing,content creation',
     is_featured: true,
     is_media_gig: true,
     view_count: 289,
     application_count: 45,
-    deadline: "2025-02-28",
-    posting_date: "2025-01-20",
+    deadline: '2025-02-28',
+    posting_date: '2025-01-20',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-3",
-    title: "Barista",
-    organization: "Grounded Coffee Co.",
+    id: 'sample-3',
+    title: 'Barista',
+    organization: 'Grounded Coffee Co.',
     logo_url: SAMPLE_LOGOS.grounded,
-    opportunity_type: "Part-time",
-    category: "Other",
-    location: "Calgary, AB",
-    compensation: "$16.50/hour + tips",
-    description: "Craft specialty coffee drinks and create welcoming experiences for customers. Flexible scheduling, free coffee, and opportunities to advance to shift lead.",
-    tags: "coffee,customer service,hospitality",
+    opportunity_type: 'Part-time',
+    category: 'Other',
+    location: 'Calgary, AB',
+    compensation: '$16.50/hour + tips',
+    description:
+      'Craft specialty coffee drinks and create welcoming experiences for customers. Flexible scheduling, free coffee, and opportunities to advance to shift lead.',
+    tags: 'coffee,customer service,hospitality',
     training_provided: true,
     no_experience_required: true,
     hires_with_gaps: true,
     view_count: 156,
     application_count: 19,
-    posting_date: "2025-01-10",
+    posting_date: '2025-01-10',
   },
   {
-    id: "sample-4",
-    title: "Graphic Designer",
-    organization: "Creative Collective Studio",
+    id: 'sample-4',
+    title: 'Graphic Designer',
+    organization: 'Creative Collective Studio',
     logo_url: SAMPLE_LOGOS.creative,
-    opportunity_type: "Contract",
-    category: "Media",
-    location: "Montreal, QC",
-    compensation: "$35-50/hour",
-    description: "Design branding, marketing materials, and digital assets for a variety of clients. Proficiency in Adobe Creative Suite required. Remote-friendly with occasional in-person meetings.",
-    tags: "design,adobe,branding,freelance",
+    opportunity_type: 'Contract',
+    category: 'Media',
+    location: 'Montreal, QC',
+    compensation: '$35-50/hour',
+    description:
+      'Design branding, marketing materials, and digital assets for a variety of clients. Proficiency in Adobe Creative Suite required. Remote-friendly with occasional in-person meetings.',
+    tags: 'design,adobe,branding,freelance',
     is_featured: true,
     is_creative_opportunity: true,
     view_count: 412,
     application_count: 33,
-    deadline: "2025-01-31",
-    posting_date: "2025-01-05",
+    deadline: '2025-01-31',
+    posting_date: '2025-01-05',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-5",
-    title: "Delivery Driver",
-    organization: "QuickShip Logistics",
+    id: 'sample-5',
+    title: 'Delivery Driver',
+    organization: 'QuickShip Logistics',
     logo_url: SAMPLE_LOGOS.quickship,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Toronto, ON",
-    compensation: "$19/hour + mileage",
-    description: "Deliver packages throughout the GTA. Must have valid G license and reliable vehicle. Flexible routes and scheduling available. Same-day pay option.",
-    tags: "driving,delivery,logistics",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Toronto, ON',
+    compensation: '$19/hour + mileage',
+    description:
+      'Deliver packages throughout the GTA. Must have valid G license and reliable vehicle. Flexible routes and scheduling available. Same-day pay option.',
+    tags: 'driving,delivery,logistics',
     same_day_pay: true,
     hires_with_record: true,
     view_count: 198,
     application_count: 12,
-    posting_date: "2025-01-18",
+    posting_date: '2025-01-18',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-6",
-    title: "Content Writer",
-    organization: "Digital Ink Media",
+    id: 'sample-6',
+    title: 'Content Writer',
+    organization: 'Digital Ink Media',
     logo_url: SAMPLE_LOGOS.digitalink,
-    opportunity_type: "Freelance",
-    category: "Media",
-    location: "Remote",
-    compensation: "$0.15-0.25/word",
-    description: "Write blog posts, articles, and web copy for tech and lifestyle clients. Consistent work available for reliable writers. Pitch your ideas or take on assigned topics.",
-    tags: "writing,content,remote,freelance",
+    opportunity_type: 'Freelance',
+    category: 'Media',
+    location: 'Remote',
+    compensation: '$0.15-0.25/word',
+    description:
+      'Write blog posts, articles, and web copy for tech and lifestyle clients. Consistent work available for reliable writers. Pitch your ideas or take on assigned topics.',
+    tags: 'writing,content,remote,freelance',
     is_media_gig: true,
     hires_without_address: true,
     view_count: 267,
     application_count: 52,
-    posting_date: "2025-01-12",
+    posting_date: '2025-01-12',
   },
   {
-    id: "sample-7",
-    title: "IT Support Technician",
-    organization: "Northern Tech Solutions",
+    id: 'sample-7',
+    title: 'IT Support Technician',
+    organization: 'Northern Tech Solutions',
     logo_url: SAMPLE_LOGOS.northern,
-    opportunity_type: "Full-time",
-    category: "Technology",
-    location: "Ottawa, ON",
-    compensation: "$50,000-58,000/year",
-    description: "Provide technical support for small business clients. Troubleshoot hardware and software issues, set up networks, and maintain systems. CompTIA A+ preferred but not required.",
-    tags: "IT,support,networking,helpdesk",
+    opportunity_type: 'Full-time',
+    category: 'Technology',
+    location: 'Ottawa, ON',
+    compensation: '$50,000-58,000/year',
+    description:
+      'Provide technical support for small business clients. Troubleshoot hardware and software issues, set up networks, and maintain systems. CompTIA A+ preferred but not required.',
+    tags: 'IT,support,networking,helpdesk',
     training_provided: true,
     view_count: 143,
     application_count: 8,
-    deadline: "2025-02-15",
-    posting_date: "2025-01-22",
+    deadline: '2025-02-15',
+    posting_date: '2025-01-22',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-8",
-    title: "Event Coordinator",
-    organization: "Celebrate Events Inc.",
+    id: 'sample-8',
+    title: 'Event Coordinator',
+    organization: 'Celebrate Events Inc.',
     logo_url: SAMPLE_LOGOS.celebrate,
-    opportunity_type: "Part-time",
-    category: "Community",
-    location: "Edmonton, AB",
-    compensation: "$22/hour",
-    description: "Help plan and execute corporate events, weddings, and community gatherings. Great organizational skills and attention to detail a must. Weekends required.",
-    tags: "events,planning,coordination",
+    opportunity_type: 'Part-time',
+    category: 'Community',
+    location: 'Edmonton, AB',
+    compensation: '$22/hour',
+    description:
+      'Help plan and execute corporate events, weddings, and community gatherings. Great organizational skills and attention to detail a must. Weekends required.',
+    tags: 'events,planning,coordination',
     view_count: 187,
     application_count: 14,
-    posting_date: "2025-01-08",
+    posting_date: '2025-01-08',
   },
   {
-    id: "sample-9",
-    title: "Community Garden Coordinator",
-    organization: "Urban Harvest",
+    id: 'sample-9',
+    title: 'Community Garden Coordinator',
+    organization: 'Urban Harvest',
     logo_url: SAMPLE_LOGOS.urbanHarvest,
-    opportunity_type: "Part-time",
-    category: "Community",
-    location: "Toronto, ON",
-    compensation: "$20/hour",
-    description: "Coordinate activities at our community gardens across the city. Organize volunteer days, lead workshops on urban farming, and help maintain garden plots. Passion for sustainability a plus!",
-    tags: "gardening,community,sustainability,outdoors",
+    opportunity_type: 'Part-time',
+    category: 'Community',
+    location: 'Toronto, ON',
+    compensation: '$20/hour',
+    description:
+      'Coordinate activities at our community gardens across the city. Organize volunteer days, lead workshops on urban farming, and help maintain garden plots. Passion for sustainability a plus!',
+    tags: 'gardening,community,sustainability,outdoors',
     is_featured: true,
     training_provided: true,
     no_experience_required: true,
     view_count: 234,
     application_count: 31,
-    posting_date: "2025-01-25",
+    posting_date: '2025-01-25',
     employer_verified: true,
-    employer_verification_type: "nonprofit",
+    employer_verification_type: 'nonprofit',
   },
   {
-    id: "sample-10",
-    title: "Youth Program Facilitator",
-    organization: "Bright Futures Education",
+    id: 'sample-10',
+    title: 'Youth Program Facilitator',
+    organization: 'Bright Futures Education',
     logo_url: SAMPLE_LOGOS.brightFutures,
-    opportunity_type: "Full-time",
-    category: "Community",
-    location: "Mississauga, ON",
-    compensation: "$48,000-55,000/year",
-    description: "Lead after-school programs for youth ages 12-18. Create engaging activities around STEM, arts, and life skills. Make a real difference in young people's lives!",
-    tags: "education,youth,mentorship,teaching",
+    opportunity_type: 'Full-time',
+    category: 'Community',
+    location: 'Mississauga, ON',
+    compensation: '$48,000-55,000/year',
+    description:
+      "Lead after-school programs for youth ages 12-18. Create engaging activities around STEM, arts, and life skills. Make a real difference in young people's lives!",
+    tags: 'education,youth,mentorship,teaching',
     training_provided: true,
     requires_background_check: true,
     view_count: 312,
     application_count: 22,
-    deadline: "2025-02-10",
-    posting_date: "2025-01-03",
+    deadline: '2025-02-10',
+    posting_date: '2025-01-03',
     employer_verified: true,
-    employer_verification_type: "nonprofit",
+    employer_verification_type: 'nonprofit',
   },
   {
-    id: "sample-11",
-    title: "Construction Labourer",
-    organization: "BuildRight Construction",
+    id: 'sample-11',
+    title: 'Construction Labourer',
+    organization: 'BuildRight Construction',
     logo_url: SAMPLE_LOGOS.buildright,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Hamilton, ON",
-    compensation: "$22-28/hour",
-    description: "Join our crew on residential and commercial construction sites. Learn valuable trades skills on the job. Physical work in a team environment. Safety training provided.",
-    tags: "construction,trades,labour,physical",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Hamilton, ON',
+    compensation: '$22-28/hour',
+    description:
+      'Join our crew on residential and commercial construction sites. Learn valuable trades skills on the job. Physical work in a team environment. Safety training provided.',
+    tags: 'construction,trades,labour,physical',
     training_provided: true,
     provides_work_gear: true,
     hires_with_record: true,
     hires_with_gaps: true,
     view_count: 421,
     application_count: 67,
-    posting_date: "2025-01-14",
+    posting_date: '2025-01-14',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-12",
-    title: "Medical Receptionist",
-    organization: "Metro Health Community Clinic",
+    id: 'sample-12',
+    title: 'Medical Receptionist',
+    organization: 'Metro Health Community Clinic',
     logo_url: SAMPLE_LOGOS.metroHealth,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Scarborough, ON",
-    compensation: "$42,000-48,000/year",
-    description: "Be the welcoming face of our community health clinic. Schedule appointments, assist patients, and support our healthcare team. Bilingual (English/French or English/Tagalog) preferred.",
-    tags: "healthcare,reception,administration,customer service",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Scarborough, ON',
+    compensation: '$42,000-48,000/year',
+    description:
+      'Be the welcoming face of our community health clinic. Schedule appointments, assist patients, and support our healthcare team. Bilingual (English/French or English/Tagalog) preferred.',
+    tags: 'healthcare,reception,administration,customer service',
     training_provided: true,
     is_transit_accessible: true,
     view_count: 189,
     application_count: 26,
-    deadline: "2025-02-05",
-    posting_date: "2025-01-07",
+    deadline: '2025-02-05',
+    posting_date: '2025-01-07',
     employer_verified: true,
-    employer_verification_type: "nonprofit",
+    employer_verification_type: 'nonprofit',
   },
   {
-    id: "sample-13",
-    title: "Peer Support Worker",
-    organization: "Community Care Network",
+    id: 'sample-13',
+    title: 'Peer Support Worker',
+    organization: 'Community Care Network',
     logo_url: SAMPLE_LOGOS.communityCare,
-    opportunity_type: "Full-time",
-    category: "Community",
-    location: "Toronto, ON",
-    compensation: "$45,000-52,000/year",
-    description: "Use your lived experience to support others on their recovery journey. Connect clients with resources, provide emotional support, and advocate for their needs. Lived experience with homelessness or mental health required.",
-    tags: "peer support,mental health,social services,advocacy",
+    opportunity_type: 'Full-time',
+    category: 'Community',
+    location: 'Toronto, ON',
+    compensation: '$45,000-52,000/year',
+    description:
+      'Use your lived experience to support others on their recovery journey. Connect clients with resources, provide emotional support, and advocate for their needs. Lived experience with homelessness or mental health required.',
+    tags: 'peer support,mental health,social services,advocacy',
     is_featured: true,
     training_provided: true,
     hires_without_address: true,
     hires_with_gaps: true,
     view_count: 445,
     application_count: 38,
-    deadline: "2025-02-20",
-    posting_date: "2024-12-28",
+    deadline: '2025-02-20',
+    posting_date: '2024-12-28',
     employer_verified: true,
-    employer_verification_type: "nonprofit",
+    employer_verification_type: 'nonprofit',
     black_led_organization: true,
   },
   {
-    id: "sample-14",
-    title: "Personal Trainer",
-    organization: "Peak Fitness",
+    id: 'sample-14',
+    title: 'Personal Trainer',
+    organization: 'Peak Fitness',
     logo_url: SAMPLE_LOGOS.peakFitness,
-    opportunity_type: "Part-time",
-    category: "Other",
-    location: "Brampton, ON",
-    compensation: "$25-40/hour + commissions",
-    description: "Help clients reach their fitness goals! Train individuals and small groups. Certification required (or willingness to get certified). Build your client base with our marketing support.",
-    tags: "fitness,personal training,health,coaching",
+    opportunity_type: 'Part-time',
+    category: 'Other',
+    location: 'Brampton, ON',
+    compensation: '$25-40/hour + commissions',
+    description:
+      'Help clients reach their fitness goals! Train individuals and small groups. Certification required (or willingness to get certified). Build your client base with our marketing support.',
+    tags: 'fitness,personal training,health,coaching',
     training_provided: true,
     view_count: 276,
     application_count: 19,
-    posting_date: "2025-01-16",
+    posting_date: '2025-01-16',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-15",
-    title: "Line Cook",
-    organization: "Good Eats Kitchen",
+    id: 'sample-15',
+    title: 'Line Cook',
+    organization: 'Good Eats Kitchen',
     logo_url: SAMPLE_LOGOS.goodEats,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Toronto, ON",
-    compensation: "$18-22/hour + meals",
-    description: "Cook delicious food in our busy downtown restaurant. Work alongside experienced chefs. Free meals during shifts and room to grow into sous chef role.",
-    tags: "cooking,restaurant,culinary,food service",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Toronto, ON',
+    compensation: '$18-22/hour + meals',
+    description:
+      'Cook delicious food in our busy downtown restaurant. Work alongside experienced chefs. Free meals during shifts and room to grow into sous chef role.',
+    tags: 'cooking,restaurant,culinary,food service',
     training_provided: true,
     no_experience_required: true,
     hires_with_record: true,
     view_count: 334,
     application_count: 41,
-    posting_date: "2024-12-20",
+    posting_date: '2024-12-20',
   },
   {
-    id: "sample-16",
-    title: "Commercial Cleaner",
-    organization: "EcoClean Solutions",
+    id: 'sample-16',
+    title: 'Commercial Cleaner',
+    organization: 'EcoClean Solutions',
     logo_url: SAMPLE_LOGOS.ecoClean,
-    opportunity_type: "Part-time",
-    category: "Other",
-    location: "Multiple Locations, GTA",
-    compensation: "$17-20/hour",
-    description: "Clean offices, retail spaces, and commercial buildings using eco-friendly products. Evening and weekend shifts available. Reliable transportation required.",
-    tags: "cleaning,janitorial,maintenance,evening",
+    opportunity_type: 'Part-time',
+    category: 'Other',
+    location: 'Multiple Locations, GTA',
+    compensation: '$17-20/hour',
+    description:
+      'Clean offices, retail spaces, and commercial buildings using eco-friendly products. Evening and weekend shifts available. Reliable transportation required.',
+    tags: 'cleaning,janitorial,maintenance,evening',
     provides_work_gear: true,
     hires_without_address: true,
     hires_with_record: true,
     same_day_pay: true,
     view_count: 521,
     application_count: 89,
-    posting_date: "2025-01-11",
+    posting_date: '2025-01-11',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-17",
-    title: "Bus Operator Trainee",
-    organization: "Transit TO",
+    id: 'sample-17',
+    title: 'Bus Operator Trainee',
+    organization: 'Transit TO',
     logo_url: SAMPLE_LOGOS.transitTo,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Toronto, ON",
-    compensation: "$58,000-68,000/year",
-    description: "Join Toronto's transit system! Full paid training program provided. Must have valid G license and clean driving record. Excellent benefits and pension. Union position.",
-    tags: "driving,transit,public service,union",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Toronto, ON',
+    compensation: '$58,000-68,000/year',
+    description:
+      "Join Toronto's transit system! Full paid training program provided. Must have valid G license and clean driving record. Excellent benefits and pension. Union position.",
+    tags: 'driving,transit,public service,union',
     is_featured: true,
     training_provided: true,
     requires_background_check: true,
     view_count: 892,
     application_count: 156,
-    deadline: "2025-02-28",
-    posting_date: "2025-01-19",
+    deadline: '2025-02-28',
+    posting_date: '2025-01-19',
     employer_verified: true,
-    employer_verification_type: "government",
+    employer_verification_type: 'government',
   },
   {
-    id: "sample-18",
-    title: "Member Services Representative",
-    organization: "First Nations Credit Union",
+    id: 'sample-18',
+    title: 'Member Services Representative',
+    organization: 'First Nations Credit Union',
     logo_url: SAMPLE_LOGOS.firstNationsCu,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Brantford, ON",
-    compensation: "$40,000-46,000/year",
-    description: "Serve members of our Indigenous-owned credit union. Help with accounts, loans, and financial planning. Knowledge of Indigenous communities an asset. We welcome applications from Indigenous peoples.",
-    tags: "banking,finance,customer service,indigenous",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Brantford, ON',
+    compensation: '$40,000-46,000/year',
+    description:
+      'Serve members of our Indigenous-owned credit union. Help with accounts, loans, and financial planning. Knowledge of Indigenous communities an asset. We welcome applications from Indigenous peoples.',
+    tags: 'banking,finance,customer service,indigenous',
     training_provided: true,
     view_count: 167,
     application_count: 12,
-    deadline: "2025-02-12",
-    posting_date: "2024-12-30",
+    deadline: '2025-02-12',
+    posting_date: '2024-12-30',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-19",
-    title: "Video Production Assistant",
-    organization: "Spectrum Media",
+    id: 'sample-19',
+    title: 'Video Production Assistant',
+    organization: 'Spectrum Media',
     logo_url: SAMPLE_LOGOS.spectrumMedia,
-    opportunity_type: "Contract",
-    category: "Media",
-    location: "Toronto, ON",
-    compensation: "$200-350/day",
-    description: "Assist on commercial and music video shoots. Help with equipment, lighting, and production coordination. Great way to break into the industry. Portfolio building opportunities.",
-    tags: "video,production,film,creative",
+    opportunity_type: 'Contract',
+    category: 'Media',
+    location: 'Toronto, ON',
+    compensation: '$200-350/day',
+    description:
+      'Assist on commercial and music video shoots. Help with equipment, lighting, and production coordination. Great way to break into the industry. Portfolio building opportunities.',
+    tags: 'video,production,film,creative',
     is_creative_opportunity: true,
     is_media_gig: true,
     no_experience_required: true,
     view_count: 623,
     application_count: 78,
-    posting_date: "2025-01-23",
+    posting_date: '2025-01-23',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-20",
-    title: "Security Guard",
-    organization: "SecureGuard Services",
+    id: 'sample-20',
+    title: 'Security Guard',
+    organization: 'SecureGuard Services',
     logo_url: SAMPLE_LOGOS.secureGuard,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Toronto, ON",
-    compensation: "$18-22/hour",
-    description: "Provide security for office buildings, events, and retail locations. Must be able to obtain security license (we help with this). Day, evening, and overnight shifts available.",
-    tags: "security,patrol,safety,protection",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Toronto, ON',
+    compensation: '$18-22/hour',
+    description:
+      'Provide security for office buildings, events, and retail locations. Must be able to obtain security license (we help with this). Day, evening, and overnight shifts available.',
+    tags: 'security,patrol,safety,protection',
     training_provided: true,
     provides_work_gear: true,
     hires_with_gaps: true,
     view_count: 445,
     application_count: 53,
-    posting_date: "2025-01-06",
+    posting_date: '2025-01-06',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-21",
-    title: "Warehouse Associate",
-    organization: "Apex Distribution Co.",
+    id: 'sample-21',
+    title: 'Warehouse Associate',
+    organization: 'Apex Distribution Co.',
     logo_url: SAMPLE_LOGOS.apexDistribution,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Mississauga, ON",
-    compensation: "$18/hour + benefits",
-    description: "Pick, pack, and ship orders in our fulfillment center. Forklift experience a plus but not required. Physical work in climate-controlled environment. Multiple shifts available.",
-    tags: "warehouse,logistics,shipping,forklift",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Mississauga, ON',
+    compensation: '$18/hour + benefits',
+    description:
+      'Pick, pack, and ship orders in our fulfillment center. Forklift experience a plus but not required. Physical work in climate-controlled environment. Multiple shifts available.',
+    tags: 'warehouse,logistics,shipping,forklift',
     training_provided: true,
     no_experience_required: true,
     hires_with_record: true,
@@ -544,302 +572,312 @@ const SAMPLE_JOBS: Job[] = [
     view_count: 387,
     application_count: 62,
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-22",
-    title: "Digital Marketing Intern",
-    organization: "Spark Digital Agency",
+    id: 'sample-22',
+    title: 'Digital Marketing Intern',
+    organization: 'Spark Digital Agency',
     logo_url: SAMPLE_LOGOS.sparkDigital,
-    opportunity_type: "Internship",
-    category: "Media",
-    location: "Toronto, ON",
-    compensation: "$18/hour",
-    description: "Paid internship learning all aspects of digital marketing. Work on real client campaigns. SEO, social media, email marketing, and analytics. Perfect for students or career changers.",
-    tags: "marketing,intern,digital,learning",
+    opportunity_type: 'Internship',
+    category: 'Media',
+    location: 'Toronto, ON',
+    compensation: '$18/hour',
+    description:
+      'Paid internship learning all aspects of digital marketing. Work on real client campaigns. SEO, social media, email marketing, and analytics. Perfect for students or career changers.',
+    tags: 'marketing,intern,digital,learning',
     training_provided: true,
     no_experience_required: true,
     view_count: 534,
     application_count: 87,
-    deadline: "2025-02-01",
+    deadline: '2025-02-01',
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-23",
-    title: "Community Outreach Worker",
-    organization: "Street Hope Foundation",
+    id: 'sample-23',
+    title: 'Community Outreach Worker',
+    organization: 'Street Hope Foundation',
     logo_url: SAMPLE_LOGOS.streetHope,
-    opportunity_type: "Full-time",
-    category: "Community",
-    location: "Toronto, ON",
-    compensation: "$48,000-54,000/year",
-    description: "Connect with unhoused individuals on the streets. Provide immediate support and connect people to housing, health, and social services. Lived experience valued.",
-    tags: "outreach,social work,homelessness,advocacy",
+    opportunity_type: 'Full-time',
+    category: 'Community',
+    location: 'Toronto, ON',
+    compensation: '$48,000-54,000/year',
+    description:
+      'Connect with unhoused individuals on the streets. Provide immediate support and connect people to housing, health, and social services. Lived experience valued.',
+    tags: 'outreach,social work,homelessness,advocacy',
     training_provided: true,
     hires_without_address: true,
     hires_with_gaps: true,
     view_count: 298,
     application_count: 24,
     employer_verified: true,
-    employer_verification_type: "nonprofit",
+    employer_verification_type: 'nonprofit',
     black_led_organization: true,
   },
   {
-    id: "sample-24",
-    title: "Shift Supervisor",
-    organization: "Bean & Brew Coffee House",
+    id: 'sample-24',
+    title: 'Shift Supervisor',
+    organization: 'Bean & Brew Coffee House',
     logo_url: SAMPLE_LOGOS.beanBrew,
-    opportunity_type: "Full-time",
-    category: "Other",
-    location: "Toronto, ON",
-    compensation: "$19/hour + tips",
-    description: "Lead a team of baristas at our busy downtown location. Open and close shifts, handle cash, train new staff. 1+ years coffee shop experience preferred. Great stepping stone to management.",
-    tags: "coffee,supervisor,leadership,hospitality",
+    opportunity_type: 'Full-time',
+    category: 'Other',
+    location: 'Toronto, ON',
+    compensation: '$19/hour + tips',
+    description:
+      'Lead a team of baristas at our busy downtown location. Open and close shifts, handle cash, train new staff. 1+ years coffee shop experience preferred. Great stepping stone to management.',
+    tags: 'coffee,supervisor,leadership,hospitality',
     training_provided: true,
     view_count: 212,
     application_count: 18,
     employer_verified: true,
-    employer_verification_type: "business",
+    employer_verification_type: 'business',
   },
   {
-    id: "sample-25",
-    title: "Volunteer Photographer",
-    organization: "Street Voices",
-    logo_url: "/job-logos/street-voices.svg",
-    opportunity_type: "Volunteer",
-    category: "Media",
-    work_mode: "Hybrid",
-    location: "Toronto, ON",
-    compensation: "Volunteer (unpaid)",
-    description: "The Volunteer Photographer will support Street Voices by capturing high-quality photos at events, workshops, community programs, interviews, and media projects. This role is ideal for someone passionate about photography, storytelling, community work, and documenting powerful moments. What you'll gain: build your photography portfolio, gain real-world media and event coverage experience, work with a creative team, receive credit for published work, and contribute to a platform that uplifts Black youth and marginalized voices. Potential opportunities for references, networking, and future paid projects when available.",
+    id: 'sample-25',
+    title: 'Volunteer Photographer',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Volunteer',
+    category: 'Media',
+    work_mode: 'Hybrid',
+    location: 'Toronto, ON',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      "The Volunteer Photographer will support Street Voices by capturing high-quality photos at events, workshops, community programs, interviews, and media projects. This role is ideal for someone passionate about photography, storytelling, community work, and documenting powerful moments. What you'll gain: build your photography portfolio, gain real-world media and event coverage experience, work with a creative team, receive credit for published work, and contribute to a platform that uplifts Black youth and marginalized voices. Potential opportunities for references, networking, and future paid projects when available.",
     responsibilities:
-      "Photograph Street Voices events, workshops, panels, programs, and community activities.\n" +
-      "Capture candid, portrait, behind-the-scenes, and event-style photography.\n" +
-      "Work with the media and creative team to understand the visual needs of each project.\n" +
-      "Edit and organize selected photos for use on social media, websites, reports, promotional materials, and storytelling projects.\n" +
-      "Help build the Street Voices visual archive.\n" +
-      "Follow consent, privacy, and community safety guidelines when photographing participants.\n" +
-      "Collaborate with writers, videographers, personalities, and other creative team members.",
+      'Photograph Street Voices events, workshops, panels, programs, and community activities.\n' +
+      'Capture candid, portrait, behind-the-scenes, and event-style photography.\n' +
+      'Work with the media and creative team to understand the visual needs of each project.\n' +
+      'Edit and organize selected photos for use on social media, websites, reports, promotional materials, and storytelling projects.\n' +
+      'Help build the Street Voices visual archive.\n' +
+      'Follow consent, privacy, and community safety guidelines when photographing participants.\n' +
+      'Collaborate with writers, videographers, personalities, and other creative team members.',
     requirements:
-      "Experience with photography, either professionally, academically, or independently.\n" +
-      "Access to a camera or high-quality photography equipment is an asset.\n" +
-      "Basic photo editing skills are an asset.\n" +
-      "Strong eye for composition, lighting, and storytelling.\n" +
-      "Respectful, professional, and comfortable working in community spaces.\n" +
-      "Interest in media, social impact, youth empowerment, or storytelling.",
+      'Experience with photography, either professionally, academically, or independently.\n' +
+      'Access to a camera or high-quality photography equipment is an asset.\n' +
+      'Basic photo editing skills are an asset.\n' +
+      'Strong eye for composition, lighting, and storytelling.\n' +
+      'Respectful, professional, and comfortable working in community spaces.\n' +
+      'Interest in media, social impact, youth empowerment, or storytelling.',
     equity_statement:
-      "Street Voices is a media and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media production, training, and community engagement.",
-    tags: "photography,media,volunteer,event coverage,creative,storytelling",
+      'Street Voices is a media and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media production, training, and community engagement.',
+    tags: 'photography,media,volunteer,event coverage,creative,storytelling',
     is_creative_opportunity: true,
     is_media_gig: true,
-    posting_date: "2026-04-30",
+    posting_date: '2026-04-30',
     employer_verified: true,
-    employer_verification_type: "non-profit",
+    employer_verification_type: 'non-profit',
   },
   {
-    id: "sample-26",
-    title: "Volunteer Program Intern / Web Developer Intern",
-    organization: "Street Voices",
-    logo_url: "/job-logos/street-voices.svg",
-    opportunity_type: "Volunteer",
-    category: "Technology",
-    work_mode: "Hybrid",
-    location: "Remote / Hybrid",
-    compensation: "Volunteer (unpaid) — mentorship, references, and future paid opportunities when available",
-    description: "The Volunteer Program Intern / Web Developer Intern will support Street Voices' technology and digital projects while learning about software development, web development, AI tools, and digital product building. This is a learning-focused volunteer internship — you'll get guidance and mentorship while helping with real tasks across websites, web applications, databases, AI tools, automation, user experience, and digital systems. The ideal candidate is curious, motivated, and excited to learn how technology can support communities. You don't need to be an expert — just open to mentorship, willing to practice new skills, and interested in helping build digital tools that make real impact. Time commitment is flexible based on availability, project needs, and learning goals.",
+    id: 'sample-26',
+    title: 'Volunteer Program Intern / Web Developer Intern',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Volunteer',
+    category: 'Technology',
+    work_mode: 'Hybrid',
+    location: 'Remote / Hybrid',
+    compensation:
+      'Volunteer (unpaid) — mentorship, references, and future paid opportunities when available',
+    description:
+      "The Volunteer Program Intern / Web Developer Intern will support Street Voices' technology and digital projects while learning about software development, web development, AI tools, and digital product building. This is a learning-focused volunteer internship — you'll get guidance and mentorship while helping with real tasks across websites, web applications, databases, AI tools, automation, user experience, and digital systems. The ideal candidate is curious, motivated, and excited to learn how technology can support communities. You don't need to be an expert — just open to mentorship, willing to practice new skills, and interested in helping build digital tools that make real impact. Time commitment is flexible based on availability, project needs, and learning goals.",
     responsibilities:
       "Support the development and improvement of Street Voices' websites, digital platforms, and web-based tools.\n" +
-      "Assist with front-end development tasks such as updating pages, layouts, forms, components, and user interfaces.\n" +
-      "Learn and contribute to back-end tasks such as APIs, databases, integrations, and basic server-side workflows.\n" +
-      "Help test websites, forms, applications, and digital tools to identify bugs or areas for improvement.\n" +
-      "Support research into AI tools, software libraries, automation systems, and web development best practices.\n" +
-      "Assist with organizing technical documentation, notes, project plans, and feature ideas.\n" +
-      "Work with the Street Voices team to translate program needs into digital solutions.\n" +
-      "Learn about AI-powered tools, chatbots, directories, case management systems, and service-access technology.\n" +
-      "Participate in mentorship sessions, team check-ins, and project discussions.\n" +
+      'Assist with front-end development tasks such as updating pages, layouts, forms, components, and user interfaces.\n' +
+      'Learn and contribute to back-end tasks such as APIs, databases, integrations, and basic server-side workflows.\n' +
+      'Help test websites, forms, applications, and digital tools to identify bugs or areas for improvement.\n' +
+      'Support research into AI tools, software libraries, automation systems, and web development best practices.\n' +
+      'Assist with organizing technical documentation, notes, project plans, and feature ideas.\n' +
+      'Work with the Street Voices team to translate program needs into digital solutions.\n' +
+      'Learn about AI-powered tools, chatbots, directories, case management systems, and service-access technology.\n' +
+      'Participate in mentorship sessions, team check-ins, and project discussions.\n' +
       "Support digital projects connected to Street Voices' media platform, training program, directory, and technology initiatives.",
     requirements:
-      "Interest in technology, web development, software development, AI, or digital products.\n" +
-      "Beginner, student, self-taught, or early-stage developer experience is welcome.\n" +
-      "Basic knowledge of HTML, CSS, JavaScript, React, Python, or similar tools is an asset but not required.\n" +
-      "Willingness to learn, ask questions, and receive feedback.\n" +
-      "Strong problem-solving skills and attention to detail.\n" +
-      "Reliable, organized, and able to complete agreed-upon tasks.\n" +
-      "Interest in community impact, youth empowerment, media, social services, or nonprofit technology.\n" +
-      "Comfortable working independently and as part of a team.",
+      'Interest in technology, web development, software development, AI, or digital products.\n' +
+      'Beginner, student, self-taught, or early-stage developer experience is welcome.\n' +
+      'Basic knowledge of HTML, CSS, JavaScript, React, Python, or similar tools is an asset but not required.\n' +
+      'Willingness to learn, ask questions, and receive feedback.\n' +
+      'Strong problem-solving skills and attention to detail.\n' +
+      'Reliable, organized, and able to complete agreed-upon tasks.\n' +
+      'Interest in community impact, youth empowerment, media, social services, or nonprofit technology.\n' +
+      'Comfortable working independently and as part of a team.',
     nice_to_have:
-      "Experience with website builders, CMS platforms, GitHub, or basic coding projects.\n" +
-      "Familiarity with React, Next.js, Vite, Tailwind CSS, FastAPI, Python, or JavaScript.\n" +
-      "Interest in AI, automation, data scraping, search tools, or chatbot development.\n" +
-      "Basic design sense or interest in UI/UX.\n" +
-      "Experience using tools like Google Workspace, Notion, Airtable, Figma, GitHub, or project management apps.",
+      'Experience with website builders, CMS platforms, GitHub, or basic coding projects.\n' +
+      'Familiarity with React, Next.js, Vite, Tailwind CSS, FastAPI, Python, or JavaScript.\n' +
+      'Interest in AI, automation, data scraping, search tools, or chatbot development.\n' +
+      'Basic design sense or interest in UI/UX.\n' +
+      'Experience using tools like Google Workspace, Notion, Airtable, Figma, GitHub, or project management apps.',
     equity_statement:
-      "Street Voices is a media, technology, and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media training, digital tools, and community-based innovation.",
-    tags: "internship,web development,javascript,react,python,ai,mentorship,volunteer",
+      'Street Voices is a media, technology, and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media training, digital tools, and community-based innovation.',
+    tags: 'internship,web development,javascript,react,python,ai,mentorship,volunteer',
     training_provided: true,
     no_experience_required: true,
-    posting_date: "2026-04-30",
+    posting_date: '2026-04-30',
     employer_verified: true,
-    employer_verification_type: "non-profit",
+    employer_verification_type: 'non-profit',
   },
   {
-    id: "sample-27",
-    title: "Podcast Producer — The Echo",
-    organization: "Street Voices",
-    logo_url: "/job-logos/street-voices.svg",
-    opportunity_type: "Part-time",
-    category: "Media",
-    work_mode: "Remote",
-    location: "Remote (in-person optional)",
-    compensation: "$150 per episode (bi-weekly, ~2 episodes/month)",
-    description: "The Echo is a Street Voices podcast that explores culture, pop culture, urban culture, media, community stories, entertainment, and the conversations shaping our generation. The Podcast Producer will help shape the direction, topics, and content strategy for The Echo — researching and developing episode topics, identifying relevant cultural conversations, helping structure episodes, and deciding which moments should be turned into clips for social media and promotional use. The ideal candidate is tapped into culture and knows what people are talking about: what makes a podcast conversation interesting, what makes a clip shareable, and how to shape raw conversations into strong media content. This is a part-time contract role with bi-weekly production (about two episodes per month) at $150 per episode.",
+    id: 'sample-27',
+    title: 'Podcast Producer — The Echo',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Part-time',
+    category: 'Media',
+    work_mode: 'Remote',
+    location: 'Remote (in-person optional)',
+    compensation: '$150 per episode (bi-weekly, ~2 episodes/month)',
+    description:
+      'The Echo is a Street Voices podcast that explores culture, pop culture, urban culture, media, community stories, entertainment, and the conversations shaping our generation. The Podcast Producer will help shape the direction, topics, and content strategy for The Echo — researching and developing episode topics, identifying relevant cultural conversations, helping structure episodes, and deciding which moments should be turned into clips for social media and promotional use. The ideal candidate is tapped into culture and knows what people are talking about: what makes a podcast conversation interesting, what makes a clip shareable, and how to shape raw conversations into strong media content. This is a part-time contract role with bi-weekly production (about two episodes per month) at $150 per episode.',
     responsibilities:
-      "Develop episode topics for The Echo on a bi-weekly basis.\n" +
-      "Research current conversations in culture, pop culture, urban culture, entertainment, media, and community issues.\n" +
-      "Help shape the angle, structure, and flow of each podcast episode.\n" +
-      "Prepare topic notes, discussion points, and possible questions for hosts.\n" +
-      "Identify strong moments from each episode that should be edited into clips for social media.\n" +
-      "Decide which clips should be prioritized for promotion, engagement, and audience growth.\n" +
-      "Work with the podcast host, editor, and Street Voices team to support episode planning and release.\n" +
-      "Ensure topics are relevant, timely, engaging, and aligned with the voice of The Echo.\n" +
-      "Support creative brainstorming for recurring segments, guest ideas, and episode formats.\n" +
-      "Stay aware of social media trends, viral conversations, music, entertainment, youth culture, and community issues.\n" +
-      "Provide clear direction to editors on clip selections, timestamps, and content priorities when needed.",
+      'Develop episode topics for The Echo on a bi-weekly basis.\n' +
+      'Research current conversations in culture, pop culture, urban culture, entertainment, media, and community issues.\n' +
+      'Help shape the angle, structure, and flow of each podcast episode.\n' +
+      'Prepare topic notes, discussion points, and possible questions for hosts.\n' +
+      'Identify strong moments from each episode that should be edited into clips for social media.\n' +
+      'Decide which clips should be prioritized for promotion, engagement, and audience growth.\n' +
+      'Work with the podcast host, editor, and Street Voices team to support episode planning and release.\n' +
+      'Ensure topics are relevant, timely, engaging, and aligned with the voice of The Echo.\n' +
+      'Support creative brainstorming for recurring segments, guest ideas, and episode formats.\n' +
+      'Stay aware of social media trends, viral conversations, music, entertainment, youth culture, and community issues.\n' +
+      'Provide clear direction to editors on clip selections, timestamps, and content priorities when needed.',
     requirements:
-      "Strong understanding of culture, pop culture, urban culture, entertainment, and social media trends.\n" +
-      "Experience with podcasting, media production, content creation, journalism, music or media commentary, or digital storytelling is an asset.\n" +
-      "Strong creative instincts and ability to identify engaging conversation topics.\n" +
-      "Ability to recognize strong soundbites, viral moments, and clip-worthy segments.\n" +
-      "Good research, communication, and organizational skills.\n" +
-      "Comfortable working remotely and meeting deadlines.\n" +
-      "Interest in Black culture, youth culture, media, community issues, and creative industries.\n" +
-      "Ability to collaborate with hosts, editors, and creative team members.",
+      'Strong understanding of culture, pop culture, urban culture, entertainment, and social media trends.\n' +
+      'Experience with podcasting, media production, content creation, journalism, music or media commentary, or digital storytelling is an asset.\n' +
+      'Strong creative instincts and ability to identify engaging conversation topics.\n' +
+      'Ability to recognize strong soundbites, viral moments, and clip-worthy segments.\n' +
+      'Good research, communication, and organizational skills.\n' +
+      'Comfortable working remotely and meeting deadlines.\n' +
+      'Interest in Black culture, youth culture, media, community issues, and creative industries.\n' +
+      'Ability to collaborate with hosts, editors, and creative team members.',
     nice_to_have:
-      "Experience producing podcasts, YouTube shows, radio segments, interviews, or digital media content.\n" +
-      "Familiarity with platforms such as TikTok, Instagram Reels, YouTube Shorts, and podcast platforms.\n" +
-      "Ability to create episode outlines, show notes, or content briefs.\n" +
-      "Experience selecting clips or creating short-form content strategies.\n" +
-      "Knowledge of Toronto culture, urban media, music, entertainment, and community conversations.\n" +
-      "Existing network of potential guests, creatives, artists, or commentators.",
+      'Experience producing podcasts, YouTube shows, radio segments, interviews, or digital media content.\n' +
+      'Familiarity with platforms such as TikTok, Instagram Reels, YouTube Shorts, and podcast platforms.\n' +
+      'Ability to create episode outlines, show notes, or content briefs.\n' +
+      'Experience selecting clips or creating short-form content strategies.\n' +
+      'Knowledge of Toronto culture, urban media, music, entertainment, and community conversations.\n' +
+      'Existing network of potential guests, creatives, artists, or commentators.',
     equity_statement:
-      "Street Voices is a media and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media production, training, and community engagement.",
-    tags: "podcast,producer,culture,pop culture,urban culture,media,editorial",
+      'Street Voices is a media and community organization dedicated to empowering Black youth and marginalized voices through storytelling, media production, training, and community engagement.',
+    tags: 'podcast,producer,culture,pop culture,urban culture,media,editorial',
     is_media_gig: true,
     is_creative_opportunity: true,
-    posting_date: "2026-04-30",
+    posting_date: '2026-04-30',
     employer_verified: true,
-    employer_verification_type: "non-profit",
+    employer_verification_type: 'non-profit',
   },
   {
-    id: "sample-28",
-    title: "Volunteer Videographer",
-    organization: "Street Voices",
-    logo_url: "/job-logos/street-voices.svg",
-    opportunity_type: "Volunteer",
-    category: "Media",
-    work_mode: "Hybrid",
-    location: "Toronto, ON",
-    compensation: "Volunteer (unpaid)",
-    description: "The Volunteer Videographer will help Street Voices capture video content for events, interviews, workshops, documentaries, social media, promotional campaigns, and community stories. This role is ideal for someone passionate about visual storytelling and looking for hands-on experience in community-based media production. What you'll gain: build your videography and filmmaking portfolio, hands-on experience in media production, credit for published work, collaboration with a creative and mission-driven team, the chance to support meaningful stories from Black youth and marginalized communities, and potential references, networking, and future paid projects when available.",
+    id: 'sample-28',
+    title: 'Volunteer Videographer',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Volunteer',
+    category: 'Media',
+    work_mode: 'Hybrid',
+    location: 'Toronto, ON',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      "The Volunteer Videographer will help Street Voices capture video content for events, interviews, workshops, documentaries, social media, promotional campaigns, and community stories. This role is ideal for someone passionate about visual storytelling and looking for hands-on experience in community-based media production. What you'll gain: build your videography and filmmaking portfolio, hands-on experience in media production, credit for published work, collaboration with a creative and mission-driven team, the chance to support meaningful stories from Black youth and marginalized communities, and potential references, networking, and future paid projects when available.",
     responsibilities:
-      "Film events, workshops, interviews, panels, behind-the-scenes moments, and community stories.\n" +
-      "Support the production of short-form and long-form video content.\n" +
-      "Work with the creative team to plan shots, angles, and visual storytelling approaches.\n" +
-      "Assist with lighting, audio, camera setup, and production needs when required.\n" +
-      "Edit video clips for social media, website use, promotional content, and recap videos when needed.\n" +
+      'Film events, workshops, interviews, panels, behind-the-scenes moments, and community stories.\n' +
+      'Support the production of short-form and long-form video content.\n' +
+      'Work with the creative team to plan shots, angles, and visual storytelling approaches.\n' +
+      'Assist with lighting, audio, camera setup, and production needs when required.\n' +
+      'Edit video clips for social media, website use, promotional content, and recap videos when needed.\n' +
       "Organize video files and support Street Voices' media archive.\n" +
-      "Follow consent, privacy, and safety guidelines when filming participants and community members.\n" +
-      "Collaborate with photographers, writers, personalities, and other members of the media team.",
+      'Follow consent, privacy, and safety guidelines when filming participants and community members.\n' +
+      'Collaborate with photographers, writers, personalities, and other members of the media team.',
     requirements:
-      "Experience with videography, video editing, filmmaking, or content creation.\n" +
-      "Access to a camera, phone, or video equipment is an asset.\n" +
-      "Familiarity with editing software such as Premiere Pro, Final Cut Pro, DaVinci Resolve, CapCut, or similar tools is an asset.\n" +
-      "Strong understanding of framing, audio, lighting, and storytelling.\n" +
-      "Reliable, creative, and comfortable working in community spaces.\n" +
-      "Interest in media, social justice, youth empowerment, or community storytelling.",
+      'Experience with videography, video editing, filmmaking, or content creation.\n' +
+      'Access to a camera, phone, or video equipment is an asset.\n' +
+      'Familiarity with editing software such as Premiere Pro, Final Cut Pro, DaVinci Resolve, CapCut, or similar tools is an asset.\n' +
+      'Strong understanding of framing, audio, lighting, and storytelling.\n' +
+      'Reliable, creative, and comfortable working in community spaces.\n' +
+      'Interest in media, social justice, youth empowerment, or community storytelling.',
     equity_statement:
-      "Street Voices is a media and community organization focused on empowering Black youth and marginalized communities through media, storytelling, training, and creative opportunities. We use video, journalism, photography, podcasting, and digital media to help communities take control of their narratives.",
-    tags: "videography,video editing,filmmaking,media,volunteer,event coverage",
+      'Street Voices is a media and community organization focused on empowering Black youth and marginalized communities through media, storytelling, training, and creative opportunities. We use video, journalism, photography, podcasting, and digital media to help communities take control of their narratives.',
+    tags: 'videography,video editing,filmmaking,media,volunteer,event coverage',
     is_creative_opportunity: true,
     is_media_gig: true,
-    posting_date: "2026-04-30",
+    posting_date: '2026-04-30',
     employer_verified: true,
-    employer_verification_type: "non-profit",
+    employer_verification_type: 'non-profit',
   },
   {
-    id: "sample-29",
-    title: "Volunteer Writer",
-    organization: "Street Voices",
-    logo_url: "/job-logos/street-voices.svg",
-    opportunity_type: "Volunteer",
-    category: "Media",
-    work_mode: "Hybrid",
-    location: "Remote / Hybrid",
-    compensation: "Volunteer (unpaid)",
-    description: "The Volunteer Writer will support Street Voices by writing articles, interviews, profiles, blog posts, event recaps, community stories, and other written content. This role is ideal for someone who enjoys writing, journalism, storytelling, research, and amplifying community voices. What you'll gain: build your writing portfolio, get published on the Street Voices platform, gain experience in journalism, media, and community storytelling, receive writing credit when published, work with a creative and mission-driven team, and access potential references, networking, and future paid projects when available.",
+    id: 'sample-29',
+    title: 'Volunteer Writer',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Volunteer',
+    category: 'Media',
+    work_mode: 'Hybrid',
+    location: 'Remote / Hybrid',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      "The Volunteer Writer will support Street Voices by writing articles, interviews, profiles, blog posts, event recaps, community stories, and other written content. This role is ideal for someone who enjoys writing, journalism, storytelling, research, and amplifying community voices. What you'll gain: build your writing portfolio, get published on the Street Voices platform, gain experience in journalism, media, and community storytelling, receive writing credit when published, work with a creative and mission-driven team, and access potential references, networking, and future paid projects when available.",
     responsibilities:
-      "Write articles, interviews, profiles, opinion pieces, event recaps, and community-focused stories.\n" +
-      "Conduct interviews with artists, youth, community members, organizers, and Street Voices participants when needed.\n" +
-      "Research topics related to media, arts, culture, youth, social issues, community resources, and marginalized communities.\n" +
-      "Work with the editorial or creative team to develop story ideas and content angles.\n" +
-      "Edit and revise drafts based on feedback.\n" +
-      "Support written content for the Street Voices website, social media, newsletters, reports, and promotional materials.\n" +
+      'Write articles, interviews, profiles, opinion pieces, event recaps, and community-focused stories.\n' +
+      'Conduct interviews with artists, youth, community members, organizers, and Street Voices participants when needed.\n' +
+      'Research topics related to media, arts, culture, youth, social issues, community resources, and marginalized communities.\n' +
+      'Work with the editorial or creative team to develop story ideas and content angles.\n' +
+      'Edit and revise drafts based on feedback.\n' +
+      'Support written content for the Street Voices website, social media, newsletters, reports, and promotional materials.\n' +
       "Ensure writing is respectful, accurate, engaging, and aligned with Street Voices' mission.\n" +
-      "Collaborate with photographers, videographers, personalities, and other team members to create multimedia stories.",
+      'Collaborate with photographers, videographers, personalities, and other team members to create multimedia stories.',
     requirements:
-      "Strong writing, editing, and storytelling skills.\n" +
-      "Interest in journalism, blogging, creative writing, community storytelling, or media.\n" +
-      "Ability to write clearly and meet agreed-upon deadlines.\n" +
-      "Research and interview skills are an asset.\n" +
-      "Familiarity with social issues, arts, culture, youth issues, or marginalized communities is an asset.\n" +
-      "Open to feedback and collaboration.",
+      'Strong writing, editing, and storytelling skills.\n' +
+      'Interest in journalism, blogging, creative writing, community storytelling, or media.\n' +
+      'Ability to write clearly and meet agreed-upon deadlines.\n' +
+      'Research and interview skills are an asset.\n' +
+      'Familiarity with social issues, arts, culture, youth issues, or marginalized communities is an asset.\n' +
+      'Open to feedback and collaboration.',
     equity_statement:
-      "Street Voices is a media and community organization committed to empowering Black youth and marginalized voices through storytelling, media training, journalism, and creative expression.",
-    tags: "writing,journalism,storytelling,content,volunteer,media",
+      'Street Voices is a media and community organization committed to empowering Black youth and marginalized voices through storytelling, media training, journalism, and creative expression.',
+    tags: 'writing,journalism,storytelling,content,volunteer,media',
     is_creative_opportunity: true,
     is_media_gig: true,
-    posting_date: "2026-04-30",
+    posting_date: '2026-04-30',
     employer_verified: true,
-    employer_verification_type: "non-profit",
+    employer_verification_type: 'non-profit',
   },
   {
-    id: "sample-30",
-    title: "Volunteer Personality",
-    organization: "Street Voices",
-    logo_url: "/job-logos/street-voices.svg",
-    opportunity_type: "Volunteer",
-    category: "Media",
-    work_mode: "Hybrid",
-    location: "Toronto, ON",
-    compensation: "Volunteer (unpaid)",
-    description: "The Volunteer Personality will represent Street Voices on camera, on mic, at events, and across media projects. This role is ideal for someone who is charismatic, confident, thoughtful, and passionate about interviewing people, hosting conversations, and bringing energy to community-based media content. A Personality may support interviews, podcasts, event hosting, street interviews, social media content, panel discussions, and other public-facing media projects. What you'll gain: build your hosting, interviewing, and media portfolio, gain experience in podcasting, video content, public speaking, and event hosting, receive credit for published appearances when applicable, network with creatives, community leaders, artists, and media professionals, work with a mission-driven creative team, and access potential references, networking, and future paid projects when available.",
+    id: 'sample-30',
+    title: 'Volunteer Personality',
+    organization: 'Street Voices',
+    logo_url: '/job-logos/street-voices.svg',
+    opportunity_type: 'Volunteer',
+    category: 'Media',
+    work_mode: 'Hybrid',
+    location: 'Toronto, ON',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      "The Volunteer Personality will represent Street Voices on camera, on mic, at events, and across media projects. This role is ideal for someone who is charismatic, confident, thoughtful, and passionate about interviewing people, hosting conversations, and bringing energy to community-based media content. A Personality may support interviews, podcasts, event hosting, street interviews, social media content, panel discussions, and other public-facing media projects. What you'll gain: build your hosting, interviewing, and media portfolio, gain experience in podcasting, video content, public speaking, and event hosting, receive credit for published appearances when applicable, network with creatives, community leaders, artists, and media professionals, work with a mission-driven creative team, and access potential references, networking, and future paid projects when available.",
     responsibilities:
-      "Host or co-host interviews, podcasts, event segments, social media videos, and community conversations.\n" +
-      "Conduct interviews with artists, youth, entrepreneurs, organizers, creatives, and community members.\n" +
-      "Represent Street Voices in a professional, engaging, and authentic way.\n" +
-      "Help develop interview questions, conversation topics, and content ideas.\n" +
-      "Participate in video shoots, podcast recordings, panels, and live events when needed.\n" +
-      "Work with writers, videographers, photographers, and the creative team to produce engaging stories.\n" +
-      "Support social media and promotional content through on-camera appearances.\n" +
-      "Create a welcoming and respectful environment for guests and participants.\n" +
+      'Host or co-host interviews, podcasts, event segments, social media videos, and community conversations.\n' +
+      'Conduct interviews with artists, youth, entrepreneurs, organizers, creatives, and community members.\n' +
+      'Represent Street Voices in a professional, engaging, and authentic way.\n' +
+      'Help develop interview questions, conversation topics, and content ideas.\n' +
+      'Participate in video shoots, podcast recordings, panels, and live events when needed.\n' +
+      'Work with writers, videographers, photographers, and the creative team to produce engaging stories.\n' +
+      'Support social media and promotional content through on-camera appearances.\n' +
+      'Create a welcoming and respectful environment for guests and participants.\n' +
       "Follow Street Voices' values around consent, respect, representation, and community care.",
     requirements:
-      "Comfortable speaking on camera, on mic, or in front of an audience.\n" +
-      "Strong communication and interpersonal skills.\n" +
-      "Interest in media, entertainment, journalism, podcasting, public speaking, or community storytelling.\n" +
-      "Ability to ask thoughtful questions and hold engaging conversations.\n" +
-      "Reliable, respectful, and open to feedback.\n" +
-      "Experience with hosting, podcasting, interviewing, acting, content creation, or public speaking is an asset but not required.\n" +
-      "Passion for uplifting Black youth and marginalized voices.",
+      'Comfortable speaking on camera, on mic, or in front of an audience.\n' +
+      'Strong communication and interpersonal skills.\n' +
+      'Interest in media, entertainment, journalism, podcasting, public speaking, or community storytelling.\n' +
+      'Ability to ask thoughtful questions and hold engaging conversations.\n' +
+      'Reliable, respectful, and open to feedback.\n' +
+      'Experience with hosting, podcasting, interviewing, acting, content creation, or public speaking is an asset but not required.\n' +
+      'Passion for uplifting Black youth and marginalized voices.',
     equity_statement:
-      "Street Voices is a media and community organization that empowers Black youth and marginalized voices through storytelling, media production, training, and community engagement.",
-    tags: "hosting,podcasting,on-camera,public speaking,media,volunteer",
+      'Street Voices is a media and community organization that empowers Black youth and marginalized voices through storytelling, media production, training, and community engagement.',
+    tags: 'hosting,podcasting,on-camera,public speaking,media,volunteer',
     is_creative_opportunity: true,
     is_media_gig: true,
-    posting_date: "2026-04-30",
+    posting_date: '2026-04-30',
     employer_verified: true,
-    employer_verification_type: "non-profit",
+    employer_verification_type: 'non-profit',
   },
 ];
 
@@ -848,39 +886,43 @@ const ENRICHED_SAMPLE_JOBS: Job[] = enrichJobsSchedule(SAMPLE_JOBS);
 // Verification Badge component
 function VerificationBadge({
   verificationType,
-  size = "sm"
+  size = 'sm',
 }: {
   verificationType?: string;
-  size?: "sm" | "md" | "lg";
+  size?: 'sm' | 'md' | 'lg';
 }) {
   if (!verificationType) return null;
 
   const sizeStyles = {
-    sm: { padding: "2px 8px", fontSize: "10px", iconSize: 10 },
-    md: { padding: "4px 10px", fontSize: "11px", iconSize: 12 },
-    lg: { padding: "6px 12px", fontSize: "12px", iconSize: 14 },
+    sm: { padding: '2px 8px', fontSize: '10px', iconSize: 10 },
+    md: { padding: '4px 10px', fontSize: '11px', iconSize: 12 },
+    lg: { padding: '6px 12px', fontSize: '12px', iconSize: 14 },
   };
 
-  const typeConfig: Record<string, { label: string; bg: string; icon: string }> = {
+  const typeConfig: Record<string, { label: string; bg: string; color: string; icon: string }> = {
     basic: {
-      label: "Verified",
-      bg: "linear-gradient(135deg, #16a34a 0%, #059669 100%)",
-      icon: "check",
+      label: 'Verified',
+      bg: 'linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.15) 100%)',
+      color: '#22c55e',
+      icon: 'check',
     },
     business: {
-      label: "Verified Business",
-      bg: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
-      icon: "building",
+      label: 'Verified Business',
+      bg: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)',
+      color: '#3b82f6',
+      icon: 'building',
     },
     nonprofit: {
-      label: "Verified Nonprofit",
-      bg: "linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)",
-      icon: "heart",
+      label: 'Verified Nonprofit',
+      bg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%)',
+      color: '#a855f7',
+      icon: 'heart',
     },
     government: {
-      label: "Government",
-      bg: "linear-gradient(135deg, #ca8a04 0%, #a16207 100%)",
-      icon: "shield",
+      label: 'Government',
+      bg: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2) 0%, rgba(202, 138, 4, 0.15) 100%)',
+      color: '#eab308',
+      icon: 'shield',
     },
   };
 
@@ -890,17 +932,17 @@ function VerificationBadge({
   return (
     <span
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "4px",
-        borderRadius: "9999px",
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        borderRadius: '9999px',
         background: config.bg,
+        border: `1px solid ${config.color}33`,
         padding: styles.padding,
         fontSize: styles.fontSize,
-        fontWeight: 700,
-        color: "#ffffff",
-        whiteSpace: "nowrap",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+        fontWeight: 600,
+        color: config.color,
+        whiteSpace: 'nowrap',
       }}
       title={`${config.label} employer`}
     >
@@ -922,36 +964,36 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
       role="status"
       aria-live="polite"
       style={{
-        position: "fixed",
-        bottom: "24px",
-        right: "24px",
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
         zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        borderRadius: "8px",
-        background: "#1f2937",
-        padding: "12px 16px",
-        color: "#fff",
-        boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        borderRadius: '8px',
+        background: '#1f2937',
+        padding: '12px 16px',
+        color: '#fff',
+        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
       }}
     >
       <span>{message}</span>
       <button
         onClick={onClose}
         style={{
-          background: "transparent",
-          border: "none",
-          color: "#9ca3af",
-          cursor: "pointer",
+          background: 'transparent',
+          border: 'none',
+          color: '#9ca3af',
+          cursor: 'pointer',
           padding: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
         aria-label="Dismiss notification"
       >
-        <X style={{ width: "16px", height: "16px" }} />
+        <X style={{ width: '16px', height: '16px' }} />
       </button>
     </div>
   );
@@ -980,24 +1022,26 @@ function JobCard({
   return (
     <article
       style={{
-        display: "flex",
-        flexDirection: "column",
+        display: 'flex',
+        flexDirection: 'column',
         background: colors.cardBg,
-        backdropFilter: "blur(24px) saturate(180%)",
-        WebkitBackdropFilter: "blur(24px) saturate(180%)",
-        borderRadius: "24px",
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        borderRadius: '24px',
         border: `1px solid ${colors.border}`,
         boxShadow: colors.glassShadow,
-        overflow: "hidden",
-        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        overflow: 'hidden',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "translateY(-8px)";
+        e.currentTarget.style.transform = 'translateY(-8px)';
         e.currentTarget.style.borderColor = colors.borderHover;
-        e.currentTarget.style.boxShadow = isDark ? "0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(139, 92, 246, 0.15)" : "0 20px 40px rgba(31, 38, 135, 0.2)";
+        e.currentTarget.style.boxShadow = isDark
+          ? '0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(139, 92, 246, 0.15)'
+          : '0 20px 40px rgba(31, 38, 135, 0.2)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.borderColor = colors.border;
         e.currentTarget.style.boxShadow = colors.glassShadow;
       }}
@@ -1005,61 +1049,61 @@ function JobCard({
       {/* Logo Banner Area - Matches Directory Style */}
       <div
         style={{
-          position: "relative",
-          height: "160px",
-          background: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          position: 'relative',
+          height: '160px',
+          background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           borderBottom: `1px solid ${colors.border}`,
-          overflow: "hidden",
         }}
       >
-        {/* Large Logo — fills the banner edge-to-edge for branded covers (e.g.
-            Street Voices yellow), so no white margin is visible around it. */}
-        <img loading="lazy" decoding="async"
+        {/* Large Logo */}
+        <img
+          loading="lazy"
+          decoding="async"
           src={getLogoForJob(job)}
           alt={`${job.organization} logo`}
           style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
+            maxWidth: '85%',
+            maxHeight: '120px',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain',
           }}
           onError={(e) => {
-            (e.target as HTMLImageElement).src = "/job-logos/default-job.svg";
+            (e.target as HTMLImageElement).src = '/job-logos/default-job.svg';
           }}
         />
 
         {/* Opportunity Type Badge - Top Left */}
         <span
           style={{
-            position: "absolute",
-            top: "12px",
-            left: "12px",
-            display: "inline-block",
-            borderRadius: "9999px",
+            position: 'absolute',
+            top: '12px',
+            left: '12px',
+            display: 'inline-block',
+            borderRadius: '9999px',
             background: colors.accent,
-            padding: "6px 12px",
-            fontSize: "12px",
+            padding: '6px 12px',
+            fontSize: '12px',
             fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            color: "#000",
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            color: '#000',
           }}
         >
-          {job.opportunity_type || "Opportunity"}
+          {job.opportunity_type || 'Opportunity'}
         </span>
 
         {/* Action Buttons - Top Right */}
         <div
           style={{
-            position: "absolute",
-            top: "12px",
-            right: "12px",
-            display: "flex",
-            gap: "6px",
+            position: 'absolute',
+            top: '12px',
+            right: '12px',
+            display: 'flex',
+            gap: '6px',
           }}
         >
           <button
@@ -1070,25 +1114,25 @@ function JobCard({
               onToggleFavorite(job.id);
             }}
             style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              background: isDark ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.9)",
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backdropFilter: "blur(8px)",
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              background: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(8px)',
               padding: 0,
             }}
-            aria-label={isSaved ? "Remove from saved jobs" : "Save job"}
+            aria-label={isSaved ? 'Remove from saved jobs' : 'Save job'}
             aria-pressed={isSaved}
           >
             <Heart
-              style={{ width: "18px", height: "18px" }}
-              color={isSaved ? "#ef4444" : isDark ? "#fff" : "#666"}
-              fill={isSaved ? "#ef4444" : "none"}
+              style={{ width: '18px', height: '18px' }}
+              color={isSaved ? '#ef4444' : isDark ? '#fff' : '#666'}
+              fill={isSaved ? '#ef4444' : 'none'}
             />
           </button>
           <button
@@ -1099,42 +1143,66 @@ function JobCard({
               onShare(job);
             }}
             style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              background: isDark ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.9)",
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backdropFilter: "blur(8px)",
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              background: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(8px)',
               padding: 0,
             }}
             aria-label="Share job listing"
           >
-            <Share2 style={{ width: "18px", height: "18px" }} color={isDark ? "#fff" : "#666"} />
+            <Share2 style={{ width: '18px', height: '18px' }} color={isDark ? '#fff' : '#666'} />
           </button>
         </div>
 
+        {/* Verified Badge - Bottom Center */}
+        {job.employer_verified && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '-14px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+            }}
+          >
+            <VerificationBadge verificationType={job.employer_verification_type} size="md" />
+          </div>
+        )}
       </div>
 
       {/* Card Content */}
-      <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {/* Title & Organization */}
-        <Link to={`/jobs/${job.id}`} style={{ textDecoration: "none" }}>
-          <h3 style={{ fontSize: "18px", fontWeight: 700, color: colors.text, margin: "0 0 4px 0", textAlign: "center", transition: "color 0.2s" }}>
+        <Link to={`/jobs/${job.id}`} style={{ textDecoration: 'none' }}>
+          <h3
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: colors.text,
+              margin: '0 0 4px 0',
+              textAlign: 'center',
+              transition: 'color 0.2s',
+            }}
+          >
             {job.title}
           </h3>
           {job.organization && (
-            <p style={{ fontSize: "14px", color: colors.textSecondary, margin: 0, textAlign: "center" }}>
+            <p
+              style={{
+                fontSize: '14px',
+                color: colors.textSecondary,
+                margin: 0,
+                textAlign: 'center',
+              }}
+            >
               {job.organization}
             </p>
-          )}
-          {job.employer_verified && (
-            <div style={{ display: "flex", justifyContent: "center", marginTop: "8px" }}>
-              <VerificationBadge verificationType={job.employer_verification_type} size="md" />
-            </div>
           )}
         </Link>
 
@@ -1142,15 +1210,15 @@ function JobCard({
         {job.description && (
           <p
             style={{
-              fontSize: "14px",
+              fontSize: '14px',
               lineHeight: 1.6,
               color: colors.textSecondary,
-              display: "-webkit-box",
+              display: '-webkit-box',
               WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
               margin: 0,
-              textAlign: "center",
+              textAlign: 'center',
             }}
           >
             {job.description}
@@ -1158,34 +1226,103 @@ function JobCard({
         )}
 
         {/* Badges */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "center" }} role="list" aria-label="Job attributes">
+        <div
+          style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}
+          role="list"
+          aria-label="Job attributes"
+        >
           {job.black_led_organization && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "9999px", background: "linear-gradient(to right, #ec4899, #f43f5e)", padding: "4px 10px", fontSize: "11px", fontWeight: 600, color: "#fff" }} role="listitem">
-              <Building2 style={{ width: "12px", height: "12px" }} />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '9999px',
+                background: 'linear-gradient(to right, #ec4899, #f43f5e)',
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#fff',
+              }}
+              role="listitem"
+            >
+              <Building2 style={{ width: '12px', height: '12px' }} />
               Black-Led
             </span>
           )}
           {job.no_experience_required && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "9999px", background: "linear-gradient(to right, #60a5fa, #22d3ee)", padding: "4px 10px", fontSize: "11px", fontWeight: 600, color: "#fff" }} role="listitem">
-              <Sparkles style={{ width: "12px", height: "12px" }} />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '9999px',
+                background: 'linear-gradient(to right, #60a5fa, #22d3ee)',
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#fff',
+              }}
+              role="listitem"
+            >
+              <Sparkles style={{ width: '12px', height: '12px' }} />
               No Experience
             </span>
           )}
           {job.training_provided && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "9999px", background: "linear-gradient(to right, #4ade80, #34d399)", padding: "4px 10px", fontSize: "11px", fontWeight: 600, color: "#fff" }} role="listitem">
-              <GraduationCap style={{ width: "12px", height: "12px" }} />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '9999px',
+                background: 'linear-gradient(to right, #4ade80, #34d399)',
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#fff',
+              }}
+              role="listitem"
+            >
+              <GraduationCap style={{ width: '12px', height: '12px' }} />
               Training
             </span>
           )}
           {job.is_creative_opportunity && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "9999px", background: "linear-gradient(to right, #f472b6, #facc15)", padding: "4px 10px", fontSize: "11px", fontWeight: 600, color: "#fff" }} role="listitem">
-              <Palette style={{ width: "12px", height: "12px" }} />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '9999px',
+                background: 'linear-gradient(to right, #f472b6, #facc15)',
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#fff',
+              }}
+              role="listitem"
+            >
+              <Palette style={{ width: '12px', height: '12px' }} />
               Creative
             </span>
           )}
           {job.is_media_gig && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "9999px", background: "linear-gradient(to right, #22d3ee, #6366f1)", padding: "4px 10px", fontSize: "11px", fontWeight: 600, color: "#fff" }} role="listitem">
-              <Camera style={{ width: "12px", height: "12px" }} />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '9999px',
+                background: 'linear-gradient(to right, #22d3ee, #6366f1)',
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#fff',
+              }}
+              role="listitem"
+            >
+              <Camera style={{ width: '12px', height: '12px' }} />
               Media
             </span>
           )}
@@ -1194,107 +1331,103 @@ function JobCard({
         {/* Meta Info - Contact/Location Box */}
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-            padding: "12px",
-            background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-            borderRadius: "12px",
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            padding: '12px',
+            background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+            borderRadius: '12px',
           }}
         >
           {job.location && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <MapPin style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
-              <span style={{ fontSize: "13px", color: colors.text }}>{job.location}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MapPin
+                style={{ width: '16px', height: '16px', color: colors.accent, flexShrink: 0 }}
+                aria-hidden="true"
+              />
+              <span style={{ fontSize: '13px', color: colors.text }}>{job.location}</span>
             </div>
           )}
           {job.compensation && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <DollarSign style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
-              <span style={{ fontSize: "13px", color: colors.text }}>{job.compensation}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <DollarSign
+                style={{ width: '16px', height: '16px', color: colors.accent, flexShrink: 0 }}
+                aria-hidden="true"
+              />
+              <span style={{ fontSize: '13px', color: colors.text }}>{job.compensation}</span>
             </div>
           )}
           {job.work_mode && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Briefcase style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
-              <span style={{ fontSize: "13px", color: colors.text }}>{job.work_mode}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Briefcase
+                style={{ width: '16px', height: '16px', color: colors.accent, flexShrink: 0 }}
+                aria-hidden="true"
+              />
+              <span style={{ fontSize: '13px', color: colors.text }}>{job.work_mode}</span>
             </div>
           )}
           {job.hours_per_week && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Clock style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
-              <span style={{ fontSize: "13px", color: colors.text }}>{job.hours_per_week}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock
+                style={{ width: '16px', height: '16px', color: colors.accent, flexShrink: 0 }}
+                aria-hidden="true"
+              />
+              <span style={{ fontSize: '13px', color: colors.text }}>{job.hours_per_week}</span>
             </div>
           )}
-          {(() => {
-            const postedRaw = job.posting_date || job.created_at;
-            if (!postedRaw) return null;
-            const posted = new Date(postedRaw);
-            if (isNaN(posted.getTime())) return null;
-            const now = new Date();
-            const diffDays = Math.floor((now.getTime() - posted.getTime()) / 86400000);
-            let label: string;
-            if (diffDays <= 0) label = "Posted today";
-            else if (diffDays === 1) label = "Posted yesterday";
-            else if (diffDays < 7) label = `Posted ${diffDays} days ago`;
-            else if (diffDays < 30) {
-              const weeks = Math.floor(diffDays / 7);
-              label = `Posted ${weeks} week${weeks === 1 ? "" : "s"} ago`;
-            } else {
-              label = `Posted ${posted.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
-            }
-            return (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Clock style={{ width: "16px", height: "16px", color: colors.accent, flexShrink: 0 }} aria-hidden="true" />
-                <span style={{ fontSize: "13px", color: colors.text }}>{label}</span>
-              </div>
-            );
-          })()}
-          {(() => {
-            if (!job.deadline) return null;
-            const due = new Date(job.deadline);
-            if (isNaN(due.getTime())) return null;
-            const now = new Date();
-            const diffDays = Math.floor((due.getTime() - now.getTime()) / 86400000);
-            let label: string;
-            let isUrgent = false;
-            if (diffDays < 0) label = "Closed";
-            else if (diffDays === 0) { label = "Closes today"; isUrgent = true; }
-            else if (diffDays === 1) { label = "Closes tomorrow"; isUrgent = true; }
-            else if (diffDays < 7) { label = `Closes in ${diffDays} days`; isUrgent = true; }
-            else label = `Closes ${due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
-            const color = isUrgent ? "#EF4444" : (diffDays < 0 ? colors.textMuted : colors.text);
-            return (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Clock style={{ width: "16px", height: "16px", color: isUrgent ? "#EF4444" : colors.accent, flexShrink: 0 }} aria-hidden="true" />
-                <span style={{ fontSize: "13px", color, fontWeight: isUrgent ? 600 : 400 }}>{label}</span>
-              </div>
-            );
-          })()}
+          {job.posting_date && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock
+                style={{ width: '16px', height: '16px', color: colors.accent, flexShrink: 0 }}
+                aria-hidden="true"
+              />
+              <span style={{ fontSize: '13px', color: colors.text }}>
+                Posted: {job.posting_date}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <footer style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "center", borderTop: `1px solid ${colors.border}`, paddingTop: "14px" }}>
+        <footer
+          style={{
+            marginTop: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderTop: `1px solid ${colors.border}`,
+            paddingTop: '14px',
+          }}
+        >
           {isApplied ? (
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                gap: '10px',
+                flexWrap: 'nowrap',
+                justifyContent: 'center',
+              }}
+            >
               <Link
                 to={`/jobs/${job.id}`}
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "6px",
-                  minWidth: "148px",
-                  borderRadius: "12px",
-                  padding: "10px 18px",
-                  fontSize: "14px",
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  flex: 1,
+                  minWidth: 0,
+                  borderRadius: '12px',
+                  padding: '10px 12px',
+                  fontSize: '14px',
                   fontWeight: 600,
-                  cursor: "pointer",
+                  cursor: 'pointer',
                   border: `1px solid ${colors.border}`,
                   background: colors.surface,
                   color: colors.text,
-                  transition: "all 0.2s",
-                  textDecoration: "none",
+                  transition: 'all 0.2s',
+                  textDecoration: 'none',
                 }}
               >
                 View Details
@@ -1306,45 +1439,55 @@ function JobCard({
                   onUnapply(job);
                 }}
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "6px",
-                  minWidth: "148px",
-                  borderRadius: "12px",
-                  padding: "10px 18px",
-                  fontSize: "14px",
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  flex: 1,
+                  minWidth: 0,
+                  borderRadius: '12px',
+                  padding: '10px 12px',
+                  fontSize: '14px',
                   fontWeight: 600,
-                  cursor: "pointer",
+                  cursor: 'pointer',
                   border: `1px solid rgba(239, 68, 68, 0.35)`,
-                  background: isDark ? "rgba(239,68,68,0.14)" : "rgba(239,68,68,0.08)",
-                  color: "#ef4444",
-                  transition: "all 0.2s",
+                  background: isDark ? 'rgba(239,68,68,0.14)' : 'rgba(239,68,68,0.08)',
+                  color: '#ef4444',
+                  transition: 'all 0.2s',
                 }}
               >
                 Unapply
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                gap: '10px',
+                flexWrap: 'nowrap',
+                justifyContent: 'center',
+              }}
+            >
               <Link
                 to={`/jobs/${job.id}`}
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "6px",
-                  minWidth: "148px",
-                  borderRadius: "12px",
-                  padding: "10px 18px",
-                  fontSize: "14px",
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  flex: 1,
+                  minWidth: 0,
+                  borderRadius: '12px',
+                  padding: '10px 12px',
+                  fontSize: '14px',
                   fontWeight: 600,
-                  cursor: "pointer",
+                  cursor: 'pointer',
                   border: `1px solid ${colors.border}`,
                   background: colors.surface,
                   color: colors.text,
-                  transition: "all 0.2s",
-                  textDecoration: "none",
+                  transition: 'all 0.2s',
+                  textDecoration: 'none',
                 }}
               >
                 View Details
@@ -1352,21 +1495,22 @@ function JobCard({
               <Link
                 to={`/jobs/${job.id}?apply=1`}
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "6px",
-                  minWidth: "148px",
-                  borderRadius: "12px",
-                  padding: "10px 18px",
-                  fontSize: "14px",
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  flex: 1,
+                  minWidth: 0,
+                  borderRadius: '12px',
+                  padding: '10px 12px',
+                  fontSize: '14px',
                   fontWeight: 600,
-                  cursor: "pointer",
+                  cursor: 'pointer',
                   border: `1px solid ${colors.accent}`,
-                  background: "transparent",
-                  color: colors.accent,
-                  transition: "all 0.2s",
-                  textDecoration: "none",
+                  background: isDark ? 'transparent' : 'rgba(255, 214, 0, 0.12)',
+                  color: isDark ? colors.accent : '#111827',
+                  transition: 'all 0.2s',
+                  textDecoration: 'none',
                 }}
               >
                 Apply Now
@@ -1380,84 +1524,95 @@ function JobCard({
 }
 
 // Featured Job Card component
-function FeaturedJobCard({ job, colors, isDark }: { job: Job; colors: JobColors; isDark: boolean }) {
+function FeaturedJobCard({
+  job,
+  colors,
+  isDark,
+}: {
+  job: Job;
+  colors: JobColors;
+  isDark: boolean;
+}) {
   return (
-    <Link to={`/jobs/${job.id}`} style={{ display: "block", textDecoration: "none" }}>
+    <Link to={`/jobs/${job.id}`} style={{ display: 'block', textDecoration: 'none' }}>
       <article
         style={{
-          position: "relative",
-          borderRadius: "24px",
+          position: 'relative',
+          borderRadius: '24px',
           border: `2px solid rgba(255, 214, 0, 0.4)`,
           background: isDark
-            ? "linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(255, 214, 0, 0.08) 100%)"
-            : "linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(255, 214, 0, 0.05) 100%)",
-          backdropFilter: "blur(24px) saturate(180%)",
-          WebkitBackdropFilter: "blur(24px) saturate(180%)",
+            ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(255, 214, 0, 0.08) 100%)'
+            : 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(255, 214, 0, 0.05) 100%)',
+          backdropFilter: 'blur(24px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
           boxShadow: `${colors.glassShadow}, 0 0 20px rgba(255, 214, 0, 0.15)`,
-          overflow: "hidden",
-          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          overflow: 'hidden',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.transform = "translateY(-8px)";
-          e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.6)";
-          e.currentTarget.style.boxShadow = isDark ? "0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(255, 214, 0, 0.25)" : "0 20px 40px rgba(31, 38, 135, 0.2), 0 0 30px rgba(255, 214, 0, 0.2)";
+          e.currentTarget.style.transform = 'translateY(-8px)';
+          e.currentTarget.style.borderColor = 'rgba(255, 214, 0, 0.6)';
+          e.currentTarget.style.boxShadow = isDark
+            ? '0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(255, 214, 0, 0.25)'
+            : '0 20px 40px rgba(31, 38, 135, 0.2), 0 0 30px rgba(255, 214, 0, 0.2)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.transform = "translateY(0)";
-          e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.4)";
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.borderColor = 'rgba(255, 214, 0, 0.4)';
           e.currentTarget.style.boxShadow = `${colors.glassShadow}, 0 0 20px rgba(255, 214, 0, 0.15)`;
         }}
       >
         {/* Logo Banner Area */}
         <div
           style={{
-            position: "relative",
-            height: "140px",
-            background: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            position: 'relative',
+            height: '140px',
+            background: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             borderBottom: `1px solid ${colors.border}`,
-            overflow: "hidden",
           }}
         >
-          {/* Large Logo — fills the banner edge-to-edge */}
-          <img loading="lazy" decoding="async"
+          {/* Large Logo */}
+          <img
+            loading="lazy"
+            decoding="async"
             src={getLogoForJob(job)}
             alt={`${job.organization} logo`}
             style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
+              maxWidth: '80%',
+              maxHeight: '100px',
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
             }}
             onError={(e) => {
-              (e.target as HTMLImageElement).src = "/job-logos/default-job.svg";
+              (e.target as HTMLImageElement).src = '/job-logos/default-job.svg';
             }}
           />
 
           {/* Featured Badge - Top Left */}
           <span
             style={{
-              position: "absolute",
-              top: "12px",
-              left: "12px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              borderRadius: "9999px",
+              position: 'absolute',
+              top: '12px',
+              left: '12px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '9999px',
               background: colors.accent,
-              padding: "6px 12px",
-              fontSize: "12px",
+              padding: '6px 12px',
+              fontSize: '12px',
               fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              color: "#000",
-              boxShadow: "0 2px 8px rgba(255, 214, 0, 0.4)",
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: '#000',
+              boxShadow: '0 2px 8px rgba(255, 214, 0, 0.4)',
             }}
           >
-            <Star style={{ width: "12px", height: "12px" }} fill="#000" />
+            <Star style={{ width: '12px', height: '12px' }} fill="#000" />
             Featured
           </span>
 
@@ -1465,10 +1620,10 @@ function FeaturedJobCard({ job, colors, isDark }: { job: Job; colors: JobColors;
           {job.employer_verified && (
             <div
               style={{
-                position: "absolute",
-                bottom: "-14px",
-                left: "50%",
-                transform: "translateX(-50%)",
+                position: 'absolute',
+                bottom: '-14px',
+                left: '50%',
+                transform: 'translateX(-50%)',
               }}
             >
               <VerificationBadge verificationType={job.employer_verification_type} size="md" />
@@ -1477,40 +1632,71 @@ function FeaturedJobCard({ job, colors, isDark }: { job: Job; colors: JobColors;
         </div>
 
         {/* Content */}
-        <div style={{ padding: "20px" }}>
-          <h3 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: colors.text, textAlign: "center", transition: "color 0.2s" }}>
+        <div style={{ padding: '20px' }}>
+          <h3
+            style={{
+              marginBottom: '4px',
+              fontSize: '18px',
+              fontWeight: 700,
+              color: colors.text,
+              textAlign: 'center',
+              transition: 'color 0.2s',
+            }}
+          >
             {job.title}
           </h3>
           {job.organization && (
-            <p style={{ marginBottom: "12px", fontSize: "14px", color: colors.textSecondary, textAlign: "center" }}>
+            <p
+              style={{
+                marginBottom: '12px',
+                fontSize: '14px',
+                color: colors.textSecondary,
+                textAlign: 'center',
+              }}
+            >
               {job.organization}
             </p>
           )}
           <p
             style={{
-              marginBottom: "14px",
-              fontSize: "13px",
+              marginBottom: '14px',
+              fontSize: '13px',
               lineHeight: 1.5,
               color: colors.textSecondary,
-              display: "-webkit-box",
+              display: '-webkit-box',
               WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-              textAlign: "center",
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              textAlign: 'center',
             }}
           >
             {job.description}
           </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", fontSize: "13px", color: colors.textSecondary }}>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '12px',
+              justifyContent: 'center',
+              fontSize: '13px',
+              color: colors.textSecondary,
+            }}
+          >
             {job.location && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                <MapPin style={{ width: "14px", height: "14px", color: colors.accent }} aria-hidden="true" />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <MapPin
+                  style={{ width: '14px', height: '14px', color: colors.accent }}
+                  aria-hidden="true"
+                />
                 {job.location}
               </span>
             )}
             {job.compensation && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                <DollarSign style={{ width: "14px", height: "14px", color: colors.accent }} aria-hidden="true" />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <DollarSign
+                  style={{ width: '14px', height: '14px', color: colors.accent }}
+                  aria-hidden="true"
+                />
                 {job.compensation}
               </span>
             )}
@@ -1523,65 +1709,56 @@ function FeaturedJobCard({ job, colors, isDark }: { job: Job; colors: JobColors;
 
 export default function JobsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { colors, gradientOrbs, isDark } = useGlassStyles();
-  const { isMobile } = useResponsive();
+  const { isMobile, width } = useResponsive();
+  const isTopNavScrolled = useTopNavScrolled();
+  const isCompactNav = width < 1080;
+  const compactLinksRef = useRef<HTMLDivElement | null>(null);
 
   const [isLoading, setIsLoading] = useState(() => {
-    const cached = readSessionCache<Job[]>('streetbot:jobs:listings:v2', 5 * 60 * 1000);
+    const cached = readSessionCache<Job[]>(JOBS_CACHE_KEY, 5 * 60 * 1000);
     return !cached || cached.length === 0;
   });
   const [jobs, setJobs] = useState<Job[]>(() => {
-    const cached = readSessionCache<Job[]>('streetbot:jobs:listings:v2', 5 * 60 * 1000);
+    const cached = readSessionCache<Job[]>(JOBS_CACHE_KEY, 5 * 60 * 1000);
     return cached && cached.length > 0 ? enrichJobsSchedule(cached) : [];
   });
-  const [jobQuery, setJobQuery] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
-  const [filterOpportunityType, setFilterOpportunityType] = useState("");
-  const [filterLocation, setFilterLocation] = useState("");
+  const [jobQuery, setJobQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterOpportunityType, setFilterOpportunityType] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
   const [filterTags, setFilterTags] = useState<string[]>([]);
-  const [filterWorkType, setFilterWorkType] = useState("");
-  const [filterExperienceLevel, setFilterExperienceLevel] = useState("");
-  const [filterSalaryMin, setFilterSalaryMin] = useState("");
-  const [filterSalaryMax, setFilterSalaryMax] = useState("");
-  const [sortMode, setSortMode] = useState("newest");
+  const [filterWorkType, setFilterWorkType] = useState('');
+  const [filterExperienceLevel, setFilterExperienceLevel] = useState('');
+  const [filterSalaryMin, setFilterSalaryMin] = useState('');
+  const [filterSalaryMax, setFilterSalaryMax] = useState('');
+  const [sortMode, setSortMode] = useState('newest');
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"all" | "saved">("all");
+  const [viewMode, setViewMode] = useState<'all' | 'saved'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [paginationMode, setPaginationMode] = useState<"paginated" | "infinite">("paginated");
+  const [paginationMode, setPaginationMode] = useState<'paginated' | 'infinite'>('paginated');
   const [currentPage, setCurrentPage] = useState(1);
-  const [loadedCount, setLoadedCount] = useState(9);
-  const PAGE_SIZE = 9;
-  const { isAdmin } = useUserRole();
+  const [loadedCount, setLoadedCount] = useState(12);
+  const PAGE_SIZE = 12;
 
   const availableTags = useMemo(() => {
     const tags = new Set<string>();
     jobs.forEach((job) => {
       if (job.tags) {
-        job.tags.split(",").forEach((tag) => tags.add(tag.trim()));
+        job.tags.split(',').forEach((tag) => tags.add(tag.trim()));
       }
     });
     return Array.from(tags).sort();
   }, [jobs]);
 
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filterCategory) count++;
-    if (filterOpportunityType) count++;
-    if (filterLocation) count++;
-    if (filterTags.length > 0) count += filterTags.length;
-    if (filterWorkType) count++;
-    if (filterExperienceLevel) count++;
-    if (filterSalaryMin || filterSalaryMax) count++;
-    return count;
-  }, [filterCategory, filterOpportunityType, filterLocation, filterTags, filterWorkType, filterExperienceLevel, filterSalaryMin, filterSalaryMax]);
-
   const filteredJobs = useMemo(() => {
     let result = jobs;
 
-    if (viewMode === "saved") {
+    if (viewMode === 'saved') {
       result = result.filter((job) => savedIds.includes(job.id));
     }
 
@@ -1592,48 +1769,46 @@ export default function JobsPage() {
           job.title.toLowerCase().includes(query) ||
           job.organization?.toLowerCase().includes(query) ||
           job.description?.toLowerCase().includes(query) ||
-          job.location?.toLowerCase().includes(query)
+          job.location?.toLowerCase().includes(query),
       );
     }
 
     if (filterCategory) {
       const needle = filterCategory.toLowerCase();
-      result = result.filter((job) =>
-        (job.category || "").toLowerCase().includes(needle),
-      );
+      result = result.filter((job) => (job.category || '').toLowerCase().includes(needle));
     }
 
     if (filterOpportunityType) {
       const needle = filterOpportunityType.toLowerCase();
-      result = result.filter((job) =>
-        (job.opportunity_type || "").toLowerCase().includes(needle),
-      );
+      result = result.filter((job) => (job.opportunity_type || '').toLowerCase().includes(needle));
     }
 
     if (filterLocation) {
       result = result.filter((job) =>
-        job.location?.toLowerCase().includes(filterLocation.toLowerCase())
+        job.location?.toLowerCase().includes(filterLocation.toLowerCase()),
       );
     }
 
     if (filterTags.length > 0) {
       result = result.filter((job) => {
         if (!job.tags) return false;
-        const jobTags = job.tags.split(",").map((t) => t.trim());
+        const jobTags = job.tags.split(',').map((t) => t.trim());
         return filterTags.some((tag) => jobTags.includes(tag));
       });
     }
 
     if (filterWorkType) {
       result = result.filter((job) =>
-        (job.work_mode || "").toLowerCase().includes(filterWorkType.toLowerCase())
+        (job.work_mode || '').toLowerCase().includes(filterWorkType.toLowerCase()),
       );
     }
 
     if (filterExperienceLevel) {
       result = result.filter((job) => {
-        if (filterExperienceLevel === "No Experience Required") return job.no_experience_required;
-        return (job.experience_level || "").toLowerCase().includes(filterExperienceLevel.toLowerCase());
+        if (filterExperienceLevel === 'No Experience Required') return job.no_experience_required;
+        return (job.experience_level || '')
+          .toLowerCase()
+          .includes(filterExperienceLevel.toLowerCase());
       });
     }
 
@@ -1648,28 +1823,28 @@ export default function JobsPage() {
     }
 
     result = [...result].sort((a, b) => {
-      if (sortMode === "newest") {
+      if (sortMode === 'newest') {
         return (Number(b.id) || 0) - (Number(a.id) || 0);
-      } else if (sortMode === "deadline") {
+      } else if (sortMode === 'deadline') {
         if (!a.deadline) return 1;
         if (!b.deadline) return -1;
         return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-      } else if (sortMode === "views") {
+      } else if (sortMode === 'views') {
         return (b.view_count || 0) - (a.view_count || 0);
-      } else if (sortMode === "featured") {
+      } else if (sortMode === 'featured') {
         if (a.is_featured && !b.is_featured) return -1;
         if (!a.is_featured && b.is_featured) return 1;
         return 0;
-      } else if (sortMode === "salary") {
+      } else if (sortMode === 'salary') {
         const sa = parseSalaryFromJob(a);
         const sb = parseSalaryFromJob(b);
         if (!sa && !sb) return 0;
         if (!sa) return 1;
         if (!sb) return -1;
         return sb.max - sa.max;
-      } else if (sortMode === "company") {
-        const orgA = (a.organization || "").toLowerCase();
-        const orgB = (b.organization || "").toLowerCase();
+      } else if (sortMode === 'company') {
+        const orgA = (a.organization || '').toLowerCase();
+        const orgB = (b.organization || '').toLowerCase();
         if (!orgA && !orgB) return 0;
         if (!orgA) return 1;
         if (!orgB) return -1;
@@ -1695,29 +1870,23 @@ export default function JobsPage() {
     sortMode,
   ]);
 
-  const featuredJobs = useMemo(
-    () => jobs.filter((job) => job.is_featured).slice(0, 3),
-    [jobs]
-  );
+  const featuredJobs = useMemo(() => jobs.filter((job) => job.is_featured).slice(0, 3), [jobs]);
 
   const stats = useMemo(
     () => ({
       total: filteredJobs.length,
       featured: filteredJobs.filter((j) => j.is_featured).length,
       saved: savedIds.length,
-      applications: filteredJobs.reduce(
-        (acc, j) => acc + (j.application_count || 0),
-        0
-      ),
+      applications: filteredJobs.reduce((acc, j) => acc + (j.application_count || 0), 0),
     }),
-    [filteredJobs, savedIds]
+    [filteredJobs, savedIds],
   );
 
   const loadJobs = useCallback(async () => {
     setIsLoading(true);
     try {
-      const resp = await fetch(JOBS_API_URL);
-      if (!resp.ok) throw new Error("Failed to load jobs");
+      const resp = await fetch(JOBS_READ_API_URL);
+      if (!resp.ok) throw new Error('Failed to load jobs');
       const data = await resp.json();
       const jobsData = Array.isArray(data) ? enrichJobsSchedule(data) : [];
       setJobs(jobsData.length > 0 ? jobsData : ENRICHED_SAMPLE_JOBS);
@@ -1730,11 +1899,9 @@ export default function JobsPage() {
 
   const loadFavorites = useCallback(async () => {
     try {
-      const base = JOBS_API_URL.replace(/\/$/, "");
+      const base = JOBS_READ_API_URL.replace(/\/$/, '');
       const userId = getOrCreateUserId();
-      const resp = await fetch(
-        `${base}/favorites?user_id=${encodeURIComponent(userId)}`
-      );
+      const resp = await fetch(`${base}/favorites?user_id=${encodeURIComponent(userId)}`);
       if (!resp.ok) return;
       const data = await resp.json();
       if (Array.isArray(data)) {
@@ -1747,54 +1914,50 @@ export default function JobsPage() {
 
   const toggleFavorite = useCallback(
     async (jobId: string) => {
-      const base = JOBS_API_URL.replace(/\/$/, "");
+      const base = JOBS_API_URL.replace(/\/$/, '');
       const isSaved = savedIds.includes(jobId);
       try {
         const userId = getOrCreateUserId();
         const resp = await fetch(
           `${base}/${jobId}/favorite?user_id=${encodeURIComponent(userId)}`,
           {
-            method: isSaved ? "DELETE" : "POST",
-          }
+            method: isSaved ? 'DELETE' : 'POST',
+          },
         );
         if (!resp.ok) throw new Error();
-        setSavedIds((prev) =>
-          isSaved ? prev.filter((id) => id !== jobId) : [...prev, jobId]
-        );
-        setToast(isSaved ? "Removed from saved jobs" : "Job saved!");
+        setSavedIds((prev) => (isSaved ? prev.filter((id) => id !== jobId) : [...prev, jobId]));
+        setToast(isSaved ? 'Removed from saved jobs' : 'Job saved!');
       } catch {
-        setToast("Failed to update saved jobs");
+        setToast('Failed to update saved jobs');
       }
     },
-    [savedIds]
+    [savedIds],
   );
 
   const shareJob = useCallback((job: Job) => {
     const url = `${window.location.origin}/jobs/${job.id}`;
     navigator.clipboard.writeText(url).then(
-      () => setToast("Link copied to clipboard!"),
+      () => setToast('Link copied to clipboard!'),
       () => setToast("Couldn't copy link. Long-press the share button to copy manually."),
     );
   }, []);
 
   const toggleTagFilter = useCallback((tag: string) => {
-    setFilterTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+    setFilterTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   }, []);
 
   const clearAllFilters = useCallback(() => {
-    setFilterCategory("");
-    setFilterOpportunityType("");
-    setFilterLocation("");
+    setFilterCategory('');
+    setFilterOpportunityType('');
+    setFilterLocation('');
     setFilterTags([]);
-    setFilterWorkType("");
-    setFilterExperienceLevel("");
-    setFilterSalaryMin("");
-    setFilterSalaryMax("");
-    setJobQuery("");
+    setFilterWorkType('');
+    setFilterExperienceLevel('');
+    setFilterSalaryMin('');
+    setFilterSalaryMax('');
+    setJobQuery('');
     setCurrentPage(1);
-    setLoadedCount(9);
+    setLoadedCount(12);
   }, []);
 
   // Load applied job IDs from localStorage
@@ -1808,7 +1971,7 @@ export default function JobsPage() {
     const userId = getOrCreateUserId();
     withdrawApplicationByJob(userId, job.id);
     setAppliedIds((prev) => prev.filter((id) => id !== job.id));
-    setToast("Application withdrawn.");
+    setToast('Application withdrawn.');
   }, []);
 
   useEffect(() => {
@@ -1821,205 +1984,393 @@ export default function JobsPage() {
   }, [jobs, loadAppliedIds]);
 
   useEffect(() => {
-    const savedParam = searchParams?.get("saved");
-    if (savedParam === "1") {
-      setViewMode("saved");
+    const savedParam = searchParams?.get('saved');
+    if (savedParam === '1') {
+      setViewMode('saved');
     }
   }, [searchParams]);
 
+  const jobSearchBar = (
+    <form
+      role="search"
+      aria-label="Search Job Board"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setCurrentPage(1);
+      }}
+      style={{
+        width: '100%',
+        height: 41,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '4px 4px 4px 14px',
+        borderRadius: 999,
+        border: isDark ? '1px solid rgba(255,255,255,0.16)' : '1px solid rgba(17,24,39,0.12)',
+        background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)',
+        boxShadow: isDark ? '0 8px 24px rgba(0,0,0,0.16)' : '0 8px 20px rgba(17,24,39,0.08)',
+        backdropFilter: 'blur(18px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+        transform: 'translateY(-1px)',
+      }}
+    >
+      <Search size={17} color={isDark ? 'rgba(230,231,242,0.64)' : 'rgba(31,41,55,0.56)'} />
+      <label
+        htmlFor="job-search"
+        style={{
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          padding: 0,
+          margin: '-1px',
+          overflow: 'hidden',
+          clip: 'rect(0,0,0,0)',
+          whiteSpace: 'nowrap',
+          borderWidth: 0,
+        }}
+      >
+        Search jobs
+      </label>
+      <input
+        id="job-search"
+        type="search"
+        value={jobQuery}
+        onChange={(e) => setJobQuery(e.target.value)}
+        placeholder="Search jobs, companies, skills..."
+        style={{
+          flex: 1,
+          minWidth: 0,
+          height: '100%',
+          border: 'none',
+          outline: 'none',
+          background: 'transparent',
+          color: isDark ? '#fff' : '#111827',
+          fontFamily: 'Rubik, sans-serif',
+          fontSize: 14,
+        }}
+      />
+      <button
+        type="submit"
+        style={{
+          height: '100%',
+          minWidth: 86,
+          padding: '0 12px',
+          border: 'none',
+          borderRadius: 30,
+          background: '#FFD600',
+          color: '#000',
+          fontFamily: 'inherit',
+          fontSize: 'var(--sv-search-bar-font-size)',
+          fontWeight: 700,
+          whiteSpace: 'nowrap',
+          cursor: 'pointer',
+          flexShrink: 0,
+          position: 'relative',
+          zIndex: 1,
+          boxShadow: '0 7px 16px rgba(0,0,0,0.20)',
+        }}
+      >
+        Search
+      </button>
+    </form>
+  );
+  const mainNavLinks = [
+    { label: 'Street Profile', to: '/profiles' },
+    { label: 'Street Gallery', to: '/gallery' },
+    { label: 'Academy', to: '/academy' },
+    { label: 'Job Board', to: '/jobs' },
+    { label: 'Directory', to: '/directory' },
+    { label: 'News', to: '/news' },
+  ];
+
+  useEffect(() => {
+    if (!isCompactNav) return;
+    const activeLink = compactLinksRef.current?.querySelector<HTMLElement>(
+      '[data-sv-active-nav-link="true"]',
+    );
+    activeLink?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
+  }, [isCompactNav, location.pathname]);
+
   return (
     <div>
+      <style>{`
+        @media (max-width: 1079px) {
+          .sv-feature-top-nav-shell { padding: 58px 14px 10px !important; }
+          .sv-feature-top-nav {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+            overflow: hidden !important;
+          }
+          .sv-feature-top-nav-links {
+            display: none !important;
+          }
+          .sv-feature-top-nav-search {
+            flex: 1 1 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+          .sv-feature-top-nav-spacer { height: 166px !important; }
+        }
+      `}</style>
       {/* Glassmorphism Background Orbs */}
       <div style={gradientOrbs.purple} aria-hidden="true" />
       <div style={gradientOrbs.pink} aria-hidden="true" />
       <div style={gradientOrbs.cyan} aria-hidden="true" />
       <div style={gradientOrbs.gold} aria-hidden="true" />
 
-      <div style={{ position: "relative", zIndex: 1 }}>
-        {/* Hero Section */}
-        <header
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div
+          className="sv-feature-top-nav-shell"
           style={{
-            background: "transparent",
-            padding: isMobile ? "32px 12px 24px" : "60px 24px 48px",
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 100,
+            ...getSeamlessNavBarStyle(isDark, isTopNavScrolled),
+            padding: isCompactNav ? '58px 14px 10px' : '8px clamp(160px, 16.45vw, 220px)',
+            boxSizing: 'border-box',
           }}
         >
-          <div style={{ maxWidth: "1024px", margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", gap: "32px", textAlign: "center" }}>
-            <div style={{ maxWidth: "768px" }}>
-              <h1 style={{ fontSize: "clamp(1.875rem, 4vw, 3.75rem)", fontWeight: 800, lineHeight: 1.1, color: colors.text, margin: 0 }}>
-                <span style={{ background: "linear-gradient(to right, #facc15, #ca8a04)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-                  Discover
-                </span>{" "}
-                Your Next Opportunity
-              </h1>
-              <p style={{ marginTop: "16px", fontSize: "clamp(1rem, 2vw, 1.25rem)", color: colors.textSecondary }}>
-                Connecting talent with creative, tech, and community
-                opportunities across Canada
-              </p>
-            </div>
+          <nav
+            className="sv-feature-top-nav"
+            aria-label="Job board main navigation"
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-start',
+              alignItems: 'center',
+              gap: isCompactNav ? 8 : 4,
+              height: isCompactNav ? 'auto' : 48,
+              whiteSpace: 'nowrap',
+              maxWidth: '859px',
+              width: isCompactNav ? '100%' : 'min(859px, calc(100vw - 320px))',
+              margin: '0 auto',
+              flexWrap: isCompactNav ? 'wrap' : 'nowrap',
+              overflow: isCompactNav ? 'hidden' : undefined,
+            }}
+          >
+            <div
+              ref={compactLinksRef}
+              className="sv-feature-top-nav-links"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                gap: 4,
+                flex: isCompactNav ? '1 1 100%' : undefined,
+                flexShrink: 0,
+                minWidth: 0,
+                overflowX: isCompactNav ? 'auto' : undefined,
+                paddingBottom: isCompactNav ? 2 : 0,
+              }}
+            >
+              {mainNavLinks.map((item) => {
+                const isActive =
+                  item.label === 'Street Profile'
+                    ? isStreetProfileNavActive(location.pathname)
+                    : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
 
-            {/* Search Bar */}
-            <div style={{ width: "100%", maxWidth: "672px" }}>
-              {isDirectory ? (
-                <>
-                  <style>{`.sv-search-input::placeholder { color: #000; opacity: 1; }`}</style>
-                  <div style={{ display: "flex", alignItems: "center", borderRadius: 30, background: "#d3d3d3", overflow: "hidden", height: 46 }}>
-                    <div style={{ flex: 3, height: "100%", display: "flex", alignItems: "center", padding: "0 20px", background: "#fff" }}>
-                      <input
-                        id="job-search"
-                        type="text"
-                        className="sv-search-input"
-                        value={jobQuery}
-                        onChange={(e) => setJobQuery(e.target.value)}
-                        placeholder="Search jobs, companies, skills..."
-                        style={{ width: "100%", height: "100%", border: "none", background: "transparent", color: "#000", fontSize: 14, outline: "none", fontFamily: "inherit" }}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowFilters(!showFilters)}
-                      style={{ height: 46, padding: "1px 50px", borderRadius: 25, border: "none", background: "#FFD600", color: "#000", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}
-                    >
-                      Search
-                    </button>
-                  </div>
-                </>
-              ) : (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  borderRadius: "20px",
-                  border: `1px solid ${colors.border}`,
-                  background: colors.surface,
-                  backdropFilter: "blur(24px) saturate(180%)",
-                  WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                  padding: "8px",
-                  boxShadow: colors.glassShadow,
-                }}
-              >
-                <Search
-                  style={{ marginLeft: "8px", width: "20px", height: "20px", flexShrink: 0, color: colors.textMuted }}
-                  aria-hidden="true"
-                />
-                <label htmlFor="job-search" style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", borderWidth: 0 }}>
-                  Search jobs
-                </label>
-                <input
-                  id="job-search"
-                  type="text"
-                  value={jobQuery}
-                  onChange={(e) => setJobQuery(e.target.value)}
-                  placeholder="Search jobs, companies, skills..."
-                  style={{
-                    flex: 1,
-                    border: "none",
-                    background: "transparent",
-                    padding: "12px 8px",
-                    fontSize: "16px",
-                    color: colors.text,
-                    outline: "none",
-                    boxShadow: "none",
-                  }}
-                />
-                {jobQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setJobQuery("")}
+                if (item.label === 'Street Profile') {
+                  return (
+                    <NavDropdown
+                      key={item.to}
+                      label={item.label}
+                      href={item.to}
+                      items={STREET_PROFILE_NAV_ITEMS}
+                      textColor={
+                        isActive ? (isDark ? '#FFD600' : '#111827') : isDark ? '#E6E7F2' : '#1f2937'
+                      }
+                      fontSize={14}
+                      buttonStyle={{
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        fontWeight: isActive ? 900 : 700,
+                        lineHeight: 1.25,
+                      }}
+                      menuMinWidth={170}
+                    />
+                  );
+                }
+
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    data-sv-active-nav-link={isActive ? 'true' : undefined}
                     style={{
-                      borderRadius: "8px",
-                      padding: "8px",
-                      background: "transparent",
-                      border: "none",
-                      color: colors.textMuted,
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
+                      color: isActive
+                        ? isDark
+                          ? '#FFD600'
+                          : '#111827'
+                        : isDark
+                          ? '#E6E7F2'
+                          : '#1f2937',
+                      fontFamily: 'Rubik, sans-serif',
+                      fontSize: 14,
+                      fontWeight: isActive ? 900 : 700,
+                      lineHeight: 1.25,
+                      textDecoration: 'none',
+                      padding: '8px 12px',
+                      borderRadius: 8,
                     }}
-                    aria-label="Clear search"
                   >
-                    <X style={{ width: "16px", height: "16px" }} />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowFilters(!showFilters)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    borderRadius: "14px",
-                    padding: "10px 16px",
-                    fontSize: "14px",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    background: showFilters ? colors.accent : colors.surface,
-                    color: showFilters ? "#000" : colors.text,
-                    border: showFilters ? "none" : `1px solid ${colors.border}`,
-                    boxShadow: showFilters ? "0 4px 14px rgba(255, 214, 0, 0.3)" : "none",
-                  }}
-                  aria-expanded={showFilters}
-                  aria-controls="filters-panel"
-                >
-                  <SlidersHorizontal style={{ width: "16px", height: "16px" }} aria-hidden="true" />
-                  Filters
-                  {activeFilterCount > 0 && (
-                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "20px", height: "20px", borderRadius: "50%", background: "#a855f7", fontSize: "12px", fontWeight: 700, color: "#fff" }}>
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-              )}
+                    {item.label}
+                  </Link>
+                );
+              })}
             </div>
+            <div
+              className="sv-feature-top-nav-search"
+              style={{
+                flex: isCompactNav ? '1 1 100%' : '0 0 clamp(260px, calc(50vw - 386px), 372px)',
+                minWidth: isCompactNav ? 0 : 260,
+                maxWidth: isCompactNav ? '100%' : 372,
+              }}
+            >
+              {jobSearchBar}
+            </div>
+          </nav>
+        </div>
+        <div
+          className="sv-feature-top-nav-spacer"
+          aria-hidden="true"
+          style={{ height: isCompactNav ? '166px' : '64px' }}
+        />
 
-          </div>
-        </header>
+        <div
+          translate="no"
+          style={{
+            maxWidth: '1600px',
+            height: 58,
+            margin: '0 auto 8px',
+            padding: '0 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 18,
+            position: 'relative',
+            zIndex: 2,
+            boxSizing: 'border-box',
+          }}
+        >
+          <p style={{ fontSize: '1rem', color: colors.textSecondary }}>
+            <span style={{ fontWeight: 600, color: colors.text }}>{filteredJobs.length}</span> job
+            {filteredJobs.length !== 1 ? 's' : ''} found
+          </p>
+
+          <button
+            type="button"
+            onClick={() => navigate('/jobs/post')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              background: '#FFD700',
+              color: '#000',
+              fontFamily: 'Rubik, sans-serif',
+              fontSize: '14px',
+              fontWeight: 800,
+              height: 42,
+              width: 126,
+              padding: '0 14px',
+              borderRadius: '999px',
+              transition: 'all 0.2s',
+              border: 'none',
+              boxSizing: 'border-box',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(255, 214, 0, 0.36)',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 6px 18px rgba(255, 214, 0, 0.46)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 14px rgba(255, 214, 0, 0.36)';
+            }}
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Post a Job
+          </button>
+        </div>
 
         {/* Filters Panel */}
         {showFilters && (
           <section
             id="filters-panel"
-            style={{ maxWidth: "1152px", margin: "0 auto 32px", padding: "0 16px" }}
+            style={{ maxWidth: '1600px', margin: '0 auto 32px', padding: '0 20px' }}
             aria-label="Filter options"
           >
             <div
               style={{
-                borderRadius: isMobile ? "16px" : "24px",
+                borderRadius: isMobile ? '16px' : '24px',
                 border: `1px solid ${colors.border}`,
                 background: colors.surface,
-                backdropFilter: "blur(24px) saturate(180%)",
-                WebkitBackdropFilter: "blur(24px) saturate(180%)",
-                padding: isMobile ? "16px" : "24px",
+                backdropFilter: 'blur(24px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                padding: isMobile ? '16px' : '24px',
                 boxShadow: colors.glassShadow,
               }}
             >
-              <div style={{ marginBottom: "20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <h2 style={{ fontSize: isMobile ? "16px" : "18px", fontWeight: 600, color: colors.text, margin: 0 }}>Filters</h2>
+              <div
+                style={{
+                  marginBottom: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <h2
+                  style={{
+                    fontSize: isMobile ? '16px' : '18px',
+                    fontWeight: 600,
+                    color: colors.text,
+                    margin: 0,
+                  }}
+                >
+                  Filters
+                </h2>
                 <button
                   type="button"
                   onClick={clearAllFilters}
                   style={{
-                    borderRadius: "10px",
+                    borderRadius: '10px',
                     border: `1px solid ${colors.border}`,
                     background: colors.surface,
-                    padding: "8px 16px",
-                    fontSize: "14px",
+                    padding: '8px 16px',
+                    fontSize: '14px',
                     color: colors.textSecondary,
-                    cursor: "pointer",
-                    transition: "all 0.2s",
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
                   }}
                 >
                   Reset All
                 </button>
               </div>
 
-              <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gap: '16px',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                }}
+              >
                 <div>
-                  <label htmlFor="filter-category" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                  <label
+                    htmlFor="filter-category"
+                    style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Category
                   </label>
                   <select
@@ -2027,15 +2378,15 @@ export default function JobsPage() {
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
                     style={{
-                      width: "100%",
-                      cursor: "pointer",
-                      borderRadius: "14px",
+                      width: '100%',
+                      cursor: 'pointer',
+                      borderRadius: '14px',
                       border: `1px solid ${colors.border}`,
-                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                      padding: "10px 12px",
-                      fontSize: "14px",
+                      background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.5)',
+                      padding: '10px 12px',
+                      fontSize: '14px',
                       color: colors.text,
-                      outline: "none",
+                      outline: 'none',
                     }}
                   >
                     <option value="">All Categories</option>
@@ -2047,7 +2398,16 @@ export default function JobsPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="filter-type" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                  <label
+                    htmlFor="filter-type"
+                    style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Opportunity Type
                   </label>
                   <select
@@ -2055,15 +2415,15 @@ export default function JobsPage() {
                     value={filterOpportunityType}
                     onChange={(e) => setFilterOpportunityType(e.target.value)}
                     style={{
-                      width: "100%",
-                      cursor: "pointer",
-                      borderRadius: "14px",
+                      width: '100%',
+                      cursor: 'pointer',
+                      borderRadius: '14px',
                       border: `1px solid ${colors.border}`,
-                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                      padding: "10px 12px",
-                      fontSize: "14px",
+                      background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.5)',
+                      padding: '10px 12px',
+                      fontSize: '14px',
                       color: colors.text,
-                      outline: "none",
+                      outline: 'none',
                     }}
                   >
                     <option value="">All Types</option>
@@ -2077,7 +2437,16 @@ export default function JobsPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="filter-location" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                  <label
+                    htmlFor="filter-location"
+                    style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Location
                   </label>
                   <input
@@ -2087,37 +2456,49 @@ export default function JobsPage() {
                     onChange={(e) => setFilterLocation(e.target.value)}
                     placeholder="City or remote"
                     style={{
-                      width: "100%",
-                      borderRadius: "14px",
+                      width: '100%',
+                      borderRadius: '14px',
                       border: `1px solid ${colors.border}`,
-                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                      padding: "10px 12px",
-                      fontSize: "14px",
+                      background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.5)',
+                      padding: '10px 12px',
+                      fontSize: '14px',
                       color: colors.text,
-                      outline: "none",
-                      boxSizing: "border-box",
+                      outline: 'none',
+                      boxSizing: 'border-box',
                     }}
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="filter-work-type" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                  <label
+                    htmlFor="filter-work-type"
+                    style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Work Type
                   </label>
                   <select
                     id="filter-work-type"
                     value={filterWorkType}
-                    onChange={(e) => { setFilterWorkType(e.target.value); setCurrentPage(1); }}
+                    onChange={(e) => {
+                      setFilterWorkType(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     style={{
-                      width: "100%",
-                      cursor: "pointer",
-                      borderRadius: "14px",
+                      width: '100%',
+                      cursor: 'pointer',
+                      borderRadius: '14px',
                       border: `1px solid ${colors.border}`,
-                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                      padding: "10px 12px",
-                      fontSize: "14px",
+                      background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.5)',
+                      padding: '10px 12px',
+                      fontSize: '14px',
                       color: colors.text,
-                      outline: "none",
+                      outline: 'none',
                     }}
                   >
                     <option value="">All Work Types</option>
@@ -2128,23 +2509,35 @@ export default function JobsPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="filter-experience" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                  <label
+                    htmlFor="filter-experience"
+                    style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Experience Level
                   </label>
                   <select
                     id="filter-experience"
                     value={filterExperienceLevel}
-                    onChange={(e) => { setFilterExperienceLevel(e.target.value); setCurrentPage(1); }}
+                    onChange={(e) => {
+                      setFilterExperienceLevel(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     style={{
-                      width: "100%",
-                      cursor: "pointer",
-                      borderRadius: "14px",
+                      width: '100%',
+                      cursor: 'pointer',
+                      borderRadius: '14px',
                       border: `1px solid ${colors.border}`,
-                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                      padding: "10px 12px",
-                      fontSize: "14px",
+                      background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.5)',
+                      padding: '10px 12px',
+                      fontSize: '14px',
                       color: colors.text,
-                      outline: "none",
+                      outline: 'none',
                     }}
                   >
                     <option value="">All Levels</option>
@@ -2156,52 +2549,79 @@ export default function JobsPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Salary Range (Annual)
                   </label>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center", width: "100%" }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }}>
                     <input
                       type="number"
                       value={filterSalaryMin}
-                      onChange={(e) => { setFilterSalaryMin(e.target.value); setCurrentPage(1); }}
+                      onChange={(e) => {
+                        setFilterSalaryMin(e.target.value);
+                        setCurrentPage(1);
+                      }}
                       placeholder="Min"
                       style={{
                         flex: 1,
                         minWidth: 0,
-                        borderRadius: "14px",
+                        borderRadius: '14px',
                         border: `1px solid ${colors.border}`,
-                        background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                        padding: "10px 12px",
-                        fontSize: "14px",
+                        background: isDark
+                          ? 'rgba(255, 255, 255, 0.05)'
+                          : 'rgba(255, 255, 255, 0.5)',
+                        padding: '10px 12px',
+                        fontSize: '14px',
                         color: colors.text,
-                        outline: "none",
-                        boxSizing: "border-box" as const,
+                        outline: 'none',
+                        boxSizing: 'border-box' as const,
                       }}
                     />
-                    <span style={{ color: colors.textMuted, fontSize: "14px" }}>-</span>
+                    <span style={{ color: colors.textMuted, fontSize: '14px' }}>-</span>
                     <input
                       type="number"
                       value={filterSalaryMax}
-                      onChange={(e) => { setFilterSalaryMax(e.target.value); setCurrentPage(1); }}
+                      onChange={(e) => {
+                        setFilterSalaryMax(e.target.value);
+                        setCurrentPage(1);
+                      }}
                       placeholder="Max"
                       style={{
                         flex: 1,
                         minWidth: 0,
-                        borderRadius: "14px",
+                        borderRadius: '14px',
                         border: `1px solid ${colors.border}`,
-                        background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                        padding: "10px 12px",
-                        fontSize: "14px",
+                        background: isDark
+                          ? 'rgba(255, 255, 255, 0.05)'
+                          : 'rgba(255, 255, 255, 0.5)',
+                        padding: '10px 12px',
+                        fontSize: '14px',
                         color: colors.text,
-                        outline: "none",
-                        boxSizing: "border-box" as const,
+                        outline: 'none',
+                        boxSizing: 'border-box' as const,
                       }}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="filter-sort" style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                  <label
+                    htmlFor="filter-sort"
+                    style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Sort By
                   </label>
                   <select
@@ -2209,15 +2629,15 @@ export default function JobsPage() {
                     value={sortMode}
                     onChange={(e) => setSortMode(e.target.value)}
                     style={{
-                      width: "100%",
-                      cursor: "pointer",
-                      borderRadius: "14px",
+                      width: '100%',
+                      cursor: 'pointer',
+                      borderRadius: '14px',
                       border: `1px solid ${colors.border}`,
-                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                      padding: "10px 12px",
-                      fontSize: "14px",
+                      background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.5)',
+                      padding: '10px 12px',
+                      fontSize: '14px',
                       color: colors.text,
-                      outline: "none",
+                      outline: 'none',
                     }}
                   >
                     <option value="newest">Newest First</option>
@@ -2232,26 +2652,38 @@ export default function JobsPage() {
 
               {/* Tags */}
               {availableTags.length > 0 && (
-                <div style={{ marginTop: "20px" }}>
-                  <span style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: colors.textSecondary }}>
+                <div style={{ marginTop: '20px' }}>
+                  <span
+                    style={{
+                      display: 'block',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: colors.textSecondary,
+                    }}
+                  >
                     Filter by Tags
                   </span>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }} role="group" aria-label="Tag filters">
+                  <div
+                    style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
+                    role="group"
+                    aria-label="Tag filters"
+                  >
                     {availableTags.slice(0, 12).map((tag) => (
                       <button
                         key={tag}
                         type="button"
                         onClick={() => toggleTagFilter(tag)}
                         style={{
-                          borderRadius: "9999px",
-                          border: filterTags.includes(tag) ? "none" : `1px solid ${colors.border}`,
-                          padding: "6px 12px",
-                          fontSize: "12px",
+                          borderRadius: '9999px',
+                          border: filterTags.includes(tag) ? 'none' : `1px solid ${colors.border}`,
+                          padding: '6px 12px',
+                          fontSize: '12px',
                           fontWeight: 500,
-                          cursor: "pointer",
-                          transition: "all 0.2s",
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
                           background: filterTags.includes(tag) ? colors.accent : colors.surface,
-                          color: filterTags.includes(tag) ? "#000" : colors.text,
+                          color: filterTags.includes(tag) ? '#000' : colors.text,
                         }}
                         aria-pressed={filterTags.includes(tag)}
                       >
@@ -2265,177 +2697,79 @@ export default function JobsPage() {
           </section>
         )}
 
-        <main style={{ maxWidth: "1152px", margin: "0 auto", padding: "0 16px 80px" }}>
-          {/* View Tabs */}
-          <nav
-            style={{ marginBottom: isMobile ? "20px" : "32px", display: "flex", flexWrap: isMobile ? "nowrap" : "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", borderBottom: `1px solid ${colors.border}`, paddingBottom: "12px", overflowX: isMobile ? "auto" : undefined, WebkitOverflowScrolling: isMobile ? "touch" : undefined }}
-            aria-label="Job view options"
-          >
-            <div style={{ display: "flex", gap: isMobile ? "6px" : "8px", flexShrink: 0 }} role="tablist">
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode("all");
-                  navigate("/jobs");
-                }}
-                role="tab"
-                aria-selected={viewMode === "all"}
-                style={{
-                  borderRadius: "14px",
-                  padding: "10px 20px",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background: viewMode === "all" ? colors.accent : colors.surface,
-                  color: viewMode === "all" ? "#000" : colors.textSecondary,
-                  border: viewMode === "all" ? "none" : `1px solid ${colors.border}`,
-                  boxShadow: viewMode === "all" ? "0 4px 14px rgba(255, 214, 0, 0.3)" : "none",
-                }}
-              >
-                All Jobs
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode("saved");
-                  navigate("/jobs?saved=1");
-                }}
-                role="tab"
-                aria-selected={viewMode === "saved"}
-                style={{
-                  borderRadius: "14px",
-                  padding: "10px 20px",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background: viewMode === "saved" ? colors.accent : colors.surface,
-                  color: viewMode === "saved" ? "#000" : colors.textSecondary,
-                  border: viewMode === "saved" ? "none" : `1px solid ${colors.border}`,
-                  boxShadow: viewMode === "saved" ? "0 4px 14px rgba(255, 214, 0, 0.3)" : "none",
-                }}
-              >
-                Saved
-              </button>
-              <Link
-                to="/jobs/my-applications"
-                style={{
-                  borderRadius: "14px",
-                  padding: "10px 20px",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  textDecoration: "none",
-                  transition: "all 0.2s",
-                  background: colors.surface,
-                  color: colors.textSecondary,
-                  border: `1px solid ${colors.border}`,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <FileText style={{ width: "16px", height: "16px" }} />
-                My Applications
-              </Link>
-              <Link
-                to="/jobs/resume"
-                style={{
-                  borderRadius: "14px",
-                  padding: "10px 20px",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  textDecoration: "none",
-                  transition: "all 0.2s",
-                  background: colors.surface,
-                  color: colors.textSecondary,
-                  border: `1px solid ${colors.border}`,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <FileText style={{ width: "16px", height: "16px" }} />
-                My Resume
-              </Link>
-              {isAdmin && (
-                <Link
-                  to="/jobs/admin"
-                  style={{
-                    borderRadius: "14px",
-                    padding: "10px 20px",
-                    fontSize: "14px",
-                    fontWeight: 500,
-                    textDecoration: "none",
-                    transition: "all 0.2s",
-                    background: "rgba(248, 113, 113, 0.15)",
-                    color: "#f87171",
-                    border: "1px solid rgba(248, 113, 113, 0.3)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <Shield style={{ width: "16px", height: "16px" }} />
-                  Admin
-                </Link>
-              )}
-            </div>
-            <Link
-              to="/jobs/employer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                fontSize: "13px",
-                fontWeight: 500,
-                color: colors.textMuted,
-                textDecoration: "none",
-                transition: "all 0.2s",
-              }}
-            >
-              <Building2 style={{ width: "14px", height: "14px" }} />
-              Employer View &rarr;
-            </Link>
-          </nav>
-
-
+        <main style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 20px 80px' }}>
           {/* Jobs Grid */}
           <section aria-label="Job listings">
             {isLoading ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", padding: "80px 0", color: colors.textSecondary }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '16px',
+                  padding: '80px 0',
+                  color: colors.textSecondary,
+                }}
+              >
                 <Loader2
-                  style={{ width: "40px", height: "40px", color: "#a855f7", animation: "spin 1s linear infinite" }}
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    color: '#a855f7',
+                    animation: 'spin 1s linear infinite',
+                  }}
                   aria-hidden="true"
                 />
                 <p>Loading opportunities...</p>
               </div>
             ) : filteredJobs.length === 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center" }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '80px 0',
+                  textAlign: 'center',
+                }}
+              >
                 <SearchX
-                  style={{ marginBottom: "16px", width: "64px", height: "64px", color: colors.textMuted }}
+                  style={{
+                    marginBottom: '16px',
+                    width: '64px',
+                    height: '64px',
+                    color: colors.textMuted,
+                  }}
                   aria-hidden="true"
                 />
-                <h3 style={{ marginBottom: "8px", fontSize: "20px", fontWeight: 700, color: colors.text }}>
+                <h3
+                  style={{
+                    marginBottom: '8px',
+                    fontSize: '20px',
+                    fontWeight: 700,
+                    color: colors.text,
+                  }}
+                >
                   No jobs found
                 </h3>
-                <p style={{ marginBottom: "16px", color: colors.textSecondary }}>
+                <p style={{ marginBottom: '16px', color: colors.textSecondary }}>
                   Try adjusting your filters or search query
                 </p>
                 <button
                   type="button"
                   onClick={clearAllFilters}
                   style={{
-                    borderRadius: "14px",
+                    borderRadius: '14px',
                     background: colors.accent,
-                    padding: "10px 20px",
-                    fontSize: "14px",
+                    padding: '10px 20px',
+                    fontSize: '14px',
                     fontWeight: 600,
-                    color: "#000",
-                    border: "none",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    boxShadow: "0 4px 14px rgba(255, 214, 0, 0.3)",
+                    color: '#000',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 4px 14px rgba(255, 214, 0, 0.3)',
                   }}
                 >
                   Clear All Filters
@@ -2443,114 +2777,69 @@ export default function JobsPage() {
               </div>
             ) : (
               <>
-              {/* Pagination mode toggle & info */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
-                <div style={{ fontSize: "0.85rem", color: colors.textMuted }}>
-                  {filteredJobs.length} job{filteredJobs.length !== 1 ? "s" : ""} found
-                </div>
-                <div style={{ display: "flex", gap: "4px", borderRadius: "10px", overflow: "hidden", border: `1px solid ${colors.border}` }}>
-                  <button
-                    onClick={() => { setPaginationMode("paginated"); setCurrentPage(1); }}
-                    style={{
-                      padding: "6px 14px", fontSize: "0.75rem", fontWeight: 600, border: "none", cursor: "pointer",
-                      background: paginationMode === "paginated" ? colors.accent : "transparent",
-                      color: paginationMode === "paginated" ? "#000" : colors.textMuted,
-                    }}
-                  >
-                    Pages
-                  </button>
-                  <button
-                    onClick={() => { setPaginationMode("infinite"); setLoadedCount(9); }}
-                    style={{
-                      padding: "6px 14px", fontSize: "0.75rem", fontWeight: 600, border: "none", cursor: "pointer",
-                      background: paginationMode === "infinite" ? colors.accent : "transparent",
-                      color: paginationMode === "infinite" ? "#000" : colors.textMuted,
-                    }}
-                  >
-                    Scroll
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: isMobile ? "14px" : "20px", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(340px, 1fr))" }}>
-                {(paginationMode === "paginated"
-                  ? filteredJobs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-                  : filteredJobs.slice(0, loadedCount)
-                ).map((job) => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    isSaved={savedIds.includes(job.id)}
-                    onToggleFavorite={toggleFavorite}
-                    onShare={shareJob}
-                    isApplied={appliedIds.includes(job.id)}
-                    onUnapply={handleUnapply}
-                    colors={colors}
-                    isDark={isDark}
-                  />
-                ))}
-              </div>
-
-              {/* Pagination controls */}
-              {paginationMode === "paginated" && filteredJobs.length > PAGE_SIZE && (
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", marginTop: "24px" }}>
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage <= 1}
-                    style={{
-                      padding: "10px 20px", borderRadius: "12px", border: `1px solid ${colors.border}`,
-                      background: currentPage <= 1 ? "transparent" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
-                      color: currentPage <= 1 ? colors.textMuted : colors.text,
-                      fontWeight: 600, fontSize: "0.85rem", cursor: currentPage <= 1 ? "default" : "pointer",
-                      opacity: currentPage <= 1 ? 0.5 : 1,
-                    }}
-                  >
-                    Previous
-                  </button>
-                  <span style={{ fontSize: "0.85rem", color: colors.textSecondary, fontWeight: 500 }}>
-                    Page {currentPage} of {Math.ceil(filteredJobs.length / PAGE_SIZE)}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(Math.ceil(filteredJobs.length / PAGE_SIZE), p + 1))}
-                    disabled={currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE)}
-                    style={{
-                      padding: "10px 20px", borderRadius: "12px", border: `1px solid ${colors.border}`,
-                      background: currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE) ? "transparent" : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
-                      color: currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE) ? colors.textMuted : colors.text,
-                      fontWeight: 600, fontSize: "0.85rem",
-                      cursor: currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE) ? "default" : "pointer",
-                      opacity: currentPage >= Math.ceil(filteredJobs.length / PAGE_SIZE) ? 0.5 : 1,
-                    }}
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
-
-              {/* Infinite scroll sentinel */}
-              {paginationMode === "infinite" && loadedCount < filteredJobs.length && (
                 <div
-                  style={{ textAlign: "center", padding: "24px", marginTop: "12px" }}
-                  ref={(el) => {
-                    if (!el) return;
-                    const observer = new IntersectionObserver(
-                      (entries) => {
-                        if (entries[0].isIntersecting) {
-                          setLoadedCount((prev) => prev + 9);
-                          observer.disconnect();
-                        }
-                      },
-                      { threshold: 0.1 }
-                    );
-                    observer.observe(el);
+                  style={{
+                    display: 'grid',
+                    gap: isMobile ? '16px' : '24px',
+                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(340px, 1fr))',
                   }}
                 >
-                  <Loader2 size={24} color={colors.textMuted} style={{ animation: "spin 1s linear infinite" }} />
-                  <div style={{ fontSize: "0.8rem", color: colors.textMuted, marginTop: "8px" }}>
-                    Loading more jobs...
-                  </div>
+                  {(paginationMode === 'paginated'
+                    ? filteredJobs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+                    : filteredJobs.slice(0, loadedCount)
+                  ).map((job) => (
+                    <JobCard
+                      key={job.id}
+                      job={job}
+                      isSaved={savedIds.includes(job.id)}
+                      onToggleFavorite={toggleFavorite}
+                      onShare={shareJob}
+                      isApplied={appliedIds.includes(job.id)}
+                      onUnapply={handleUnapply}
+                      colors={colors}
+                      isDark={isDark}
+                    />
+                  ))}
                 </div>
-              )}
+
+                {paginationMode === 'paginated' && filteredJobs.length > PAGE_SIZE && (
+                  <StreetPagination
+                    currentPage={currentPage}
+                    totalPages={Math.ceil(filteredJobs.length / PAGE_SIZE)}
+                    onPageChange={setCurrentPage}
+                    colors={colors}
+                    marginTop={24}
+                  />
+                )}
+
+                {/* Infinite scroll sentinel */}
+                {paginationMode === 'infinite' && loadedCount < filteredJobs.length && (
+                  <div
+                    style={{ textAlign: 'center', padding: '24px', marginTop: '12px' }}
+                    ref={(el) => {
+                      if (!el) return;
+                      const observer = new IntersectionObserver(
+                        (entries) => {
+                          if (entries[0].isIntersecting) {
+                            setLoadedCount((prev) => prev + 12);
+                            observer.disconnect();
+                          }
+                        },
+                        { threshold: 0.1 },
+                      );
+                      observer.observe(el);
+                    }}
+                  >
+                    <Loader2
+                      size={24}
+                      color={colors.textMuted}
+                      style={{ animation: 'spin 1s linear infinite' }}
+                    />
+                    <div style={{ fontSize: '0.8rem', color: colors.textMuted, marginTop: '8px' }}>
+                      Loading more jobs...
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </section>

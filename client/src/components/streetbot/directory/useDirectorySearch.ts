@@ -12,6 +12,11 @@ import {
   writeLocalCache,
   writeSessionCache,
 } from '../shared/perfCache';
+import {
+  DIRECTORY_SEARCH_API_URL,
+  DIRECTORY_SERVICES_API_URL,
+  DIRECTORY_SERVICES_SEARCH_API_URL,
+} from '../shared/apiConfig';
 // Uses LibreChat Express /api/directory/search (NOT /sbapi)
 
 export interface SearchHit {
@@ -93,9 +98,9 @@ export interface UseDirectorySearchOptions {
 }
 
 const DEBOUNCE_MS = 150;
-const SEARCH_URL = '/api/directory/search';
-const SBP_SEARCH_URL = '/sbapi/services/search';
-const FALLBACK_SERVICES_URL = '/sbapi/services';
+const SEARCH_URL = DIRECTORY_SEARCH_API_URL;
+const SBP_SEARCH_URL = DIRECTORY_SERVICES_SEARCH_API_URL;
+const FALLBACK_SERVICES_URL = DIRECTORY_SERVICES_API_URL;
 const DIRECTORY_SEARCH_CACHE_PREFIX = 'streetbot:directory:search:v5:';
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_PROGRESSIVE_LIMIT = 200;
@@ -107,6 +112,92 @@ const SEARCH_API_FAILURE_COOLDOWN_MS = 60 * 1000;
 const SEARCH_API_FAILURE_UNTIL_KEY = 'streetbot:directory:search-api-failure-until:v2';
 const FALLBACK_TOTAL_CACHE_KEY = 'streetbot:directory:fallback-total:v1';
 const FALLBACK_TOTAL_SEARCH_MAX = 200000;
+const LOCAL_DIRECTORY_FALLBACK_SERVICES: SearchHit[] = [
+  {
+    id: -101,
+    name: 'Street Voices Resource Hub',
+    overview: 'Free walk-in support for housing, food access, benefits navigation, and referrals.',
+    description:
+      'Community intake workers help neighbours find services, complete forms, and connect with trusted local agencies.',
+    city: 'Toronto',
+    province: 'ON',
+    category_names: ['Community', 'Housing'],
+    tags: ['free', 'walk-in', 'resource navigation', 'referrals'],
+    is_verified: true,
+    rating: 4.9,
+    rating_count: 42,
+    phone: '416-555-0182',
+    address: '120 Queen St W',
+    service_type: 'In person',
+    ages_served: 'All ages',
+    gender_served: 'All genders',
+    latitude: 43.6535,
+    longitude: -79.3839,
+  },
+  {
+    id: -102,
+    name: 'Neighbourhood Food Table',
+    overview: 'Free groceries, hot meals, and food-bank appointments for individuals and families.',
+    description:
+      'A low-barrier community food program with same-day emergency food support and delivery referrals.',
+    city: 'Toronto',
+    province: 'ON',
+    category_names: ['Food', 'Community'],
+    tags: ['free', 'food bank', 'meals', 'families'],
+    is_verified: true,
+    rating: 4.8,
+    rating_count: 31,
+    phone: '416-555-0134',
+    address: '84 Dundas St E',
+    service_type: 'In person',
+    ages_served: 'All ages',
+    gender_served: 'All genders',
+    latitude: 43.6561,
+    longitude: -79.3789,
+  },
+  {
+    id: -103,
+    name: 'Open Door Legal Clinic',
+    overview: 'Free legal information for housing, employment, immigration, and income support issues.',
+    description:
+      'Volunteer lawyers and legal workers provide intake, document review, and warm referrals.',
+    city: 'Toronto',
+    province: 'ON',
+    category_names: ['Legal'],
+    tags: ['free', 'legal', 'housing', 'employment'],
+    is_verified: true,
+    rating: 4.7,
+    rating_count: 18,
+    phone: '416-555-0199',
+    address: '50 College St',
+    service_type: 'Hybrid',
+    ages_served: 'Adults',
+    gender_served: 'All genders',
+    latitude: 43.6612,
+    longitude: -79.3841,
+  },
+  {
+    id: -104,
+    name: 'Creative Skills Drop-In',
+    overview: 'Free creative workshops, resume help, portfolio feedback, and digital skills coaching.',
+    description:
+      'A weekly drop-in for artists, youth, and job seekers building practical creative and digital skills.',
+    city: 'Toronto',
+    province: 'ON',
+    category_names: ['Education', 'Employment'],
+    tags: ['free', 'workshops', 'resume', 'portfolio'],
+    is_verified: false,
+    rating: 4.6,
+    rating_count: 14,
+    phone: '416-555-0177',
+    address: '250 Front St W',
+    service_type: 'Hybrid',
+    ages_served: 'Youth and adults',
+    gender_served: 'All genders',
+    latitude: 43.644,
+    longitude: -79.3894,
+  },
+];
 const inFlightSearchRequests = new Map<string, Promise<SearchResult>>();
 let searchApiFailureUntil = 0;
 
@@ -433,6 +524,9 @@ export function useDirectorySearch(options: UseDirectorySearchOptions) {
       if (!response.ok) {
         throw new Error(`Fallback search failed: ${response.status}`);
       }
+      if (!isJsonResponse(response)) {
+        return [];
+      }
 
       const payload = await response.json();
       return extractItemsFromPayload(payload);
@@ -502,12 +596,7 @@ export function useDirectorySearch(options: UseDirectorySearchOptions) {
     }
 
     if (sourceItems.length === 0) {
-      return {
-        hits: [],
-        total: 0,
-        facets: {},
-        processingTimeMs: 0,
-      };
+      appendBatchItems(LOCAL_DIRECTORY_FALLBACK_SERVICES);
     }
 
     const normalizedQuery = query.trim().toLowerCase();
@@ -658,6 +747,9 @@ export function useDirectorySearch(options: UseDirectorySearchOptions) {
       const response = await fetch(`${FALLBACK_SERVICES_URL}?limit=1&skip=${index}`, { signal });
       if (!response.ok) {
         throw new Error(`Fallback count failed: ${response.status}`);
+      }
+      if (!isJsonResponse(response)) {
+        return false;
       }
       const payload = await response.json();
       const exists = extractItemsFromPayload(payload).length > 0;

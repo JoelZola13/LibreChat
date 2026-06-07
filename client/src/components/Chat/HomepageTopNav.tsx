@@ -1,118 +1,422 @@
-import { lazy, memo, Suspense, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { lazy, memo, Suspense, useCallback, useContext, useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { ThemeContext, isDark } from '@librechat/client';
-import { useUserRole } from '~/components/streetbot/lib/auth/useUserRole';
-import MobileMenuDrawer, { getMobileNavLinkStyle, getMobileDividerStyle } from '~/components/streetbot/shared/MobileMenuDrawer';
-import { variantConfig, isDirectory, isStreetBot } from '~/config/appVariant';
+import MobileMenuDrawer, {
+  HamburgerButton,
+  getMobileNavLinkStyle,
+  getMobileDividerStyle,
+  getMobileSectionHeaderStyle,
+} from '~/components/streetbot/shared/MobileMenuDrawer';
 import { useActiveUser } from '~/components/streetbot/shared/useActiveUser';
+import NavDropdown from '~/components/streetbot/shared/NavDropdown';
+import { PRODUCT_NAV_ITEMS, PRICING_NAV_ITEMS } from '~/components/streetbot/shared/commerceNav';
+import TopRightAccountMenu from '~/components/streetbot/shared/TopRightAccountMenu';
+import NotificationDropdown from '~/components/streetbot/notifications/NotificationDropdown';
+import { getGlassNavBarStyle } from '~/components/streetbot/shared/glassNav';
+import { STREET_PROFILE_NAV_ITEMS } from '~/components/streetbot/shared/streetProfileNavItems';
+import { Home } from 'lucide-react';
 
 const AuthPopupModal = lazy(() => import('~/components/streetbot/shared/AuthPopupModal'));
 
-function MobileSideMenuIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M5 9h12M5 15h8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MobileMenuIcon() {
-  return (
-    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MobileBellIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M15 17H9m9-2V10a6 6 0 1 0-12 0v5l-2 2h16l-2-2ZM10 20h4"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+const HOMEPAGE_NAV_ITEMS = [
+  { label: 'Street Gallery', href: '/gallery' },
+  { label: 'Academy', href: '/academy' },
+  { label: 'Job Board', href: '/jobs' },
+  { label: 'Directory', href: '/directory' },
+  { label: 'News', href: '/news' },
+  { label: 'About Us', href: '/about' },
+];
 
 function HomepageTopNav() {
-  const { canAccess } = useUserRole();
+  const { pathname } = useLocation();
   const { activeUser, resolved: sessionResolved } = useActiveUser();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
-  const [avatarLoadError, setAvatarLoadError] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const { theme, setTheme } = useContext(ThemeContext);
   const dark = isDark(theme);
-  const visibleNavItems = useMemo(() => variantConfig.topNavItems.filter(item => item.navKey === null || canAccess(item.navKey)), [canAccess]);
-
   const toggleTheme = useCallback(() => {
     setTheme(isDark(theme) ? 'light' : 'dark');
   }, [theme, setTheme]);
-
-  const userInitial = activeUser?.name?.charAt(0)?.toUpperCase() || activeUser?.username?.charAt(0)?.toUpperCase() || '?';
+  const isHomePage = pathname === '/' || pathname === '/home';
+  const showHomeLogo = pathname.startsWith('/products') || pathname.startsWith('/pricing');
+  const navGlassStyle = getGlassNavBarStyle(dark);
+  const showNavSurface = !isHomePage || isScrolled;
+  const mobileMainMenuItems = STREET_PROFILE_NAV_ITEMS.filter(
+    (item) => item.href !== '/myprofile',
+  );
 
   useEffect(() => {
-    setAvatarLoadError(false);
-  }, [activeUser?.avatar]);
+    const updateScrolled = () => setIsScrolled(window.scrollY > 8);
+    updateScrolled();
+    window.addEventListener('scroll', updateScrolled, { passive: true });
+    return () => window.removeEventListener('scroll', updateScrolled);
+  }, [pathname]);
 
   return (
     <>
-    <style>{`.sv-login-btn { background: transparent; border: 2px solid #FFD600; color: #000; transition: 0.3s ease-in-out; } html.dark .sv-login-btn { color: #fff; } .sv-login-btn:hover { background: rgb(255, 198, 0) !important; color: #000 !important; } .sv-home-nav-link { transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; } html.dark .sv-home-nav-link, html.light .sv-home-nav-link, [data-theme="dark"] .sv-home-nav-link, [data-theme="light"] .sv-home-nav-link { border-radius: 999px !important; } html.dark .sv-home-nav-link:hover, html.dark .sv-home-nav-link:focus-visible, [data-theme="dark"] .sv-home-nav-link:hover, [data-theme="dark"] .sv-home-nav-link:focus-visible { background: #28292C !important; color: #E6E7F2 !important; box-shadow: none; } html.light .sv-home-nav-link:hover, html.light .sv-home-nav-link:focus-visible, [data-theme="light"] .sv-home-nav-link:hover, [data-theme="light"] .sv-home-nav-link:focus-visible { background: var(--surface-hover) !important; color: var(--text-primary) !important; box-shadow: 0 0 0 1px rgba(227, 227, 227, 0.18); } .sv-home-donate-btn { border-radius: 999px; transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; } html.light .sv-home-donate-btn, [data-theme="light"] .sv-home-donate-btn { background: transparent !important; color: var(--text-primary) !important; border: 2px solid var(--text-primary) !important; padding: 6px 28px !important; box-shadow: 0 0 0 1px rgba(33, 33, 33, 0.08); } html.dark .sv-home-donate-btn, [data-theme="dark"] .sv-home-donate-btn { background: transparent !important; color: #E1E3EB !important; border: 2px solid #E1E3EB !important; padding: 6px 28px !important; } html.light .sv-home-donate-btn:hover, html.light .sv-home-donate-btn:focus-visible, [data-theme="light"] .sv-home-donate-btn:hover, [data-theme="light"] .sv-home-donate-btn:focus-visible, html.dark .sv-home-donate-btn:hover, html.dark .sv-home-donate-btn:focus-visible, [data-theme="dark"] .sv-home-donate-btn:hover, [data-theme="dark"] .sv-home-donate-btn:focus-visible { background: #FFD600 !important; border-color: #FFD600 !important; color: #000 !important; box-shadow: 0 0 0 1px rgba(255, 214, 0, 0.14); }`}</style>
-    <div className="absolute top-0 z-10 w-full border-b border-white/5 bg-[#11121b]/96 px-4 text-white sm:px-6 lg:border-none lg:bg-transparent">
-      <div className="relative flex h-[56px] w-full items-center justify-between lg:h-[60px]">
-        {/* Left: mobile menu for StreetBot, phone for directory */}
-        <div className="flex items-center gap-2">
-          {isStreetBot ? (
+      <style>{`
+      .sv-login-btn { background: transparent; border: 2px solid #FFD600; color: #000; transition: 0.3s ease-in-out; }
+      html.dark .sv-login-btn { color: #fff; }
+      .sv-login-btn:hover { background: #FFD600 !important; color: #000 !important; }
+      .sv-home-top-nav-link:hover,
+      .sv-home-top-nav-link:focus-visible { background: rgba(255, 255, 255, 0.12); }
+      html.light .sv-home-top-nav-link:hover,
+      html.light .sv-home-top-nav-link:focus-visible { background: rgba(17, 19, 24, 0.08); }
+      @media (max-width: 1399px) {
+        .sv-home-desktop-nav { display: none !important; }
+      }
+      @media (max-width: 768px) {
+        .sv-homepage-top-nav {
+          z-index: 90 !important;
+          pointer-events: none;
+        }
+        .sv-homepage-top-nav .sv-home-top-actions {
+          pointer-events: auto;
+          right: 10px !important;
+          top: 12px !important;
+          transform: none !important;
+          height: 36px;
+          align-items: center !important;
+          gap: 8px !important;
+        }
+        .sv-homepage-top-nav .sv-home-top-actions > a[aria-label="Go to home"],
+        .sv-homepage-top-nav .sv-home-top-actions .sv-donate-nav-label {
+          display: none !important;
+        }
+      }
+    `}</style>
+      <div
+        className="sv-homepage-top-nav fixed left-0 right-0 top-0 z-[1200] px-4 sm:px-6"
+        style={{
+          ...(showNavSurface
+            ? navGlassStyle
+            : {
+                background: 'transparent',
+                backdropFilter: 'none',
+                WebkitBackdropFilter: 'none',
+                borderBottom: '1px solid transparent',
+                boxShadow: 'none',
+              }),
+          borderBottom:
+            showNavSurface && isScrolled ? navGlassStyle.borderBottom : '1px solid transparent',
+          boxShadow: showNavSurface && isScrolled ? navGlassStyle.boxShadow : 'none',
+        }}
+      >
+        <div className="relative flex h-[60px] w-full items-center justify-end">
+          {showHomeLogo && (
+            <Link
+              to="/home"
+              aria-label="Street Voices home"
+              title="Street Voices home"
+              className="absolute left-0 inline-flex items-center"
+              style={{ textDecoration: 'none' }}
+            >
+              <img
+                src={dark ? '/assets/streetvoices-text.svg' : '/assets/streetvoices-text-dark.svg'}
+                alt="Street Voices"
+                style={{
+                  height: 38,
+                  maxWidth: 143,
+                }}
+              />
+            </Link>
+          )}
+
+          {/* Desktop navigation */}
+          <nav className="sv-home-desktop-nav absolute left-1/2 hidden h-[60px] -translate-x-1/2 items-center gap-0 lg:flex xl:gap-1">
+            <NavDropdown
+              label="Street Profile"
+              href="/profiles"
+              items={STREET_PROFILE_NAV_ITEMS}
+              textColor={dark ? '#E6E7F2' : '#1f2937'}
+              fontSize={14}
+              buttonStyle={{ padding: '8px 12px', borderRadius: 8, fontWeight: 700 }}
+              menuMinWidth={170}
+            />
+            {HOMEPAGE_NAV_ITEMS.map((item) =>
+              item.href.startsWith('http') ? (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sv-home-top-nav-link flex items-center gap-1 rounded-lg px-2 py-2 text-text-primary transition-colors xl:px-3"
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    fontFamily: 'Rubik, sans-serif',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <Link
+                  key={item.label}
+                  to={item.href}
+                  className="sv-home-top-nav-link flex items-center gap-1 rounded-lg px-2 py-2 text-text-primary transition-colors xl:px-3"
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    fontFamily: 'Rubik, sans-serif',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {item.label}
+                </Link>
+              ),
+            )}
+            <NavDropdown
+              label="Products"
+              href="/products"
+              items={PRODUCT_NAV_ITEMS}
+              textColor={dark ? '#E6E7F2' : '#1f2937'}
+              fontSize={14}
+              buttonStyle={{ padding: '8px 12px', borderRadius: 8, fontWeight: 700 }}
+            />
+            <NavDropdown
+              label="Pricing"
+              href="/pricing"
+              items={PRICING_NAV_ITEMS}
+              textColor={dark ? '#E6E7F2' : '#1f2937'}
+              fontSize={14}
+              buttonStyle={{ padding: '8px 12px', borderRadius: 8, fontWeight: 700 }}
+              menuMinWidth={160}
+            />
+          </nav>
+
+          {/* Right actions */}
+          <div className="sv-home-top-actions absolute right-0 top-1/2 z-[2] flex -translate-y-1/2 items-center gap-2">
+            {!isHomePage && (
+              <Link
+                to="/home"
+                aria-label="Go to home"
+                title="Go to home"
+                className="hidden lg:inline-flex"
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  border: dark
+                    ? '1px solid rgba(255,255,255,0.16)'
+                    : '1px solid rgba(17,24,39,0.12)',
+                  background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.72)',
+                  color: dark ? '#E6E7F2' : '#374151',
+                  textDecoration: 'none',
+                  boxShadow: dark
+                    ? '0 8px 24px rgba(0,0,0,0.16)'
+                    : '0 8px 20px rgba(17,24,39,0.08)',
+                  backdropFilter: 'blur(18px) saturate(160%)',
+                  WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                }}
+              >
+                <Home size={18} strokeWidth={2} />
+              </Link>
+            )}
+            {activeUser && (
+              <NotificationDropdown
+                dark={dark}
+                userId={activeUser.id}
+                className="inline-flex"
+              />
+            )}
+            <Link
+              to="/donate"
+              className="sv-donate-nav-label sv-nav-action-button sv-nav-action-button--donate hidden font-bold text-black lg:inline-flex"
+              style={{
+                fontSize: 14,
+                fontWeight: 900,
+                fontFamily: 'Rubik, sans-serif',
+                background: '#FFD600',
+                borderRadius: 25,
+                padding: '8px 18px',
+                border: '2px solid #FFD600',
+              }}
+            >
+              Donate
+            </Link>
+            {!activeUser && sessionResolved && (
+              <button
+                onClick={() => {
+                  setAuthModalTab('login');
+                  setAuthModalOpen(true);
+                }}
+                className="sv-nav-action-button sv-nav-action-button--login sv-login-btn hidden font-bold lg:inline-flex"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  fontFamily: 'Rubik, sans-serif',
+                  borderRadius: 25,
+                  padding: '8px 18px',
+                  cursor: 'pointer',
+                }}
+              >
+                Login
+              </button>
+            )}
             <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-white/90 lg:hidden"
-              aria-label="Open menu"
+              onClick={toggleTheme}
+              className="sv-theme-toggle-button flex h-9 w-9 items-center justify-center rounded-lg text-text-primary transition-colors hover:bg-surface-hover"
+              aria-label="Toggle theme"
             >
-              <MobileSideMenuIcon />
+              {isDark(theme) ? (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="5" />
+                  <line x1="12" y1="1" x2="12" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="23" />
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                  <line x1="1" y1="12" x2="3" y2="12" />
+                  <line x1="21" y1="12" x2="23" y2="12" />
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+              ) : (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
             </button>
-          ) : (
-            <a
-              href="tel:+14166976626"
-              className="flex items-center gap-2 rounded-lg text-text-primary transition-colors hover:bg-surface-hover lg:hidden"
-              aria-label="Call Street Voices"
-              style={{ padding: '6px 10px', fontSize: 14, fontFamily: 'Rubik, sans-serif', whiteSpace: 'nowrap' }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-              </svg>
-              +1 416-697-6626
-            </a>
-          )}
-          {isDirectory && (
-            <a
-              href="tel:+14166976626"
-              className="hidden items-center gap-2 text-text-primary transition-colors hover:opacity-80 xl:flex"
-              style={{ fontSize: 16, fontFamily: 'Rubik, sans-serif' }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-              </svg>
-              +1 416-697-6626
-            </a>
-          )}
+            <TopRightAccountMenu dark={dark} size={28} />
+            <div className="lg:hidden">
+              <HamburgerButton onClick={() => setMobileMenuOpen(true)} dark={dark} />
+            </div>
+          </div>
         </div>
 
-        {/* Desktop navigation — absolutely centered */}
-        <nav className="absolute left-1/2 top-0 hidden h-[60px] -translate-x-1/2 items-center gap-0 lg:flex xl:gap-1">
-          {visibleNavItems.map((item) =>
+        {/* Mobile hamburger menu — mirrors original streetvoices.ca pattern */}
+        <MobileMenuDrawer isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+            {!activeUser && sessionResolved && (
+              <>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setAuthModalTab('login');
+                    setAuthModalOpen(true);
+                  }}
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    padding: '10px 0',
+                    borderRadius: 12,
+                    background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                    border: dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
+                    color: dark ? '#E6E7F2' : '#1f2937',
+                    fontFamily: 'Rubik, sans-serif',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setAuthModalTab('register');
+                    setAuthModalOpen(true);
+                  }}
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    padding: '10px 0',
+                    borderRadius: 12,
+                    background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                    border: dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
+                    color: dark ? '#E6E7F2' : '#1f2937',
+                    fontFamily: 'Rubik, sans-serif',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Sign Up
+                </button>
+              </>
+            )}
+            <Link
+              to="/donate"
+              className="sv-donate-nav-label"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{
+                flex: 1,
+                textAlign: 'center',
+                padding: '10px 0',
+                borderRadius: 12,
+                background: '#FFD600',
+                border: '1px solid #FFD600',
+                color: '#000',
+                fontFamily: 'Rubik, sans-serif',
+                textDecoration: 'none',
+                fontSize: 14,
+                fontWeight: 900,
+              }}
+            >
+              Donate
+            </Link>
+          </div>
+
+          <div style={getMobileDividerStyle(dark)} />
+
+          {activeUser && (
+            <a
+              href="/myprofile"
+              onClick={() => setMobileMenuOpen(false)}
+              style={getMobileNavLinkStyle(dark)}
+            >
+              My Profile
+            </a>
+          )}
+          {activeUser && (
+            <Link
+              to="/notifications"
+              onClick={() => setMobileMenuOpen(false)}
+              style={getMobileNavLinkStyle(dark)}
+            >
+              Notifications
+            </Link>
+          )}
+
+          <div style={getMobileSectionHeaderStyle(dark)}>Main Menu</div>
+          {mobileMainMenuItems.map((item) => (
+            <Link
+              key={item.href}
+              to={item.href}
+              onClick={() => setMobileMenuOpen(false)}
+              style={getMobileNavLinkStyle(dark)}
+            >
+              {item.label}
+            </Link>
+          ))}
+
+          {HOMEPAGE_NAV_ITEMS.map((item) =>
             item.href.startsWith('http') ? (
               <a
                 key={item.label}
                 href={item.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="sv-home-nav-link flex items-center gap-1 rounded-lg px-2 py-2 text-text-primary transition-colors hover:bg-surface-hover xl:px-3"
-                style={{ fontSize: 14, fontFamily: 'Rubik, sans-serif', whiteSpace: 'nowrap' }}
+                onClick={() => setMobileMenuOpen(false)}
+                style={getMobileNavLinkStyle(dark)}
               >
                 {item.label}
               </a>
@@ -120,205 +424,65 @@ function HomepageTopNav() {
               <Link
                 key={item.label}
                 to={item.href}
-                className="sv-home-nav-link flex items-center gap-1 rounded-lg px-2 py-2 text-text-primary transition-colors hover:bg-surface-hover xl:px-3"
-                style={{ fontSize: 14, fontFamily: 'Rubik, sans-serif', whiteSpace: 'nowrap' }}
+                onClick={() => setMobileMenuOpen(false)}
+                style={getMobileNavLinkStyle(dark)}
               >
                 {item.label}
               </Link>
             ),
           )}
-        </nav>
-
-        {/* Right actions */}
-        <div className="flex items-center gap-3 lg:gap-2">
           <Link
-            to="/donate"
-            className="sv-home-donate-btn hidden font-bold text-black transition-opacity hover:opacity-90 lg:inline-flex"
-            style={{ fontSize: 14, fontFamily: 'Rubik, sans-serif', background: '#FFD600', borderRadius: 25, padding: '8px 18px', border: '2px solid #FFD600' }}
-          >
-            Donate
-          </Link>
-          {!activeUser && sessionResolved && (
-            <button
-              onClick={() => { setAuthModalTab('login'); setAuthModalOpen(true); }}
-              className="hidden font-bold lg:inline-flex sv-login-btn"
-              style={{ fontSize: 14, fontFamily: 'Rubik, sans-serif', borderRadius: 25, padding: '8px 18px', cursor: 'pointer' }}
-            >
-              Login
-            </button>
-          )}
-          <Link
-            to="/notifications"
-            aria-label="Notifications"
-            className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white lg:hidden"
-          >
-            <MobileBellIcon />
-            <span className="absolute -right-1 -top-1 rounded-full bg-[#ff2f5f] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-              16
-            </span>
-          </Link>
-          <button
-            onClick={toggleTheme}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/8 lg:h-9 lg:w-9 lg:rounded-lg lg:text-text-primary lg:hover:bg-surface-hover"
-            aria-label="Toggle theme"
-          >
-            {isDark(theme) ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" />
-                <line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            )}
-          </button>
-          {activeUser && (
-            <a
-              href="/settings"
-              className="flex h-10 w-10 items-center justify-center rounded-full lg:h-auto lg:w-auto"
-              aria-label="Settings"
-            >
-              {activeUser.avatar && !avatarLoadError ? (
-                <img
-                  src={activeUser.avatar}
-                  alt={activeUser.name || 'Profile'}
-                  className="h-9 w-9 rounded-full object-cover lg:h-7 lg:w-7"
-                  width={28}
-                  height={28}
-                  loading="lazy"
-                  onError={() => setAvatarLoadError(true)}
-                />
-              ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-600 text-xs font-medium text-white lg:h-7 lg:w-7">
-                  {userInitial}
-                </div>
-              )}
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-white/90 lg:hidden"
-            aria-label="Open menu"
-          >
-            <MobileMenuIcon />
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile hamburger menu — mirrors original streetvoices.ca pattern */}
-      <MobileMenuDrawer isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-          {!activeUser && sessionResolved && (
-            <>
-              <button
-                onClick={() => { setMobileMenuOpen(false); setAuthModalTab('login'); setAuthModalOpen(true); }}
-                style={{
-                  flex: 1,
-                  textAlign: 'center',
-                  padding: '10px 0',
-                  borderRadius: 12,
-                  background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                  border: dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
-                  color: dark ? '#E6E7F2' : '#1f2937',
-                  fontFamily: 'Rubik, sans-serif',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Login
-              </button>
-              <button
-                onClick={() => { setMobileMenuOpen(false); setAuthModalTab('register'); setAuthModalOpen(true); }}
-                style={{
-                  flex: 1,
-                  textAlign: 'center',
-                  padding: '10px 0',
-                  borderRadius: 12,
-                  background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                  border: dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)',
-                  color: dark ? '#E6E7F2' : '#1f2937',
-                  fontFamily: 'Rubik, sans-serif',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Sign Up
-              </button>
-            </>
-          )}
-          <Link
-            to="/donate"
+            to="/products"
             onClick={() => setMobileMenuOpen(false)}
             style={{
-              flex: 1,
-              textAlign: 'center',
-              padding: '10px 0',
-              borderRadius: 12,
-              background: '#FFD600',
-              border: '1px solid #FFD600',
-              color: '#000',
-              fontFamily: 'Rubik, sans-serif',
+              ...getMobileSectionHeaderStyle(dark),
+              display: 'block',
               textDecoration: 'none',
-              fontSize: 14,
-              fontWeight: 700,
             }}
           >
-            Donate
+            Products
           </Link>
-        </div>
-
-        <div style={getMobileDividerStyle(dark)} />
-
-        {activeUser && (
-          <a
-            href="/settings"
-            onClick={() => setMobileMenuOpen(false)}
-            style={getMobileNavLinkStyle(dark)}
-          >
-            Settings
-          </a>
-        )}
-
-        {visibleNavItems.map((item) =>
-          item.href.startsWith('http') ? (
-            <a
-              key={item.label}
-              href={item.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setMobileMenuOpen(false)}
-              style={getMobileNavLinkStyle(dark)}
-            >
-              {item.label}
-            </a>
-          ) : (
+          {PRODUCT_NAV_ITEMS.map((item) => (
             <Link
-              key={item.label}
+              key={item.href}
               to={item.href}
               onClick={() => setMobileMenuOpen(false)}
               style={getMobileNavLinkStyle(dark)}
             >
               {item.label}
             </Link>
-          ),
-        )}
-      </MobileMenuDrawer>
+          ))}
+          <Link
+            to="/pricing"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              ...getMobileSectionHeaderStyle(dark),
+              display: 'block',
+              textDecoration: 'none',
+            }}
+          >
+            Pricing
+          </Link>
+          {PRICING_NAV_ITEMS.map((item) => (
+            <Link
+              key={item.href}
+              to={item.href}
+              onClick={() => setMobileMenuOpen(false)}
+              style={getMobileNavLinkStyle(dark)}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </MobileMenuDrawer>
 
-      <Suspense fallback={null}>
-        <AuthPopupModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} initialTab={authModalTab} />
-      </Suspense>
-    </div>
+        <Suspense fallback={null}>
+          <AuthPopupModal
+            isOpen={authModalOpen}
+            onClose={() => setAuthModalOpen(false)}
+            initialTab={authModalTab}
+          />
+        </Suspense>
+      </div>
     </>
   );
 }

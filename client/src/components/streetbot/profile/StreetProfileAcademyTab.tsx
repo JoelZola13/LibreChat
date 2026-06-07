@@ -29,7 +29,7 @@ type StreetProfileAcademyTabProps = {
     username: string;
     display_name: string;
     primary_roles?: string[];
-    academy_role?: AcademyProfileRole;
+    academy_role?: AcademyProfileRole | null;
   };
   canEditProfile?: boolean;
   isDark: boolean;
@@ -601,9 +601,9 @@ export default function StreetProfileAcademyTab({
     effectiveRole === "instructor"
       ? "This is what I teach. Courses, programs, live sessions, and the impact I have built through Street Voices Academy all live here inside the same Street Profile system."
       : "This is what I'm learning. Courses, completions, achievements, and recent activity are connected directly to Street Voices Academy so growth shows up right on the profile.";
-  const detailBasePath = location.pathname.startsWith("/settings")
-    ? "/settings/academy"
-    : `/creatives/${profile.username}/academy`;
+  const detailBasePath = location.pathname.startsWith("/myprofile")
+    ? "/myprofile/academy"
+    : `/profiles/${profile.username}/academy`;
   const currentLearningHref = `${detailBasePath}/currently-learning`;
   const completedCoursesHref = `${detailBasePath}/completed-courses`;
   const achievementsHref = `${detailBasePath}/achievements`;
@@ -682,7 +682,7 @@ export default function StreetProfileAcademyTab({
           </Link>
           {canEditProfile ? (
             <Link
-              to="/settings"
+              to="/myprofile"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -801,7 +801,7 @@ export default function StreetProfileAcademyTab({
           </Link>
           {canEditProfile ? (
             <Link
-              to="/settings"
+              to="/myprofile"
               style={{
                 display: "inline-flex",
                 alignItems: "center",

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Spinner } from '@librechat/client';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
-import { Constants, EModelEndpoint } from 'librechat-data-provider';
+import { useSearchParams } from 'react-router-dom';
+import { EModelEndpoint, type TPreset, type TStartupConfig } from 'librechat-data-provider';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import { useGetStartupConfig, useGetEndpointsQuery } from '~/data-provider';
 import { useNewConvo, useAppStartup, useAssistantListMap, useAuthContext } from '~/hooks';
@@ -13,9 +14,38 @@ import temporaryStore from '~/store/temporary';
 import store from '~/store';
 import { isStreetBot } from '~/config/appVariant';
 
+function getRequestedAgentPreset(
+  startupConfig: TStartupConfig | undefined,
+  requestedAgentModel: string,
+): TPreset | undefined {
+  const model = requestedAgentModel.trim();
+  if (!model.startsWith('agent/')) {
+    return undefined;
+  }
+
+  const spec = startupConfig?.modelSpecs?.list?.find(
+    (modelSpec) => modelSpec.name === model || modelSpec.preset?.model === model,
+  );
+  if (spec) {
+    return getModelSpecPreset(spec);
+  }
+
+  return {
+    endpoint: 'Street Bot',
+    endpointType: EModelEndpoint.custom,
+    model,
+    spec: model,
+  };
+}
+
 export default function HomepageRoute() {
   const { data: startupConfig } = useGetStartupConfig();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated, user, roles } = useAuthContext();
+  const requestedAgentPreset = getRequestedAgentPreset(
+    startupConfig,
+    searchParams.get('agentModel') ?? '',
+  );
 
   const defaultTemporaryChat = useRecoilValue(temporaryStore.defaultTemporaryChat);
   const setIsTemporary = useRecoilCallback(
@@ -28,7 +58,6 @@ export default function HomepageRoute() {
   useAppStartup({ startupConfig, user });
 
   const index = 0;
-  const conversationId = Constants.NEW_CONVO;
   const { hasSetConversation, conversation } = store.useCreateConversationAtom(index);
   const { newConversation } = useNewConvo();
 
@@ -55,10 +84,11 @@ export default function HomepageRoute() {
     if (endpointsQuery.data && modelsQuery.data) {
       const result = getDefaultModelSpec(startupConfig);
       const spec = result?.default ?? result?.last;
+      const preset = requestedAgentPreset ?? (spec ? getModelSpecPreset(spec) : undefined);
       logger.log('conversation', 'HomepageRoute, new convo effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
+        ...(preset ? { preset } : {}),
         skipNavigation: true,
       });
       hasSetConversation.current = true;
@@ -68,10 +98,11 @@ export default function HomepageRoute() {
     ) {
       const result = getDefaultModelSpec(startupConfig);
       const spec = result?.default ?? result?.last;
+      const preset = requestedAgentPreset ?? (spec ? getModelSpecPreset(spec) : undefined);
       logger.log('conversation', 'HomepageRoute new convo, assistants effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
+        ...(preset ? { preset } : {}),
         skipNavigation: true,
       });
       hasSetConversation.current = true;

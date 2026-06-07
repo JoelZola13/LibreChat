@@ -1,5 +1,6 @@
 import debounce from 'lodash/debounce';
 import { useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useRecoilValue, useRecoilState } from 'recoil';
 import type { TEndpointOption } from 'librechat-data-provider';
 import type { KeyboardEvent } from 'react';
@@ -23,6 +24,37 @@ import store from '~/store';
 
 type KeyEvent = KeyboardEvent<HTMLTextAreaElement>;
 
+function formatStreetBotRecipient(model?: string | null) {
+  const normalizedModel = model?.replace(/^spec-agent\//, 'agent/');
+  if (!normalizedModel?.startsWith('agent/')) {
+    return 'Street Bot';
+  }
+
+  const slug = normalizedModel.replace(/^agent\//, '');
+  if (slug === 'auto' || slug === 'ceo') {
+    return 'Street Bot';
+  }
+
+  const special: Record<string, string> = {
+    devops: 'DevOps Agent',
+    executive_memory: 'Executive Memory',
+  };
+  if (special[slug]) {
+    return special[slug];
+  }
+
+  const label = slug
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+  if (label.endsWith(' Agent') || label.endsWith(' Memory')) {
+    return label;
+  }
+  return `${label} Agent`;
+}
+
 export default function useTextarea({
   textAreaRef,
   submitButtonRef,
@@ -35,6 +67,7 @@ export default function useTextarea({
   disabled?: boolean;
 }) {
   const localize = useLocalize();
+  const { search } = useLocation();
   const getSender = useGetSender();
   const isComposing = useRef(false);
   const agentsMap = useAgentsMapContext();
@@ -56,6 +89,12 @@ export default function useTextarea({
     assistant_id: conversation?.assistant_id,
   });
   const entityName = entity?.name ?? '';
+  const urlParams = new URLSearchParams(search);
+  const selectedStreetBotRecipient =
+    urlParams.get('spec') ||
+    urlParams.get('agentModel') ||
+    conversation?.spec ||
+    conversation?.model;
   const isStreetBotConversation =
     isStreetBot ||
     conversation?.spec === 'streetbot-0.1' ||
@@ -101,7 +140,7 @@ export default function useTextarea({
       }
 
       if (isStreetBotConversation) {
-        return 'Message Street Voices 0.5';
+        return `Message ${formatStreetBotRecipient(selectedStreetBotRecipient)}`;
       }
 
       const sender =
@@ -147,6 +186,7 @@ export default function useTextarea({
     latestMessage,
     isNotAppendable,
     isStreetBotConversation,
+    selectedStreetBotRecipient,
   ]);
 
   const handleKeyDown = useCallback(

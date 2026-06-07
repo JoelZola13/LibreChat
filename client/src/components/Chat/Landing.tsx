@@ -9,6 +9,10 @@ import ConvoIcon from '~/components/Endpoints/ConvoIcon';
 import { useLocalize, useAuthContext } from '~/hooks';
 import { isStreetBot } from '~/config/appVariant';
 import { getIconEndpoint, getEntity } from '~/utils';
+import StreetAgentIcon, {
+  getMarketplaceAgentIconId,
+  isStreetBotModelId,
+} from '~/components/Agents/StreetAgentIcon';
 
 const containerClassName =
   'shadow-stroke relative flex h-full items-center justify-center rounded-full bg-white dark:bg-presentation dark:text-white text-black dark:after:shadow-none ';
@@ -31,7 +35,8 @@ function getTextSizeClass(text: string | undefined | null) {
 
 export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: boolean }) {
   const { conversation } = useChatContext();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname, search } = location;
   const agentsMap = useAgentsMapContext();
   const assistantMap = useAssistantsMapContext();
   const { data: startupConfig } = useGetStartupConfig();
@@ -139,8 +144,31 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
     typeof startupConfig?.interface?.customWelcome === 'string'
       ? getGreeting()
       : getGreeting() + (user?.name ? ', ' + user.name : '');
+  const selectedModel =
+    String(conversation?.model ?? '') ||
+    String((conversation as { spec?: string | null } | null)?.spec ?? '');
+  const selectedIconURL = String(conversation?.iconURL ?? '');
+  const urlParams = useMemo(() => new URLSearchParams(search), [search]);
+  const liveSearchParams =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : urlParams;
+  const selectedAgentIconId = getMarketplaceAgentIconId(
+    liveSearchParams.get('agentModel'),
+    liveSearchParams.get('spec'),
+    urlParams.get('spec'),
+    urlParams.get('agentModel'),
+    String((conversation as { spec?: string | null } | null)?.spec ?? ''),
+    String(conversation?.modelLabel ?? ''),
+    String((conversation as { modelDisplayLabel?: string | null } | null)?.modelDisplayLabel ?? ''),
+    String((conversation as { chatGptLabel?: string | null } | null)?.chatGptLabel ?? ''),
+    selectedModel,
+    selectedIconURL,
+  );
+  const isStreetBotModel =
+    !selectedAgentIconId &&
+    (isStreetBotModelId(selectedModel) ||
+      (!selectedModel && selectedIconURL.includes('street-voices-bot')));
   const showStreetBotHomeLogo = isStreetBot && (pathname === '/' || pathname === '/home');
-  const showStreetBotGreetingIcon = isStreetBot && !showStreetBotHomeLogo;
+  const showStreetBotGreetingIcon = isStreetBot && !showStreetBotHomeLogo && isStreetBotModel;
   const landingMarginClass = showStreetBotHomeLogo ? 'mb-[50px]' : getDynamicMargin;
 
   return (
@@ -189,6 +217,10 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
                     className="hidden h-full w-full object-contain dark:block"
                   />
                 </>
+              ) : selectedAgentIconId ? (
+                <span className="flex h-full w-full items-center justify-center">
+                  <StreetAgentIcon id={selectedAgentIconId} className="h-7 w-7" />
+                </span>
               ) : (
                 <ConvoIcon
                   agentsMap={agentsMap}

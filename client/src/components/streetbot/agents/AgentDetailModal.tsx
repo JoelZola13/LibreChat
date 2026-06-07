@@ -26,7 +26,8 @@ export default function AgentDetailModal({ agent, onClose }: AgentDetailModalPro
   const teamName = TEAM_DISPLAY_NAMES[agent.team] || agent.team;
 
   const handleStartChat = () => {
-    window.location.href = `/?agentModel=${agent.model}`;
+    const model = agent.model || `agent/${agent.name}`;
+    window.location.href = `/c/new?spec=${encodeURIComponent(model)}&agentModel=${encodeURIComponent(model)}`;
   };
 
   return (

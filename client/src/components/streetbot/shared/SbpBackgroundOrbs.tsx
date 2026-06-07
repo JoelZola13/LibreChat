@@ -283,6 +283,12 @@ export function Aurora({ colorStops, amplitude = 1, blend = 0.9 }: AuroraProps) 
   const colorSignature = normalizedStops.join('|');
 
   useEffect(() => {
+    const removeCanvas = (container: HTMLDivElement, canvas: HTMLCanvasElement) => {
+      if (canvas.parentNode === container) {
+        container.removeChild(canvas);
+      }
+    };
+
     const container = containerRef.current;
     if (!container) {
       return;
@@ -303,7 +309,7 @@ export function Aurora({ colorStops, amplitude = 1, blend = 0.9 }: AuroraProps) 
     });
 
     if (!gl) {
-      container.removeChild(canvas);
+      removeCanvas(container, canvas);
       return;
     }
 
@@ -442,7 +448,7 @@ export function Aurora({ colorStops, amplitude = 1, blend = 0.9 }: AuroraProps) 
       if (fragmentShader) {
         gl.deleteShader(fragmentShader);
       }
-      container.removeChild(canvas);
+      removeCanvas(container, canvas);
       return;
     }
 
@@ -450,7 +456,7 @@ export function Aurora({ colorStops, amplitude = 1, blend = 0.9 }: AuroraProps) 
     if (!program) {
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
-      container.removeChild(canvas);
+      removeCanvas(container, canvas);
       return;
     }
 
@@ -462,7 +468,7 @@ export function Aurora({ colorStops, amplitude = 1, blend = 0.9 }: AuroraProps) 
       gl.deleteProgram(program);
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
-      container.removeChild(canvas);
+      removeCanvas(container, canvas);
       return;
     }
 
@@ -471,7 +477,7 @@ export function Aurora({ colorStops, amplitude = 1, blend = 0.9 }: AuroraProps) 
       gl.deleteProgram(program);
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
-      container.removeChild(canvas);
+      removeCanvas(container, canvas);
       return;
     }
 
@@ -559,9 +565,7 @@ export function Aurora({ colorStops, amplitude = 1, blend = 0.9 }: AuroraProps) 
       gl.deleteProgram(program);
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
-      if (canvas.parentNode === container) {
-        container.removeChild(canvas);
-      }
+      removeCanvas(container, canvas);
     };
   }, [amplitude, blend, colorSignature]);
 
@@ -596,80 +600,23 @@ export function Aurora({ colorStops, amplitude = 1, blend = 0.9 }: AuroraProps) 
   );
 }
 
-const orbBaseStyle = {
-  position: 'absolute',
-  borderRadius: '9999px',
-  pointerEvents: 'none',
-  mixBlendMode: 'screen',
-  transform: 'translateZ(0)',
-  backfaceVisibility: 'hidden',
-} satisfies CSSProperties;
-
-const cyanOrbStyle = {
-  ...orbBaseStyle,
-  left: '-16vw',
-  top: '46vh',
-  width: '52vw',
-  height: '52vw',
-  opacity: 0.94,
-  filter: 'blur(118px)',
-  background:
-    'radial-gradient(circle at 50% 50%, rgba(70, 230, 255, 0.34) 0%, rgba(39, 173, 214, 0.24) 24%, rgba(14, 96, 146, 0.12) 48%, rgba(6, 39, 70, 0.04) 66%, transparent 80%)',
-  animation: 'sv-orb-float-cyan 14s ease-in-out infinite alternate',
-} satisfies CSSProperties;
-
-const violetOrbStyle = {
-  ...orbBaseStyle,
-  left: '18vw',
-  top: '-16vh',
-  width: '56vw',
-  height: '56vw',
-  opacity: 0.98,
-  filter: 'blur(126px)',
-  background:
-    'radial-gradient(circle at 50% 50%, rgba(125, 103, 255, 0.34) 0%, rgba(103, 78, 232, 0.24) 28%, rgba(72, 53, 170, 0.12) 50%, rgba(29, 18, 74, 0.04) 70%, transparent 82%)',
-  animation: 'sv-orb-float-violet 17s ease-in-out infinite alternate',
-} satisfies CSSProperties;
-
-const roseOrbStyle = {
-  ...orbBaseStyle,
-  right: '-12vw',
-  top: '26vh',
-  width: '48vw',
-  height: '48vw',
-  opacity: 0.88,
-  filter: 'blur(122px)',
-  background:
-    'radial-gradient(circle at 50% 50%, rgba(244, 104, 188, 0.24) 0%, rgba(214, 66, 154, 0.18) 26%, rgba(124, 35, 88, 0.1) 48%, rgba(58, 14, 40, 0.04) 68%, transparent 80%)',
-  animation: 'sv-orb-float-rose 15s ease-in-out infinite alternate',
-} satisfies CSSProperties;
-
-const goldOrbStyle = {
-  ...orbBaseStyle,
-  left: '46vw',
-  top: '62vh',
-  width: '26vw',
-  height: '26vw',
-  opacity: 0.62,
-  filter: 'blur(96px)',
-  background:
-    'radial-gradient(circle at 50% 50%, rgba(255, 224, 90, 0.26) 0%, rgba(225, 184, 34, 0.14) 28%, rgba(96, 77, 12, 0.06) 54%, transparent 76%)',
-  animation: 'sv-orb-float-gold 13s ease-in-out infinite alternate',
-} satisfies CSSProperties;
-
 function SbpBackgroundOrbs() {
   const { pathname } = useLocation();
   const { theme } = useTheme();
   const isDark =
     theme === 'dark' ||
     (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
-  const isHomePage =
+  const isHomeStyledRoute =
+    pathname === '/c/new' ||
     pathname === '/home' ||
-    (typeof window !== 'undefined' && window.location.pathname === '/home');
+    (typeof window !== 'undefined' &&
+      (window.location.pathname === '/c/new' || window.location.pathname === '/home'));
+
+  const renderUniversalHomeBackground = !isHomeStyledRoute;
 
   return (
     <>
-      {isDark && <style>{backgroundKeyframes}</style>}
+      <style>{backgroundKeyframes}</style>
       <div
         aria-hidden="true"
         style={{
@@ -679,27 +626,86 @@ function SbpBackgroundOrbs() {
           overflow: 'hidden',
           pointerEvents: 'none',
           background:
-            isDark && isHomePage
-              ? 'linear-gradient(180deg, #090a0f 0%, #0d1017 30%, #111520 62%, #131723 100%)'
-              : isDark
-                ? '#171923'
-                : 'var(--sb-color-background)',
+            isDark
+              ? 'linear-gradient(180deg, rgba(3, 4, 6, 1) 0%, rgba(4, 5, 8, 0.996) 24%, rgba(5, 7, 10, 0.986) 48%, rgba(7, 9, 13, 0.968) 100%)'
+              : 'linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(254, 254, 255, 0.998) 28%, rgba(251, 252, 253, 0.989) 56%, rgba(246, 248, 250, 0.978) 100%)',
         }}
       >
-        {isDark && !isHomePage ? (
+        {renderUniversalHomeBackground ? (
           <>
-            <div className="sv-sbp-orb-field">
-              <div className="sv-sbp-orb" style={cyanOrbStyle} />
-              <div className="sv-sbp-orb" style={violetOrbStyle} />
-              <div className="sv-sbp-orb" style={roseOrbStyle} />
-              <div className="sv-sbp-orb" style={goldOrbStyle} />
-            </div>
             <div
               style={{
                 position: 'absolute',
                 inset: 0,
-                background:
-                  'radial-gradient(circle at 50% 48%, rgba(255,255,255,0.014), transparent 62%)',
+                background: isDark
+                  ? 'linear-gradient(180deg, rgba(3, 4, 6, 0.98) 0%, rgba(3, 4, 6, 0.94) 14%, rgba(3, 4, 6, 0.8) 28%, rgba(3, 4, 6, 0.54) 42%, rgba(3, 4, 6, 0.22) 58%, rgba(3, 4, 6, 0.04) 72%, transparent 82%)'
+                  : 'linear-gradient(180deg, rgba(255, 255, 255, 0.992) 0%, rgba(255, 255, 255, 0.965) 14%, rgba(255, 255, 255, 0.82) 28%, rgba(255, 255, 255, 0.54) 42%, rgba(255, 255, 255, 0.22) 58%, rgba(255, 255, 255, 0.04) 72%, transparent 82%)',
+              }}
+            />
+            <div
+              className="sv-home-aurora-field"
+              style={{
+                inset: 'calc(30% - 50px) -12% calc(-24% + 50px) -12%',
+                opacity: isDark ? 0.7 : 0.59,
+                filter: isDark
+                  ? 'saturate(132%) brightness(0.88) contrast(1.03)'
+                  : 'saturate(136%) brightness(1.16) contrast(1.03)',
+                animation: 'sv-home-aurora-field-drift 24s ease-in-out infinite alternate',
+                transformOrigin: '50% 84%',
+                WebkitMaskImage:
+                  'linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.04) 22%, rgba(0, 0, 0, 0.22) 34%, rgba(0, 0, 0, 0.72) 58%, rgba(0, 0, 0, 0.96) 78%, rgba(0, 0, 0, 1) 100%)',
+                maskImage:
+                  'linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.04) 22%, rgba(0, 0, 0, 0.22) 34%, rgba(0, 0, 0, 0.72) 58%, rgba(0, 0, 0, 0.96) 78%, rgba(0, 0, 0, 1) 100%)',
+              }}
+            >
+              <Aurora
+                colorStops={['#ffd400', '#00b4d0', '#fe8a8d', '#7c86c6']}
+                amplitude={1}
+                blend={0.9}
+              />
+            </div>
+            <div
+              style={{
+                position: 'absolute',
+                left: '-10%',
+                bottom: 'calc(-18% + 50px)',
+                width: '46%',
+                height: '52%',
+                borderRadius: '999px',
+                background: isDark
+                  ? 'radial-gradient(circle at 50% 54%, rgba(255, 212, 0, 0.32) 0%, rgba(255, 212, 0, 0.18) 24%, rgba(255, 212, 0, 0.065) 52%, transparent 74%)'
+                  : 'radial-gradient(circle at 50% 54%, rgba(255, 212, 0, 0.26) 0%, rgba(255, 212, 0, 0.14) 24%, rgba(255, 212, 0, 0.05) 52%, transparent 74%)',
+                filter: 'blur(96px)',
+                opacity: isDark ? 0.58 : 0.48,
+                animation: 'sv-home-aurora-field-drift 24s ease-in-out infinite alternate-reverse',
+                transformOrigin: '24% 86%',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                right: '-8%',
+                bottom: 'calc(-20% + 50px)',
+                width: '38%',
+                height: '46%',
+                borderRadius: '999px',
+                background: isDark
+                  ? 'radial-gradient(circle at 48% 52%, rgba(124, 134, 198, 0.18) 0%, rgba(124, 134, 198, 0.085) 26%, rgba(124, 134, 198, 0.03) 54%, transparent 74%)'
+                  : 'radial-gradient(circle at 48% 52%, rgba(124, 134, 198, 0.17) 0%, rgba(124, 134, 198, 0.08) 26%, rgba(124, 134, 198, 0.03) 54%, transparent 74%)',
+                filter: 'blur(104px)',
+                opacity: isDark ? 0.44 : 0.34,
+                animation: 'sv-home-aurora-field-drift 24s ease-in-out infinite alternate',
+                transformOrigin: '74% 84%',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: isDark
+                  ? 'radial-gradient(circle at 50% 108%, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.014) 24%, transparent 58%), linear-gradient(180deg, rgba(0, 0, 0, 0) 54%, rgba(0, 0, 0, 0.08) 100%)'
+                  : 'radial-gradient(circle at 50% 108%, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.42) 24%, rgba(255, 255, 255, 0.12) 58%, transparent 76%), linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0.58) 34%, rgba(255, 255, 255, 0.24) 66%, rgba(255, 255, 255, 0.1) 100%), radial-gradient(circle at 50% 10%, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.5) 34%, rgba(255, 255, 255, 0.12) 68%, transparent 86%)',
+                opacity: isDark ? 0.9 : 1,
               }}
             />
           </>

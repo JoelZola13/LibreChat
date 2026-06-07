@@ -6,7 +6,7 @@ export default function PrivacyPage() {
   const { isMobile, isTablet } = useResponsive();
   const { isDark, colors } = useGlassStyles();
 
-  const accentColor = isDark ? '#FDD30B' : '#b8960a';
+  const accentColor = isDark ? '#FDD30B' : '#6B5A00';
 
   const sectionStyle = {
     border: `1px solid ${colors.border}`,
@@ -89,10 +89,10 @@ export default function PrivacyPage() {
           <h2 style={h2}>1. Automatic Collection of Information</h2>
           <p style={pStyle}>
             When you visit our website, our servers automatically record certain information that
-            your web browser sends. This data may include your device&apos;s IP address, browser type
-            and version, operating system type and version, language preferences, the referring URL,
-            the pages you visit on our site, the date and time of your visit, the amount of time
-            spent on each page, and other statistics.
+            your web browser sends. This data may include your device&apos;s IP address, browser
+            type and version, operating system type and version, language preferences, the referring
+            URL, the pages you visit on our site, the date and time of your visit, the amount of
+            time spent on each page, and other statistics.
           </p>
           <p style={{ ...pStyle, marginBottom: 0 }}>
             We may also use cookies, web beacons, and similar tracking technologies to collect
@@ -133,8 +133,8 @@ export default function PrivacyPage() {
           </p>
           <p style={{ ...pStyle, marginBottom: 0 }}>
             If you have reason to believe that a child under the age of 13 has provided personal
-            information to us, please contact us at {emailLink} and we will take steps to delete that
-            information from our systems immediately.
+            information to us, please contact us at {emailLink} and we will take steps to delete
+            that information from our systems immediately.
           </p>
         </div>
 
@@ -144,11 +144,11 @@ export default function PrivacyPage() {
           <p style={pStyle}>
             We use the information we collect for a variety of purposes, including to operate,
             maintain, and improve our website and services; to respond to your inquiries, comments,
-            and requests; to send administrative communications such as updates, security alerts, and
-            support messages; to send marketing and promotional communications (where permitted by
-            law); to enforce our terms and conditions and other agreements; to protect the rights,
-            property, and safety of Street Voices, our users, and the public; and to comply with
-            applicable legal obligations.
+            and requests; to send administrative communications such as updates, security alerts,
+            and support messages; to send marketing and promotional communications (where permitted
+            by law); to enforce our terms and conditions and other agreements; to protect the
+            rights, property, and safety of Street Voices, our users, and the public; and to comply
+            with applicable legal obligations.
           </p>
           <p style={{ ...pStyle, marginBottom: 0 }}>
             The legal bases for processing your information include: your consent, where you have
@@ -167,10 +167,10 @@ export default function PrivacyPage() {
             about you. The information you can access, update, and delete may change as our services
             evolve. You may manage your personal information through your account settings, or you
             may contact us directly at {emailLink} to request access to, correction of, or deletion
-            of any personal information that you have provided to us. We will respond to your request
-            within a reasonable timeframe. Please note that we may need to retain certain information
-            for record-keeping purposes or to complete any transactions that you began prior to
-            requesting a change or deletion.
+            of any personal information that you have provided to us. We will respond to your
+            request within a reasonable timeframe. Please note that we may need to retain certain
+            information for record-keeping purposes or to complete any transactions that you began
+            prior to requesting a change or deletion.
           </p>
         </div>
 
@@ -187,9 +187,9 @@ export default function PrivacyPage() {
           <p style={{ ...pStyle, marginBottom: 0 }}>
             In the event of a merger, acquisition, reorganization, or sale of assets, your personal
             information may be transferred as part of that transaction. We will notify you of any
-            such change in ownership or control of your personal information. We will not sell, rent,
-            or trade your personal information to unaffiliated third parties for their own marketing
-            purposes without your explicit consent.
+            such change in ownership or control of your personal information. We will not sell,
+            rent, or trade your personal information to unaffiliated third parties for their own
+            marketing purposes without your explicit consent.
           </p>
         </div>
 
@@ -213,11 +213,11 @@ export default function PrivacyPage() {
           <p style={{ ...pStyle, marginBottom: 0 }}>
             We may use third-party analytics tools, such as Google Analytics, to help us measure
             traffic and usage trends for our website. These tools collect information sent by your
-            browser, including the pages you visit and other information that assists us in improving
-            our services. The analytics data is collected through cookies and similar technologies
-            and is used in aggregate form to understand overall user behavior. You can opt out of
-            Google Analytics by installing the Google Analytics opt-out browser add-on, or by
-            adjusting your cookie preferences in your browser settings.
+            browser, including the pages you visit and other information that assists us in
+            improving our services. The analytics data is collected through cookies and similar
+            technologies and is used in aggregate form to understand overall user behavior. You can
+            opt out of Google Analytics by installing the Google Analytics opt-out browser add-on,
+            or by adjusting your cookie preferences in your browser settings.
           </p>
         </div>
 
@@ -228,9 +228,10 @@ export default function PrivacyPage() {
             Some browsers incorporate a Do Not Track (DNT) feature that signals to websites you
             visit that you do not want to have your online activity tracked. We respect Do Not Track
             signals. When we detect a Do Not Track signal from your browser, certain tracking and
-            analytics features will be disabled in accordance with your preferences. Please note that
-            because there is no consistent industry standard for recognizing or honoring DNT signals,
-            some third-party services integrated into our site may not respond to DNT signals.
+            analytics features will be disabled in accordance with your preferences. Please note
+            that because there is no consistent industry standard for recognizing or honoring DNT
+            signals, some third-party services integrated into our site may not respond to DNT
+            signals.
           </p>
         </div>
 
@@ -238,13 +239,13 @@ export default function PrivacyPage() {
         <div style={sectionStyle}>
           <h2 style={h2}>10. Social Media Features</h2>
           <p style={{ ...pStyle, marginBottom: 0 }}>
-            Our website may include social media features such as share buttons, embedded content, or
-            links to social media platforms including Facebook, Twitter, Instagram, and YouTube. These
-            features may collect your IP address and set cookies to enable the feature to function
-            properly. Your interactions with these features are governed by the privacy policies of
-            the respective social media platforms, not by this privacy policy. We encourage you to
-            review the privacy policies of any social media services you use to understand how they
-            collect, use, and share your information.
+            Our website may include social media features such as share buttons, embedded content,
+            or links to social media platforms including Facebook, Twitter, Instagram, and YouTube.
+            These features may collect your IP address and set cookies to enable the feature to
+            function properly. Your interactions with these features are governed by the privacy
+            policies of the respective social media platforms, not by this privacy policy. We
+            encourage you to review the privacy policies of any social media services you use to
+            understand how they collect, use, and share your information.
           </p>
         </div>
 
@@ -256,8 +257,8 @@ export default function PrivacyPage() {
             communications related to Street Voices and our services. You may opt out of receiving
             marketing emails at any time by clicking the unsubscribe link at the bottom of any
             marketing email, or by contacting us at {emailLink}. We will process your opt-out
-            request promptly. Please note that even after opting out of marketing communications, you
-            may still receive transactional or administrative emails from us, such as account
+            request promptly. Please note that even after opting out of marketing communications,
+            you may still receive transactional or administrative emails from us, such as account
             notifications and service updates. We comply with the CAN-SPAM Act and all applicable
             anti-spam legislation.
           </p>
@@ -272,8 +273,8 @@ export default function PrivacyPage() {
             privacy practices of such other sites. We encourage you to be aware when you leave our
             website and to read the privacy statements of every website that collects personal
             information. This privacy policy applies only to information collected through our
-            website and does not govern the practices of third parties that we do not own or control,
-            or individuals that we do not employ or manage.
+            website and does not govern the practices of third parties that we do not own or
+            control, or individuals that we do not employ or manage.
           </p>
         </div>
 
@@ -313,9 +314,9 @@ export default function PrivacyPage() {
             We reserve the right to modify this privacy policy at any time, effective upon posting
             the updated version on our website. When we do, we will revise the &ldquo;last
             updated&rdquo; date at the top of this page. We encourage you to review this privacy
-            policy periodically to stay informed about how we are protecting the personal information
-            we collect. Your continued use of our website and services after any changes or revisions
-            to this privacy policy constitutes your acceptance of those changes.
+            policy periodically to stay informed about how we are protecting the personal
+            information we collect. Your continued use of our website and services after any changes
+            or revisions to this privacy policy constitutes your acceptance of those changes.
           </p>
         </div>
 

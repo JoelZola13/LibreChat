@@ -1,18 +1,30 @@
-import type { ApplicationDocument, Job, JobApplication, ApplicationStatus, EmployerListing, Resume, ResumeVersion, CoverLetter, PrivacySettings, PostedJob, UploadedDocument } from "./types";
+import type {
+  ApplicationDocument,
+  Job,
+  JobApplication,
+  ApplicationStatus,
+  EmployerListing,
+  Resume,
+  ResumeVersion,
+  CoverLetter,
+  PrivacySettings,
+  PostedJob,
+  UploadedDocument,
+} from './types';
 
-const APPS_KEY = "sb_job_applications";
-const RESUME_KEY = "sb_user_resume";
-const EMPLOYER_KEY = "sb_employer_listings";
-const SEEDED_KEY = "sb_jobs_seeded";
-const RESUME_VERSIONS_KEY = "sb_resume_versions";
-const COVER_LETTERS_KEY = "sb_cover_letters";
-const PRIVACY_KEY = "sb_privacy_settings";
-const POSTED_JOBS_KEY = "sb_posted_jobs";
-const UPLOADED_DOCS_KEY = "sb_uploaded_documents";
+const APPS_KEY = 'sb_job_applications';
+const RESUME_KEY = 'sb_user_resume';
+const EMPLOYER_KEY = 'sb_employer_listings';
+const SEEDED_KEY = 'sb_jobs_seeded';
+const RESUME_VERSIONS_KEY = 'sb_resume_versions';
+const COVER_LETTERS_KEY = 'sb_cover_letters';
+const PRIVACY_KEY = 'sb_privacy_settings';
+const POSTED_JOBS_KEY = 'sb_posted_jobs';
+const UPLOADED_DOCS_KEY = 'sb_uploaded_documents';
 
 function read<T>(key: string): T[] {
   try {
-    return JSON.parse(localStorage.getItem(key) || "[]");
+    return JSON.parse(localStorage.getItem(key) || '[]');
   } catch {
     return [];
   }
@@ -33,36 +45,25 @@ function getEmployerEmail(job: Job): string {
 
   if (job.company_website) {
     try {
-      const hostname = new URL(job.company_website).hostname.replace(/^www\./, "");
+      const hostname = new URL(job.company_website).hostname.replace(/^www\./, '');
       return `hiring@${hostname}`;
     } catch {
       // Fall through to organization-based fallback.
     }
   }
 
-  const orgSlug = (job.organization || "streetvoices")
+  const orgSlug = (job.organization || 'streetvoices')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
-  return `${orgSlug || "streetvoices"}@employer.streetvoices.local`;
+  return `${orgSlug || 'streetvoices'}@employer.streetvoices.local`;
 }
 
 export function getApplicationByJob(userId: string, jobId: string): JobApplication | null {
   return (
     read<JobApplication>(APPS_KEY).find(
       (a) => a.userId === userId && a.jobId === jobId && !a.withdrawn,
-    ) || null
-  );
-}
-
-// Returns ANY application for this jobId — including withdrawn ones.
-// Used to render the application's stored jobSnapshot when the underlying
-// job listing has since been deleted from the backend.
-export function getAnyApplicationByJob(userId: string, jobId: string): JobApplication | null {
-  return (
-    read<JobApplication>(APPS_KEY).find(
-      (a) => a.userId === userId && a.jobId === jobId,
     ) || null
   );
 }
@@ -90,7 +91,7 @@ export function addApplication(
         : `app_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     jobId: job.id,
     userId,
-    status: "applied",
+    status: 'applied',
     appliedAt: existingIndex !== -1 ? apps[existingIndex].appliedAt : now,
     updatedAt: now,
     withdrawn: false,
@@ -101,7 +102,7 @@ export function addApplication(
     employerNotification: {
       email: getEmployerEmail(job),
       sentAt: now,
-      status: "sent",
+      status: 'sent',
     },
     jobSnapshot: {
       title: job.title,
@@ -135,9 +136,7 @@ export function withdrawApplication(userId: string, applicationId: string) {
 
 export function withdrawApplicationByJob(userId: string, jobId: string) {
   const apps = read<JobApplication>(APPS_KEY);
-  const idx = apps.findIndex(
-    (a) => a.userId === userId && a.jobId === jobId && !a.withdrawn,
-  );
+  const idx = apps.findIndex((a) => a.userId === userId && a.jobId === jobId && !a.withdrawn);
   if (idx !== -1) {
     apps[idx].withdrawn = true;
     apps[idx].updatedAt = new Date().toISOString();
@@ -161,13 +160,13 @@ export function getResume(userId: string): Resume | null {
     if (resume.userId !== userId) return null;
     return {
       userId,
-      fullName: resume.fullName || "",
-      email: resume.email || "",
-      phone: resume.phone || "",
-      location: resume.location || "",
-      website: resume.website || "",
-      linkedin: resume.linkedin || "",
-      summary: resume.summary || "",
+      fullName: resume.fullName || '',
+      email: resume.email || '',
+      phone: resume.phone || '',
+      location: resume.location || '',
+      website: resume.website || '',
+      linkedin: resume.linkedin || '',
+      summary: resume.summary || '',
       experience: Array.isArray(resume.experience) ? resume.experience : [],
       education: Array.isArray(resume.education) ? resume.education : [],
       skills: Array.isArray(resume.skills) ? resume.skills : [],
@@ -188,13 +187,13 @@ export function saveResume(resume: Resume): void {
 export function createEmptyResume(userId: string): Resume {
   return {
     userId,
-    fullName: "",
-    email: "",
-    phone: "",
-    location: "",
-    website: "",
-    linkedin: "",
-    summary: "",
+    fullName: '',
+    email: '',
+    phone: '',
+    location: '',
+    website: '',
+    linkedin: '',
+    summary: '',
     experience: [],
     education: [],
     skills: [],
@@ -246,14 +245,25 @@ export function addEmployerListing(userId: string, jobData: PostedJob): Employer
       compensation: jobData.compensation,
       description: jobData.description,
     },
-    stats: { viewCount: 0, applicationCount: 0, screeningCount: 0, interviewCount: 0, offerCount: 0, hiredCount: 0 },
+    stats: {
+      viewCount: 0,
+      applicationCount: 0,
+      screeningCount: 0,
+      interviewCount: 0,
+      offerCount: 0,
+      hiredCount: 0,
+    },
   };
   listings.push(listing);
   write(EMPLOYER_KEY, listings);
   return listing;
 }
 
-export function updateEmployerListing(userId: string, jobId: string, updates: Partial<EmployerListing>): void {
+export function updateEmployerListing(
+  userId: string,
+  jobId: string,
+  updates: Partial<EmployerListing>,
+): void {
   const listings = read<EmployerListing>(EMPLOYER_KEY);
   const idx = listings.findIndex((l) => l.jobId === jobId && l.userId === userId);
   if (idx !== -1) {
@@ -264,7 +274,10 @@ export function updateEmployerListing(userId: string, jobId: string, updates: Pa
 
 export function deleteEmployerListing(userId: string, jobId: string): void {
   const listings = read<EmployerListing>(EMPLOYER_KEY);
-  write(EMPLOYER_KEY, listings.filter((l) => !(l.jobId === jobId && l.userId === userId)));
+  write(
+    EMPLOYER_KEY,
+    listings.filter((l) => !(l.jobId === jobId && l.userId === userId)),
+  );
 }
 
 // ── Application Pipeline ──
@@ -285,6 +298,198 @@ export function getApplicationsForJob(jobId: string): JobApplication[] {
 
 export function getAllApplications(): JobApplication[] {
   return read<JobApplication>(APPS_KEY);
+}
+
+const EMPLOYER_DASHBOARD_APPLICANTS = [
+  'Aaliyah Morgan',
+  'Marcus Lee',
+  'Sofia Alvarez',
+  'Daniel Kim',
+  'Jasmine Patel',
+  'Nia Campbell',
+  'Owen Fraser',
+  'Priya Shah',
+  'Malik Thompson',
+  'Elena Rossi',
+  'Noah Williams',
+  'Amara Okafor',
+  'Leo Chen',
+  'Maya Robinson',
+  'Isaac Brown',
+  'Lina Ahmed',
+  'Andre Wilson',
+  'Tessa Nguyen',
+  'Camila Torres',
+  'Julian Scott',
+  'Fatima Hassan',
+  'Evan Miller',
+  'Renee Clarke',
+  'Samira Khan',
+  'Mateo Garcia',
+  'Bianca Lewis',
+  'Tyler Brooks',
+  'Grace Moore',
+  'Hannah Wright',
+  'Dante Harris',
+  'Chloe Bennett',
+  'Ravi Patel',
+  'Avery Young',
+  'Mina Park',
+  'Kai Anderson',
+  'Selena King',
+  'Jordan Ellis',
+];
+
+export function ensureEmployerDashboardApplications(userId: string): void {
+  const listings = read<EmployerListing>(EMPLOYER_KEY).filter(
+    (listing) => listing.userId === userId,
+  );
+  const dashboardListings = listings.filter((listing) => listing.jobId.startsWith('emp_seed_'));
+  if (!dashboardListings.length) return;
+
+  const apps = read<JobApplication>(APPS_KEY);
+  const existingDashboardApps = apps.filter((app) =>
+    dashboardListings.some((listing) => listing.jobId === app.jobId),
+  );
+  if (existingDashboardApps.length > 0) return;
+
+  const now = new Date();
+  const daysAgo = (days: number) => new Date(now.getTime() - days * 86400000).toISOString();
+  const recentDays = [7, 6, 6, 5, 4, 4, 4, 3, 3, 2, 1, 1];
+  const olderDays = Array.from({ length: 25 }, (_, index) => 8 + (index % 18));
+  const appliedDays = [...olderDays, ...recentDays];
+  const jobDistribution = [
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_1',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_2',
+    'emp_seed_3',
+    'emp_seed_3',
+    'emp_seed_3',
+    'emp_seed_3',
+    'emp_seed_3',
+    'emp_seed_3',
+    'emp_seed_3',
+  ];
+  const statuses: ApplicationStatus[] = [
+    'hired',
+    'hired',
+    'hired',
+    'hired',
+    'hired',
+    'offered',
+    'interview',
+    'interview',
+    'interview',
+    'interview',
+    'interview',
+    'interview',
+    'screening',
+    'screening',
+    'screening',
+    'screening',
+    'under_review',
+    'under_review',
+    'under_review',
+    'under_review',
+    'under_review',
+    'under_review',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+    'applied',
+  ];
+
+  const seededApps = EMPLOYER_DASHBOARD_APPLICANTS.map((name, index): JobApplication => {
+    const jobId = jobDistribution[index];
+    const listing = dashboardListings.find((item) => item.jobId === jobId) || dashboardListings[0];
+    const appliedAt = daysAgo(appliedDays[index]);
+    const hiredOffset = [4, 5, 4, 4, 4][index] || 0;
+    const updatedAt =
+      statuses[index] === 'hired'
+        ? new Date(new Date(appliedAt).getTime() + hiredOffset * 86400000).toISOString()
+        : appliedAt;
+
+    return {
+      id: `employer_app_${index + 1}`,
+      jobId,
+      userId: `${userId}_applicant_${index + 1}`,
+      status: statuses[index],
+      appliedAt,
+      updatedAt,
+      withdrawn: false,
+      applicantName: name,
+      applicantEmail: `${name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '.')
+        .replace(/^\.+|\.+$/g, '')}@example.streetvoices.local`,
+      documents: [],
+      jobSnapshot: {
+        title: listing.jobSnapshot.title,
+        organization: listing.jobSnapshot.organization,
+        logo_url: listing.jobSnapshot.logo_url,
+        opportunity_type: listing.jobSnapshot.opportunity_type,
+        location: listing.jobSnapshot.location,
+        compensation: listing.jobSnapshot.compensation,
+      },
+    };
+  });
+
+  write(APPS_KEY, [...apps, ...seededApps]);
+
+  const nextListings = read<EmployerListing>(EMPLOYER_KEY).map((listing) => {
+    if (listing.userId !== userId || !listing.jobId.startsWith('emp_seed_')) return listing;
+    const listingApps = seededApps.filter((app) => app.jobId === listing.jobId);
+    return {
+      ...listing,
+      stats: {
+        ...listing.stats,
+        applicationCount: listingApps.length,
+        screeningCount: listingApps.filter((app) => app.status === 'screening').length,
+        interviewCount: listingApps.filter((app) => app.status === 'interview').length,
+        offerCount: listingApps.filter((app) => app.status === 'offered').length,
+        hiredCount: listingApps.filter((app) => app.status === 'hired').length,
+      },
+    };
+  });
+  write(EMPLOYER_KEY, nextListings);
 }
 
 // ── Job Expiration ──
@@ -317,7 +522,7 @@ export function getResumeVersions(userId: string): ResumeVersion[] {
       const migrated: ResumeVersion = {
         id: `rv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         userId,
-        label: "My Resume",
+        label: 'My Resume',
         isDefault: true,
         createdAt: now,
         updatedAt: now,
@@ -416,7 +621,10 @@ export function saveCoverLetter(letter: CoverLetter): void {
 
 export function deleteCoverLetter(userId: string, letterId: string): void {
   const all = read<CoverLetter>(COVER_LETTERS_KEY);
-  write(COVER_LETTERS_KEY, all.filter((c) => !(c.id === letterId && c.userId === userId)));
+  write(
+    COVER_LETTERS_KEY,
+    all.filter((c) => !(c.id === letterId && c.userId === userId)),
+  );
 }
 
 // ── Privacy Settings ──
@@ -428,11 +636,13 @@ export function getPrivacySettings(userId: string): PrivacySettings {
       const settings = JSON.parse(raw) as PrivacySettings;
       if (settings.userId === userId) return settings;
     }
-  } catch { /* use defaults */ }
+  } catch {
+    /* use defaults */
+  }
   return {
     userId,
-    profileVisibility: "public",
-    resumeVisibility: "employers_only",
+    profileVisibility: 'public',
+    resumeVisibility: 'employers_only',
     showEmail: true,
     showPhone: false,
     showLocation: true,
@@ -463,12 +673,18 @@ export function savePostedJob(job: PostedJob): void {
 
 export function deletePostedJob(jobId: string): void {
   const all = read<PostedJob>(POSTED_JOBS_KEY);
-  write(POSTED_JOBS_KEY, all.filter((j) => j.id !== jobId));
+  write(
+    POSTED_JOBS_KEY,
+    all.filter((j) => j.id !== jobId),
+  );
 }
 
 // ── Uploaded Documents ──
 
-export function getUploadedDocuments(userId: string, kind?: "resume" | "cover_letter"): UploadedDocument[] {
+export function getUploadedDocuments(
+  userId: string,
+  kind?: 'resume' | 'cover_letter',
+): UploadedDocument[] {
   const all = read<UploadedDocument>(UPLOADED_DOCS_KEY).filter((d) => d.userId === userId);
   return kind ? all.filter((d) => d.kind === kind) : all;
 }
@@ -487,10 +703,17 @@ export function saveUploadedDocument(doc: UploadedDocument): void {
 
 export function deleteUploadedDocument(userId: string, docId: string): void {
   const all = read<UploadedDocument>(UPLOADED_DOCS_KEY);
-  write(UPLOADED_DOCS_KEY, all.filter((d) => !(d.id === docId && d.userId === userId)));
+  write(
+    UPLOADED_DOCS_KEY,
+    all.filter((d) => !(d.id === docId && d.userId === userId)),
+  );
 }
 
-export function setDefaultUploadedDocument(userId: string, docId: string, kind: "resume" | "cover_letter"): void {
+export function setDefaultUploadedDocument(
+  userId: string,
+  docId: string,
+  kind: 'resume' | 'cover_letter',
+): void {
   const all = read<UploadedDocument>(UPLOADED_DOCS_KEY);
   for (const d of all) {
     if (d.userId === userId && d.kind === kind) {
@@ -504,8 +727,8 @@ export function getStorageUsage(): { used: number; limit: number; percentage: nu
   let total = 0;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key?.startsWith("sb_")) {
-      total += (localStorage.getItem(key) || "").length * 2; // UTF-16 = 2 bytes per char
+    if (key?.startsWith('sb_')) {
+      total += (localStorage.getItem(key) || '').length * 2; // UTF-16 = 2 bytes per char
     }
   }
   const limit = 5 * 1024 * 1024; // 5MB conservative estimate
@@ -516,7 +739,7 @@ export function getStorageUsage(): { used: number; limit: number; percentage: nu
 
 export function clearSeedApplications(): void {
   const apps = read<JobApplication>(APPS_KEY);
-  const real = apps.filter((a) => !a.id?.startsWith("app_seed_"));
+  const real = apps.filter((a) => !a.id?.startsWith('app_seed_'));
   if (real.length !== apps.length) {
     write(APPS_KEY, real);
   }
@@ -524,145 +747,146 @@ export function clearSeedApplications(): void {
 
 export function seedIfNeeded(userId: string) {
   if (localStorage.getItem(SEEDED_KEY)) return;
-  localStorage.setItem(SEEDED_KEY, "1");
+  localStorage.setItem(SEEDED_KEY, '1');
 
   const now = new Date();
   const daysAgo = (d: number) => new Date(now.getTime() - d * 86400000).toISOString();
 
   const sampleApps: JobApplication[] = [
     {
-      id: "app_seed_1",
-      jobId: "sample-1",
+      id: 'app_seed_1',
+      jobId: 'sample-1',
       userId,
-      status: "interview",
+      status: 'interview',
       appliedAt: daysAgo(12),
       updatedAt: daysAgo(3),
       withdrawn: false,
       jobSnapshot: {
-        title: "Junior Web Developer",
-        organization: "TechStart Toronto",
-        logo_url: "/job-logos/techstart.svg",
-        opportunity_type: "Full-time",
-        location: "Toronto, ON",
-        compensation: "$55,000-65,000/year",
+        title: 'Junior Web Developer',
+        organization: 'TechStart Toronto',
+        logo_url: '/job-logos/techstart.svg',
+        opportunity_type: 'Full-time',
+        location: 'Toronto, ON',
+        compensation: '$55,000-65,000/year',
       },
     },
     {
-      id: "app_seed_2",
-      jobId: "sample-2",
+      id: 'app_seed_2',
+      jobId: 'sample-2',
       userId,
-      status: "under_review",
+      status: 'under_review',
       appliedAt: daysAgo(5),
       updatedAt: daysAgo(5),
       withdrawn: false,
       jobSnapshot: {
-        title: "Social Media Coordinator",
-        organization: "Maple Leaf Marketing",
-        logo_url: "/job-logos/mapleleaf.svg",
-        opportunity_type: "Full-time",
-        location: "Vancouver, BC",
-        compensation: "$45,000-52,000/year",
+        title: 'Social Media Coordinator',
+        organization: 'Maple Leaf Marketing',
+        logo_url: '/job-logos/mapleleaf.svg',
+        opportunity_type: 'Full-time',
+        location: 'Vancouver, BC',
+        compensation: '$45,000-52,000/year',
       },
     },
     {
-      id: "app_seed_3",
-      jobId: "sample-4",
+      id: 'app_seed_3',
+      jobId: 'sample-4',
       userId,
-      status: "offered",
+      status: 'offered',
       appliedAt: daysAgo(21),
       updatedAt: daysAgo(1),
       withdrawn: false,
       jobSnapshot: {
-        title: "Graphic Designer",
-        organization: "Creative Collective Studio",
-        logo_url: "/job-logos/creative-collective.svg",
-        opportunity_type: "Contract",
-        location: "Montreal, QC",
-        compensation: "$35-50/hour",
+        title: 'Graphic Designer',
+        organization: 'Creative Collective Studio',
+        logo_url: '/job-logos/creative-collective.svg',
+        opportunity_type: 'Contract',
+        location: 'Montreal, QC',
+        compensation: '$35-50/hour',
       },
     },
     {
-      id: "app_seed_4",
-      jobId: "sample-5",
+      id: 'app_seed_4',
+      jobId: 'sample-5',
       userId,
-      status: "rejected",
+      status: 'rejected',
       appliedAt: daysAgo(30),
       updatedAt: daysAgo(14),
       withdrawn: false,
       jobSnapshot: {
-        title: "Delivery Driver",
-        organization: "QuickShip Logistics",
-        logo_url: "/job-logos/quickship.svg",
-        opportunity_type: "Full-time",
-        location: "Ottawa, ON",
-        compensation: "$18-22/hour + mileage",
+        title: 'Delivery Driver',
+        organization: 'QuickShip Logistics',
+        logo_url: '/job-logos/quickship.svg',
+        opportunity_type: 'Full-time',
+        location: 'Ottawa, ON',
+        compensation: '$18-22/hour + mileage',
       },
     },
     {
-      id: "app_seed_5",
-      jobId: "sample-3",
+      id: 'app_seed_5',
+      jobId: 'sample-3',
       userId,
-      status: "applied",
+      status: 'applied',
       appliedAt: daysAgo(1),
       updatedAt: daysAgo(1),
       withdrawn: false,
       jobSnapshot: {
-        title: "Barista",
-        organization: "Grounded Coffee Co.",
-        logo_url: "/job-logos/grounded.svg",
-        opportunity_type: "Part-time",
-        location: "Calgary, AB",
-        compensation: "$16.50/hour + tips",
+        title: 'Barista',
+        organization: 'Grounded Coffee Co.',
+        logo_url: '/job-logos/grounded.svg',
+        opportunity_type: 'Part-time',
+        location: 'Calgary, AB',
+        compensation: '$16.50/hour + tips',
       },
     },
   ];
 
   const sampleListings: EmployerListing[] = [
     {
-      jobId: "emp_seed_1",
+      jobId: 'emp_seed_1',
       userId,
       createdAt: daysAgo(45),
       isActive: true,
       jobSnapshot: {
-        title: "Community Outreach Coordinator",
-        organization: "Street Voices Community Services",
-        logo_url: "/job-logos/street-voices.svg",
-        opportunity_type: "Full-time",
-        location: "Toronto, ON",
-        compensation: "$48,000-55,000/year",
-        description: "Lead community engagement initiatives and build partnerships with local organizations.",
+        title: 'Community Outreach Coordinator',
+        organization: 'Street Voices Community Services',
+        logo_url: '/job-logos/street-voices.svg',
+        opportunity_type: 'Full-time',
+        location: 'Toronto, ON',
+        compensation: '$48,000-55,000/year',
+        description:
+          'Lead community engagement initiatives and build partnerships with local organizations.',
       },
       stats: { viewCount: 234, applicationCount: 18 },
     },
     {
-      jobId: "emp_seed_2",
+      jobId: 'emp_seed_2',
       userId,
       createdAt: daysAgo(20),
       isActive: true,
       jobSnapshot: {
-        title: "Youth Program Assistant",
-        organization: "Street Voices Community Services",
-        logo_url: "/job-logos/street-voices.svg",
-        opportunity_type: "Part-time",
-        location: "Toronto, ON",
-        compensation: "$20-24/hour",
-        description: "Support youth programming and after-school activities in community spaces.",
+        title: 'Youth Program Assistant',
+        organization: 'Street Voices Community Services',
+        logo_url: '/job-logos/street-voices.svg',
+        opportunity_type: 'Part-time',
+        location: 'Toronto, ON',
+        compensation: '$20-24/hour',
+        description: 'Support youth programming and after-school activities in community spaces.',
       },
       stats: { viewCount: 156, applicationCount: 12 },
     },
     {
-      jobId: "emp_seed_3",
+      jobId: 'emp_seed_3',
       userId,
       createdAt: daysAgo(60),
       isActive: false,
       jobSnapshot: {
-        title: "Grant Writer",
-        organization: "Street Voices Community Services",
-        logo_url: "/job-logos/street-voices.svg",
-        opportunity_type: "Contract",
-        location: "Remote",
-        compensation: "$40-55/hour",
-        description: "Research and write grant proposals for community development projects.",
+        title: 'Grant Writer',
+        organization: 'Street Voices Community Services',
+        logo_url: '/job-logos/street-voices.svg',
+        opportunity_type: 'Contract',
+        location: 'Remote',
+        compensation: '$40-55/hour',
+        description: 'Research and write grant proposals for community development projects.',
       },
       stats: { viewCount: 89, applicationCount: 7 },
     },

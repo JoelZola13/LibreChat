@@ -218,11 +218,12 @@ function readSectionSelection(userId: string, section: AcademyProfileSectionId):
       }
 
       if (parsed && typeof parsed === "object") {
-        const selectedIds = Array.isArray((parsed as StoredSectionSelection).selectedIds)
-          ? (parsed as StoredSectionSelection).selectedIds.filter((item): item is string => typeof item === "string")
+        const storedSelection = parsed as StoredSectionSelection;
+        const selectedIds = Array.isArray(storedSelection.selectedIds)
+          ? storedSelection.selectedIds.filter((item): item is string => typeof item === "string")
           : [];
-        const knownItemIds = Array.isArray((parsed as StoredSectionSelection).knownItemIds)
-          ? (parsed as StoredSectionSelection).knownItemIds.filter((item): item is string => typeof item === "string")
+        const knownItemIds = Array.isArray(storedSelection.knownItemIds)
+          ? storedSelection.knownItemIds.filter((item): item is string => typeof item === "string")
           : null;
 
         return {
@@ -643,7 +644,7 @@ export default function StreetProfileAcademySectionPage() {
     [sharedColors, isDark],
   );
 
-  const isSettingsRoute = location.pathname.startsWith("/settings");
+  const isSettingsRoute = location.pathname.startsWith("/myprofile");
   const settingsProfile = useMemo(() => buildCurrentUserProfile(user), [user]);
   const [profile, setProfile] = useState<StreetProfile | null>(isSettingsRoute ? settingsProfile : null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -760,10 +761,10 @@ export default function StreetProfileAcademySectionPage() {
   const canEditProfile = Boolean(user?.id && profile?.user_id === user.id);
   const normalizedSection = String(section || "").trim().toLowerCase() as AcademyProfileSectionId;
   const backHref = isSettingsRoute
-    ? "/settings?tab=academy"
+    ? "/myprofile?tab=academy"
     : profile
-      ? `/creatives/${profile.username}?tab=academy`
-      : "/profile?tab=academy";
+      ? `/profiles/${profile.username}?tab=academy`
+      : "/profiles?tab=academy";
 
   const currentPath = useMemo(() => {
     const inFlight = enrolledPathSummaries

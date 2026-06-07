@@ -43,8 +43,6 @@ export type Job = {
   is_transit_accessible?: boolean;
   employer_verified?: boolean;
   employer_verification_type?: string;
-  created_at?: string;
-  updated_at?: string;
 };
 
 export type ApplicationStatus = "applied" | "screening" | "under_review" | "interview" | "offered" | "hired" | "rejected";

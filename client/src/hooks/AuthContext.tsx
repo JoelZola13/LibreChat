@@ -147,13 +147,44 @@ const AuthContextProvider = ({
         p === '/privacy' ||
         p === '/products' ||
         p === '/pricing' ||
+        p === '/agents' ||
+        p.startsWith('/agents/') ||
+        p === '/profile' ||
+        p.startsWith('/profile/') ||
+        p === '/profiles' ||
+        p.startsWith('/profiles/') ||
+        p === '/creatives' ||
+        p.startsWith('/creatives/') ||
+        p === '/groups' ||
+        p.startsWith('/groups/') ||
+        p === '/word-on-the-street' ||
+        p.startsWith('/word-on-the-street/') ||
+        p === '/forum' ||
+        p.startsWith('/forum/') ||
         p.startsWith('/news') ||
+        p.startsWith('/notifications') ||
+        p.startsWith('/messages') ||
         p.startsWith('/directory') ||
         p.startsWith('/gallery') ||
-        p.startsWith('/creatives')
+        p.startsWith('/jobs') ||
+        p.startsWith('/academy') ||
+        p.startsWith('/learning')
       );
     }
-    return p.startsWith('/gallery') || p.startsWith('/creatives');
+    return (
+      p.startsWith('/gallery') ||
+      p.startsWith('/profiles') ||
+      p.startsWith('/profile') ||
+      p.startsWith('/creatives') ||
+      p.startsWith('/groups') ||
+      p.startsWith('/word-on-the-street') ||
+      p.startsWith('/forum') ||
+      p.startsWith('/agents') ||
+      p.startsWith('/messages') ||
+      p.startsWith('/jobs') ||
+      p.startsWith('/academy') ||
+      p.startsWith('/learning')
+    );
   };
 
   const silentRefresh = useCallback(() => {
