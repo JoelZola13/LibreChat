@@ -7,6 +7,8 @@ import { CustomMenuItem as MenuItem } from '../CustomMenu';
 import { useFavorites, useLocalize } from '~/hooks';
 import type { Endpoint } from '~/common';
 import { cn } from '~/utils';
+import StreetAgentIcon, { getMarketplaceAgentIconId } from '~/components/Agents/StreetAgentIcon';
+import { getAgentDisplayNameByModelId } from '~/components/Agents/streetCatalog';
 
 interface EndpointModelItemProps {
   modelId: string | null;
@@ -42,11 +44,11 @@ export function EndpointModelItem({ modelId, endpoint, isSelected }: EndpointMod
   let isGlobal = false;
   let modelName = modelId;
   const avatarUrl = endpoint?.modelIcons?.[modelId ?? ''] || null;
+  const marketplaceIconId = getMarketplaceAgentIconId(modelId, modelName, avatarUrl);
 
   // Use custom names if available
-  if (endpoint && modelId && isAgentsEndpoint(endpoint.value) && endpoint.agentNames?.[modelId]) {
-    modelName = endpoint.agentNames[modelId];
-
+  if (endpoint && modelId && isAgentsEndpoint(endpoint.value)) {
+    modelName = getAgentDisplayNameByModelId(modelId) ?? endpoint.agentNames?.[modelId] ?? modelId;
     const modelInfo = endpoint?.models?.find((m) => m.name === modelId);
     isGlobal = modelInfo?.isGlobal ?? false;
   } else if (
@@ -81,6 +83,14 @@ export function EndpointModelItem({ modelId, endpoint, isSelected }: EndpointMod
   };
 
   const renderAvatar = () => {
+    if (marketplaceIconId) {
+      return (
+        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
+          <StreetAgentIcon id={marketplaceIconId} className="h-5 w-5" />
+        </div>
+      );
+    }
+
     const isAgentOrAssistant =
       isAgentsEndpoint(endpoint.value) || isAssistantsEndpoint(endpoint.value);
     const showEndpointIcon = isAgentOrAssistant && endpoint.icon;

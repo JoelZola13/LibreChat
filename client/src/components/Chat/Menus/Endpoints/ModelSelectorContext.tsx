@@ -16,6 +16,7 @@ import { useGetEndpointsQuery, useListAgentsQuery } from '~/data-provider';
 import { useModelSelectorChatContext } from './ModelSelectorChatContext';
 import useSelectMention from '~/hooks/Input/useSelectMention';
 import { filterItems } from './utils';
+import { getAgentDisplayNameByModelId } from '~/components/Agents/streetCatalog';
 
 type ModelSelectorContextType = {
   // State
@@ -101,7 +102,12 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
   const getModelDisplayName = useCallback(
     (endpoint: Endpoint, model: string): string => {
       if (isAgentsEndpoint(endpoint.value)) {
-        return endpoint.agentNames?.[model] ?? agentsMap?.[model]?.name ?? model;
+        return (
+          getAgentDisplayNameByModelId(model) ??
+          endpoint.agentNames?.[model] ??
+          agentsMap?.[model]?.name ??
+          model
+        );
       }
 
       if (isAssistantsEndpoint(endpoint.value)) {

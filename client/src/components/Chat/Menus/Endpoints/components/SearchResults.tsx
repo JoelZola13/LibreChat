@@ -8,6 +8,8 @@ import { useModelSelectorContext } from '../ModelSelectorContext';
 import { CustomMenuItem as MenuItem } from '../CustomMenu';
 import SpecIcon from './SpecIcon';
 import { cn } from '~/utils';
+import StreetAgentIcon, { getMarketplaceAgentIconId } from '~/components/Agents/StreetAgentIcon';
+import { getAgentDisplayNameByModelId } from '~/components/Agents/streetCatalog';
 
 interface SearchResultsProps {
   results: (TModelSpec | Endpoint)[] | null;
@@ -108,12 +110,11 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
               ? endpoint.models
               : endpoint.models.filter((model) => {
                   let modelName = model.name;
-                  if (
-                    isAgentsEndpoint(endpoint.value) &&
-                    endpoint.agentNames &&
-                    endpoint.agentNames[model.name]
-                  ) {
-                    modelName = endpoint.agentNames[model.name];
+                  if (isAgentsEndpoint(endpoint.value)) {
+                    modelName =
+                      getAgentDisplayNameByModelId(model.name) ??
+                      endpoint.agentNames?.[model.name] ??
+                      model.name;
                   } else if (
                     isAssistantsEndpoint(endpoint.value) &&
                     endpoint.assistantNames &&
@@ -143,12 +144,11 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
 
                   let isGlobal = false;
                   let modelName = modelId;
-                  if (
-                    isAgentsEndpoint(endpoint.value) &&
-                    endpoint.agentNames &&
-                    endpoint.agentNames[modelId]
-                  ) {
-                    modelName = endpoint.agentNames[modelId];
+                  if (isAgentsEndpoint(endpoint.value)) {
+                    modelName =
+                      getAgentDisplayNameByModelId(modelId) ??
+                      endpoint.agentNames?.[modelId] ??
+                      modelId;
                     const modelInfo = endpoint?.models?.find((m) => m.name === modelId);
                     isGlobal = modelInfo?.isGlobal ?? false;
                   } else if (
@@ -161,6 +161,11 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
 
                   const isModelSelected =
                     selectedEndpoint === endpoint.value && selectedModel === modelId;
+                  const marketplaceIconId = getMarketplaceAgentIconId(
+                    modelId,
+                    modelName,
+                    endpoint.modelIcons?.[modelId],
+                  );
                   return (
                     <MenuItem
                       key={`${endpoint.value}-${modelId}-search-${i}`}
@@ -169,7 +174,11 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
                       className="flex w-full cursor-pointer items-center justify-start rounded-lg px-3 py-2 pl-6 text-sm"
                     >
                       <div className="flex items-center gap-2">
-                        {endpoint.modelIcons?.[modelId] && (
+                        {marketplaceIconId ? (
+                          <div className="flex h-5 w-5 items-center justify-center">
+                            <StreetAgentIcon id={marketplaceIconId} className="h-5 w-5" />
+                          </div>
+                        ) : endpoint.modelIcons?.[modelId] ? (
                           <div className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full">
                             <img
                               src={endpoint.modelIcons[modelId]}
@@ -177,7 +186,7 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
                               className="h-full w-full object-cover"
                             />
                           </div>
-                        )}
+                        ) : null}
                         <span>{modelName}</span>
                       </div>
                       {isGlobal && (

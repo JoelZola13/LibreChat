@@ -20,6 +20,7 @@ import { useChatContext } from '~/Providers/ChatContext';
 import { globalAudioId } from '~/common';
 import { useLocalize } from '~/hooks';
 import { isStreetBot } from '~/config/appVariant';
+import { getAgentDisplayNameByModelId } from '~/components/Agents/streetCatalog';
 import store from '~/store';
 
 type KeyEvent = KeyboardEvent<HTMLTextAreaElement>;
@@ -28,6 +29,11 @@ function formatStreetBotRecipient(model?: string | null) {
   const normalizedModel = model?.replace(/^spec-agent\//, 'agent/');
   if (!normalizedModel?.startsWith('agent/')) {
     return 'Street Bot';
+  }
+
+  const catalogName = getAgentDisplayNameByModelId(normalizedModel);
+  if (catalogName) {
+    return catalogName;
   }
 
   const slug = normalizedModel.replace(/^agent\//, '');

@@ -72,7 +72,7 @@ export const AGENT_MODEL_IDS: Record<string, string> = {
   academy: 'agent/academy_agent',
   health: 'agent/health_agent',
   legal: 'agent/legal_agent',
-  'art-curator': 'agent/art_curator_agent',
+  'art-curator': 'agent/gallery_agent',
   storage: 'agent/storage_agent',
   documents: 'agent/documents_agent',
   calendar: 'agent/calendar_agent',
@@ -345,7 +345,8 @@ export const STREET_AGENTS: StreetAgent[] = [
     category: 'productivity',
     author: AUTHOR,
     parent: 'project-manager',
-    description: 'Drafts, formats, and manages documents and records with a consistent house style.',
+    description:
+      'Drafts, formats, and manages documents and records with a consistent house style.',
     tags: ['Documents', 'Drafting', 'Records'],
   },
   {
@@ -654,6 +655,32 @@ export const getAgentById = (id?: string): StreetAgent | undefined =>
   id ? STREET_AGENTS.find((a) => a.id === id) : undefined;
 
 export const getAgentModelId = (agent: StreetAgent): string => AGENT_MODEL_IDS[agent.id];
+
+const normalizeAgentModelId = (modelId?: string | null) => {
+  if (!modelId) {
+    return '';
+  }
+  const withoutQuery = modelId.trim().split('?')[0];
+  try {
+    return decodeURIComponent(withoutQuery)
+      .trim()
+      .replace(/^spec-agent\//, 'agent/');
+  } catch {
+    return withoutQuery.trim().replace(/^spec-agent\//, 'agent/');
+  }
+};
+
+export const getAgentByModelId = (modelId?: string | null): StreetAgent | undefined => {
+  const normalizedModelId = normalizeAgentModelId(modelId);
+  const agentId = Object.entries(AGENT_MODEL_IDS).find(
+    ([, agentModelId]) => agentModelId === normalizedModelId,
+  )?.[0];
+
+  return getAgentById(agentId);
+};
+
+export const getAgentDisplayNameByModelId = (modelId?: string | null): string | undefined =>
+  getAgentByModelId(modelId)?.name;
 
 export const getMembers = (agent: StreetAgent): StreetAgent[] =>
   (agent.members ?? []).map(getAgentById).filter((a): a is StreetAgent => Boolean(a));

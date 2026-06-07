@@ -6,6 +6,7 @@ import MermaidErrorBoundary from '~/components/Messages/Content/MermaidErrorBoun
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
 import Mermaid from '~/components/Messages/Content/Mermaid';
 import StreetBotServiceResults from '~/components/Chat/Messages/Content/StreetBotServiceResults';
+import StreetBotAgentResults from '~/components/Chat/Messages/Content/StreetBotAgentResults';
 import StreetProfileResults from '~/components/Chat/Messages/Content/StreetProfileResults';
 import useHasAccess from '~/hooks/Roles/useHasAccess';
 import { useFileDownload } from '~/data-provider';
@@ -56,6 +57,13 @@ const isStreetProfileResultBlock = (className: string | undefined): boolean => {
   return getLanguageName(className) === 'street-profile-results';
 };
 
+const isStreetBotAgentResultBlock = (className: string | undefined): boolean => {
+  if (!isStreetBot) {
+    return false;
+  }
+  return getLanguageName(className) === 'streetbot-agent-results';
+};
+
 export const code: React.ElementType = memo(({ className, children }: TCodeProps) => {
   const canRunCode = useHasAccess({
     permissionType: PermissionTypes.RUN_CODE,
@@ -85,6 +93,8 @@ export const code: React.ElementType = memo(({ className, children }: TCodeProps
     );
   } else if (!isSingleLine && isStreetProfileResultBlock(className)) {
     return <StreetProfileResults raw={content} />;
+  } else if (!isSingleLine && isStreetBotAgentResultBlock(className)) {
+    return <StreetBotAgentResults raw={content} />;
   } else if (!isSingleLine && isStreetBotServiceResultBlock(className, content)) {
     return <StreetBotServiceResults raw={content} />;
   } else if (isSingleLine) {
@@ -116,6 +126,8 @@ export const codeNoExecution: React.ElementType = memo(({ className, children }:
     return <Mermaid>{content}</Mermaid>;
   } else if (content.split('\n').length > 1 && isStreetProfileResultBlock(className)) {
     return <StreetProfileResults raw={content} />;
+  } else if (content.split('\n').length > 1 && isStreetBotAgentResultBlock(className)) {
+    return <StreetBotAgentResults raw={content} />;
   } else if (content.split('\n').length > 1 && isStreetBotServiceResultBlock(className, content)) {
     return <StreetBotServiceResults raw={content} />;
   } else if (content.split('\n').length === 1) {

@@ -21,6 +21,7 @@ import { langSubset, preprocessLaTeX } from '~/utils';
 import { unicodeCitation } from '~/components/Web';
 import { code, a, p, img } from './MarkdownComponents';
 import StreetBotServiceResults from './StreetBotServiceResults';
+import StreetBotAgentResults from './StreetBotAgentResults';
 import StreetProfileResults from './StreetProfileResults';
 import StreetProfileMessageDraft from './StreetProfileMessageDraft';
 import { isStreetBot } from '~/config/appVariant';
@@ -34,16 +35,18 @@ type TContentProps = {
 type TMarkdownPart =
   | { type: 'markdown'; content: string }
   | { type: 'streetbot-service-results'; content: string }
+  | { type: 'streetbot-agent-results'; content: string }
   | { type: 'street-profile-results'; content: string }
   | { type: 'street-profile-message-draft'; content: string };
 
 const STREETBOT_RICH_FENCE =
-  /```(streetbot-service-results|street-profile-results|street-profile-message-draft)\s*([\s\S]*?)```/gi;
+  /```(streetbot-service-results|streetbot-agent-results|street-profile-results|street-profile-message-draft)\s*([\s\S]*?)```/gi;
 
 const splitStreetBotRichBlocks = (content: string): TMarkdownPart[] | null => {
   if (
     !isStreetBot ||
     (!content.includes('```streetbot-service-results') &&
+      !content.includes('```streetbot-agent-results') &&
       !content.includes('```street-profile-results') &&
       !content.includes('```street-profile-message-draft'))
   ) {
@@ -162,8 +165,16 @@ const Markdown = memo(({ content = '', isLatestMessage }: TContentProps) => {
             ? streetBotParts.map((part, index) =>
                 part.type === 'streetbot-service-results' ? (
                   <StreetBotServiceResults key={`streetbot-services-${index}`} raw={part.content} />
+                ) : part.type === 'streetbot-agent-results' ? (
+                  <StreetBotAgentResults
+                    key={`streetbot-agent-results-${index}`}
+                    raw={part.content}
+                  />
                 ) : part.type === 'street-profile-results' ? (
-                  <StreetProfileResults key={`street-profile-results-${index}`} raw={part.content} />
+                  <StreetProfileResults
+                    key={`street-profile-results-${index}`}
+                    raw={part.content}
+                  />
                 ) : part.type === 'street-profile-message-draft' ? (
                   <StreetProfileMessageDraft
                     key={`street-profile-message-draft-${index}`}

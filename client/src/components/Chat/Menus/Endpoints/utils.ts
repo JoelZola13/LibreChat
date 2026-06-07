@@ -9,10 +9,9 @@ import type {
 } from 'librechat-data-provider';
 import type { useLocalize } from '~/hooks';
 import SpecIcon from '~/components/Chat/Menus/Endpoints/components/SpecIcon';
-import StreetAgentIcon, {
-  getMarketplaceAgentIconId,
-} from '~/components/Agents/StreetAgentIcon';
+import StreetAgentIcon, { getMarketplaceAgentIconId } from '~/components/Agents/StreetAgentIcon';
 import StreetBotMarketplaceIcon from '~/components/Agents/StreetBotMarketplaceIcon';
+import { getAgentDisplayNameByModelId } from '~/components/Agents/streetCatalog';
 import { Endpoint, SelectedValues } from '~/common';
 
 export function filterItems<
@@ -86,8 +85,8 @@ export function filterModels(
   return models.filter((modelId) => {
     let modelName = modelId;
 
-    if (isAgentsEndpoint(endpoint.value) && agentsMap && agentsMap[modelId]) {
-      modelName = agentsMap[modelId]?.name || modelId;
+    if (isAgentsEndpoint(endpoint.value)) {
+      modelName = getAgentDisplayNameByModelId(modelId) || agentsMap?.[modelId]?.name || modelId;
     } else if (
       isAssistantsEndpoint(endpoint.value) &&
       assistantsMap &&
@@ -212,6 +211,11 @@ export const getDisplayValue = ({
     const endpoint = mappedEndpoints.find((e) => e.value === selectedValues.endpoint);
     if (!endpoint) {
       return localize('com_ui_select_model');
+    }
+
+    const catalogAgentName = getAgentDisplayNameByModelId(selectedValues.model);
+    if (isAgentsEndpoint(endpoint.value) && catalogAgentName) {
+      return catalogAgentName;
     }
 
     if (

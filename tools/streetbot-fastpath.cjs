@@ -460,6 +460,82 @@ const STREET_PROFILE_AGENT_ICON_URLS = new Map([
   ['agent/groups_agent', '/images/agent-marketplace-icons/groups.svg?v=20260605b'],
   ['agent/word_on_the_street_agent', '/images/agent-marketplace-icons/word-on-the-street.svg?v=20260605b'],
 ]);
+const MARKETPLACE_AGENT_MODEL_TO_ICON_ID = new Map([
+  ['agent/street_profile_agent', 'street-profile'],
+  ['agent/profiles_agent', 'profiles'],
+  ['agent/messaging_agent', 'messaging'],
+  ['agent/groups_agent', 'groups'],
+  ['agent/word_on_the_street_agent', 'word-on-the-street'],
+  ['agent/project_manager_agent', 'project-manager'],
+  ['agent/employment_counsellor', 'employment-counsellor'],
+  ['agent/grant_manager', 'grant-manager'],
+  ['agent/marketing_manager', 'marketing-manager'],
+  ['agent/personal_assistant', 'personal-assistant'],
+  ['agent/brain_agent', 'brain'],
+  ['agent/evaluation_agent', 'evaluation'],
+  ['agent/directory_agent', 'directory'],
+  ['agent/accounting_agent', 'accounting'],
+  ['agent/cyber_security_agent', 'cyber-security'],
+  ['agent/services_rag_agent', 'services-rag'],
+  ['agent/dev_ops_agent', 'dev-ops'],
+  ['agent/analytics_agent', 'analytics'],
+  ['agent/academy_agent', 'academy'],
+  ['agent/health_agent', 'health'],
+  ['agent/legal_agent', 'legal'],
+  ['agent/gallery_agent', 'art-curator'],
+  ['agent/art_curator_agent', 'art-curator'],
+  ['agent/storage_agent', 'storage'],
+  ['agent/documents_agent', 'documents'],
+  ['agent/calendar_agent', 'calendar'],
+  ['agent/task_agent', 'task'],
+  ['agent/resume_cover_letter_agent', 'resume-cover-letter'],
+  ['agent/employment_client_agent', 'employment-client'],
+  ['agent/job_search_agent', 'job-search'],
+  ['agent/grant_writer', 'grant-writer'],
+  ['agent/project_plan_agent', 'project-plan'],
+  ['agent/budget_agent', 'budget'],
+  ['agent/grant_researcher_agent', 'grant-researcher'],
+  ['agent/designer_agent', 'designer'],
+  ['agent/market_research_agent', 'market-research'],
+  ['agent/videography_agent', 'videography'],
+  ['agent/local_news_agent', 'local-news'],
+  ['agent/national_news_agent', 'national-news'],
+  ['agent/international_news_agent', 'international-news'],
+  ['agent/contract_agent', 'contract'],
+  ['agent/market_analysis_agent', 'market-analysis'],
+  ['agent/copy_writer_agent', 'copy-writer'],
+  ['agent/city_of_toronto_agent', 'city-of-toronto'],
+  ['agent/homeless_hub_agent', 'homeless-hub'],
+  ['agent/counseling_agent', 'counseling'],
+  ['agent/open_data_agent', 'open-data'],
+  ['agent/conversational_agent', 'conversational'],
+]);
+const MARKETPLACE_AGENT_LABEL_TO_MODEL = new Map([
+  ['job search agent', 'agent/job_search_agent'],
+  ['art curator agent', 'agent/gallery_agent'],
+  ['gallery agent', 'agent/gallery_agent'],
+  ['academy agent', 'agent/academy_agent'],
+  ['grant manager agent', 'agent/grant_manager'],
+  ['street profile agent', 'agent/street_profile_agent'],
+  ['profiles agent', 'agent/profiles_agent'],
+  ['messaging agent', 'agent/messaging_agent'],
+  ['messages agent', 'agent/messaging_agent'],
+  ['groups agent', 'agent/groups_agent'],
+  ['word on the street agent', 'agent/word_on_the_street_agent'],
+]);
+const STREETBOT_RENDERED_AGENT_IDS = new Set([
+  'agent/job_search_agent',
+  'agent/gallery_agent',
+  'agent/academy_agent',
+  'agent/grant_manager',
+]);
+const STREETBOT_AGENT_RESULTS_FENCE = 'streetbot-agent-results';
+const STREETBOT_AGENT_ICON_VERSION = '20260607a';
+const STREETBOT_AGENT_READ_API_BASES = [
+  process.env.STREETBOT_AGENT_READ_API_BASE,
+  process.env.STREETBOT_READ_API_BASE,
+  'https://streetbot-directory.pages.dev/sbapi',
+].filter(Boolean);
 const STREET_PROFILE_API_BASES = [
   process.env.STREET_PROFILE_AGENT_API_BASE,
   process.env.NANOBOT_STREET_PROFILE_API_BASE,
@@ -546,6 +622,236 @@ const LOCAL_WORD_ON_THE_STREET_POSTS = [
   },
 ];
 
+const LOCAL_JOB_BOARD_JOBS = [
+  {
+    id: 'sample-30',
+    title: 'Volunteer Personality',
+    organization: 'Street Voices',
+    category: 'Media & Communications',
+    opportunity_type: 'Volunteer',
+    work_mode: 'Hybrid',
+    location: 'Toronto / Hybrid / Event-based',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      'Represent Street Voices on camera, on mic, at events, and across media projects through interviews, hosting, and community conversations.',
+    tags: 'hosting,podcasting,on-camera,public speaking,media,volunteer',
+    is_media_gig: true,
+    is_creative_opportunity: true,
+    posting_date: '2026-05-04',
+    employer_verified: true,
+  },
+  {
+    id: 'sample-29',
+    title: 'Volunteer Writer',
+    organization: 'Street Voices',
+    category: 'Media',
+    opportunity_type: 'Volunteer',
+    work_mode: 'Hybrid',
+    location: 'Remote / Hybrid',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      'Write articles, interviews, profiles, blog posts, event recaps, and community stories that amplify Street Voices contributors.',
+    tags: 'writing,journalism,storytelling,content,volunteer,media',
+    is_creative_opportunity: true,
+    is_media_gig: true,
+    posting_date: '2026-04-30',
+    employer_verified: true,
+  },
+  {
+    id: 'sample-28',
+    title: 'Volunteer Videographer',
+    organization: 'Street Voices',
+    category: 'Media',
+    opportunity_type: 'Volunteer',
+    work_mode: 'Hybrid',
+    location: 'Toronto, ON',
+    compensation: 'Volunteer (unpaid)',
+    description:
+      'Capture events, creator interviews, workshops, documentaries, and short-form video for Street Voices media projects.',
+    tags: 'videography,video editing,filmmaking,media,volunteer,event coverage',
+    is_creative_opportunity: true,
+    is_media_gig: true,
+    posting_date: '2026-04-30',
+    employer_verified: true,
+  },
+  {
+    id: 'sample-27',
+    title: 'Podcast Producer - The Echo',
+    organization: 'Street Voices',
+    category: 'Media',
+    opportunity_type: 'Part-time',
+    work_mode: 'Remote',
+    location: 'Remote (in-person optional)',
+    compensation: '$150 per episode',
+    description:
+      'Shape topics, episode structure, research, guest notes, and social clip strategy for The Echo podcast.',
+    tags: 'podcast,producer,culture,pop culture,urban culture,media,editorial',
+    is_media_gig: true,
+    is_creative_opportunity: true,
+    posting_date: '2026-04-30',
+    employer_verified: true,
+  },
+];
+
+const LOCAL_GALLERY_ARTWORKS = [
+  {
+    id: '0da05510-75aa-4418-90e1-018b8eb47008',
+    artist_name: 'Jamie Rivera',
+    title: 'Invisible City',
+    description:
+      'A series of drawings mapping the hidden spaces and secret paths known only to those who live on the margins.',
+    medium: 'drawing',
+    style: 'Cartographic',
+    year_created: 2023,
+    image_url: 'https://images.unsplash.com/photo-1547891654-e66ed7ebb968?w=800',
+    thumbnail_url: 'https://images.unsplash.com/photo-1547891654-e66ed7ebb968?w=400',
+    is_for_sale: true,
+    price: 120,
+    currency: 'CAD',
+    tags: ['drawing', 'maps', 'hidden', 'urban', 'pen and ink'],
+    view_count: 294,
+    favorite_count: 13,
+  },
+  {
+    id: 'e2b45249-6317-44fc-a79c-12c825d8329b',
+    artist_name: 'The Found Art Collective',
+    title: 'Dawn Breaks',
+    description: 'A visual poem about hope returning after a long winter.',
+    medium: 'poetry',
+    style: 'Visual Poetry',
+    year_created: 2024,
+    image_url: 'https://images.unsplash.com/photo-1482160549825-59d1b23cb208?w=800',
+    thumbnail_url: 'https://images.unsplash.com/photo-1482160549825-59d1b23cb208?w=400',
+    is_for_sale: true,
+    price: 85,
+    currency: 'CAD',
+    tags: ['poetry', 'watercolor', 'hope', 'new beginnings', 'visual'],
+    view_count: 36,
+    favorite_count: 4,
+  },
+  {
+    id: 'fa6fbd19-3224-48f1-ac37-a17f12876f5f',
+    artist_name: 'Sarah Nightingale',
+    title: 'Woven Stories',
+    description: 'A textile work built from donated fabric and recorded memories.',
+    medium: 'textile',
+    style: 'Fiber Art',
+    year_created: 2023,
+    image_url: 'https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?w=800',
+    thumbnail_url: 'https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?w=400',
+    is_for_sale: true,
+    price: 500,
+    currency: 'CAD',
+    tags: ['textile', 'fiber', 'donated', 'stories', 'community'],
+    view_count: 323,
+    favorite_count: 29,
+  },
+  {
+    id: 'bd2e3912-2869-4a21-9583-5cd7a71baaf9',
+    artist_name: 'Jamie Rivera',
+    title: 'Voices Unheard',
+    description: 'Bold acrylic layers capturing stories rarely given public space.',
+    medium: 'painting',
+    style: 'Abstract Expressionist',
+    year_created: 2023,
+    image_url: 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?w=800',
+    thumbnail_url: 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?w=400',
+    is_for_sale: true,
+    price: 325,
+    currency: 'CAD',
+    tags: ['abstract', 'expression', 'bold', 'emotional', 'acrylic'],
+    view_count: 245,
+    favorite_count: 17,
+  },
+];
+
+const LOCAL_ACADEMY_COURSES = [
+  {
+    id: 'journalism',
+    title: 'Journalism',
+    program: 'Street Voices Media Training',
+    level: 'Beginner to Intermediate',
+    delivery_mode: 'In person and live stream',
+    duration: 'August 2026',
+    schedule: 'Aug 5, Aug 12, Aug 19, Aug 26',
+    description:
+      'Practice reporting, interviewing, and shaping community stories through a focused Street Voices media training block.',
+    tags: ['media', 'journalism', 'storytelling', 'interviews'],
+  },
+  {
+    id: 'videography',
+    title: 'Videography',
+    program: 'Street Voices Media Training',
+    level: 'Beginner to Intermediate',
+    delivery_mode: 'In person and live stream',
+    duration: 'September 2026',
+    schedule: 'Sep 2, Sep 9, Sep 16, Sep 23, Sep 30',
+    description:
+      'Build hands-on camera, framing, lighting, and visual storytelling skills for community media projects.',
+    tags: ['media', 'video', 'videography', 'storytelling'],
+  },
+  {
+    id: 'broadcasting',
+    title: 'Broadcasting',
+    program: 'Street Voices Media Training',
+    level: 'Beginner to Intermediate',
+    delivery_mode: 'In person and live stream',
+    duration: 'October 2026',
+    schedule: 'Oct 7, Oct 14, Oct 21, Oct 28',
+    description:
+      'Learn broadcasting fundamentals, show structure, voice, production rhythm, and audience connection.',
+    tags: ['media', 'broadcasting', 'podcasting', 'production'],
+  },
+  {
+    id: 'networking-with-kadiatu',
+    title: 'Networking with Kadiatu',
+    program: 'Street Voices Media Training',
+    level: 'Beginner to Intermediate',
+    delivery_mode: 'In person and live stream',
+    duration: 'November 2026',
+    schedule: 'Nov 4, Nov 11, Nov 18, Nov 25',
+    description:
+      'Strengthen presentation, relationship-building, and creative industry networking through guided practice.',
+    tags: ['media', 'networking', 'presentation', 'career'],
+  },
+];
+
+const LOCAL_GRANT_OPPORTUNITIES = [
+  {
+    id: 'yof-scale-2026',
+    name: 'Youth Innovations Scale Grant',
+    funder: 'Ontario Trillium Foundation',
+    funderAbbrev: 'OTF',
+    amount: 'Up to $150K/yr x 2-3 years',
+    deadline: 'April 15, 2026 (EOI)',
+    stage: 'identified',
+    url: 'https://otf.ca/our-grants/youth-opportunities-fund/youth-innovations-scale-grant',
+    recommendation: 'pursue',
+    documents: {
+      opportunity: true,
+      narrative: false,
+      budget: false,
+      projectPlan: false,
+    },
+  },
+  {
+    id: 'tgrip-extension',
+    name: 'TGRIP - Organizational Capacity Development',
+    funder: 'Toronto Grants',
+    funderAbbrev: 'TGRIP',
+    amount: 'Capacity-building stream',
+    deadline: 'Pipeline active',
+    stage: 'active',
+    recommendation: 'pursue',
+    documents: {
+      opportunity: true,
+      narrative: true,
+      budget: true,
+      projectPlan: true,
+    },
+  },
+];
+
 const MESSAGE_DRAFT_FENCE = /```street-profile-message-draft\s*([\s\S]*?)```/gi;
 
 let ragModulePromise;
@@ -597,6 +903,28 @@ function normalizeStreetProfileAgentId(value) {
   return STREET_PROFILE_AGENT_LABEL_TO_ID.get(normalized) || '';
 }
 
+function normalizeMarketplaceAgentModelId(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return '';
+  }
+  let decoded = text.split('?')[0].trim();
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch (_) {
+    decoded = text.split('?')[0].trim();
+  }
+  const normalized = decoded
+    .replace(/^spec-agent\//i, 'agent/')
+    .replace(/^spec-/i, '')
+    .replace(/^agent%2f/i, 'agent/')
+    .toLowerCase();
+  if (MARKETPLACE_AGENT_MODEL_TO_ICON_ID.has(normalized)) {
+    return normalized;
+  }
+  return MARKETPLACE_AGENT_LABEL_TO_MODEL.get(normalized) || '';
+}
+
 function getSelectedStreetProfileAgent(req) {
   const fastPath = req?._streetbotFastPath || {};
   const values = [
@@ -624,6 +952,38 @@ function getSelectedStreetProfileAgent(req) {
 function getSelectedStreetProfileAgentIconURL(req) {
   const selectedAgent = getSelectedStreetProfileAgent(req);
   return STREET_PROFILE_AGENT_ICON_URLS.get(selectedAgent) || '';
+}
+
+function getSelectedMarketplaceAgent(req) {
+  const fastPath = req?._streetbotFastPath || {};
+  const values = [
+    fastPath.selectedSpec,
+    fastPath.selectedModel,
+    fastPath.selectedLabel,
+    req?.query?.spec,
+    req?.query?.agentModel,
+    req?.body?.spec,
+    req?.body?.model,
+    req?.body?.modelLabel,
+    req?.body?.modelDisplayLabel,
+    req?.body?.endpointOption?.spec,
+    req?.body?.endpointOption?.modelOptions?.model,
+    req?.body?.endpointOption?.model_parameters?.model,
+    req?.body?.endpointOption?.model_parameters?.modelLabel,
+  ];
+  for (const value of values) {
+    const agentId = normalizeMarketplaceAgentModelId(value);
+    if (agentId) {
+      return agentId;
+    }
+  }
+  return '';
+}
+
+function getSelectedMarketplaceAgentIconURL(req) {
+  const selectedAgent = getSelectedMarketplaceAgent(req);
+  const iconId = MARKETPLACE_AGENT_MODEL_TO_ICON_ID.get(selectedAgent);
+  return iconId ? `/images/agent-marketplace-icons/${iconId}.svg?v=${STREETBOT_AGENT_ICON_VERSION}` : '';
 }
 
 async function fetchStreetProfileJson(pathname) {
@@ -804,6 +1164,335 @@ function buildStreetProfileCardsPayload(kind, title, total, items, extra = {}) {
 
 function withStreetProfileCards(intro, payload) {
   return `${String(intro || '').trim()}\n\n\`\`\`street-profile-results\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+}
+
+function withStreetBotAgentCards(intro, payload) {
+  return `${String(intro || '').trim()}\n\n\`\`\`${STREETBOT_AGENT_RESULTS_FENCE}\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+}
+
+async function fetchStreetBotReadJson(pathname) {
+  const pathSuffix = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  for (const base of STREETBOT_AGENT_READ_API_BASES) {
+    const url = `${String(base).replace(/\/$/, '')}${pathSuffix}`;
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(4500),
+      });
+      const contentType = String(response.headers.get('content-type') || '');
+      if (!response.ok || !contentType.includes('application/json')) {
+        continue;
+      }
+      return await response.json();
+    } catch (error) {
+      logger.debug('[streetbot-agent-results] read API fetch failed', {
+        url,
+        error: error?.message || String(error || ''),
+      });
+    }
+  }
+  return null;
+}
+
+const AGENT_SEARCH_STOPWORDS = new Set([
+  'a',
+  'about',
+  'actual',
+  'agent',
+  'agents',
+  'all',
+  'and',
+  'any',
+  'available',
+  'board',
+  'cards',
+  'course',
+  'courses',
+  'do',
+  'find',
+  'for',
+  'from',
+  'gallery',
+  'get',
+  'give',
+  'grant',
+  'grants',
+  'i',
+  'in',
+  'job',
+  'jobs',
+  'list',
+  'me',
+  'need',
+  'of',
+  'on',
+  'opportunities',
+  'opportunity',
+  'please',
+  'return',
+  'search',
+  'show',
+  'street',
+  'tell',
+  'the',
+  'to',
+  'ui',
+  'what',
+  'with',
+  'work',
+]);
+
+function extractAgentSearchTerms(userText) {
+  return String(userText || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 2 && !AGENT_SEARCH_STOPWORDS.has(term));
+}
+
+function stringifyForAgentSearch(item, fields) {
+  return fields
+    .map((field) => {
+      const value = item?.[field];
+      if (Array.isArray(value)) {
+        return value.join(' ');
+      }
+      if (value && typeof value === 'object') {
+        return JSON.stringify(value);
+      }
+      return String(value || '');
+    })
+    .join(' ')
+    .toLowerCase();
+}
+
+function pickAgentItemsForQuery(items, userText, fields) {
+  const list = Array.isArray(items) ? items : [];
+  const terms = extractAgentSearchTerms(userText);
+  if (!terms.length) {
+    return list;
+  }
+  const matches = list.filter((item) => {
+    const haystack = stringifyForAgentSearch(item, fields);
+    return terms.some((term) => haystack.includes(term));
+  });
+  return matches.length ? matches : list;
+}
+
+function splitAgentTags(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeJobForAgent(item) {
+  const job = cleanStreetProfileItem(item);
+  const id = String(job.id || '').trim();
+  return {
+    id,
+    title: job.title || 'Job opportunity',
+    organization: job.organization || job.company || 'Street Voices',
+    category: job.category || 'Job Board',
+    opportunity_type: job.opportunity_type || job.type || '',
+    work_mode: job.work_mode || '',
+    location: job.location || '',
+    compensation: job.compensation || job.salary_range || '',
+    description: job.description || job.summary || '',
+    tags: splitAgentTags(job.tags).slice(0, 5),
+    posting_date: job.posting_date || job.created_at || '',
+    deadline: job.deadline || '',
+    logo_url: job.logo_url || '',
+    is_featured: Boolean(job.is_featured),
+    employer_verified: Boolean(job.employer_verified),
+    view_count: Number(job.view_count || 0),
+    application_count: Number(job.application_count || 0),
+    href: id ? `/jobs/${encodeURIComponent(id)}` : '/jobs',
+  };
+}
+
+function normalizeArtworkForAgent(item) {
+  const art = cleanStreetProfileItem(item);
+  const id = String(art.id || '').trim();
+  return {
+    id,
+    title: art.title || 'Street Gallery artwork',
+    artist_name: art.artist_name || art.artist || 'Street Voices artist',
+    description: art.description || '',
+    medium: art.medium || '',
+    style: art.style || '',
+    year_created: art.year_created || '',
+    image_url: art.image_url || art.thumbnail_url || '',
+    thumbnail_url: art.thumbnail_url || art.image_url || '',
+    is_for_sale: Boolean(art.is_for_sale),
+    price: art.price ?? '',
+    currency: art.currency || 'CAD',
+    tags: splitAgentTags(art.tags).slice(0, 5),
+    view_count: Number(art.view_count || 0),
+    favorite_count: Number(art.favorite_count || 0),
+    href: id ? `/gallery/artwork/${encodeURIComponent(id)}` : '/gallery',
+  };
+}
+
+function normalizeAcademyCourseForAgent(item) {
+  const course = cleanStreetProfileItem(item);
+  const id = String(course.id || course.slug || '').trim();
+  return {
+    id,
+    title: course.title || 'Academy course',
+    program: course.program || course.learning_path || 'Street Voices Academy',
+    level: course.level || course.difficulty || '',
+    delivery_mode: course.delivery_mode || course.deliveryMode || '',
+    duration: course.duration || course.durationLabel || course.hours || '',
+    schedule: course.schedule || '',
+    description: course.description || course.summary || '',
+    tags: splitAgentTags(course.tags || course.preferredCategories).slice(0, 5),
+    image_url: course.image_url || course.cover_image || '',
+    href: id ? `/academy/courses/${encodeURIComponent(id)}` : '/academy/courses',
+  };
+}
+
+function normalizeGrantForAgent(item) {
+  const grant = cleanStreetProfileItem(item);
+  const id = String(grant.id || '').trim();
+  return {
+    id,
+    title: grant.name || grant.title || 'Grant opportunity',
+    funder: grant.funder || 'Grant funder',
+    funderAbbrev: grant.funderAbbrev || grant.funder_abbrev || '',
+    amount: grant.amount || '',
+    deadline: grant.deadline || '',
+    stage: grant.stage || '',
+    recommendation: grant.recommendation || grant.assessment?.recommendation || '',
+    documents: grant.documents || {},
+    description: grant.description || grant.summary || '',
+    url: grant.url || '',
+    href: '/grantwriter',
+  };
+}
+
+function buildStreetBotAgentPayload(kind, title, source, total, items) {
+  return {
+    kind,
+    title,
+    source,
+    total: Number(total || 0),
+    items: Array.isArray(items) ? items.slice(0, 8) : [],
+  };
+}
+
+async function loadJobAgentItems(userText) {
+  const remote = await fetchStreetBotReadJson('/jobs');
+  const allJobs = Array.isArray(remote) && remote.length ? remote : LOCAL_JOB_BOARD_JOBS;
+  return pickAgentItemsForQuery(allJobs, userText, [
+    'title',
+    'organization',
+    'category',
+    'opportunity_type',
+    'work_mode',
+    'location',
+    'compensation',
+    'description',
+    'tags',
+  ]).map(normalizeJobForAgent);
+}
+
+async function loadGalleryAgentItems(userText) {
+  const remote = await fetchStreetBotReadJson('/gallery/artworks');
+  const allArtworks = Array.isArray(remote) && remote.length ? remote : LOCAL_GALLERY_ARTWORKS;
+  return pickAgentItemsForQuery(allArtworks, userText, [
+    'title',
+    'artist_name',
+    'description',
+    'medium',
+    'style',
+    'tags',
+  ]).map(normalizeArtworkForAgent);
+}
+
+async function loadAcademyAgentItems(userText) {
+  return pickAgentItemsForQuery(LOCAL_ACADEMY_COURSES, userText, [
+    'title',
+    'program',
+    'level',
+    'delivery_mode',
+    'duration',
+    'schedule',
+    'description',
+    'tags',
+  ]).map(normalizeAcademyCourseForAgent);
+}
+
+async function loadGrantAgentItems(userText) {
+  return pickAgentItemsForQuery(LOCAL_GRANT_OPPORTUNITIES, userText, [
+    'name',
+    'funder',
+    'funderAbbrev',
+    'amount',
+    'deadline',
+    'stage',
+    'recommendation',
+  ]).map(normalizeGrantForAgent);
+}
+
+async function buildStreetBotAgentResultsResponse(req, userText, runProgressPhase) {
+  const selectedAgent = getSelectedMarketplaceAgent(req);
+  if (!STREETBOT_RENDERED_AGENT_IDS.has(selectedAgent)) {
+    return null;
+  }
+
+  const run = (phase, work) =>
+    typeof runProgressPhase === 'function' ? runProgressPhase(phase, work, { selectedAgent }) : work();
+
+  let kind = '';
+  let title = '';
+  let source = {};
+  let items = [];
+  let intro = '';
+
+  if (selectedAgent === 'agent/job_search_agent') {
+    items = await run('checking_job_board', () => loadJobAgentItems(userText));
+    kind = 'jobs';
+    title = 'Job Board matches';
+    source = { app: 'Job Board', href: '/jobs' };
+    intro = `Job Search Agent checked the local Job Board data and found ${items.length} matching job cards.`;
+  } else if (selectedAgent === 'agent/gallery_agent') {
+    items = await run('checking_street_gallery', () => loadGalleryAgentItems(userText));
+    kind = 'artworks';
+    title = 'Street Gallery artwork';
+    source = { app: 'Street Gallery', href: '/gallery' };
+    intro = `Art Curator Agent checked Street Gallery and found ${items.length} artwork cards.`;
+  } else if (selectedAgent === 'agent/academy_agent') {
+    items = await run('checking_academy', () => loadAcademyAgentItems(userText));
+    kind = 'academy_courses';
+    title = 'Academy courses';
+    source = { app: 'Academy', href: '/academy/courses' };
+    intro = `Academy Agent checked the Academy catalog and found ${items.length} course cards.`;
+  } else if (selectedAgent === 'agent/grant_manager') {
+    items = await run('checking_grant_pipeline', () => loadGrantAgentItems(userText));
+    kind = 'grants';
+    title = 'Grant pipeline opportunities';
+    source = { app: 'Grant Writer', href: '/grantwriter' };
+    intro = `Grant Manager Agent checked the Grant Writer pipeline and found ${items.length} grant cards.`;
+  }
+
+  const payload = buildStreetBotAgentPayload(kind, title, source, items.length, items);
+  return {
+    responseText: withStreetBotAgentCards(intro, payload),
+    searchResult: {
+      ok: true,
+      browse: true,
+      selectedAgent,
+      returned_count: items.length,
+      items,
+      has_more: false,
+      kind,
+    },
+  };
 }
 
 function normalizeStreetProfileUsername(value = '') {
@@ -4874,7 +5563,11 @@ async function streetbotFastPath(req, res, _next) {
     const responseMessageId = crypto.randomUUID();
     const isNewConvo = !reqConversationId || reqConversationId === 'new';
     const selectedStreetProfileAgent = getSelectedStreetProfileAgent(req);
-    const forceStreetProfileTextStream = Boolean(selectedStreetProfileAgent);
+    const selectedMarketplaceAgent = getSelectedMarketplaceAgent(req);
+    const selectedMarketplaceAgentIconURL = getSelectedMarketplaceAgentIconURL(req);
+    const forceStreetAgentTextStream = Boolean(
+      selectedStreetProfileAgent || STREETBOT_RENDERED_AGENT_IDS.has(selectedMarketplaceAgent),
+    );
     let progressStepIndex = 0;
     const nextProgressStepIndex = () => progressStepIndex++;
     const runProgressPhase = (phaseKey, work, metadata = {}) =>
@@ -4906,7 +5599,10 @@ async function streetbotFastPath(req, res, _next) {
         endpointOption.model_parameters?.modelLabel || req.body?.modelDisplayLabel,
       ),
       model: endpointOption.modelOptions?.model || endpointOption.model_parameters?.model,
-      iconURL: getSelectedStreetProfileAgentIconURL(req) || endpointOption.iconURL,
+      iconURL:
+        selectedMarketplaceAgentIconURL ||
+        getSelectedStreetProfileAgentIconURL(req) ||
+        endpointOption.iconURL,
       userMessage: {
         messageId: userMessageId,
         parentMessageId: userMessage.parentMessageId,
@@ -4928,8 +5624,15 @@ async function streetbotFastPath(req, res, _next) {
         req._streetbotServiceContext,
         req.body?._streetbotUserContext,
       ));
-    const toolBase = detectedIntent?.toolBase || 'services_search';
-    let responseText = String(detectedIntent?.responseText || '').trim();
+    const forceMarketplaceAgentConversation = STREETBOT_RENDERED_AGENT_IDS.has(
+      selectedMarketplaceAgent,
+    );
+    const toolBase = forceMarketplaceAgentConversation
+      ? 'conversation'
+      : detectedIntent?.toolBase || 'services_search';
+    let responseText = forceMarketplaceAgentConversation
+      ? ''
+      : String(detectedIntent?.responseText || '').trim();
     let searchResult = null;
     let toolCallContent = null;
     let responseAlreadyStreamed = false;
@@ -4950,12 +5653,22 @@ async function streetbotFastPath(req, res, _next) {
     });
 
     if (toolBase === 'conversation') {
-      const streetProfileFamilyResponse = await buildStreetProfileFamilyResponse(
+      const streetBotAgentResultsResponse = await buildStreetBotAgentResultsResponse(
         req,
         userText,
         runProgressPhase,
       );
-      if (streetProfileFamilyResponse) {
+      const streetProfileFamilyResponse = streetBotAgentResultsResponse
+        ? null
+        : await buildStreetProfileFamilyResponse(
+            req,
+            userText,
+            runProgressPhase,
+          );
+      if (streetBotAgentResultsResponse) {
+        responseText = streetBotAgentResultsResponse.responseText;
+        searchResult = streetBotAgentResultsResponse.searchResult;
+      } else if (streetProfileFamilyResponse) {
         responseText = streetProfileFamilyResponse.responseText;
         searchResult = streetProfileFamilyResponse.searchResult;
       } else {
@@ -5206,7 +5919,7 @@ async function streetbotFastPath(req, res, _next) {
     }
 
     if (
-      (STREETBOT_FASTPATH_STREAMING_ENABLED || forceStreetProfileTextStream) &&
+      (STREETBOT_FASTPATH_STREAMING_ENABLED || forceStreetAgentTextStream) &&
       !responseAlreadyStreamed &&
       responseText
     ) {
@@ -5214,7 +5927,7 @@ async function streetbotFastPath(req, res, _next) {
         streamId,
         responseMessageId,
         nextProgressStepIndex(),
-        { force: forceStreetProfileTextStream },
+        { force: forceStreetAgentTextStream },
       );
       const visibleResponseText =
         stripStreetBotServicePayloadForDisplay(responseText) || responseText;
@@ -5224,14 +5937,15 @@ async function streetbotFastPath(req, res, _next) {
         visibleResponseText,
         {
           delayMs: toolBase === 'smalltalk' ? STREETBOT_TEXT_STREAM_DELAY_MS : 0,
-          force: forceStreetProfileTextStream,
+          force: forceStreetAgentTextStream,
         },
       );
       responseAlreadyStreamed = true;
     }
 
     const selectedStreetProfileIconURL = getSelectedStreetProfileAgentIconURL(req);
-    const responseIconURL = selectedStreetProfileIconURL || endpointOption.iconURL;
+    const responseIconURL =
+      selectedMarketplaceAgentIconURL || selectedStreetProfileIconURL || endpointOption.iconURL;
 
     const responseMessage = {
       messageId: responseMessageId,

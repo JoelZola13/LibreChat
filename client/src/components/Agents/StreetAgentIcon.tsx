@@ -105,6 +105,7 @@ const MODEL_TO_MARKETPLACE_AGENT_ID: Record<string, string> = {
   'agent/academy_agent': 'academy',
   'agent/health_agent': 'health',
   'agent/legal_agent': 'legal',
+  'agent/gallery_agent': 'art-curator',
   'agent/art_curator_agent': 'art-curator',
   'agent/storage_agent': 'storage',
   'agent/documents_agent': 'documents',
