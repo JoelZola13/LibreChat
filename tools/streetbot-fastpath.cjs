@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const { logger } = require('@librechat/data-schemas');
 const { Constants } = require('librechat-data-provider');
 const {
@@ -529,6 +530,91 @@ const STREETBOT_RENDERED_AGENT_IDS = new Set([
   'agent/academy_agent',
   'agent/grant_manager',
 ]);
+const MARKETPLACE_AGENT_CONVERSATION_PROFILES = new Map([
+  [
+    'agent/job_search_agent',
+    {
+      label: 'Job Search Agent',
+      source: 'Job Board',
+      cardLabel: 'job cards',
+      purpose: 'help with job search questions, applications, roles, openings, and Job Board results',
+    },
+  ],
+  [
+    'agent/gallery_agent',
+    {
+      label: 'Art Curator Agent',
+      source: 'Street Gallery',
+      cardLabel: 'artwork cards',
+      purpose: 'talk through art, artists, collections, creative direction, and Street Gallery results',
+    },
+  ],
+  [
+    'agent/academy_agent',
+    {
+      label: 'Academy Agent',
+      source: 'Academy',
+      cardLabel: 'course cards',
+      purpose: 'help with learning questions, courses, workshops, and Academy catalog results',
+    },
+  ],
+  [
+    'agent/grant_manager',
+    {
+      label: 'Grant Manager Agent',
+      source: 'Grant Writer',
+      cardLabel: 'grant opportunity cards',
+      purpose: 'help with grant strategy, deadlines, funders, proposals, and grant pipeline results',
+    },
+  ],
+]);
+const STREET_PROFILE_AGENT_CONVERSATION_PROFILES = new Map([
+  [
+    'agent/street_profile_agent',
+    {
+      label: 'Street Profile Agent',
+      source: 'Street Profile',
+      cardLabel: 'Street Profile cards',
+      purpose: 'coordinate profiles, messages, groups, and Word on the Street actions',
+    },
+  ],
+  [
+    'agent/profiles_agent',
+    {
+      label: 'Profiles Agent',
+      source: 'Street Profile',
+      cardLabel: 'profile cards',
+      purpose: 'help with profile questions, bios, links, posts, and public presence',
+    },
+  ],
+  [
+    'agent/messaging_agent',
+    {
+      label: 'Messaging Agent',
+      source: 'Messages',
+      cardLabel: 'message views',
+      purpose: 'help with message questions, drafting, sorting, and direct-message workflows',
+    },
+  ],
+  [
+    'agent/groups_agent',
+    {
+      label: 'Groups Agent',
+      source: 'Groups',
+      cardLabel: 'group cards',
+      purpose: 'help with group questions, memberships, and collaborative spaces',
+    },
+  ],
+  [
+    'agent/word_on_the_street_agent',
+    {
+      label: 'Word on the Street Agent',
+      source: 'Word on the Street',
+      cardLabel: 'post cards',
+      purpose: 'help with community posts, news, updates, and what is happening on the street',
+    },
+  ],
+]);
 const STREETBOT_AGENT_RESULTS_FENCE = 'streetbot-agent-results';
 const STREETBOT_AGENT_ICON_VERSION = '20260607a';
 const STREETBOT_AGENT_READ_API_BASES = [
@@ -986,6 +1072,30 @@ function getSelectedMarketplaceAgentIconURL(req) {
   return iconId ? `/images/agent-marketplace-icons/${iconId}.svg?v=${STREETBOT_AGENT_ICON_VERSION}` : '';
 }
 
+function getSelectedConversationAgentProfile(req) {
+  const selectedMarketplaceAgent = getSelectedMarketplaceAgent(req);
+  if (selectedMarketplaceAgent) {
+    const marketplaceProfile =
+      MARKETPLACE_AGENT_CONVERSATION_PROFILES.get(selectedMarketplaceAgent) ||
+      STREET_PROFILE_AGENT_CONVERSATION_PROFILES.get(selectedMarketplaceAgent);
+    if (marketplaceProfile) {
+      return {
+        id: selectedMarketplaceAgent,
+        ...marketplaceProfile,
+      };
+    }
+  }
+
+  const selectedStreetProfileAgent = getSelectedStreetProfileAgent(req);
+  const streetProfile = STREET_PROFILE_AGENT_CONVERSATION_PROFILES.get(selectedStreetProfileAgent);
+  return streetProfile
+    ? {
+        id: selectedStreetProfileAgent,
+        ...streetProfile,
+      }
+    : null;
+}
+
 async function fetchStreetProfileJson(pathname) {
   for (const base of STREET_PROFILE_API_BASES) {
     const url = `${String(base).replace(/\/$/, '')}${pathname}`;
@@ -1439,9 +1549,126 @@ async function loadGrantAgentItems(userText) {
   ]).map(normalizeGrantForAgent);
 }
 
+const MARKETPLACE_AGENT_RESULT_KEYWORDS = new Map([
+  [
+    'agent/job_search_agent',
+    [
+      'job',
+      'jobs',
+      'role',
+      'roles',
+      'position',
+      'positions',
+      'opening',
+      'openings',
+      'career',
+      'careers',
+      'hiring',
+      'work',
+      'employment',
+      'job board',
+    ],
+  ],
+  [
+    'agent/gallery_agent',
+    [
+      'art',
+      'arts',
+      'artwork',
+      'artworks',
+      'artist',
+      'artists',
+      'gallery',
+      'piece',
+      'pieces',
+      'collection',
+      'collections',
+      'exhibit',
+      'exhibition',
+      'creative work',
+    ],
+  ],
+  [
+    'agent/academy_agent',
+    [
+      'course',
+      'courses',
+      'class',
+      'classes',
+      'academy',
+      'training',
+      'workshop',
+      'workshops',
+      'lesson',
+      'lessons',
+      'learn',
+      'learning',
+      'program',
+      'programs',
+    ],
+  ],
+  [
+    'agent/grant_manager',
+    [
+      'grant',
+      'grants',
+      'funding',
+      'funder',
+      'funders',
+      'opportunity',
+      'opportunities',
+      'deadline',
+      'deadlines',
+      'proposal',
+      'proposals',
+      'pipeline',
+    ],
+  ],
+]);
+const MARKETPLACE_AGENT_RESULT_ACTION_PATTERN =
+  /\b(show|return|list|find|search|look\s+up|pull|fetch|surface|display|render|browse|recommend|match|matches|open|get|give\s+me|bring\s+up|need|want|looking\s+for|seeking|available|apply|application)\b/i;
+const MARKETPLACE_AGENT_GENERAL_CHAT_PATTERN =
+  /\b(hello|hi|hey|how\s+are\s+you|what\s+are\s+you\s+good\s+for|what\s+can\s+you\s+do|who\s+are\s+you|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+do\s+you\s+do)\b/i;
+
+function includesMarketplaceAgentDomainKeyword(selectedAgent, userText) {
+  const keywords = MARKETPLACE_AGENT_RESULT_KEYWORDS.get(selectedAgent) || [];
+  const text = normalizeText(userText);
+  return keywords.some((keyword) => {
+    const normalizedKeyword = normalizeText(keyword);
+    return new RegExp(`\\b${escapeRegExp(normalizedKeyword)}\\b`, 'i').test(text);
+  });
+}
+
+function looksLikeMarketplaceAgentResultsRequest(selectedAgent, userText) {
+  if (!STREETBOT_RENDERED_AGENT_IDS.has(selectedAgent)) {
+    return false;
+  }
+  const text = String(userText || '').trim();
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return false;
+  }
+
+  const hasDomainKeyword = includesMarketplaceAgentDomainKeyword(selectedAgent, normalized);
+  if (!hasDomainKeyword) {
+    return false;
+  }
+
+  if (MARKETPLACE_AGENT_RESULT_ACTION_PATTERN.test(normalized)) {
+    return true;
+  }
+  if (/\b(cards?|results?|ui|actual|real)\b/i.test(normalized)) {
+    return true;
+  }
+  if (countTokens(normalized) <= 5 && !MARKETPLACE_AGENT_GENERAL_CHAT_PATTERN.test(normalized)) {
+    return true;
+  }
+  return false;
+}
+
 async function buildStreetBotAgentResultsResponse(req, userText, runProgressPhase) {
   const selectedAgent = getSelectedMarketplaceAgent(req);
-  if (!STREETBOT_RENDERED_AGENT_IDS.has(selectedAgent)) {
+  if (!looksLikeMarketplaceAgentResultsRequest(selectedAgent, userText)) {
     return null;
   }
 
@@ -3772,7 +3999,21 @@ function looksLikeBroadServiceBrowseRequest(value, candidateArgs = null) {
 
 async function getRagModule() {
   if (!ragModulePromise) {
-    ragModulePromise = import('/app/tools/streetbot-rag-mcp.mjs');
+    const moduleCandidates = [
+      process.env.STREETBOT_RAG_MCP_MODULE_PATH,
+      process.env.STREETBOT_RAG_MCP_MODULE,
+      '/app/tools/streetbot-rag-mcp.mjs',
+      path.join(__dirname, 'streetbot-rag-mcp.mjs'),
+    ].filter(Boolean);
+    const modulePath =
+      moduleCandidates.find((candidate) => {
+        try {
+          return fs.existsSync(candidate);
+        } catch (_) {
+          return false;
+        }
+      }) || path.join(__dirname, 'streetbot-rag-mcp.mjs');
+    ragModulePromise = import(pathToFileURL(modulePath).href);
   }
   return ragModulePromise;
 }
@@ -3989,6 +4230,44 @@ function buildStreetBotGeneralFallback(userText = '', error = null) {
     error: error?.message || String(error || ''),
   });
   return "I'm here with you. We can talk it through, or I can help you look for shelter, food, legal, health, or other support services.";
+}
+
+function buildSelectedAgentGeneralFallback(req, userText = '', error = null) {
+  const agentProfile = getSelectedConversationAgentProfile(req);
+  if (!agentProfile) {
+    return buildStreetBotGeneralFallback(userText, error);
+  }
+
+  const text = String(userText || '').trim();
+  const normalized = normalizeText(text);
+  const capability = `I can chat normally, and when you ask me to find, show, list, or return results, I can pull ${agentProfile.cardLabel} from ${agentProfile.source}.`;
+  if (!normalized) {
+    return `I'm ${agentProfile.label}. ${capability}`;
+  }
+
+  if (matchesAny(text, GREETING_PATTERNS)) {
+    return `${agentProfile.label} here. ${capability}`;
+  }
+  if (
+    matchesAny(text, IDENTITY_PATTERNS) ||
+    /\b(what\s+are\s+you\s+good\s+for|what\s+can\s+you\s+do|what\s+do\s+you\s+do|help\s+me\s+with)\b/i.test(
+      normalized,
+    )
+  ) {
+    return `I'm ${agentProfile.label}. I ${agentProfile.purpose}, and I can still handle regular conversation when you just want to talk. ${capability}`;
+  }
+  if (matchesAny(text, CHECKIN_PATTERNS)) {
+    return `I'm steady and ready to help. ${capability}`;
+  }
+  if (/^\s*(what|who|where|when|why|how)\b/i.test(text)) {
+    return `I can help think that through as ${agentProfile.label}. Ask me conversationally, or ask me to show ${agentProfile.cardLabel} when you want the real ${agentProfile.source} UI.`;
+  }
+
+  logger.warn('[streetbot-fastpath] using selected-agent fallback after model failure', {
+    selectedAgent: agentProfile.id,
+    error: error?.message || String(error || ''),
+  });
+  return `${agentProfile.label} here. I can talk this through with you, and I can return actual ${agentProfile.cardLabel} from ${agentProfile.source} when you ask for results.`;
 }
 
 function buildStreetBotConversationIntentResult(normalized, options = {}) {
@@ -4783,17 +5062,37 @@ function buildStreetBotConversationSystemPrompt(userContext = {}) {
     .join('\n');
 }
 
-function buildStreetBotConversationStyleNote(userText = '') {
+function buildSelectedAgentConversationSystemPrompt(agentProfile = null, userContext = {}) {
+  if (!agentProfile?.label) {
+    return '';
+  }
+  const locationLabel = getStreetBotPreferredLocationLabel(userContext);
+  return [
+    `Operating mode: I am ${agentProfile.label}, a Street Voices specialist agent.`,
+    `My domain is ${agentProfile.purpose}.`,
+    'I can have ordinary general conversation. I should answer greetings, identity questions, casual check-ins, and open-ended questions naturally as myself.',
+    `When the user clearly asks me to find, show, list, return, or search ${agentProfile.cardLabel}, the backend may render actual UI cards from ${agentProfile.source}.`,
+    'Do not claim to be Street Bot unless the selected agent is Street Bot. Do not mention backend routing.',
+    locationLabel
+      ? `The user's saved service-search location is ${locationLabel}; only use it if location matters.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildStreetBotConversationStyleNote(userText = '', agentProfile = null) {
   const normalized = normalizeText(userText);
+  const label = agentProfile?.label || 'Street Bot';
   if (!normalized) {
     return '';
   }
 
   if (/\b(your name|who are you|what are you|introduce yourself)\b/i.test(normalized)) {
-    return 'Conversation style note: answer as Street Bot in a friendly sentence or two, not as a one-word label.';
+    return `Conversation style note: answer as ${label} in a friendly sentence or two, not as a one-word label.`;
   }
 
-  return 'Conversation style note: answer naturally and directly in one to three useful sentences, with the same warm Street Bot voice.';
+  return `Conversation style note: answer naturally and directly in one to three useful sentences, with the same warm ${label} voice.`;
 }
 
 const STREAM_PROGRESS_PHASES = {
@@ -4972,10 +5271,15 @@ async function buildStreetBotConversationMessages(req, conversationId, userText)
   const userId = req?.user?.id;
   const userContext = getStreetBotUserContext(req?.body?._streetbotUserContext);
   const serviceContext = getServiceContext(req?._streetbotServiceContext);
+  const selectedAgentProfile = getSelectedConversationAgentProfile(req);
+  const selectedAgentPrompt = buildSelectedAgentConversationSystemPrompt(
+    selectedAgentProfile,
+    userContext,
+  );
   const systemSegments = [
-    buildStreetBotConversationSystemPrompt(userContext),
+    selectedAgentPrompt || buildStreetBotConversationSystemPrompt(userContext),
     buildStreetBotConversationGuardrail(serviceContext),
-    buildStreetBotConversationStyleNote(userText),
+    buildStreetBotConversationStyleNote(userText, selectedAgentProfile),
   ];
   if (hasStreetBotPreferredLocation(userContext) && looksLikeStreetBotServiceRequest(userText)) {
     const locationLabel = getStreetBotPreferredLocationLabel(userContext);
@@ -5688,7 +5992,7 @@ async function streetbotFastPath(req, res, _next) {
           logger.warn('[streetbot-fastpath] conversation model unavailable, using fallback', {
             error: error?.message || String(error || ''),
           });
-          responseText = buildStreetBotGeneralFallback(userText, error);
+          responseText = buildSelectedAgentGeneralFallback(req, userText, error);
           responseAlreadyStreamed = false;
         }
         searchResult = { ok: true, returned_count: 0, items: [], has_more: false };
