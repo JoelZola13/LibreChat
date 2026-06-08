@@ -1629,6 +1629,54 @@ const MARKETPLACE_AGENT_RESULT_ACTION_PATTERN =
   /\b(show|return|list|find|search|look\s+up|pull|fetch|surface|display|render|browse|recommend|match|matches|open|get|give\s+me|bring\s+up|need|want|looking\s+for|seeking|available|apply|application)\b/i;
 const MARKETPLACE_AGENT_GENERAL_CHAT_PATTERN =
   /\b(hello|hi|hey|how\s+are\s+you|what\s+are\s+you\s+good\s+for|what\s+can\s+you\s+do|who\s+are\s+you|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+do\s+you\s+do)\b/i;
+const AGENT_RESULT_COUNT_PATTERN =
+  /\b(how\s+many|count|counts?|total|number\s+of|do\s+we\s+have|available|active)\b/i;
+const STREET_PROFILE_AGENT_RESULT_KEYWORDS = new Map([
+  [
+    'agent/street_profile_agent',
+    [
+      'street profile',
+      'profile',
+      'profiles',
+      'people',
+      'directory',
+      'creator',
+      'creators',
+      'group',
+      'groups',
+      'member',
+      'members',
+      'message',
+      'messages',
+      'dm',
+      'dms',
+      'inbox',
+      'word on the street',
+      'post',
+      'posts',
+      'feed',
+      'news',
+      'announcement',
+      'announcements',
+    ],
+  ],
+  [
+    'agent/profiles_agent',
+    ['profile', 'profiles', 'people', 'directory', 'creator', 'creators', 'bio', 'bios', 'links'],
+  ],
+  [
+    'agent/messaging_agent',
+    ['message', 'messages', 'dm', 'dms', 'inbox', 'direct message', 'direct messages', 'chat', 'chats'],
+  ],
+  [
+    'agent/groups_agent',
+    ['group', 'groups', 'member', 'members', 'membership', 'channel', 'channels', 'community'],
+  ],
+  [
+    'agent/word_on_the_street_agent',
+    ['word on the street', 'post', 'posts', 'feed', 'news', 'announcement', 'announcements', 'update', 'updates'],
+  ],
+]);
 
 function includesMarketplaceAgentDomainKeyword(selectedAgent, userText) {
   const keywords = MARKETPLACE_AGENT_RESULT_KEYWORDS.get(selectedAgent) || [];
@@ -1657,10 +1705,59 @@ function looksLikeMarketplaceAgentResultsRequest(selectedAgent, userText) {
   if (MARKETPLACE_AGENT_RESULT_ACTION_PATTERN.test(normalized)) {
     return true;
   }
+  if (AGENT_RESULT_COUNT_PATTERN.test(normalized)) {
+    return true;
+  }
   if (/\b(cards?|results?|ui|actual|real)\b/i.test(normalized)) {
     return true;
   }
   if (countTokens(normalized) <= 5 && !MARKETPLACE_AGENT_GENERAL_CHAT_PATTERN.test(normalized)) {
+    return true;
+  }
+  return false;
+}
+
+function includesStreetProfileAgentDomainKeyword(selectedAgent, userText) {
+  const keywords = STREET_PROFILE_AGENT_RESULT_KEYWORDS.get(selectedAgent) || [];
+  const text = normalizeText(userText);
+  return keywords.some((keyword) => {
+    const normalizedKeyword = normalizeText(keyword);
+    return new RegExp(`\\b${escapeRegExp(normalizedKeyword)}\\b`, 'i').test(text);
+  });
+}
+
+function looksLikeStreetProfileAgentResultsRequest(selectedAgent, userText) {
+  if (!STREET_PROFILE_AGENT_IDS.has(selectedAgent)) {
+    return false;
+  }
+  const text = String(userText || '').trim();
+  const normalized = normalizeText(text);
+  if (!normalized || MARKETPLACE_AGENT_GENERAL_CHAT_PATTERN.test(normalized)) {
+    return false;
+  }
+
+  if (
+    selectedAgent === 'agent/street_profile_agent' &&
+    /\b(overview|all|everything|overall|areas?|connected|summary|summari[sz]e)\b/i.test(normalized)
+  ) {
+    return true;
+  }
+
+  const hasDomainKeyword = includesStreetProfileAgentDomainKeyword(selectedAgent, normalized);
+  if (!hasDomainKeyword) {
+    return false;
+  }
+
+  if (MARKETPLACE_AGENT_RESULT_ACTION_PATTERN.test(normalized)) {
+    return true;
+  }
+  if (AGENT_RESULT_COUNT_PATTERN.test(normalized)) {
+    return true;
+  }
+  if (/\b(cards?|results?|ui|actual|real|data|records?)\b/i.test(normalized)) {
+    return true;
+  }
+  if (countTokens(normalized) <= 5) {
     return true;
   }
   return false;
@@ -2402,6 +2499,10 @@ async function buildStreetProfileFamilyResponse(req, userText, runProgressPhase)
   const messageSendResponse = await buildStreetProfileMessageSendResponse(req, userText);
   if (messageSendResponse) {
     return messageSendResponse;
+  }
+
+  if (!looksLikeStreetProfileAgentResultsRequest(selectedAgent, userText)) {
+    return null;
   }
 
   const normalized = String(userText || '').toLowerCase();
@@ -4232,6 +4333,43 @@ function buildStreetBotGeneralFallback(userText = '', error = null) {
   return "I'm here with you. We can talk it through, or I can help you look for shelter, food, legal, health, or other support services.";
 }
 
+function buildSelectedAgentCapabilitySentence(agentProfile) {
+  return `I can have normal conversation, and when you ask me to find, show, list, count, or return results, I can pull ${agentProfile.cardLabel} from ${agentProfile.source}.`;
+}
+
+function normalizeSelectedAgentTextSegment(agentProfile, value) {
+  const text = String(value || '');
+  return text
+    .replace(/\bStreet\s*Bot\s*0\.1(?:\s*Pro)?\b/gi, agentProfile.label)
+    .replace(/\bStreet\s*Bot(?:\s*Pro)?\b/gi, agentProfile.label)
+    .replace(/\bStreetBot\b/g, agentProfile.label)
+    .replace(/\bStreetbot\b/g, agentProfile.label)
+    .replace(new RegExp(`${escapeRegExp(agentProfile.label)}\\s+here\\s+here`, 'gi'), `${agentProfile.label} here`)
+}
+
+function normalizeSelectedAgentResponseText(req, value) {
+  const agentProfile = getSelectedConversationAgentProfile(req);
+  const text = String(value || '').trim();
+  if (!agentProfile || !text) {
+    return text;
+  }
+  return text
+    .split(/(```[\s\S]*?```)/g)
+    .map((segment) =>
+      segment.startsWith('```') ? segment : normalizeSelectedAgentTextSegment(agentProfile, segment),
+    )
+    .join('')
+    .trim();
+}
+
+function sanitizeSelectedAgentAssistantHistoryText(value, agentProfile = null) {
+  const text = sanitizeStreetBotConversationHistoryText(value);
+  if (!agentProfile) {
+    return text;
+  }
+  return normalizeSelectedAgentTextSegment(agentProfile, text);
+}
+
 function buildSelectedAgentGeneralFallback(req, userText = '', error = null) {
   const agentProfile = getSelectedConversationAgentProfile(req);
   if (!agentProfile) {
@@ -4240,13 +4378,13 @@ function buildSelectedAgentGeneralFallback(req, userText = '', error = null) {
 
   const text = String(userText || '').trim();
   const normalized = normalizeText(text);
-  const capability = `I can chat normally, and when you ask me to find, show, list, or return results, I can pull ${agentProfile.cardLabel} from ${agentProfile.source}.`;
+  const capability = buildSelectedAgentCapabilitySentence(agentProfile);
   if (!normalized) {
     return `I'm ${agentProfile.label}. ${capability}`;
   }
 
   if (matchesAny(text, GREETING_PATTERNS)) {
-    return `${agentProfile.label} here. ${capability}`;
+    return `${agentProfile.label} here. What do you want to work through? ${capability}`;
   }
   if (
     matchesAny(text, IDENTITY_PATTERNS) ||
@@ -4254,20 +4392,35 @@ function buildSelectedAgentGeneralFallback(req, userText = '', error = null) {
       normalized,
     )
   ) {
-    return `I'm ${agentProfile.label}. I ${agentProfile.purpose}, and I can still handle regular conversation when you just want to talk. ${capability}`;
+    return `I'm ${agentProfile.label}. I ${agentProfile.purpose}. You can talk to me normally, ask strategy questions, or ask me to return the actual ${agentProfile.source} UI when you want live results.`;
   }
   if (matchesAny(text, CHECKIN_PATTERNS)) {
-    return `I'm steady and ready to help. ${capability}`;
+    return `I'm steady and ready. We can chat, plan, or pull the relevant ${agentProfile.source} results when you need them.`;
+  }
+  if (matchesAny(text, THANKS_PATTERNS)) {
+    return `Anytime. I'm still here as ${agentProfile.label} when you want to keep going.`;
+  }
+  if (
+    /\bcapital\b/i.test(text) &&
+    /\b(congo|drc|democratic republic of congo|republic of the congo)\b/i.test(text)
+  ) {
+    return 'If you mean the Republic of the Congo, the capital is Brazzaville. If you mean the Democratic Republic of the Congo, the capital is Kinshasa.';
+  }
+  if (looksLikeRelationalTurn(text)) {
+    return `I hear you. ${agentProfile.label} can stay with the conversation, not just pull data. Tell me what part matters most and we’ll work through it.`;
+  }
+  if (matchesAny(text, SUPPORT_PATTERNS) && !looksLikeStreetProfileAgentResultsRequest(agentProfile.id, text)) {
+    return 'I hear you. Let’s slow it down to one next step: say what feels most urgent, and I’ll help you sort it without rushing.';
   }
   if (/^\s*(what|who|where|when|why|how)\b/i.test(text)) {
-    return `I can help think that through as ${agentProfile.label}. Ask me conversationally, or ask me to show ${agentProfile.cardLabel} when you want the real ${agentProfile.source} UI.`;
+    return `I can help think that through as ${agentProfile.label}. Give me the context you care about, and I’ll answer directly; when you want live results, ask me to show ${agentProfile.cardLabel}.`;
   }
 
   logger.warn('[streetbot-fastpath] using selected-agent fallback after model failure', {
     selectedAgent: agentProfile.id,
     error: error?.message || String(error || ''),
   });
-  return `${agentProfile.label} here. I can talk this through with you, and I can return actual ${agentProfile.cardLabel} from ${agentProfile.source} when you ask for results.`;
+  return `${agentProfile.label} here. I can talk this through with you in plain language, and I can return actual ${agentProfile.cardLabel} from ${agentProfile.source} when you ask for results.`;
 }
 
 function buildStreetBotConversationIntentResult(normalized, options = {}) {
@@ -5073,6 +5226,7 @@ function buildSelectedAgentConversationSystemPrompt(agentProfile = null, userCon
     'I can have ordinary general conversation. I should answer greetings, identity questions, casual check-ins, and open-ended questions naturally as myself.',
     `When the user clearly asks me to find, show, list, return, or search ${agentProfile.cardLabel}, the backend may render actual UI cards from ${agentProfile.source}.`,
     'Do not claim to be Street Bot unless the selected agent is Street Bot. Do not mention backend routing.',
+    'If older conversation history contains a response that says Street Bot, treat it as a stale local bug and continue under my selected agent name.',
     locationLabel
       ? `The user's saved service-search location is ${locationLabel}; only use it if location matters.`
       : '',
@@ -5301,17 +5455,19 @@ async function buildStreetBotConversationMessages(req, conversationId, userText)
     try {
       const history = await getMessages({ conversationId, user: userId });
       for (const message of history || []) {
-        const content = extractMessageTextForModel(message);
+        const role =
+          message.isCreatedByUser || /^User$/i.test(String(message.sender || ''))
+            ? 'user'
+            : 'assistant';
+        const rawContent = extractMessageTextForModel(message);
+        const content =
+          role === 'assistant'
+            ? sanitizeSelectedAgentAssistantHistoryText(rawContent, selectedAgentProfile)
+            : rawContent;
         if (!content) {
           continue;
         }
-        messages.push({
-          role:
-            message.isCreatedByUser || /^User$/i.test(String(message.sender || ''))
-              ? 'user'
-              : 'assistant',
-          content,
-        });
+        messages.push({ role, content });
       }
     } catch (error) {
       logger.warn(
@@ -5362,6 +5518,8 @@ async function runStreetBotConversationModel(
       )
     : await buildStreetBotConversationMessages(req, conversationId, userText);
   const primaryPhase = inferStreetBotConversationPhase(userText);
+  const selectedAgentProfile = getSelectedConversationAgentProfile(req);
+  const useBackendStreaming = STREETBOT_BACKEND_STREAMING_ENABLED && !selectedAgentProfile;
   return phaseRunner(primaryPhase, async () => {
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), STREETBOT_CONVERSATION_TIMEOUT_MS);
@@ -5376,7 +5534,7 @@ async function runStreetBotConversationModel(
         },
         body: JSON.stringify({
           model,
-          stream: STREETBOT_BACKEND_STREAMING_ENABLED,
+          stream: useBackendStreaming,
           messages,
           temperature: Number.isFinite(Number(req?.body?.temperature))
             ? Number(req.body.temperature)
@@ -5394,7 +5552,7 @@ async function runStreetBotConversationModel(
         );
       }
 
-      if (!STREETBOT_BACKEND_STREAMING_ENABLED) {
+      if (!useBackendStreaming) {
         const payload = await response.json();
         const content = payload?.choices?.[0]?.message?.content ?? payload?.output_text ?? '';
         const responseText = (
@@ -5414,7 +5572,7 @@ async function runStreetBotConversationModel(
         if (looksLikeStreetBotModelFailureText(responseText)) {
           throw new Error(`Street Bot provider returned a model failure response: ${responseText.slice(0, 180)}`);
         }
-        return responseText;
+        return normalizeSelectedAgentResponseText(req, responseText);
       }
 
       const processStreamPayload = (dataStr, state) => {
@@ -5521,7 +5679,7 @@ async function runStreetBotConversationModel(
       if (looksLikeStreetBotModelFailureText(responseText)) {
         throw new Error(`Street Bot provider returned a model failure response: ${responseText.slice(0, 180)}`);
       }
-      return responseText;
+      return normalizeSelectedAgentResponseText(req, responseText);
     } catch (error) {
       if (abortController.signal.aborted || error?.name === 'AbortError') {
         throw new Error(
@@ -5868,7 +6026,12 @@ async function streetbotFastPath(req, res, _next) {
     const isNewConvo = !reqConversationId || reqConversationId === 'new';
     const selectedStreetProfileAgent = getSelectedStreetProfileAgent(req);
     const selectedMarketplaceAgent = getSelectedMarketplaceAgent(req);
+    const selectedAgentProfile = getSelectedConversationAgentProfile(req);
     const selectedMarketplaceAgentIconURL = getSelectedMarketplaceAgentIconURL(req);
+    const selectedAgentSender = selectedAgentProfile?.label || getStreetBotDisplayLabel(
+      endpointOption.endpoint,
+      endpointOption.model_parameters?.modelLabel || req.body?.modelDisplayLabel,
+    );
     const forceStreetAgentTextStream = Boolean(
       selectedStreetProfileAgent || STREETBOT_RENDERED_AGENT_IDS.has(selectedMarketplaceAgent),
     );
@@ -5898,10 +6061,7 @@ async function streetbotFastPath(req, res, _next) {
     await GenerationJobManager.updateMetadata(streamId, {
       conversationId,
       responseMessageId,
-      sender: getStreetBotDisplayLabel(
-        endpointOption.endpoint,
-        endpointOption.model_parameters?.modelLabel || req.body?.modelDisplayLabel,
-      ),
+      sender: selectedAgentSender,
       model: endpointOption.modelOptions?.model || endpointOption.model_parameters?.model,
       iconURL:
         selectedMarketplaceAgentIconURL ||
@@ -5931,10 +6091,13 @@ async function streetbotFastPath(req, res, _next) {
     const forceMarketplaceAgentConversation = STREETBOT_RENDERED_AGENT_IDS.has(
       selectedMarketplaceAgent,
     );
-    const toolBase = forceMarketplaceAgentConversation
+    const forceSelectedAgentConversation = Boolean(
+      selectedStreetProfileAgent || forceMarketplaceAgentConversation,
+    );
+    const toolBase = forceSelectedAgentConversation
       ? 'conversation'
       : detectedIntent?.toolBase || 'services_search';
-    let responseText = forceMarketplaceAgentConversation
+    let responseText = forceSelectedAgentConversation
       ? ''
       : String(detectedIntent?.responseText || '').trim();
     let searchResult = null;
@@ -5987,7 +6150,7 @@ async function streetbotFastPath(req, res, _next) {
             responseMessageId,
             nextProgressStepIndex,
           );
-          responseAlreadyStreamed = STREETBOT_FASTPATH_STREAMING_ENABLED;
+          responseAlreadyStreamed = STREETBOT_FASTPATH_STREAMING_ENABLED && !selectedAgentProfile;
         } catch (error) {
           logger.warn('[streetbot-fastpath] conversation model unavailable, using fallback', {
             error: error?.message || String(error || ''),
@@ -6222,6 +6385,8 @@ async function streetbotFastPath(req, res, _next) {
       };
     }
 
+    responseText = normalizeSelectedAgentResponseText(req, responseText);
+
     if (
       (STREETBOT_FASTPATH_STREAMING_ENABLED || forceStreetAgentTextStream) &&
       !responseAlreadyStreamed &&
@@ -6255,10 +6420,7 @@ async function streetbotFastPath(req, res, _next) {
       messageId: responseMessageId,
       conversationId,
       parentMessageId: userMessageId,
-      sender: getStreetBotDisplayLabel(
-        endpointOption.endpoint,
-        endpointOption.model_parameters?.modelLabel || req.body?.modelDisplayLabel,
-      ),
+      sender: selectedAgentSender,
       text: responseText,
       content: [{ type: 'text', text: responseText }],
       isCreatedByUser: false,
@@ -6282,10 +6444,7 @@ async function streetbotFastPath(req, res, _next) {
       conversationId,
       endpoint: endpointOption.endpoint,
       model: endpointOption.modelOptions?.model || endpointOption.model_parameters?.model,
-      modelLabel: getStreetBotDisplayLabel(
-        endpointOption.endpoint,
-        endpointOption.model_parameters?.modelLabel || req.body?.modelDisplayLabel,
-      ),
+      modelLabel: selectedAgentSender,
       ...(title ? { title } : {}),
     };
 
