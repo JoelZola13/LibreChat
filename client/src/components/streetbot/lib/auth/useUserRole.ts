@@ -21,6 +21,7 @@ export type UserRole = 'admin' | 'designer' | 'media' | 'service_user' | 'user';
 const ROLE_PAGES: Record<UserRole, Set<string>> = {
   admin: new Set([
     'profile',
+    'email',
     'forum',
     'gallery',
     'groups',

@@ -61,6 +61,8 @@
     "e2e:messages-ci:local": "npm run e2e:messages-auth:seed && npm run e2e:messages-auth:verify && npm run e2e:messages-smoke",
     "e2e:messages-ci:required": "node e2e/setup/bootstrap-messages-storage-state.mjs --require && npm run e2e:messages-auth:verify && npm run e2e:messages-smoke",
     "e2e:messages-smoke": "playwright test --config=e2e/playwright.messages.config.ts e2e/specs/social-messages-smoke.spec.ts",
+    "e2e:streetbot-agents": "playwright test --config=e2e/playwright.messages.config.ts e2e/specs/streetbot-agent-actions.spec.ts",
+    "e2e:streetbot-agents:local": "cross-env MESSAGES_AUTH_SEED_MONGO_URI=mongodb://127.0.0.1:27018/LibreChat npm run e2e:messages-auth:seed && npm run e2e:streetbot-agents",
     "e2e:a11y": "playwright test --config=e2e/playwright.config.a11y.ts --headed",
     "e2e:ci": "playwright test --config=e2e/playwright.config.ts",
     "e2e:debug": "cross-env PWDEBUG=1 playwright test --config=e2e/playwright.config.local.ts",

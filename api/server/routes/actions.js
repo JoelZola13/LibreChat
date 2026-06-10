@@ -16,10 +16,32 @@ const { findToken, updateToken, createToken } = require('~/models');
 const { requireJwtAuth } = require('~/server/middleware');
 const { getFlowStateManager } = require('~/config');
 const { getLogStores } = require('~/cache');
+const {
+  executeStreetBotAction,
+  getStreetBotActionManifest,
+} = require('~/server/services/StreetBot/actionBridge');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 const OAUTH_CSRF_COOKIE_PATH = '/api/actions';
+
+router.get('/streetbot', requireJwtAuth, (_req, res) => {
+  res.json(getStreetBotActionManifest());
+});
+
+router.post('/streetbot/execute', requireJwtAuth, async (req, res) => {
+  try {
+    const result = await executeStreetBotAction(req, req.body || {});
+    res.json(result);
+  } catch (error) {
+    logger.error('[StreetBot Actions] Action execution failed', error);
+    res.status(error?.status || 500).json({
+      ok: false,
+      error: error?.message || 'StreetBot action failed',
+      details: error?.details || undefined,
+    });
+  }
+});
 
 /**
  * Sets a CSRF cookie binding the action OAuth flow to the current browser session.

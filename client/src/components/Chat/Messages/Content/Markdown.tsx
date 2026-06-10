@@ -19,7 +19,7 @@ import { ArtifactProvider, CodeBlockProvider } from '~/Providers';
 import MarkdownErrorBoundary from './MarkdownErrorBoundary';
 import { langSubset, preprocessLaTeX } from '~/utils';
 import { unicodeCitation } from '~/components/Web';
-import { code, a, p, img } from './MarkdownComponents';
+import { code, pre, a, p, img } from './MarkdownComponents';
 import StreetBotServiceResults from './StreetBotServiceResults';
 import StreetBotAgentResults from './StreetBotAgentResults';
 import StreetProfileResults from './StreetProfileResults';
@@ -139,6 +139,7 @@ const Markdown = memo(({ content = '', isLatestMessage }: TContentProps) => {
       components={
         {
           code,
+          pre,
           a,
           p,
           img,

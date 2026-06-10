@@ -8,6 +8,8 @@ const defaultBaseURL = process.env.LIBRECHAT_BASE_URL || 'http://localhost:3180'
 const defaultStorageState = path.resolve(process.cwd(), 'e2e/.auth/messages-storage-state.json');
 const messagesFrame = 'iframe[title="Street Voices Messages"]';
 const messagesSidebar = 'aside[aria-label="Messages workspace"]';
+const integratedMessagesHeading = 'Direct messages';
+const integratedMessagesSidebarItem = 'Channel browser';
 
 const args = process.argv.slice(2);
 
@@ -261,18 +263,33 @@ try {
     );
   }
 
-  await page.waitForSelector(messagesFrame, { state: 'attached', timeout: timeoutMs });
-  await page
-    .frameLocator(messagesFrame)
-    .locator(messagesSidebar)
-    .waitFor({ state: 'visible', timeout: timeoutMs });
+  await Promise.race([
+    page.waitForSelector(messagesFrame, { state: 'attached', timeout: timeoutMs }),
+    page.getByRole('heading', { name: integratedMessagesHeading }).waitFor({
+      state: 'visible',
+      timeout: timeoutMs,
+    }),
+  ]);
+
+  const embeddedFrameCount = await page.locator(messagesFrame).count();
+  if (embeddedFrameCount > 0) {
+    await page
+      .frameLocator(messagesFrame)
+      .locator(messagesSidebar)
+      .waitFor({ state: 'visible', timeout: timeoutMs });
+  } else {
+    await page.getByText(integratedMessagesSidebarItem, { exact: true }).waitFor({
+      state: 'visible',
+      timeout: timeoutMs,
+    });
+  }
 
   await context.storageState({ path: storageStatePath });
 
   console.log(`Messages storage-state verified against ${messagesUrl}`);
 } catch (error) {
   const detail = (error instanceof Error ? error.message : String(error)).split('\n')[0];
-  verificationError = `could not render the authenticated Messages shell/sidebar at ${messagesUrl}. Capture a fresh Messages auth state. ${detail}`;
+  verificationError = `could not render the authenticated Messages page shell/sidebar at ${messagesUrl}. Capture a fresh Messages auth state. ${detail}`;
 } finally {
   await browser.close();
 }

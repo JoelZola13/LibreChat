@@ -52,7 +52,11 @@ export const NAV_WIDTH = {
 } as const;
 
 const SIDEBAR_ASSET_VERSION = 'sidebar-icons-20260523';
-const sidebarAsset = (path: string) => `${path}?v=${SIDEBAR_ASSET_VERSION}`;
+const sidebarAsset = (path: string) =>
+  path.startsWith('data:') ? path : `${path}?v=${SIDEBAR_ASSET_VERSION}`;
+const EMAIL_SIDEBAR_ICON = `data:image/svg+xml,${encodeURIComponent(
+  '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.75 6.75H19.25V17.25H4.75V6.75Z" stroke="black" stroke-width="1.8" stroke-linejoin="round"/><path d="M5.25 7.25L12 12.25L18.75 7.25" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+)}`;
 
 // Street Voices menu items — mirrors the 3190 sidebar source of truth.
 const sidePanelNavItems = [
@@ -61,6 +65,13 @@ const sidePanelNavItems = [
     label: 'Street Profile',
     icon: '/images/sidebar-icons/profile-avatar.svg',
     path: '/profiles',
+    external: false,
+  },
+  {
+    key: 'email',
+    label: 'Email',
+    icon: EMAIL_SIDEBAR_ICON,
+    path: '/email/campaigns',
     external: false,
   },
   {

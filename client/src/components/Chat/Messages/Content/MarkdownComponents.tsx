@@ -8,6 +8,7 @@ import Mermaid from '~/components/Messages/Content/Mermaid';
 import StreetBotServiceResults from '~/components/Chat/Messages/Content/StreetBotServiceResults';
 import StreetBotAgentResults from '~/components/Chat/Messages/Content/StreetBotAgentResults';
 import StreetProfileResults from '~/components/Chat/Messages/Content/StreetProfileResults';
+import StreetBotActionRequest from '~/components/Chat/Messages/Content/StreetBotActionRequest';
 import useHasAccess from '~/hooks/Roles/useHasAccess';
 import { useFileDownload } from '~/data-provider';
 import { useCodeBlockContext } from '~/Providers';
@@ -23,14 +24,24 @@ type TCodeProps = {
   children: React.ReactNode;
 };
 
+type TPreProps = React.HTMLAttributes<HTMLPreElement> & {
+  node?: unknown;
+  children?: React.ReactNode;
+};
+
 const getCodeContent = (children: React.ReactNode): string => {
   if (typeof children === 'string') {
     return children;
   }
+  if (typeof children === 'number') {
+    return String(children);
+  }
   if (Array.isArray(children)) {
-    return children
-      .map((child) => (typeof child === 'string' ? child : String(child ?? '')))
-      .join('');
+    return children.map((child) => getCodeContent(child)).join('');
+  }
+  if (React.isValidElement(children)) {
+    const props = children.props as { children?: React.ReactNode };
+    return getCodeContent(props.children);
   }
   return String(children ?? '');
 };
@@ -63,6 +74,49 @@ const isStreetBotAgentResultBlock = (className: string | undefined): boolean => 
   }
   return getLanguageName(className) === 'streetbot-agent-results';
 };
+
+const isStreetBotActionRequestPayload = (content: string): boolean => {
+  try {
+    const payload = JSON.parse(content) as { actionId?: unknown; params?: unknown };
+    return typeof payload.actionId === 'string' && !!payload.params && typeof payload.params === 'object';
+  } catch {
+    return false;
+  }
+};
+
+const isStreetBotActionRequestBlock = (
+  className: string | undefined,
+  content: string,
+): boolean => {
+  const languageName = getLanguageName(className);
+  return (
+    languageName === 'local-action-request' ||
+    languageName === 'streetbot-action-request' ||
+    ((languageName === 'local' || languageName === 'streetbot') &&
+      isStreetBotActionRequestPayload(content))
+  );
+};
+
+export const pre: React.ElementType = memo(({ children, node: _node, ...props }: TPreProps) => {
+  const hasActionRequestChild = React.Children.toArray(children).some((child) => {
+    if (!React.isValidElement(child)) {
+      return false;
+    }
+
+    const childProps = child.props as { className?: string; children?: React.ReactNode };
+    const content = getCodeContent(childProps.children);
+    return (
+      content.split('\n').length > 1 &&
+      isStreetBotActionRequestBlock(childProps.className, content)
+    );
+  });
+
+  if (hasActionRequestChild) {
+    return <>{children}</>;
+  }
+
+  return <pre {...props}>{children}</pre>;
+});
 
 export const code: React.ElementType = memo(({ className, children }: TCodeProps) => {
   const canRunCode = useHasAccess({
@@ -97,6 +151,8 @@ export const code: React.ElementType = memo(({ className, children }: TCodeProps
     return <StreetBotAgentResults raw={content} />;
   } else if (!isSingleLine && isStreetBotServiceResultBlock(className, content)) {
     return <StreetBotServiceResults raw={content} />;
+  } else if (!isSingleLine && isStreetBotActionRequestBlock(className, content)) {
+    return <StreetBotActionRequest raw={content} />;
   } else if (isSingleLine) {
     return (
       <code onDoubleClick={handleDoubleClick} className={className}>
@@ -130,6 +186,8 @@ export const codeNoExecution: React.ElementType = memo(({ className, children }:
     return <StreetBotAgentResults raw={content} />;
   } else if (content.split('\n').length > 1 && isStreetBotServiceResultBlock(className, content)) {
     return <StreetBotServiceResults raw={content} />;
+  } else if (content.split('\n').length > 1 && isStreetBotActionRequestBlock(className, content)) {
+    return <StreetBotActionRequest raw={content} />;
   } else if (content.split('\n').length === 1) {
     return (
       <code onDoubleClick={handleDoubleClick} className={className}>

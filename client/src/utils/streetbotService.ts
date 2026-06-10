@@ -39,14 +39,24 @@ export type ServiceResultPayload = {
   data?: unknown[];
 };
 
-const SERVICE_RESULTS_FENCE = /```streetbot-service-results\s*[\s\S]*?```/gi;
+const RICH_RESULTS_FENCE =
+  /```(?:streetbot-service-results|streetbot-agent-results|street-profile-results|street-profile-message-draft)\s*[\s\S]*?```/gi;
+const RICH_RESULTS_INLINE =
+  /\b(?:streetbot-service-results|streetbot-agent-results|street-profile-results|street-profile-message-draft)\s*\{[\s\S]*$/i;
+const ACTION_REQUEST_FENCE = /```(?:streetbot-action-request|local-action-request)\s*[\s\S]*?```/gi;
+const ACTION_REQUEST_INLINE = /\b(?:streetbot-action-request|local-action-request)\s*\{[\s\S]*$/i;
 
 export const stripServiceResultPayloads = (text: string): string => {
   if (!text || typeof text !== 'string') {
     return '';
   }
 
-  return text.replace(SERVICE_RESULTS_FENCE, '').trim();
+  return text
+    .replace(RICH_RESULTS_FENCE, '')
+    .replace(RICH_RESULTS_INLINE, '')
+    .replace(ACTION_REQUEST_FENCE, 'Action ready for confirmation.')
+    .replace(ACTION_REQUEST_INLINE, 'Action ready for confirmation.')
+    .trim();
 };
 
 type ServiceLookupContext = {

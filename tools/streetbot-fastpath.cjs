@@ -25,6 +25,16 @@ try {
 } catch (_) {
   streetBotTelemetry = require('./streetbot-telemetry.cjs');
 }
+let streetBotActionBridge;
+try {
+  streetBotActionBridge = require('/app/tools/streetbot-action-bridge.cjs');
+} catch (_) {
+  try {
+    streetBotActionBridge = require('./streetbot-action-bridge.cjs');
+  } catch (error) {
+    streetBotActionBridge = null;
+  }
+}
 const {
   annotateStreetBotRequestTrace,
   applyStreetBotSpanAttributes,
@@ -622,6 +632,12 @@ const STREETBOT_AGENT_READ_API_BASES = [
   process.env.STREETBOT_READ_API_BASE,
   'https://streetbot-directory.pages.dev/sbapi',
 ].filter(Boolean);
+const STREETBOT_AGENT_LOCAL_API_BASES = [
+  process.env.STREETBOT_ACTIONS_NANOBOT_URL,
+  process.env.NANOBOT_LOCAL_API_BASE,
+  'http://host.docker.internal:18790',
+  'http://localhost:18790',
+].filter(Boolean);
 const STREET_PROFILE_API_BASES = [
   process.env.STREET_PROFILE_AGENT_API_BASE,
   process.env.NANOBOT_STREET_PROFILE_API_BASE,
@@ -921,6 +937,23 @@ const LOCAL_GRANT_OPPORTUNITIES = [
     },
   },
   {
+    id: 'nba-foundation-2026',
+    name: 'NBA Foundation Grant',
+    funder: 'NBA Foundation',
+    funderAbbrev: 'NBA',
+    amount: 'Avg $250K (range $25K-$500K)',
+    deadline: 'Rolling',
+    stage: 'identified',
+    url: 'https://nbafoundation.fluxx.io',
+    recommendation: 'pursue',
+    documents: {
+      opportunity: true,
+      narrative: false,
+      budget: false,
+      projectPlan: false,
+    },
+  },
+  {
     id: 'tgrip-extension',
     name: 'TGRIP - Organizational Capacity Development',
     funder: 'Toronto Grants',
@@ -938,7 +971,14 @@ const LOCAL_GRANT_OPPORTUNITIES = [
   },
 ];
 
+const GRANT_WORKSPACE_FILES = [
+  process.env.STREETBOT_GRANT_WORKSPACE_FILE,
+  '/app/uploads/streetbot-actions/grant-workspace.json',
+  path.resolve(__dirname, '../uploads/streetbot-actions/grant-workspace.json'),
+].filter(Boolean);
+
 const MESSAGE_DRAFT_FENCE = /```street-profile-message-draft\s*([\s\S]*?)```/gi;
+const STREETBOT_ACTION_FENCE = /```(?:streetbot-action-request|local-action-request)\s*([\s\S]*?)```/gi;
 
 let ragModulePromise;
 
@@ -1304,6 +1344,30 @@ async function fetchStreetBotReadJson(pathname) {
   return null;
 }
 
+async function fetchStreetBotLocalJson(pathname) {
+  const pathSuffix = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  for (const base of STREETBOT_AGENT_LOCAL_API_BASES) {
+    const url = `${String(base).replace(/\/$/, '')}${pathSuffix}`;
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(4500),
+      });
+      const contentType = String(response.headers.get('content-type') || '');
+      if (!response.ok || !contentType.includes('application/json')) {
+        continue;
+      }
+      return await response.json();
+    } catch (error) {
+      logger.debug('[streetbot-agent-actions] local API fetch failed', {
+        url,
+        error: error?.message || String(error || ''),
+      });
+    }
+  }
+  return null;
+}
+
 const AGENT_SEARCH_STOPWORDS = new Set([
   'a',
   'about',
@@ -1333,6 +1397,7 @@ const AGENT_SEARCH_STOPWORDS = new Set([
   'jobs',
   'list',
   'me',
+  'my',
   'need',
   'of',
   'on',
@@ -1350,6 +1415,7 @@ const AGENT_SEARCH_STOPWORDS = new Set([
   'what',
   'with',
   'work',
+  'your',
 ]);
 
 function extractAgentSearchTerms(userText) {
@@ -1383,10 +1449,36 @@ function pickAgentItemsForQuery(items, userText, fields) {
   if (!terms.length) {
     return list;
   }
-  const matches = list.filter((item) => {
+  const phrase = String(userText || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 2 && !AGENT_SEARCH_STOPWORDS.has(term))
+    .join(' ');
+  const scored = list.map((item, index) => {
     const haystack = stringifyForAgentSearch(item, fields);
-    return terms.some((term) => haystack.includes(term));
+    const titleHaystack = stringifyForAgentSearch(item, [
+      'title',
+      'name',
+      'organization',
+      'funder',
+      'artist_name',
+      'category',
+    ]);
+    const score = terms.reduce((sum, term) => {
+      if (!haystack.includes(term)) {
+        return sum;
+      }
+      const titleWeight = titleHaystack.includes(term) ? 8 : 0;
+      return sum + 1 + titleWeight;
+    }, 0) + (phrase && titleHaystack.includes(phrase) ? 32 : 0);
+    return { item, index, score };
   });
+  const matches = scored
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map((entry) => entry.item);
   return matches.length ? matches : list;
 }
 
@@ -1511,6 +1603,30 @@ async function loadJobAgentItems(userText) {
   ]).map(normalizeJobForAgent);
 }
 
+async function loadLocalJobActionItems(userText) {
+  const local = await fetchStreetBotLocalJson('/jobs');
+  const localJobs = Array.isArray(local)
+    ? local
+    : Array.isArray(local?.jobs)
+      ? local.jobs
+      : Array.isArray(local?.items)
+        ? local.items
+        : [];
+  const allJobs = localJobs.length ? localJobs : LOCAL_JOB_BOARD_JOBS;
+  return pickAgentItemsForQuery(allJobs, userText, [
+    'id',
+    'title',
+    'organization',
+    'category',
+    'opportunity_type',
+    'work_mode',
+    'location',
+    'compensation',
+    'description',
+    'tags',
+  ]).map(normalizeJobForAgent);
+}
+
 async function loadGalleryAgentItems(userText) {
   const remote = await fetchStreetBotReadJson('/gallery/artworks');
   const allArtworks = Array.isArray(remote) && remote.length ? remote : LOCAL_GALLERY_ARTWORKS;
@@ -1524,9 +1640,41 @@ async function loadGalleryAgentItems(userText) {
   ]).map(normalizeArtworkForAgent);
 }
 
-async function loadAcademyAgentItems(userText) {
-  return pickAgentItemsForQuery(LOCAL_ACADEMY_COURSES, userText, [
+async function loadLocalGalleryActionItems(userText) {
+  const local = await fetchStreetBotLocalJson('/gallery/artworks');
+  const localArtworks = Array.isArray(local)
+    ? local
+    : Array.isArray(local?.artworks)
+      ? local.artworks
+      : Array.isArray(local?.items)
+        ? local.items
+        : [];
+  const allArtworks = localArtworks.length ? localArtworks : LOCAL_GALLERY_ARTWORKS;
+  return pickAgentItemsForQuery(allArtworks, userText, [
+    'id',
     'title',
+    'artist_name',
+    'description',
+    'medium',
+    'style',
+    'tags',
+  ]).map(normalizeArtworkForAgent);
+}
+
+async function loadAcademyAgentItems(userText) {
+  const local = await fetchStreetBotLocalJson('/api/academy/courses?limit=100');
+  const localCourses = Array.isArray(local)
+    ? local
+    : Array.isArray(local?.courses)
+      ? local.courses
+      : Array.isArray(local?.items)
+        ? local.items
+        : [];
+  const allCourses = localCourses.length ? localCourses : LOCAL_ACADEMY_COURSES;
+  return pickAgentItemsForQuery(allCourses, userText, [
+    'id',
+    'title',
+    'category',
     'program',
     'level',
     'delivery_mode',
@@ -1537,9 +1685,20 @@ async function loadAcademyAgentItems(userText) {
   ]).map(normalizeAcademyCourseForAgent);
 }
 
+async function loadLocalAcademyActionItems(userText) {
+  return loadAcademyAgentItems(userText);
+}
+
 async function loadGrantAgentItems(userText) {
-  return pickAgentItemsForQuery(LOCAL_GRANT_OPPORTUNITIES, userText, [
+  const workspaceGrants = loadGrantWorkspaceItems();
+  const seen = new Set(workspaceGrants.map((item) => String(item.id || '')));
+  const allGrants = [
+    ...workspaceGrants,
+    ...LOCAL_GRANT_OPPORTUNITIES.filter((item) => !seen.has(String(item.id || ''))),
+  ];
+  return pickAgentItemsForQuery(allGrants, userText, [
     'name',
+    'title',
     'funder',
     'funderAbbrev',
     'amount',
@@ -1547,6 +1706,24 @@ async function loadGrantAgentItems(userText) {
     'stage',
     'recommendation',
   ]).map(normalizeGrantForAgent);
+}
+
+function loadGrantWorkspaceItems() {
+  for (const filePath of GRANT_WORKSPACE_FILES) {
+    try {
+      if (!fs.existsSync(filePath)) {
+        continue;
+      }
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      return Array.isArray(parsed?.grants) ? parsed.grants : [];
+    } catch (error) {
+      logger.debug('[streetbot-agent-results] grant workspace read failed', {
+        filePath,
+        error: error?.message || String(error || ''),
+      });
+    }
+  }
+  return [];
 }
 
 const MARKETPLACE_AGENT_RESULT_KEYWORDS = new Map([
@@ -1628,7 +1805,7 @@ const MARKETPLACE_AGENT_RESULT_KEYWORDS = new Map([
 const MARKETPLACE_AGENT_RESULT_ACTION_PATTERN =
   /\b(show|return|list|find|search|look\s+up|pull|fetch|surface|display|render|browse|recommend|match|matches|open|get|give\s+me|bring\s+up|need|want|looking\s+for|seeking|available|apply|application)\b/i;
 const MARKETPLACE_AGENT_GENERAL_CHAT_PATTERN =
-  /\b(hello|hi|hey|how\s+are\s+you|what\s+are\s+you\s+good\s+for|what\s+can\s+you\s+do|who\s+are\s+you|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+do\s+you\s+do)\b/i;
+  /\b(hello|hi|hey|how\s+are\s+you|what\s+are\s+you\s+good\s+for|what\s+can\s+you\s+do|what\s+can\s+you\s+help\s+(?:me\s+)?with|how\s+can\s+you\s+help|who\s+are\s+you|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+do\s+you\s+do)\b/i;
 const AGENT_RESULT_COUNT_PATTERN =
   /\b(how\s+many|count|counts?|total|number\s+of|do\s+we\s+have|available|active)\b/i;
 const STREET_PROFILE_AGENT_RESULT_KEYWORDS = new Map([
@@ -1693,7 +1870,7 @@ function looksLikeMarketplaceAgentResultsRequest(selectedAgent, userText) {
   }
   const text = String(userText || '').trim();
   const normalized = normalizeText(text);
-  if (!normalized) {
+  if (!normalized || MARKETPLACE_AGENT_GENERAL_CHAT_PATTERN.test(normalized)) {
     return false;
   }
 
@@ -1911,6 +2088,7 @@ function stripRecipientNoise(value = '') {
   return String(value || '')
     .trim()
     .replace(/^@/, '')
+    .replace(/^to\s+/i, '')
     .replace(/\s+(?:a message|message|dm)$/i, '')
     .trim();
 }
@@ -1924,6 +2102,7 @@ function extractStreetProfileMessageRequest(value = '') {
   const patterns = [
     /\b(?:message|dm)\s+(.+?)\s+(?:saying|that says|and say|to say|with)\s+["“]?([\s\S]+?)["”]?\s*$/i,
     /\b(?:send|write)\s+(?:a\s+)?(?:message|dm)\s+to\s+(.+?)\s+(?:saying|that says|and say|to say|with|:)\s+["“]?([\s\S]+?)["”]?\s*$/i,
+    /\b(?:send|write)\s+(.+?)\s+(?:a\s+)?(?:message|dm)\s+(?:saying|that says|and say|to say|with|:)\s+["“]?([\s\S]+?)["”]?\s*$/i,
     /\b(?:tell)\s+(.+?)\s+["“]([\s\S]+?)["”]\s*$/i,
   ];
 
@@ -1946,8 +2125,16 @@ function extractStreetProfileMessageRequest(value = '') {
 }
 
 function isStreetProfileMessageConfirmation(value = '') {
-  return /\b(yes|yep|yeah|send it|send that|confirm|confirmed|go ahead|do it)\b/i.test(
-    String(value || '').trim(),
+  const text = String(value || '')
+    .trim()
+    .replace(/[.!]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+  if (!text || text.length > 40) {
+    return false;
+  }
+  return /^(yes|yep|yeah|ok|okay|send it|send that|confirm|confirmed|go ahead|do it|please send it)$/.test(
+    text,
   );
 }
 
@@ -2162,6 +2349,647 @@ async function buildStreetProfileMessageConfirmationResponse(req, userText, conv
       returned_count: 1,
       items: [{ channel_id: sent.channelId, message_id: sent.message?.id, recipient: draft.recipient }],
       has_more: false,
+    },
+  };
+}
+
+function isStreetBotActionConfirmation(value = '') {
+  const text = String(value || '')
+    .trim()
+    .replace(/[.!]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+  if (!text || text.length > 40) {
+    return false;
+  }
+  return /^(yes|yep|yeah|ok|okay|confirm|confirmed|go ahead|do it|run it|execute|send it|post it|save it|please do|please run it)$/.test(
+    text,
+  );
+}
+
+function buildStreetBotActionDraftText(actionResult) {
+  const action = actionResult?.action || {};
+  return [
+    actionResult?.message || `${action.label || 'Action'} is ready for confirmation.`,
+    '',
+    '```local-action-request',
+    JSON.stringify(
+      {
+        actionId: action.id,
+        params: action.params || {},
+        createdAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+    '```',
+  ].join('\n');
+}
+
+function extractLatestStreetBotActionDraft(messages = []) {
+  for (const message of [...messages].reverse()) {
+    const text = String(message?.text || '').trim();
+    if (!text || !/```(?:streetbot-action-request|local-action-request)/i.test(text)) {
+      continue;
+    }
+    STREETBOT_ACTION_FENCE.lastIndex = 0;
+    let match;
+    let latest = null;
+    while ((match = STREETBOT_ACTION_FENCE.exec(text)) !== null) {
+      try {
+        latest = JSON.parse(match[1]);
+      } catch (_) {
+        latest = null;
+      }
+    }
+    if (latest?.actionId && latest?.params) {
+      return latest;
+    }
+  }
+  return null;
+}
+
+function selectedStreetBotActionAgent(req) {
+  return getSelectedMarketplaceAgent(req) || getSelectedStreetProfileAgent(req);
+}
+
+function extractActionContent(value = '') {
+  const text = String(value || '').trim();
+  const match = text.match(
+    /\b(?:saying|say|with\s+(?:message|content|body)|with|content|body|message|:)\s+["“]?([\s\S]+?)["”]?\s*$/i,
+  );
+  return match ? String(match[1] || '').trim().replace(/^["“]+|["”]+$/g, '') : '';
+}
+
+function extractQuotedTitle(value = '') {
+  const text = String(value || '').trim();
+  const quoted = text.match(/["“]([^"”]{2,160})["”]/);
+  if (quoted) {
+    return quoted[1].trim();
+  }
+  const titled = text.match(/\b(?:title|titled|called)\s+["“]?([^"”:.]{2,160})/i);
+  return titled ? titled[1].trim() : '';
+}
+
+function extractMoneyAmount(value = '') {
+  const text = String(value || '');
+  const match = text.match(/(?:\$|price\s*(?:to|at|as)?\s*)\s*([0-9]+(?:\.[0-9]{1,2})?)/i);
+  if (!match) {
+    return undefined;
+  }
+  const amount = Number(match[1]);
+  return Number.isFinite(amount) ? amount : undefined;
+}
+
+function findNumericId(value = '', labels = []) {
+  const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const pattern = escaped
+    ? new RegExp(`\\b(?:${escaped})\\s*#?([a-z0-9._-]+)\\b`, 'gi')
+    : /\b#?([a-z0-9._-]+)\b/i;
+  const matches = [...String(value || '').matchAll(pattern)]
+    .map((match) => String(match[1] || '').trim())
+    .filter(Boolean);
+  return matches.find((match) => /\d/.test(match)) || matches[0] || '';
+}
+
+async function inferJobAction(userText) {
+  const normalized = String(userText || '').toLowerCase();
+  const shouldUnsave = /\b(unsave|unfavorite|remove\s+favorite|remove\s+saved|unbookmark)\b/.test(
+    normalized,
+  );
+  const shouldSave =
+    shouldUnsave || /\b(save|favorite|favourite|bookmark)\b/.test(normalized);
+  if (!shouldSave || !/\b(job|role|opportunity|listing)\b/.test(normalized)) {
+    return null;
+  }
+  const items = await loadLocalJobActionItems(userText);
+  const job = items[0];
+  if (!job?.id) {
+    return {
+      responseText:
+        'Job Search Agent can save jobs, but I need a matching job title or job id first.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+  return {
+    actionId: shouldUnsave ? 'jobs.unfavorite' : 'jobs.favorite',
+    params: { job_id: job.id, job: job.title, organization: job.organization },
+    label: shouldUnsave ? `Unsave ${job.title}` : `Save ${job.title}`,
+  };
+}
+
+async function inferGalleryAction(userText) {
+  const normalized = String(userText || '').toLowerCase();
+  const wantsComment = /\b(comment|reply)\b/.test(normalized);
+  const wantsDelete = /\b(delete|remove)\b/.test(normalized) && /\b(art|artwork|piece)\b/.test(normalized);
+  const wantsUnfavorite = /\b(unfavorite|unfavourite|unsave|remove\s+favorite)\b/.test(normalized);
+  const wantsFavorite = wantsUnfavorite || /\b(favorite|favourite|save|bookmark)\b/.test(normalized);
+  const wantsCreate = /\b(create|post|add|upload)\b/.test(normalized) && /\b(art|artwork|piece)\b/.test(normalized);
+  const wantsUpdate =
+    /\b(set|update|change|mark|list|unlist)\b/.test(normalized) &&
+    /\b(price|sale|sold|available)\b/.test(normalized);
+
+  if (wantsCreate) {
+    const title = extractQuotedTitle(userText);
+    if (!title) {
+      return {
+        responseText:
+          'Art Curator Agent can create an artwork draft, but I need a title first.',
+        searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+      };
+    }
+    return {
+      actionId: 'gallery.create_artwork',
+      params: {
+        title,
+        description: extractActionContent(userText),
+      },
+      label: `Create artwork ${title}`,
+    };
+  }
+
+  if (!wantsFavorite && !wantsComment && !wantsDelete && !wantsUpdate) {
+    return null;
+  }
+
+  const items = await loadLocalGalleryActionItems(userText);
+  const artwork = items[0];
+  if (!artwork?.id) {
+    return {
+      responseText:
+        'Art Curator Agent can act on artwork, but I need a matching artwork title or id first.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+
+  if (wantsUpdate) {
+    const params = {
+      artwork_id: artwork.id,
+      artwork: artwork.title,
+      artist: artwork.artist_name,
+    };
+    const price = extractMoneyAmount(userText);
+    if (price !== undefined) {
+      params.price = price;
+      params.currency = 'CAD';
+    }
+    if (/\b(not for sale|no longer for sale|remove from sale|off sale|unlist)\b/.test(normalized)) {
+      params.is_for_sale = false;
+    } else if (/\b(for sale|on sale|sell|selling|available|list)\b/.test(normalized)) {
+      params.is_for_sale = true;
+    }
+    if (/\b(unsold|not sold)\b/.test(normalized)) {
+      params.is_sold = false;
+    } else if (/\bsold\b/.test(normalized)) {
+      params.is_sold = true;
+    }
+    const hasUpdateField = ['price', 'currency', 'is_for_sale', 'is_sold'].some((key) =>
+      Object.prototype.hasOwnProperty.call(params, key),
+    );
+    if (!hasUpdateField) {
+      return {
+        responseText: `I found ${artwork.title}, but I need a price, sale status, or sold status before I can update it.`,
+        searchResult: { ok: false, returned_count: 0, items: [artwork], has_more: false },
+      };
+    }
+    return {
+      actionId: 'gallery.update_artwork',
+      params,
+      label: `Update ${artwork.title}`,
+    };
+  }
+
+  if (wantsComment) {
+    const body = extractActionContent(userText);
+    if (!body) {
+      return {
+        responseText: `I found ${artwork.title}, but I need the comment text before I can draft that action.`,
+        searchResult: { ok: false, returned_count: 0, items: [artwork], has_more: false },
+      };
+    }
+    return {
+      actionId: 'gallery.comment',
+      params: { artwork_id: artwork.id, artwork: artwork.title, artist: artwork.artist_name, body },
+      label: `Comment on ${artwork.title}`,
+    };
+  }
+
+  if (wantsDelete) {
+    return {
+      actionId: 'gallery.delete_artwork',
+      params: { artwork_id: artwork.id, artwork: artwork.title, artist: artwork.artist_name },
+      label: `Delete ${artwork.title}`,
+    };
+  }
+
+  return {
+    actionId: wantsUnfavorite ? 'gallery.unfavorite' : 'gallery.favorite',
+    params: { artwork_id: artwork.id, artwork: artwork.title, artist: artwork.artist_name },
+    label: wantsUnfavorite ? `Unfavorite ${artwork.title}` : `Favorite ${artwork.title}`,
+  };
+}
+
+function inferGroupAction(userText) {
+  const normalized = String(userText || '').toLowerCase();
+  if (!/\b(send|post|write)\b/.test(normalized) || !/\b(group|groups)\b/.test(normalized)) {
+    return null;
+  }
+  const groupId = findNumericId(userText, ['group', 'groups']);
+  const content = extractActionContent(userText);
+  if (!groupId || !content) {
+    return {
+      responseText:
+        'Groups Agent can post to a group, but I need a group id and the message text.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+  return {
+    actionId: 'groups.send_message',
+    params: { group_id: groupId, content },
+    label: `Post to group ${groupId}`,
+  };
+}
+
+function inferWordAction(userText) {
+  const normalized = String(userText || '').toLowerCase();
+  const wantsDelete = /\b(delete|remove)\b/.test(normalized) && /\b(article|post|news)\b/.test(normalized);
+  const looksLikeResultsRequest =
+    /\b(show|return|list|find|display|cards?|results?|actual|real|data|records?)\b/.test(
+      normalized,
+    ) && /\b(word on the street|posts?|feed|news|announcements?)\b/.test(normalized);
+  const wantsCreate =
+    !looksLikeResultsRequest &&
+    (/\b(create|draft|publish|write)\b/.test(normalized) ||
+      (/\bpost\b/.test(normalized) && Boolean(extractQuotedTitle(userText)))) &&
+    /\b(article|post|news)\b/.test(normalized);
+  if (wantsDelete) {
+    const articleId = findNumericId(userText, ['article', 'post', 'news']);
+    if (!articleId) {
+      return {
+        responseText:
+          'Word on the Street Agent can delete articles, but I need the article id first.',
+        searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+      };
+    }
+    return {
+      actionId: 'word.delete_article',
+      params: { article_id: articleId },
+      label: `Delete article ${articleId}`,
+    };
+  }
+  if (!wantsCreate) {
+    return null;
+  }
+  const title = extractQuotedTitle(userText);
+  if (!title) {
+    return {
+      responseText:
+        'Word on the Street Agent can create a draft article, but I need a title first.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+  return {
+    actionId: 'word.create_article',
+    params: {
+      title,
+      content: extractActionContent(userText),
+      status: /\bpublish|published\b/.test(normalized) ? 'published' : 'draft',
+    },
+    label: `Create article ${title}`,
+  };
+}
+
+function inferProfileDmAction(userText, selectedAgent) {
+  const normalized = String(userText || '').toLowerCase();
+  if (
+    !/\b(send|message|dm|direct message|write|tell)\b/.test(normalized) ||
+    !/\b(saying|that says|and say|to say|with|:)\b/.test(normalized)
+  ) {
+    return null;
+  }
+
+  const request = extractStreetProfileMessageRequest(userText);
+  if (!request?.recipientQuery || !request?.content) {
+    return {
+      responseText:
+        'Messaging Agent can send a profile DM, but I need both the recipient and the exact message text.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+
+  const agentName =
+    selectedAgent === 'agent/profiles_agent'
+      ? 'Profiles Agent'
+      : selectedAgent === 'agent/street_profile_agent'
+        ? 'Street Profile Agent'
+        : 'Messaging Agent';
+  return {
+    actionId: 'profile.send_dm',
+    params: {
+      recipient: request.recipientQuery,
+      content: request.content,
+      agent: selectedAgent || 'agent/messaging_agent',
+    },
+    label: `${agentName} send DM to ${request.recipientQuery}`,
+  };
+}
+
+function extractAcademyCourseQuery(value = '') {
+  const text = String(value || '').trim();
+  const match = text.match(
+    /\b(?:for|in|to)\s+(?:the\s+)?(?:(?:course|class|workshop)\s+)?["“]?([^"”.,;]+?)["”]?(?:\s+(?:with|and|called|titled|title|description|assignment|homework|task)\b|$)/i,
+  );
+  return match ? match[1].trim() : '';
+}
+
+async function inferAcademyAction(userText) {
+  const normalized = String(userText || '').toLowerCase();
+  const wantsAssignment =
+    /\b(create|add|post|draft)\b/.test(normalized) && /\b(assignment|homework|task)\b/.test(normalized);
+  const wantsCreateCourse =
+    !wantsAssignment && /\b(create|add|generate|draft)\b/.test(normalized) && /\b(course|class|workshop)\b/.test(normalized);
+  const wantsUnenroll =
+    /\b(unenroll|drop|leave|remove)\b/.test(normalized) && /\b(course|class|workshop)\b/.test(normalized);
+  const wantsEnroll =
+    wantsUnenroll || /\b(enroll|join|sign\s*up|register)\b/.test(normalized);
+
+  if (wantsCreateCourse) {
+    const title = extractQuotedTitle(userText);
+    if (!title) {
+      return {
+        responseText:
+          'Academy Agent can create a course, but I need the course title first.',
+        searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+      };
+    }
+    return {
+      actionId: 'academy.create_course',
+      params: {
+        title,
+        description: extractActionContent(userText),
+      },
+      label: `Create Academy course ${title}`,
+    };
+  }
+
+  if (wantsAssignment) {
+    const title = extractQuotedTitle(userText);
+    if (!title) {
+      return {
+        responseText:
+          'Academy Agent can create an assignment, but I need an assignment title first.',
+        searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+      };
+    }
+    const courseQuery = extractAcademyCourseQuery(userText) || userText;
+    const courses = await loadLocalAcademyActionItems(courseQuery);
+    const course = courses[0];
+    if (!course?.id) {
+      return {
+        responseText:
+          'Academy Agent can create an assignment, but I need a matching Academy course title or id first.',
+        searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+      };
+    }
+    return {
+      actionId: 'academy.create_assignment',
+      params: {
+        course_id: course.id,
+        course: course.title,
+        title,
+        description: extractActionContent(userText),
+      },
+      label: `Create ${title} for ${course.title}`,
+    };
+  }
+
+  if (!wantsEnroll) {
+    return null;
+  }
+
+  const courseQuery = extractAcademyCourseQuery(userText) || userText;
+  const courses = await loadLocalAcademyActionItems(courseQuery);
+  const course = courses[0];
+  if (!course?.id) {
+    return {
+      responseText:
+        'Academy Agent can enroll or drop courses, but I need a matching Academy course title or id first.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+  return {
+    actionId: wantsUnenroll ? 'academy.unenroll_course' : 'academy.enroll_course',
+    params: { course_id: course.id, course: course.title },
+    label: wantsUnenroll ? `Drop ${course.title}` : `Enroll in ${course.title}`,
+  };
+}
+
+const GRANT_ACTION_STAGES = [
+  'identified',
+  'evaluating',
+  'pursuing',
+  'drafting',
+  'review',
+  'submitted',
+  'awarded',
+  'declined',
+  'active',
+  'closed',
+];
+
+function extractGrantStage(value = '') {
+  const normalized = String(value || '').toLowerCase();
+  return GRANT_ACTION_STAGES.find((stage) =>
+    new RegExp(`\\b${stage.replace('-', '\\s*-?\\s*')}\\b`, 'i').test(normalized),
+  );
+}
+
+function extractGrantFunder(value = '') {
+  const match = String(value || '').match(/\b(?:funder|from|by)\s+["“]?([^"”.,;]{2,80})/i);
+  if (!match) {
+    return '';
+  }
+  const stageAlternatives = GRANT_ACTION_STAGES.map((stage) => stage.replace('-', '\\s*-?\\s*')).join('|');
+  return match[1]
+    .replace(new RegExp(`\\s+(?:in|at|to)\\s+(?:${stageAlternatives})\\s+stage\\b.*$`, 'i'), '')
+    .replace(/\s+(?:stage|status)\b.*$/i, '')
+    .trim();
+}
+
+async function inferGrantAction(userText) {
+  const normalized = String(userText || '').toLowerCase();
+  const wantsArchive = /\b(archive|close|remove)\b/.test(normalized) && /\b(grant|opportunity)\b/.test(normalized);
+  const wantsStage =
+    /\b(move|set|update|mark|change)\b/.test(normalized) &&
+    /\b(stage|status|pipeline|to)\b/.test(normalized) &&
+    /\b(grant|opportunity)\b/.test(normalized);
+  const wantsCreate =
+    /\b(create|add|track|new)\b/.test(normalized) && /\b(grant|opportunity)\b/.test(normalized);
+
+  if (wantsCreate) {
+    const name = extractQuotedTitle(userText);
+    if (!name) {
+      return {
+        responseText:
+          'Grant Manager Agent can create a grant opportunity, but I need the grant name first.',
+        searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+      };
+    }
+    return {
+      actionId: 'grant.create_opportunity',
+      params: {
+        name,
+        funder: extractGrantFunder(userText) || 'Unknown Funder',
+        stage: extractGrantStage(userText) || 'identified',
+      },
+      label: `Create grant ${name}`,
+    };
+  }
+
+  if (!wantsArchive && !wantsStage) {
+    return null;
+  }
+
+  const grants = await loadGrantAgentItems(userText);
+  const grant = grants[0];
+  if (!grant?.id) {
+    return {
+      responseText:
+        'Grant Manager Agent can update the pipeline, but I need a matching grant name or id first.',
+      searchResult: { ok: false, returned_count: 0, items: [], has_more: false },
+    };
+  }
+
+  if (wantsArchive) {
+    return {
+      actionId: 'grant.archive',
+      params: { grant_id: grant.id, grant: grant.title, funder: grant.funder },
+      label: `Archive ${grant.title}`,
+    };
+  }
+
+  const stage = extractGrantStage(userText);
+  if (!stage) {
+    return {
+      responseText:
+        'Grant Manager Agent can update a grant stage, but I need a valid stage like drafting, review, submitted, awarded, or declined.',
+      searchResult: { ok: false, returned_count: 0, items: [grant], has_more: false },
+    };
+  }
+
+  return {
+    actionId: 'grant.update_stage',
+    params: { grant_id: grant.id, grant: grant.title, funder: grant.funder, stage },
+    label: `Move ${grant.title} to ${stage}`,
+  };
+}
+
+async function inferStreetBotAgentAction(req, userText) {
+  const selectedAgent = selectedStreetBotActionAgent(req);
+  if (!selectedAgent || !streetBotActionBridge?.executeStreetBotAction) {
+    return null;
+  }
+
+  if (selectedAgent === 'agent/job_search_agent') {
+    return inferJobAction(userText);
+  }
+  if (selectedAgent === 'agent/gallery_agent') {
+    return inferGalleryAction(userText);
+  }
+  if (selectedAgent === 'agent/academy_agent') {
+    return inferAcademyAction(userText);
+  }
+  if (selectedAgent === 'agent/grant_manager') {
+    return inferGrantAction(userText);
+  }
+  if (selectedAgent === 'agent/groups_agent') {
+    return inferGroupAction(userText);
+  }
+  if (selectedAgent === 'agent/messaging_agent' || selectedAgent === 'agent/profiles_agent') {
+    return inferProfileDmAction(userText, selectedAgent);
+  }
+  if (selectedAgent === 'agent/word_on_the_street_agent') {
+    return inferWordAction(userText);
+  }
+  if (selectedAgent === 'agent/street_profile_agent') {
+    return inferProfileDmAction(userText, selectedAgent) || inferGroupAction(userText) || inferWordAction(userText);
+  }
+  return null;
+}
+
+function formatExecutedActionText(result) {
+  const label = result?.action?.label || result?.action?.id || 'Local action';
+  return `${label} completed locally.`;
+}
+
+async function buildStreetBotAgentActionResponse(req, userText) {
+  const inferred = await inferStreetBotAgentAction(req, userText);
+  if (!inferred) {
+    return null;
+  }
+  if (inferred.responseText) {
+    return inferred;
+  }
+
+  const result = await streetBotActionBridge.executeStreetBotAction(req, {
+    actionId: inferred.actionId,
+    params: inferred.params,
+  });
+
+  if (result?.status === 'needs_confirmation') {
+    return {
+      responseText: buildStreetBotActionDraftText(result),
+      searchResult: {
+        ok: true,
+        returned_count: 1,
+        items: [result.action],
+        has_more: false,
+        action: result.action,
+      },
+    };
+  }
+
+  return {
+    responseText: formatExecutedActionText(result),
+    searchResult: {
+      ok: true,
+      returned_count: 1,
+      items: [result?.result || result?.action].filter(Boolean),
+      has_more: false,
+      action: result?.action,
+    },
+  };
+}
+
+async function buildStreetBotAgentActionConfirmationResponse(req, userText, conversationId) {
+  if (
+    !streetBotActionBridge?.executeStreetBotAction ||
+    !isStreetBotActionConfirmation(userText) ||
+    !conversationId ||
+    conversationId === 'new'
+  ) {
+    return null;
+  }
+
+  const history = await getMessages({ conversationId, user: req.user.id }).catch(() => []);
+  const draft = extractLatestStreetBotActionDraft(history);
+  if (!draft) {
+    return null;
+  }
+
+  const result = await streetBotActionBridge.executeStreetBotAction(req, {
+    actionId: draft.actionId,
+    params: draft.params,
+    confirm: true,
+  });
+  return {
+    responseText: formatExecutedActionText(result),
+    searchResult: {
+      ok: true,
+      returned_count: 1,
+      items: [result?.result || result?.action].filter(Boolean),
+      has_more: false,
+      action: result?.action,
     },
   };
 }
@@ -2521,6 +3349,45 @@ async function buildStreetProfileFamilyResponse(req, userText, runProgressPhase)
     typeof runProgressPhase === 'function' ? runProgressPhase(phase, work, { selectedAgent }) : work();
 
   if (selectedAgent === 'agent/street_profile_agent') {
+    if (!wantsOverview && wantsGroups && !wantsMessages && !wantsWord) {
+      const groupsOnlyResponse = await buildGroupsAgentResponse();
+      return {
+        responseText: `Street Profile Agent routed this to Groups. ${groupsOnlyResponse.text}`,
+        searchResult: {
+          ok: true,
+          returned_count: groupsOnlyResponse.count,
+          items: [],
+          has_more: false,
+          selectedAgent,
+        },
+      };
+    }
+    if (!wantsOverview && wantsMessages && !wantsGroups && !wantsWord) {
+      const messagesOnlyResponse = await buildMessagingAgentResponse();
+      return {
+        responseText: `Street Profile Agent routed this to Messaging. ${messagesOnlyResponse.text}`,
+        searchResult: {
+          ok: true,
+          returned_count: messagesOnlyResponse.count,
+          items: [],
+          has_more: false,
+          selectedAgent,
+        },
+      };
+    }
+    if (!wantsOverview && wantsWord && !wantsGroups && !wantsMessages) {
+      const wordOnlyResponse = await buildWordOnTheStreetAgentResponse();
+      return {
+        responseText: `Street Profile Agent routed this to Word on the Street. ${wordOnlyResponse.text}`,
+        searchResult: {
+          ok: true,
+          returned_count: wordOnlyResponse.count,
+          items: [],
+          has_more: false,
+          selectedAgent,
+        },
+      };
+    }
     if (!wantsOverview && wantsProfiles && !wantsGroups && !wantsMessages && !wantsWord) {
       const profileOnlyResponse = await run('checking_street_profiles', () =>
         buildProfilesAgentResponse(userText),
@@ -2536,46 +3403,6 @@ async function buildStreetProfileFamilyResponse(req, userText, runProgressPhase)
         },
       };
     }
-    if (!wantsOverview && wantsGroups && !wantsProfiles && !wantsMessages && !wantsWord) {
-      const groupsOnlyResponse = await buildGroupsAgentResponse();
-      return {
-        responseText: `Street Profile Agent routed this to Groups. ${groupsOnlyResponse.text}`,
-        searchResult: {
-          ok: true,
-          returned_count: groupsOnlyResponse.count,
-          items: [],
-          has_more: false,
-          selectedAgent,
-        },
-      };
-    }
-    if (!wantsOverview && wantsMessages && !wantsProfiles && !wantsGroups && !wantsWord) {
-      const messagesOnlyResponse = await buildMessagingAgentResponse();
-      return {
-        responseText: `Street Profile Agent routed this to Messaging. ${messagesOnlyResponse.text}`,
-        searchResult: {
-          ok: true,
-          returned_count: messagesOnlyResponse.count,
-          items: [],
-          has_more: false,
-          selectedAgent,
-        },
-      };
-    }
-    if (!wantsOverview && wantsWord && !wantsProfiles && !wantsGroups && !wantsMessages) {
-      const wordOnlyResponse = await buildWordOnTheStreetAgentResponse();
-      return {
-        responseText: `Street Profile Agent routed this to Word on the Street. ${wordOnlyResponse.text}`,
-        searchResult: {
-          ok: true,
-          returned_count: wordOnlyResponse.count,
-          items: [],
-          has_more: false,
-          selectedAgent,
-        },
-      };
-    }
-
     const profileResponse = await run('checking_street_profiles', () => buildProfilesAgentResponse(userText));
     const groupsResponse = await buildGroupsAgentResponse();
     const messagingResponse = await buildMessagingAgentResponse();
@@ -2609,14 +3436,22 @@ async function buildStreetProfileFamilyResponse(req, userText, runProgressPhase)
   }
 
   let result;
-  if (wantsProfiles) {
+  if (selectedAgent === 'agent/profiles_agent') {
     result = await run('checking_street_profiles', () => buildProfilesAgentResponse(userText));
+  } else if (selectedAgent === 'agent/groups_agent') {
+    result = await buildGroupsAgentResponse();
+  } else if (selectedAgent === 'agent/messaging_agent') {
+    result = await buildMessagingAgentResponse();
+  } else if (selectedAgent === 'agent/word_on_the_street_agent') {
+    result = await buildWordOnTheStreetAgentResponse();
   } else if (wantsGroups) {
     result = await buildGroupsAgentResponse();
   } else if (wantsMessages) {
     result = await buildMessagingAgentResponse();
   } else if (wantsWord) {
     result = await buildWordOnTheStreetAgentResponse();
+  } else if (wantsProfiles) {
+    result = await run('checking_street_profiles', () => buildProfilesAgentResponse(userText));
   } else {
     result = {
       text:
@@ -4344,7 +5179,11 @@ function normalizeSelectedAgentTextSegment(agentProfile, value) {
     .replace(/\bStreet\s*Bot(?:\s*Pro)?\b/gi, agentProfile.label)
     .replace(/\bStreetBot\b/g, agentProfile.label)
     .replace(/\bStreetbot\b/g, agentProfile.label)
-    .replace(new RegExp(`${escapeRegExp(agentProfile.label)}\\s+here\\s+here`, 'gi'), `${agentProfile.label} here`)
+    .replace(/\bgrant[_\s-]*researcher[_\s-]*agent\b/gi, 'Grant Researcher Agent')
+    .replace(/\bgrant[_\s-]*writer\b/gi, 'Grant Writer Agent')
+    .replace(/\bbudget[_\s-]*agent\b/gi, 'Budget Agent')
+    .replace(/\bproject[_\s-]*plan[_\s-]*agent\b/gi, 'Project Plan Agent')
+    .replace(new RegExp(`${escapeRegExp(agentProfile.label)}\\s+here\\s+here`, 'gi'), `${agentProfile.label} here`);
 }
 
 function normalizeSelectedAgentResponseText(req, value) {
@@ -4413,7 +5252,7 @@ function buildSelectedAgentGeneralFallback(req, userText = '', error = null) {
     return 'I hear you. Let’s slow it down to one next step: say what feels most urgent, and I’ll help you sort it without rushing.';
   }
   if (/^\s*(what|who|where|when|why|how)\b/i.test(text)) {
-    return `I can help think that through as ${agentProfile.label}. Give me the context you care about, and I’ll answer directly; when you want live results, ask me to show ${agentProfile.cardLabel}.`;
+    return `I'm ${agentProfile.label}. I can chat normally and help think that through in plain language. Give me the context you care about, and I’ll answer directly; when you want live results, ask me to show ${agentProfile.cardLabel}.`;
   }
 
   logger.warn('[streetbot-fastpath] using selected-agent fallback after model failure', {
@@ -5112,23 +5951,28 @@ function summarizeStreetBotServicePayload(payloadText) {
   return `Street Bot ran a grounded service search${scope ? ` for ${scope}` : ''}.`;
 }
 
+const STREETBOT_RICH_RESULT_FENCE_PATTERN =
+  /```(?:streetbot-agent-results|street-profile-results|street-profile-message-draft)\s*[\s\S]*?```/gi;
+const STREETBOT_ACTION_REQUEST_FENCE_PATTERN =
+  /```(?:streetbot-action-request|local-action-request)\s*[\s\S]*?```/gi;
+
 function sanitizeStreetBotConversationHistoryText(value) {
   const text = String(value || '').trim();
-  if (!text || !text.includes('```streetbot-service-results')) {
+  if (!text || !text.includes('```street')) {
     return text;
   }
 
   const summaries = [];
-  const stripped = text.replace(
-    /```streetbot-service-results\s*([\s\S]*?)```/gi,
-    (_match, payloadText) => {
+  const stripped = text
+    .replace(/```streetbot-service-results\s*([\s\S]*?)```/gi, (_match, payloadText) => {
       const summary = summarizeStreetBotServicePayload(payloadText);
       if (summary) {
         summaries.push(summary);
       }
       return '';
-    },
-  );
+    })
+    .replace(STREETBOT_RICH_RESULT_FENCE_PATTERN, '')
+    .replace(STREETBOT_ACTION_REQUEST_FENCE_PATTERN, 'Action ready for confirmation.');
 
   return [stripped.trim(), ...summaries]
     .filter(Boolean)
@@ -5139,12 +5983,14 @@ function sanitizeStreetBotConversationHistoryText(value) {
 
 function stripStreetBotServicePayloadForDisplay(value) {
   const text = String(value || '').trim();
-  if (!text || !text.includes('```streetbot-service-results')) {
+  if (!text || !text.includes('```street')) {
     return text;
   }
 
   return text
     .replace(/```streetbot-service-results\s*[\s\S]*?```/gi, '')
+    .replace(STREETBOT_RICH_RESULT_FENCE_PATTERN, '')
+    .replace(STREETBOT_ACTION_REQUEST_FENCE_PATTERN, 'Action ready for confirmation.')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -5226,6 +6072,7 @@ function buildSelectedAgentConversationSystemPrompt(agentProfile = null, userCon
     'I can have ordinary general conversation. I should answer greetings, identity questions, casual check-ins, and open-ended questions naturally as myself.',
     `When the user clearly asks me to find, show, list, return, or search ${agentProfile.cardLabel}, the backend may render actual UI cards from ${agentProfile.source}.`,
     'Do not claim to be Street Bot unless the selected agent is Street Bot. Do not mention backend routing.',
+    'Use user-facing names for other agents and tools; never write internal identifiers with underscores.',
     'If older conversation history contains a response that says Street Bot, treat it as a stale local bug and continue under my selected agent name.',
     locationLabel
       ? `The user's saved service-search location is ${locationLabel}; only use it if location matters.`
@@ -6120,24 +6967,46 @@ async function streetbotFastPath(req, res, _next) {
     });
 
     if (toolBase === 'conversation') {
-      const streetBotAgentResultsResponse = await buildStreetBotAgentResultsResponse(
+      const streetBotAgentActionConfirmationResponse = await buildStreetBotAgentActionConfirmationResponse(
+        req,
+        userText,
+        conversationId,
+      );
+      const streetBotAgentActionResponse = streetBotAgentActionConfirmationResponse
+        ? null
+        : await buildStreetBotAgentActionResponse(req, userText);
+      const streetBotAgentResultsResponse = streetBotAgentActionConfirmationResponse || streetBotAgentActionResponse
+        ? null
+        : await buildStreetBotAgentResultsResponse(
         req,
         userText,
         runProgressPhase,
       );
       const streetProfileFamilyResponse = streetBotAgentResultsResponse
+        || streetBotAgentActionConfirmationResponse
+        || streetBotAgentActionResponse
         ? null
         : await buildStreetProfileFamilyResponse(
             req,
             userText,
             runProgressPhase,
           );
-      if (streetBotAgentResultsResponse) {
+      if (streetBotAgentActionConfirmationResponse) {
+        responseText = streetBotAgentActionConfirmationResponse.responseText;
+        searchResult = streetBotAgentActionConfirmationResponse.searchResult;
+      } else if (streetBotAgentActionResponse) {
+        responseText = streetBotAgentActionResponse.responseText;
+        searchResult = streetBotAgentActionResponse.searchResult;
+      } else if (streetBotAgentResultsResponse) {
         responseText = streetBotAgentResultsResponse.responseText;
         searchResult = streetBotAgentResultsResponse.searchResult;
       } else if (streetProfileFamilyResponse) {
         responseText = streetProfileFamilyResponse.responseText;
         searchResult = streetProfileFamilyResponse.searchResult;
+      } else if (selectedAgentProfile) {
+        responseText = buildSelectedAgentGeneralFallback(req, userText);
+        responseAlreadyStreamed = false;
+        searchResult = { ok: true, returned_count: 0, items: [], has_more: false };
       } else {
         try {
           responseText = await runStreetBotConversationModel(

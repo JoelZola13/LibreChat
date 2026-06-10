@@ -54,6 +54,7 @@ const CandidateSearchPage = lazy(() => import('~/components/streetbot/jobs/Candi
 const CalendarPage = lazy(() => import('~/components/streetbot/calendar/CalendarPage'));
 const MessagesPage = lazy(() => import('~/components/streetbot/messages/SocialMessagesPage'));
 const DocumentsPage = lazy(() => import('~/components/streetbot/documents/DocumentsPage'));
+const EmailPage = lazy(() => import('~/components/streetbot/email/EmailPage'));
 const CaseManagementPage = lazy(
   () => import('~/components/streetbot/case-management/CaseManagementPage'),
 );
@@ -475,6 +476,8 @@ export const router = createBrowserRouter(
                   },
                   { path: 'messages', element: guardedSbPage('messages', MessagesPage) },
                   { path: 'messages/*', element: guardedSbPage('messages', MessagesPage) },
+                  { path: 'email', element: guardedSbPage('email', EmailPage) },
+                  { path: 'email/*', element: guardedSbPage('email', EmailPage) },
                   { path: 'documents', element: guardedSbPage('documents', DocumentsPage) },
                   { path: 'documents/*', element: guardedSbPage('documents', DocumentsPage) },
                   { path: 'academy/courses', element: sbPage(AcademyPage) },

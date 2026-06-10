@@ -8,6 +8,20 @@ interface LiveAnnouncerProps {
   children: React.ReactNode;
 }
 
+const RICH_RESULTS_FENCE =
+  /```(?:streetbot-service-results|streetbot-agent-results|street-profile-results|street-profile-message-draft)\s*[\s\S]*?```/gi;
+const RICH_RESULTS_INLINE =
+  /\b(?:streetbot-service-results|streetbot-agent-results|street-profile-results|street-profile-message-draft)\s*\{[\s\S]*$/i;
+const ACTION_REQUEST_FENCE = /```(?:streetbot-action-request|local-action-request)\s*[\s\S]*?```/gi;
+const ACTION_REQUEST_INLINE = /\b(?:streetbot-action-request|local-action-request)\s*\{[\s\S]*$/i;
+
+const sanitizeAnnouncement = (message: string): string =>
+  message
+    .replace(RICH_RESULTS_FENCE, '')
+    .replace(RICH_RESULTS_INLINE, '')
+    .replace(ACTION_REQUEST_FENCE, 'Action ready for confirmation.')
+    .replace(ACTION_REQUEST_INLINE, 'Action ready for confirmation.');
+
 const LiveAnnouncer: React.FC<LiveAnnouncerProps> = ({ children }) => {
   const [statusMessage, setStatusMessage] = useState('');
   const [logMessage, setLogMessage] = useState('');
@@ -43,7 +57,7 @@ const LiveAnnouncer: React.FC<LiveAnnouncerProps> = ({ children }) => {
 
   const announcePolite = useCallback(
     ({ message, isStatus = false }: AnnounceOptions) => {
-      const finalMessage = (events[message] ?? message).replace(/[*`_]/g, '');
+      const finalMessage = sanitizeAnnouncement(events[message] ?? message).replace(/[*`_]/g, '');
 
       if (isStatus) {
         announceStatus(finalMessage);
